@@ -1,6 +1,10 @@
 use api::Api;
+use api::ApiError;
 use api::NameSpace;
+use clap::ArgMatches;
 use clap::{App, Arg};
+use question::{Answer, Question};
+use user_error::{UserFacingError, UFE};
 
 fn cli<'a>() -> App<'a> {
     App::new("chronicle")
@@ -27,12 +31,26 @@ fn cli<'a>() -> App<'a> {
         )
 }
 
-fn main() {
-    let options = cli().get_matches();
-    let api = Api::new();
+fn establish_config_file() {}
 
-    options.subcommand_matches("namespace").and_then(|m| {
-        m.subcommand_matches("create")
-            .map(|m| api.name_space(&NameSpace::new(m.value_of("name").unwrap())))
+fn api_exec(options: ArgMatches) -> Result<(), ApiError> {
+    let api = Api::new("")?;
+
+    options
+        .subcommand_matches("namespace")
+        .and_then(|m| {
+            m.subcommand_matches("create")
+                .map(|m| api.name_space(&NameSpace::new(m.value_of("name").unwrap())))
+        })
+        .unwrap_or(Ok(()))
+}
+
+fn main() {
+    std::process::exit(match api_exec(cli().get_matches()) {
+        Ok(_) => 0,
+        Err(e) => {
+            e.into_ufe().print();
+            1
+        }
     });
 }

@@ -7,8 +7,9 @@ edition = "2021"
 
 [dependencies]
 custom_error = "1.9.2"
-diesel = { version = "1.4.8", features = ["postgres"] }
+diesel = { version = "1.4.8", features = ["sqlite"] }
 dotenv = "0.15.0"
 iref-enum = "1.2.0"
 json-ld = "0.4.0"
+user-error = "1.2.8"
 validator = { version = "0.14.0", features = ["derive"] }

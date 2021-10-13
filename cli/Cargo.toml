@@ -10,3 +10,4 @@ clap = { version = "3.0.0-beta.4", features = ["yaml"] }
 question = "0.2.2"
 toml-config = "0.4.0"
 api = {path = "../api"}
+user-error = "1.2.8"
