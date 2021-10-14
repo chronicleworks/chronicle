@@ -81,6 +81,9 @@ fn main() {
                 ApiResponse::Iri(iri) => {
                     println!("{}", iri);
                 }
+                ApiResponse::Document(doc) => {
+                    println!("{}", doc.pretty(2));
+                }
                 ApiResponse::Unit => {}
             }
             0

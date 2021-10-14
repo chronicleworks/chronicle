@@ -9,7 +9,8 @@ table! {
 
 table! {
     namespace (name) {
-        name -> Nullable<Text>,
+        name -> Text,
+        uuid -> Text,
     }
 }
 
