@@ -13,12 +13,12 @@ mod vocab;
 
 use async_std::task;
 use custom_error::*;
-use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
+use diesel::{prelude::*, sqlite::SqliteConnection};
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 
 use iref::IriBuf;
+use models::Agent;
 use user_error::UFE;
 use uuid::Uuid;
 
@@ -30,6 +30,7 @@ custom_error! {pub ApiError
     DbMigration{source: diesel_migrations::RunMigrationsError}  = "Database migration failed",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
+    Api{source: sawtooth_interface::SubmissionError}            = "Json LD processing",
 }
 
 impl UFE for ApiError {}
@@ -39,7 +40,16 @@ pub enum NamespaceCommand {
 }
 
 pub enum AgentCommand {
-    Create { name: String, namespace: String },
+    Create {
+        name: String,
+        namespace: String,
+    },
+    RegisterKey {
+        name: String,
+        namespace: String,
+        public: String,
+        private: Option<String>,
+    },
 }
 
 pub enum ApiCommand {
@@ -91,6 +101,7 @@ impl Api {
             namespace_data.name, namespace_data.uuid
         ))?;
         let id = IriBuf::new(&format!("{}agent:{}", namespace_iri, name))?;
+
         let input = object! {
             "http://www.w3.org/ns/prov#Agent" : {
                 "@id": (id.as_str())
@@ -108,6 +119,8 @@ impl Api {
                 name,
                 namespace,
                 current: 0,
+                publickey: None,
+                privatekeypath: None,
             })
             .execute(&self.connection)
             .map_err(ApiError::from)
@@ -122,6 +135,50 @@ impl Api {
             ApiCommand::Agent(AgentCommand::Create { name, namespace }) => {
                 self.create_agent(&name, &namespace)
             }
+            ApiCommand::Agent(AgentCommand::RegisterKey {
+                name,
+                namespace,
+                public,
+                private,
+            }) => self.register_key(&name, &namespace, &public, private),
         }
+    }
+
+    fn get_agent(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Result<Option<Agent>, diesel::result::Error> {
+        use self::schema::agent::dsl as ns;
+        ns::agent
+            .filter(ns::name.eq(namespace).and(ns::namespace.eq(namespace)))
+            .first::<models::Agent>(&self.connection)
+            .optional()
+    }
+
+    fn register_key(
+        &self,
+        name: &str,
+        namespace: &str,
+        publickey: &str,
+        privatekeypath: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let update = models::NewAgent {
+            name,
+            namespace,
+            current: 0,
+            publickey: Some(publickey),
+            privatekeypath: privatekeypath.map(|x| x.as_ref()),
+        };
+
+        if let Some(agent) = self.get_agent(name, nam, namespace)? {
+            diesel::update(schema::agent::table).set(update)
+        }
+
+        diesel::insert_into(schema::agent::table)
+            .values(update)
+            .execute(&self.connection)
+            .map_err(ApiError::from)
+            .map(|_| ApiResponse::Unit)
     }
 }

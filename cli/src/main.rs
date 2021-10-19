@@ -1,11 +1,5 @@
-use api::AgentCommand;
-use api::Api;
-use api::ApiCommand;
-use api::ApiError;
-use api::ApiResponse;
-use api::NamespaceCommand;
-use clap::ArgMatches;
-use clap::{App, Arg};
+use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
+use clap::{App, Arg, ArgMatches};
 use user_error::UFE;
 
 fn cli<'a>() -> App<'a> {
@@ -43,6 +37,33 @@ fn cli<'a>() -> App<'a> {
                             .default_value("default")
                             .required(false)
                             .takes_value(true),
+                    )
+                    .subcommand(
+                        App::new("create")
+                            .about("Create a new agent, if required")
+                            .arg(Arg::new("agent_name").required(true).takes_value(true))
+                            .arg(
+                                Arg::new("namespace")
+                                    .short('n')
+                                    .long("namespace")
+                                    .default_value("default")
+                                    .required(false)
+                                    .takes_value(true),
+                            )
+                            .arg(
+                                Arg::new("publickey")
+                                    .short('p')
+                                    .long("publickey")
+                                    .required(true)
+                                    .takes_value(true),
+                            )
+                            .arg(
+                                Arg::new("privatekey")
+                                    .short('k')
+                                    .long("privatekey")
+                                    .required(false)
+                                    .takes_value(true),
+                            ),
                     ),
             ),
         )
@@ -60,12 +81,25 @@ fn api_exec(options: ArgMatches) -> Result<ApiResponse, ApiError> {
             })
         }),
         options.subcommand_matches("agent").and_then(|m| {
-            m.subcommand_matches("create").map(|m| {
-                api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-                    name: m.value_of("agent_name").unwrap().to_owned(),
-                    namespace: m.value_of("namespace").unwrap().to_owned(),
-                }))
-            })
+            vec![
+                m.subcommand_matches("create").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    }))
+                }),
+                m.subcommand_matches("register-key").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        public: m.value_of("publickey").unwrap().to_owned(),
+                        private: m.value_of("privatekey").map(|x| x.to_owned()),
+                    }))
+                }),
+            ]
+            .into_iter()
+            .flatten()
+            .next()
         }),
     ]
     .into_iter()

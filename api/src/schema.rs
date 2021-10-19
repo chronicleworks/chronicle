@@ -2,7 +2,8 @@ table! {
     agent (name) {
         name -> Text,
         namespace -> Text,
-        uuid -> Text,
+        publickey -> Nullable<Text>,
+        privatekeypath -> Nullable<Text>,
         current -> Integer,
     }
 }
@@ -16,7 +17,4 @@ table! {
 
 joinable!(agent -> namespace (namespace));
 
-allow_tables_to_appear_in_same_query!(
-    agent,
-    namespace,
-);
+allow_tables_to_appear_in_same_query!(agent, namespace,);
