@@ -1,10 +1,17 @@
 use crate::schema::*;
 use diesel::{Insertable, Queryable};
+use iref::{AsIri, Iri};
 
 #[derive(Queryable)]
 pub struct NameSpace {
     pub name: String,
     pub uuid: String,
+}
+
+impl AsIri for NameSpace {
+    fn as_iri(&self) -> iref::Iri {
+        Iri::new(&format!("chronicle:ns:{}:{}", self.name, self.uuid)).unwrap()
+    }
 }
 
 #[derive(Insertable)]
@@ -23,7 +30,13 @@ pub struct Agent {
     pub current: i32,
 }
 
-#[derive(Insertable)]
+impl AsIri for Agent {
+    fn as_iri(&self) -> iref::Iri {
+        Iri::new(&format!("chronicle:agent:{}", self.name)).unwrap()
+    }
+}
+
+#[derive(Insertable, AsChangeset, Default)]
 #[table_name = "agent"]
 pub struct NewAgent<'a> {
     pub name: &'a str,
@@ -31,4 +44,10 @@ pub struct NewAgent<'a> {
     pub current: i32,
     pub publickey: Option<&'a str>,
     pub privatekeypath: Option<&'a str>,
+}
+
+impl<'a> AsIri for NewAgent<'a> {
+    fn as_iri(&self) -> iref::Iri {
+        Iri::new(&format!("chronicle:agent:{}", self.name)).unwrap()
+    }
 }
