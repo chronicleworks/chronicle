@@ -12,4 +12,5 @@ toml-config = "0.4.0"
 api = {path = "../api"}
 user-error = "1.2.8"
 url = "2.2.2"
+rand = "0.8.4"
 

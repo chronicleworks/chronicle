@@ -1,6 +1,6 @@
 use crate::schema::*;
 use diesel::{Insertable, Queryable};
-use iref::{AsIri, Iri, IriBuf};
+use iref::{IriBuf};
 
 #[derive(Queryable)]
 pub struct NameSpace {
