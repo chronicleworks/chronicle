@@ -1,6 +1,6 @@
 use crate::schema::*;
 use diesel::{Insertable, Queryable};
-use iref::{AsIri, Iri};
+use iref::{AsIri, Iri, IriBuf};
 
 #[derive(Queryable)]
 pub struct NameSpace {
@@ -8,9 +8,9 @@ pub struct NameSpace {
     pub uuid: String,
 }
 
-impl AsIri for NameSpace {
-    fn as_iri(&self) -> iref::Iri {
-        Iri::new(&format!("chronicle:ns:{}:{}", self.name, self.uuid)).unwrap()
+impl From<&NameSpace> for IriBuf {
+    fn from(ns: &NameSpace) -> Self {
+        IriBuf::new(&format!("chronicle:ns:{}:{}", ns.name, ns.uuid)).unwrap()
     }
 }
 
@@ -19,6 +19,12 @@ impl AsIri for NameSpace {
 pub struct NewNamespace<'a> {
     pub name: &'a str,
     pub uuid: &'a str,
+}
+
+impl<'a> From<&NewNamespace<'a>> for IriBuf {
+    fn from(ns: &NewNamespace<'a>) -> Self {
+        IriBuf::new(&format!("chronicle:ns:{}:{}", ns.name, ns.uuid)).unwrap()
+    }
 }
 
 #[derive(Queryable)]
@@ -30,9 +36,9 @@ pub struct Agent {
     pub current: i32,
 }
 
-impl AsIri for Agent {
-    fn as_iri(&self) -> iref::Iri {
-        Iri::new(&format!("chronicle:agent:{}", self.name)).unwrap()
+impl From<&Agent> for IriBuf {
+    fn from(agent: &Agent) -> Self {
+        IriBuf::new(&format!("chronicle:agent:{}", agent.name)).unwrap()
     }
 }
 
@@ -46,8 +52,8 @@ pub struct NewAgent<'a> {
     pub privatekeypath: Option<&'a str>,
 }
 
-impl<'a> AsIri for NewAgent<'a> {
-    fn as_iri(&self) -> iref::Iri {
-        Iri::new(&format!("chronicle:agent:{}", self.name)).unwrap()
+impl<'a> From<&NewAgent<'a>> for IriBuf {
+    fn from(agent: &NewAgent<'a>) -> Self {
+        IriBuf::new(&format!("chronicle:agent:{}", agent.name)).unwrap()
     }
 }

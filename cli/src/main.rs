@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
 use clap::{App, Arg, ArgMatches};
 use user_error::UFE;
@@ -70,7 +72,7 @@ fn cli<'a>() -> App<'a> {
 }
 
 fn api_exec(options: ArgMatches) -> Result<ApiResponse, ApiError> {
-    let api = Api::new("./.sqlite")?;
+    let api = Api::new("./.sqlite", &url::Url::from_str("http://bob.com").unwrap())?;
 
     vec![
         options.subcommand_matches("namespace").and_then(|m| {

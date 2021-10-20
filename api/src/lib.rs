@@ -17,9 +17,10 @@ use diesel::{prelude::*, sqlite::SqliteConnection};
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 
-use iref::{AsIri, IriBuf};
+use common::models::{ChronicleTransaction, CreateAgent, CreateNamespace};
+use iref::IriBuf;
 use models::Agent;
-use sawtooth_interface::models::{ChronicleTransaction, CreateAgent, CreateNamespace};
+use proto::messaging::{SawtoothValidator, SubmissionError};
 use url::Url;
 use user_error::UFE;
 use uuid::Uuid;
@@ -32,7 +33,7 @@ custom_error! {pub ApiError
     DbMigration{source: diesel_migrations::RunMigrationsError}  = "Database migration failed",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
-    Api{source: proto::SubmissionError}            = "Json LD processing",
+    Api{source: SubmissionError}            = "Json LD processing",
 }
 
 impl UFE for ApiError {}
@@ -67,7 +68,7 @@ pub enum ApiResponse {
 
 pub struct Api {
     connection: SqliteConnection,
-    ledger: sawtooth_interface::SawtoothValidator,
+    ledger: SawtoothValidator,
 }
 
 impl Api {
@@ -75,28 +76,29 @@ impl Api {
         let connection = SqliteConnection::establish(database_url)?;
         embedded_migrations::run(&connection)?;
 
-        let ledger = sawtooth_interface::SawtoothValidator::new(sawtooth_url);
+        let ledger = SawtoothValidator::new(sawtooth_url);
         Ok(Api { connection, ledger })
     }
 
     fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = Uuid::new_v4();
+        let newnamespace = models::NewNamespace {
+            name,
+            uuid: &uuid.to_string(),
+        };
+
         diesel::insert_or_ignore_into(schema::namespace::table)
-            .values(models::NewNamespace {
-                name,
-                uuid: &uuid.to_string(),
-            })
+            .values(&newnamespace)
             .execute(&self.connection)
             .map(|_| {
                 self.ledger
                     .submit(vec![ChronicleTransaction::CreateNamespace(
                         CreateNamespace {
-                            name: name.to_string(),
-                            uuid,
+                            id: IriBuf::from(&newnamespace).as_iri().into(),
                         },
                     )])
             })
-            .map(|x| ApiResponse::Unit)
+            .map(|_| ApiResponse::Unit)
             .map_err(ApiError::from)
     }
 
@@ -137,13 +139,13 @@ impl Api {
         };
 
         diesel::insert_or_ignore_into(schema::agent::table)
-            .values(newagent)
+            .values(&newagent)
             .execute(&self.connection)
             .map(|_| {
                 self.ledger
                     .submit(vec![ChronicleTransaction::CreateAgent(CreateAgent {
-                        id: newagent.as_iri().into(),
-                        namespace: namespace_data.as_iri().into(),
+                        id: IriBuf::from(&newagent).as_iri().into(),
+                        namespace: IriBuf::from(&namespace_data).as_iri().into(),
                     })])
             })
             .map_err(ApiError::from)
@@ -174,7 +176,7 @@ impl Api {
     ) -> Result<Option<Agent>, diesel::result::Error> {
         use self::schema::agent::dsl as ns;
         ns::agent
-            .filter(ns::name.eq(namespace).and(ns::namespace.eq(namespace)))
+            .filter(ns::name.eq(name).and(ns::namespace.eq(namespace)))
             .first::<models::Agent>(&self.connection)
             .optional()
     }
@@ -194,19 +196,21 @@ impl Api {
                 namespace,
                 current,
                 publickey: Some(publickey),
-                privatekeypath: privatekeypath.map(|x| x.as_ref()),
+                privatekeypath: privatekeypath.as_deref(),
             };
 
             diesel::update(schema::agent::table)
                 .filter(ns::name.eq(namespace).and(ns::namespace.eq(namespace)))
                 .set(update)
                 .execute(&self.connection)
+                .map_err(ApiError::from)
+                .map(|_| ApiResponse::Unit)
         } else {
             let insert = models::NewAgent {
                 name,
                 namespace,
                 publickey: Some(publickey),
-                privatekeypath: privatekeypath.map(|x| x.as_ref()),
+                privatekeypath: privatekeypath.as_deref(),
                 ..Default::default()
             };
 
