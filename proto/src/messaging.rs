@@ -33,7 +33,7 @@ impl SawtoothValidator {
         &self,
         _transactions: Vec<ChronicleTransaction>,
     ) -> Result<SubmissionResult, SubmissionError> {
-        todo!()
+        Ok(SubmissionResult::Accepted)
     }
 }
 

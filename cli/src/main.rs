@@ -213,7 +213,7 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
 
     let validatorurl =
         Question::new("What is the address of the sawtooth validator zeromq service?")
-            .default(Answer::RESPONSE("localhost:9090".to_owned()))
+            .default(Answer::RESPONSE("tcp://localhost:4004".to_owned()))
             .show_defaults()
             .confirm();
 
@@ -232,7 +232,7 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
             let secretpath = Path::new(&secretpath);
 
             println!("Creating config dir {} if needed", path.to_string_lossy());
-            std::fs::create_dir_all(path)?;
+            std::fs::create_dir_all(path.parent().unwrap())?;
             println!("Creating db dir {} if needed", &dbpath.to_string_lossy());
             std::fs::create_dir_all(&dbpath)?;
             println!(
