@@ -33,7 +33,7 @@ custom_error! {pub ApiError
     DbMigration{source: diesel_migrations::RunMigrationsError}  = "Database migration failed",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
-    Api{source: SubmissionError}            = "Json LD processing",
+    Api{source: SubmissionError}                                = "Json LD processing",
 }
 
 impl UFE for ApiError {}

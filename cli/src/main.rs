@@ -1,7 +1,16 @@
-use std::str::FromStr;
+#[macro_use]
+extern crate serde_derive;
 
 use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
 use clap::{App, Arg, ArgMatches};
+use custom_error::custom_error;
+use k256::{elliptic_curve::sec1::ToEncodedPoint, SecretKey};
+use pkcs8::{ToPrivateKey, ToPublicKey};
+use question::{Answer, Question};
+use rand::prelude::StdRng;
+use rand_core::SeedableRng;
+use std::path::{Path, PathBuf};
+use url::Url;
 use user_error::UFE;
 
 fn cli<'a>() -> App<'a> {
@@ -13,8 +22,8 @@ fn cli<'a>() -> App<'a> {
             Arg::new("config")
                 .short('c')
                 .long("config")
-                .value_name("FILE")
-                .default_value("~/.chronicle/.config.toml")
+                .value_name("config")
+                .default_value("~/.chronicle/config.toml")
                 .about("Sets a custom config file")
                 .takes_value(true),
         )
@@ -71,8 +80,11 @@ fn cli<'a>() -> App<'a> {
         )
 }
 
-fn api_exec(options: ArgMatches) -> Result<ApiResponse, ApiError> {
-    let api = Api::new("./.sqlite", &url::Url::from_str("http://bob.com").unwrap())?;
+fn api_exec(config: Config, options: ArgMatches) -> Result<ApiResponse, ApiError> {
+    let api = Api::new(
+        &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+        &config.validator.address,
+    )?;
 
     vec![
         options.subcommand_matches("namespace").and_then(|m| {
@@ -110,9 +122,185 @@ fn api_exec(options: ArgMatches) -> Result<ApiResponse, ApiError> {
     .unwrap_or(Ok(ApiResponse::Unit))
 }
 
+custom_error! {pub CliError
+    Api{source: api::ApiError}                  = "Api error",
+    Pkcs8{source: pkcs8::Error}                 = "Key encoding",
+    FileSystem{source: std::io::Error}       = "Cannot locate configuration file",
+    ConfigInvalid{source: toml::de::Error}      = "Invalid configuration file",
+    InvalidPath                                 = "Invalid path",
+}
+
+impl UFE for CliError {}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SecretConfig {
+    pub path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StoreConfig {
+    pub path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ValidatorConfig {
+    pub address: Url,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Config {
+    pub secrets: SecretConfig,
+    pub store: StoreConfig,
+    pub validator: ValidatorConfig,
+}
+
+fn handle_config_and_init(cli: &App) -> Result<Config, CliError> {
+    let path = cli
+        .clone()
+        .get_matches()
+        .value_of("config")
+        .unwrap()
+        .to_owned();
+    let path = shellexpand::tilde(&path);
+    let path = PathBuf::from(&*path);
+
+    let meta = std::fs::metadata(&*path);
+    if meta.is_err() {
+        init_chronicle_at(&path)?
+    }
+
+    let toml = std::fs::read_to_string(&path)?;
+    Ok(toml::from_str(&toml)?)
+}
+
+/// Interrogate the user for required configuration and initialise chronicle to a working state, including key generation if needed
+fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
+    let init = Question::new(&format!(
+        "No configuration found at {}, create?",
+        path.to_string_lossy()
+    ))
+    .default(question::Answer::YES)
+    .show_defaults()
+    .confirm();
+
+    if init != Answer::YES {
+        std::process::exit(0);
+    }
+
+    let dbpath = Question::new("Where should chronicle store state?")
+        .default(Answer::RESPONSE(
+            Path::join(
+                path.parent().ok_or(CliError::InvalidPath)?,
+                PathBuf::from("store"),
+            )
+            .to_string_lossy()
+            .to_string(),
+        ))
+        .show_defaults()
+        .confirm();
+
+    let secretpath = Question::new("Where should chronicle store secrets?")
+        .default(Answer::RESPONSE(
+            Path::join(
+                path.parent().ok_or(CliError::InvalidPath)?,
+                PathBuf::from("secrets"),
+            )
+            .to_string_lossy()
+            .to_string(),
+        ))
+        .show_defaults()
+        .confirm();
+
+    let validatorurl =
+        Question::new("What is the address of the sawtooth validator zeromq service?")
+            .default(Answer::RESPONSE("localhost:9090".to_owned()))
+            .show_defaults()
+            .confirm();
+
+    let generatesecret = Question::new("Generate a new default key in the secret store?")
+        .default(Answer::YES)
+        .show_defaults()
+        .confirm();
+
+    match (dbpath, secretpath, validatorurl) {
+        (
+            Answer::RESPONSE(dbpath),
+            Answer::RESPONSE(secretpath),
+            Answer::RESPONSE(validatorurl),
+        ) => {
+            let dbpath = Path::new(&dbpath);
+            let secretpath = Path::new(&secretpath);
+
+            println!("Creating config dir {} if needed", path.to_string_lossy());
+            std::fs::create_dir_all(path)?;
+            println!("Creating db dir {} if needed", &dbpath.to_string_lossy());
+            std::fs::create_dir_all(&dbpath)?;
+            println!(
+                "Creating secret dir {} if needed",
+                &secretpath.to_string_lossy()
+            );
+            std::fs::create_dir_all(&secretpath)?;
+
+            let config = format!(
+                r#"
+            [secrets]
+            path = "{}"
+            [store]
+            path = "{}"
+            [validator]
+            address = "{}"
+            "#,
+                &*secretpath.to_string_lossy(),
+                &*dbpath.to_string_lossy(),
+                validatorurl
+            );
+
+            println!("Writing config to {}", &path.to_string_lossy());
+            println!("{}", &config);
+
+            std::fs::write(path, config)?;
+
+            if generatesecret == Answer::YES {
+                println!("Generating Secp256k1 secret key");
+                let secret = SecretKey::random(StdRng::from_entropy());
+
+                let privpem = secret.to_pkcs8_pem()?;
+
+                let pubpem = secret.public_key().to_public_key_pem()?;
+
+                println!(
+                    "Writing new key {} to store",
+                    hex::encode_upper(secret.public_key().to_encoded_point(true).as_bytes())
+                );
+
+                std::fs::write(
+                    Path::join(Path::new(&secretpath), Path::new("default.priv.pem")),
+                    privpem.as_bytes(),
+                )?;
+
+                std::fs::write(
+                    Path::join(Path::new(&secretpath), Path::new("default.pub.pem")),
+                    pubpem.as_bytes(),
+                )?;
+            } else {
+                println!(
+                    "Please install your keys in .pem format in the configured secret location"
+                );
+                std::process::exit(0);
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
 fn main() {
-    std::process::exit(match api_exec(cli().get_matches()) {
-        Ok(response) => {
+    let cli = cli();
+
+    handle_config_and_init(&cli)
+        .and_then(|config| Ok(api_exec(config, cli.get_matches())?))
+        .map(|response| {
             match response {
                 ApiResponse::Iri(iri) => {
                     println!("{}", iri);
@@ -122,11 +310,11 @@ fn main() {
                 }
                 ApiResponse::Unit => {}
             }
-            0
-        }
-        Err(e) => {
+            std::process::exit(0);
+        })
+        .map_err(|e| {
             e.into_ufe().print();
-            1
-        }
-    });
+            std::process::exit(1);
+        })
+        .ok();
 }
