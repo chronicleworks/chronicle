@@ -1,18 +1,34 @@
+use std::future::Future;
+
+use crate::messages::MessageBuilder;
 use common::models::ChronicleTransaction;
 use crypto::digest::Digest;
 use custom_error::*;
+use derivative::Derivative;
+use k256::ecdsa::SigningKey;
+use prost::Message as ProstMessage;
+use sawtooth_sdk::messages::processor::TpProcessRequest;
+use sawtooth_sdk::messages::validator::Message;
+use sawtooth_sdk::messages::validator::Message_MessageType;
+use sawtooth_sdk::messaging::stream::{
+    MessageFuture, MessageResult, MessageSender, ReceiveError, SendError,
+};
 use sawtooth_sdk::{
-    messages::processor::TpProcessRequest,
     messaging::{
         stream::{MessageConnection, MessageReceiver},
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
     },
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
+use tracing::instrument;
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct SawtoothValidator {
+    #[derivative(Debug = "ignore")]
     tx: ZmqMessageSender,
     rx: MessageReceiver,
+    builder: MessageBuilder,
 }
 
 pub enum SubmissionResult {
@@ -20,20 +36,46 @@ pub enum SubmissionResult {
 }
 
 custom_error! {pub SubmissionError
-    Unknown{}                           = "Submission failed",
+    Send{source: SendError}                              = "Submission failed to send to validator",
+    Recv{source: ReceiveError}                           = "Submission failed to send to validator",
+    UnexpectedReply{}                                    = "Validator reply unexpected",
 }
 
 impl SawtoothValidator {
-    pub fn new(address: &url::Url) -> Self {
+    pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
+        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
-        SawtoothValidator { tx, rx }
+        SawtoothValidator { tx, rx, builder }
     }
 
+    #[instrument]
     pub fn submit(
         &self,
-        _transactions: Vec<ChronicleTransaction>,
+        transactions: Vec<ChronicleTransaction>,
     ) -> Result<SubmissionResult, SubmissionError> {
-        Ok(SubmissionResult::Accepted)
+        let transactions = transactions
+            .iter()
+            .map(|payload| {
+                self.builder
+                    .make_sawtooth_transaction(vec![], vec![], vec![], &payload)
+            })
+            .collect();
+
+        let batch = self.builder.make_sawtooth_batch(transactions);
+
+        let mut future = self.tx.send(
+            Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
+            &uuid::Uuid::new_v4().to_string(),
+            &*batch.encode_to_vec(),
+        )?;
+
+        let result = future.get_timeout(std::time::Duration::from_secs(10))?;
+
+        if result.message_type == Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE {
+            Ok(SubmissionResult::Accepted)
+        } else {
+            Err(SubmissionError::UnexpectedReply {})
+        }
     }
 }
 
@@ -52,7 +94,7 @@ pub struct ChronicleTransactionHandler {
 impl ChronicleTransactionHandler {
     pub fn new() -> ChronicleTransactionHandler {
         ChronicleTransactionHandler {
-            family_name: "xo".into(),
+            family_name: "chronicle".into(),
             family_versions: vec!["1.0".into()],
             namespaces: vec![get_prefix()],
         }

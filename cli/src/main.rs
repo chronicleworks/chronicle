@@ -84,6 +84,7 @@ fn api_exec(config: Config, options: ArgMatches) -> Result<ApiResponse, ApiError
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         &config.validator.address,
+        &config.secrets.path,
     )?;
 
     vec![

@@ -17,7 +17,6 @@ pub mod messages {
     use k256::{
         ecdsa::signature::Signer,
         ecdsa::{Signature, SigningKey},
-        PublicKey, Secp256k1,
     };
     use prost::Message;
     use rand::{prelude::StdRng, Rng, SeedableRng};
@@ -28,6 +27,7 @@ pub mod messages {
         Serialize{source: serde_cbor::Error}                              = "Could not serialize as CBOR",
     }
 
+    #[derive(Debug)]
     pub struct MessageBuilder {
         signer: SigningKey,
         family_name: String,
@@ -36,12 +36,12 @@ pub mod messages {
     }
 
     impl MessageBuilder {
-        pub fn new(signer: SigningKey, family_name: String, family_version: String) -> Self {
+        pub fn new(signer: SigningKey, family_name: &str, family_version: &str) -> Self {
             let rng = StdRng::from_entropy();
             Self {
                 signer,
-                family_name,
-                family_version,
+                family_name: family_name.to_owned(),
+                family_version: family_version.to_owned(),
                 rng: Rc::new(rng.into()),
             }
         }
@@ -51,14 +51,33 @@ pub mod messages {
             hex::encode_upper(bytes)
         }
 
+        pub fn make_sawtooth_batch(&self, tx: Vec<Transaction>) -> Batch {
+            let mut batch = Batch::default();
+
+            let mut header = BatchHeader::default();
+
+            let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
+            header.transaction_ids = tx.iter().map(|tx| tx.header_signature.to_owned()).collect();
+            header.signer_public_key = pubkey;
+
+            let encoded_header = header.encode_to_vec();
+            let s: Signature = self.signer.sign(&*encoded_header);
+
+            batch.transactions = tx;
+            batch.header = encoded_header;
+            batch.header_signature = hex::encode_upper(s.as_ref());
+
+            batch
+        }
+
         pub fn make_sawtooth_transaction(
             &self,
             _input_addresses: Vec<String>,
             _output_addresses: Vec<String>,
             _dependencies: Vec<String>,
             payload: &ChronicleTransaction,
-        ) -> Result<Transaction, MessageBuilderError> {
-            let bytes = serde_cbor::to_vec(payload)?;
+        ) -> Transaction {
+            let bytes = serde_cbor::to_vec(payload).unwrap();
 
             let mut hasher = Sha512::new();
             hasher.input(&*bytes);
@@ -83,7 +102,7 @@ pub mod messages {
             tx.header_signature = hex::encode_upper(s.as_ref());
             tx.payload = bytes;
 
-            Ok(tx)
+            tx
         }
     }
 }

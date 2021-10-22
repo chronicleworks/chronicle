@@ -40,4 +40,8 @@ impl DirectoryStoredKeys {
 
         Ok(Self { public, signing })
     }
+
+    pub fn default(&self) -> &SigningKey {
+        &self.signing
+    }
 }

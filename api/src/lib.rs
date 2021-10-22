@@ -11,13 +11,18 @@ mod models;
 mod schema;
 mod vocab;
 
+use std::path::Path;
+
 use async_std::task;
 use custom_error::*;
 use diesel::{prelude::*, sqlite::SqliteConnection};
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 
-use common::models::{ChronicleTransaction, CreateAgent, CreateNamespace};
+use common::{
+    models::{ChronicleTransaction, CreateAgent, CreateNamespace},
+    signing::{DirectoryStoredKeys, SignerError},
+};
 use iref::IriBuf;
 use models::Agent;
 use proto::messaging::{SawtoothValidator, SubmissionError};
@@ -34,6 +39,7 @@ custom_error! {pub ApiError
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
     Api{source: SubmissionError}                                = "Json LD processing",
+    Signing{source: SignerError}                                = "Signing",
 }
 
 impl UFE for ApiError {}
@@ -72,11 +78,18 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn new(database_url: &str, sawtooth_url: &Url) -> Result<Self, ApiError> {
+    pub fn new(
+        database_url: &str,
+        sawtooth_url: &Url,
+        secret_path: &Path,
+    ) -> Result<Self, ApiError> {
         let connection = SqliteConnection::establish(database_url)?;
         embedded_migrations::run(&connection)?;
 
-        let ledger = SawtoothValidator::new(sawtooth_url);
+        let ledger = SawtoothValidator::new(
+            sawtooth_url,
+            DirectoryStoredKeys::new(secret_path)?.default(),
+        );
         Ok(Api { connection, ledger })
     }
 
