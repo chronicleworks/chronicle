@@ -26,3 +26,4 @@ glob = "0.3.0"
 proto = {path="../proto"}
 common = {path="../common"}
 tracing = "0.1.29"
+derivative = "2.2.0"

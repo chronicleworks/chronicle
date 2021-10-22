@@ -10,6 +10,7 @@ use question::{Answer, Question};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
 use std::path::{Path, PathBuf};
+use tracing::Level;
 use url::Url;
 use user_error::UFE;
 
@@ -26,6 +27,12 @@ fn cli<'a>() -> App<'a> {
                 .default_value("~/.chronicle/config.toml")
                 .about("Sets a custom config file")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::new("debug")
+                .short('d')
+                .long("debug")
+                .about("Print debugging information"),
         )
         .subcommand(
             App::new("namespace")
@@ -80,7 +87,7 @@ fn cli<'a>() -> App<'a> {
         )
 }
 
-fn api_exec(config: Config, options: ArgMatches) -> Result<ApiResponse, ApiError> {
+fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         &config.validator.address,
@@ -155,13 +162,8 @@ pub struct Config {
     pub validator: ValidatorConfig,
 }
 
-fn handle_config_and_init(cli: &App) -> Result<Config, CliError> {
-    let path = cli
-        .clone()
-        .get_matches()
-        .value_of("config")
-        .unwrap()
-        .to_owned();
+fn handle_config_and_init(matches: &ArgMatches) -> Result<Config, CliError> {
+    let path = matches.value_of("config").unwrap().to_owned();
     let path = shellexpand::tilde(&path);
     let path = PathBuf::from(&*path);
 
@@ -297,10 +299,22 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
 }
 
 fn main() {
-    let cli = cli();
+    let matches = cli().get_matches();
 
-    handle_config_and_init(&cli)
-        .and_then(|config| Ok(api_exec(config, cli.get_matches())?))
+    let _tracer = {
+        if matches.is_present("debug") {
+            Some(
+                tracing_subscriber::fmt()
+                    .with_max_level(Level::TRACE)
+                    .init(),
+            )
+        } else {
+            None
+        }
+    };
+
+    handle_config_and_init(&matches)
+        .and_then(|config| Ok(api_exec(config, &matches)?))
         .map(|response| {
             match response {
                 ApiResponse::Iri(iri) => {

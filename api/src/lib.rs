@@ -11,13 +11,13 @@ mod models;
 mod schema;
 mod vocab;
 
-use std::path::Path;
-
 use async_std::task;
 use custom_error::*;
+use derivative::*;
 use diesel::{prelude::*, sqlite::SqliteConnection};
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
+use std::path::Path;
 
 use common::{
     models::{ChronicleTransaction, CreateAgent, CreateNamespace},
@@ -26,6 +26,7 @@ use common::{
 use iref::IriBuf;
 use models::Agent;
 use proto::messaging::{SawtoothValidator, SubmissionError};
+use tracing::instrument;
 use url::Url;
 use user_error::UFE;
 use uuid::Uuid;
@@ -44,10 +45,12 @@ custom_error! {pub ApiError
 
 impl UFE for ApiError {}
 
+#[derive(Debug)]
 pub enum NamespaceCommand {
     Create { name: String },
 }
 
+#[derive(Debug)]
 pub enum AgentCommand {
     Create {
         name: String,
@@ -61,18 +64,23 @@ pub enum AgentCommand {
     },
 }
 
+#[derive(Debug)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
 }
 
+#[derive(Debug)]
 pub enum ApiResponse {
     Unit,
     Iri(IriBuf),
     Document(JsonValue),
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Api {
+    #[derivative(Debug = "ignore")]
     connection: SqliteConnection,
     ledger: SawtoothValidator,
 }
@@ -93,6 +101,7 @@ impl Api {
         Ok(Api { connection, ledger })
     }
 
+    #[instrument]
     fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = Uuid::new_v4();
         let newnamespace = models::NewNamespace {
@@ -115,6 +124,7 @@ impl Api {
             .map_err(ApiError::from)
     }
 
+    #[instrument]
     fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
         use self::schema::namespace::dsl as ns;
 
@@ -165,6 +175,7 @@ impl Api {
             .map(|_| ApiResponse::Document(output))
     }
 
+    #[instrument]
     pub fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
@@ -182,6 +193,7 @@ impl Api {
         }
     }
 
+    #[instrument]
     fn get_agent(
         &self,
         name: &str,
@@ -194,6 +206,7 @@ impl Api {
             .optional()
     }
 
+    #[instrument]
     fn register_key(
         &self,
         name: &str,
