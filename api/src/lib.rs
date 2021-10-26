@@ -20,12 +20,13 @@ use json_ld::{context::Local, Document, JsonContext, NoLoader};
 use std::path::Path;
 
 use common::{
+    ledger::{LedgerWriter, SubmissionError},
     models::{ChronicleTransaction, CreateAgent, CreateNamespace},
     signing::{DirectoryStoredKeys, SignerError},
 };
 use iref::IriBuf;
 use models::Agent;
-use proto::messaging::{SawtoothValidator, SubmissionError};
+use proto::messaging::SawtoothValidator;
 use tracing::instrument;
 use url::Url;
 use user_error::UFE;
@@ -39,7 +40,7 @@ custom_error! {pub ApiError
     DbMigration{source: diesel_migrations::RunMigrationsError}  = "Database migration failed",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
-    Api{source: SubmissionError}                                = "Json LD processing",
+    Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
 }
 
@@ -82,7 +83,8 @@ pub enum ApiResponse {
 pub struct Api {
     #[derivative(Debug = "ignore")]
     connection: SqliteConnection,
-    ledger: SawtoothValidator,
+    #[derivative(Debug = "ignore")]
+    ledger: Box<dyn LedgerWriter>,
 }
 
 impl Api {
@@ -98,7 +100,10 @@ impl Api {
             sawtooth_url,
             DirectoryStoredKeys::new(secret_path)?.default(),
         );
-        Ok(Api { connection, ledger })
+        Ok(Api {
+            connection,
+            ledger: Box::new(ledger),
+        })
     }
 
     #[instrument]
@@ -111,17 +116,16 @@ impl Api {
 
         diesel::insert_or_ignore_into(schema::namespace::table)
             .values(&newnamespace)
-            .execute(&self.connection)
-            .map(|_| {
-                self.ledger
-                    .submit(vec![ChronicleTransaction::CreateNamespace(
-                        CreateNamespace {
-                            id: IriBuf::from(&newnamespace).as_iri().into(),
-                        },
-                    )])
-            })
-            .map(|_| ApiResponse::Unit)
-            .map_err(ApiError::from)
+            .execute(&self.connection)?;
+
+        self.ledger
+            .submit(vec![ChronicleTransaction::CreateNamespace(
+                CreateNamespace {
+                    id: IriBuf::from(&newnamespace).as_iri().into(),
+                },
+            )])?;
+
+        Ok(ApiResponse::Unit)
     }
 
     #[instrument]
@@ -163,16 +167,15 @@ impl Api {
 
         diesel::insert_or_ignore_into(schema::agent::table)
             .values(&newagent)
-            .execute(&self.connection)
-            .map(|_| {
-                self.ledger
-                    .submit(vec![ChronicleTransaction::CreateAgent(CreateAgent {
-                        id: IriBuf::from(&newagent).as_iri().into(),
-                        namespace: IriBuf::from(&namespace_data).as_iri().into(),
-                    })])
-            })
-            .map_err(ApiError::from)
-            .map(|_| ApiResponse::Document(output))
+            .execute(&self.connection)?;
+
+        self.ledger
+            .submit(vec![ChronicleTransaction::CreateAgent(CreateAgent {
+                id: IriBuf::from(&newagent).as_iri().into(),
+                namespace: IriBuf::from(&namespace_data).as_iri().into(),
+            })])?;
+
+        Ok(ApiResponse::Document(output))
     }
 
     #[instrument]

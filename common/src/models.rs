@@ -1,6 +1,5 @@
 use iref::Iri;
 
-
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct NamespaceId(String);
 
@@ -92,3 +91,6 @@ pub enum ChronicleTransaction {
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct ProvStatement {}

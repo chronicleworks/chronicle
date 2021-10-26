@@ -1,14 +1,15 @@
 use std::future::Future;
+use std::sync::mpsc::Receiver;
 
 use crate::messages::MessageBuilder;
+use async_trait::async_trait;
+use common::ledger::{LedgerWriter, SubmissionError};
 use common::models::ChronicleTransaction;
-use crypto::digest::Digest;
 use custom_error::*;
 use derivative::Derivative;
 use k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
-use sawtooth_sdk::messages::processor::TpProcessRequest;
-use sawtooth_sdk::messages::validator::Message;
+use prost_types::Duration;
 use sawtooth_sdk::messages::validator::Message_MessageType;
 use sawtooth_sdk::messaging::stream::{
     MessageFuture, MessageResult, MessageSender, ReceiveError, SendError,
@@ -20,8 +21,11 @@ use sawtooth_sdk::{
     },
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
+use tracing::debug;
 use tracing::instrument;
 
+///
+/// The
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct SawtoothValidator {
@@ -35,12 +39,22 @@ pub enum SubmissionResult {
     Accepted,
 }
 
-custom_error! {pub SubmissionError
+custom_error! {pub SawtoothSubmissionError
     Send{source: SendError}                              = "Submission failed to send to validator",
     Recv{source: ReceiveError}                           = "Submission failed to send to validator",
     UnexpectedReply{}                                    = "Validator reply unexpected",
 }
 
+impl Into<SubmissionError> for SawtoothSubmissionError {
+    fn into(self) -> SubmissionError {
+        SubmissionError::Implementation {
+            source: Box::new(self),
+        }
+    }
+}
+
+///
+/// The sawtooth futures and their soickets are not controlled by a compatible reactor
 impl SawtoothValidator {
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
@@ -49,10 +63,10 @@ impl SawtoothValidator {
     }
 
     #[instrument]
-    pub fn submit(
+    fn submit(
         &self,
         transactions: Vec<ChronicleTransaction>,
-    ) -> Result<SubmissionResult, SubmissionError> {
+    ) -> Result<(), SawtoothSubmissionError> {
         let transactions = transactions
             .iter()
             .map(|payload| {
@@ -63,6 +77,8 @@ impl SawtoothValidator {
 
         let batch = self.builder.make_sawtooth_batch(transactions);
 
+        debug!(?batch, "Validator request");
+
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
             &uuid::Uuid::new_v4().to_string(),
@@ -71,54 +87,18 @@ impl SawtoothValidator {
 
         let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
+        debug!(?result, "Validator response");
+
         if result.message_type == Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE {
-            Ok(SubmissionResult::Accepted)
+            Ok(())
         } else {
-            Err(SubmissionError::UnexpectedReply {})
+            Err(SawtoothSubmissionError::UnexpectedReply {})
         }
     }
 }
 
-pub fn get_prefix() -> String {
-    let mut sha = crypto::sha2::Sha512::new();
-    sha.input_str("chronicle");
-    sha.result_str()[..6].to_string()
-}
-
-pub struct ChronicleTransactionHandler {
-    family_name: String,
-    family_versions: Vec<String>,
-    namespaces: Vec<String>,
-}
-
-impl ChronicleTransactionHandler {
-    pub fn new() -> ChronicleTransactionHandler {
-        ChronicleTransactionHandler {
-            family_name: "chronicle".into(),
-            family_versions: vec!["1.0".into()],
-            namespaces: vec![get_prefix()],
-        }
-    }
-}
-
-impl TransactionHandler for ChronicleTransactionHandler {
-    fn family_name(&self) -> String {
-        self.family_name.clone()
-    }
-
-    fn family_versions(&self) -> Vec<String> {
-        self.family_versions.clone()
-    }
-
-    fn namespaces(&self) -> Vec<String> {
-        self.namespaces.clone()
-    }
-
-    fn apply(
-        &self,
-        _request: &TpProcessRequest,
-        _context: &mut dyn TransactionContext,
-    ) -> Result<(), ApplyError> {
-        Ok(())
+impl LedgerWriter for SawtoothValidator {
+    fn submit(&self, tx: Vec<ChronicleTransaction>) -> Result<(), SubmissionError> {
+        self.submit(tx).map_err(SawtoothSubmissionError::into)
     }
 }

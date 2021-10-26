@@ -10,7 +10,7 @@ use question::{Answer, Question};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
 use std::path::{Path, PathBuf};
-use tracing::Level;
+use tracing::{error, instrument, Level};
 use url::Url;
 use user_error::UFE;
 
@@ -87,6 +87,7 @@ fn cli<'a>() -> App<'a> {
         )
 }
 
+#[instrument]
 fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
@@ -305,6 +306,7 @@ fn main() {
         if matches.is_present("debug") {
             Some(
                 tracing_subscriber::fmt()
+                    .pretty()
                     .with_max_level(Level::TRACE)
                     .init(),
             )
@@ -328,6 +330,7 @@ fn main() {
             std::process::exit(0);
         })
         .map_err(|e| {
+            error!(?e, "Api error");
             e.into_ufe().print();
             std::process::exit(1);
         })
