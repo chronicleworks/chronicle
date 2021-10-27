@@ -7,9 +7,7 @@ extern crate iref_enum;
 #[macro_use]
 extern crate json;
 
-mod models;
-mod schema;
-mod vocab;
+mod persistence;
 
 use async_std::task;
 use custom_error::*;
@@ -17,27 +15,24 @@ use derivative::*;
 use diesel::{prelude::*, sqlite::SqliteConnection};
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
+use persistence::Store;
 use std::path::Path;
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{ChronicleTransaction, CreateAgent, CreateNamespace},
     signing::{DirectoryStoredKeys, SignerError},
+    vocab::Chronicle as ChronicleVocab,
 };
 use iref::IriBuf;
-use models::Agent;
 use proto::messaging::SawtoothValidator;
 use tracing::instrument;
 use url::Url;
 use user_error::UFE;
 use uuid::Uuid;
 
-embed_migrations!();
-
 custom_error! {pub ApiError
-    Db{source: diesel::result::Error}                           = "Database operation failed",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
-    DbMigration{source: diesel_migrations::RunMigrationsError}  = "Database migration failed",
+    Store{source: persistence::StoreError}                      = "Storage",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
@@ -82,9 +77,9 @@ pub enum ApiResponse {
 #[derivative(Debug)]
 pub struct Api {
     #[derivative(Debug = "ignore")]
-    connection: SqliteConnection,
-    #[derivative(Debug = "ignore")]
     ledger: Box<dyn LedgerWriter>,
+    #[derivative(Debug = "ignore")]
+    store: persistence::Store,
 }
 
 impl Api {
@@ -93,89 +88,46 @@ impl Api {
         sawtooth_url: &Url,
         secret_path: &Path,
     ) -> Result<Self, ApiError> {
-        let connection = SqliteConnection::establish(database_url)?;
-        embedded_migrations::run(&connection)?;
-
         let ledger = SawtoothValidator::new(
             sawtooth_url,
             DirectoryStoredKeys::new(secret_path)?.default(),
         );
         Ok(Api {
-            connection,
             ledger: Box::new(ledger),
+            store: Store::new(database_url)?,
         })
     }
 
     #[instrument]
     fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = Uuid::new_v4();
-        let newnamespace = models::NewNamespace {
-            name,
-            uuid: &uuid.to_string(),
-        };
+        let iri = ChronicleVocab::namespace(name, &uuid);
 
-        diesel::insert_or_ignore_into(schema::namespace::table)
-            .values(&newnamespace)
-            .execute(&self.connection)?;
+        let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
+            id: iri.into(),
+            name: name.to_owned(),
+            uuid: Uuid::new_v4(),
+        });
 
-        self.ledger
-            .submit(vec![ChronicleTransaction::CreateNamespace(
-                CreateNamespace {
-                    id: IriBuf::from(&newnamespace).as_iri().into(),
-                },
-            )])?;
+        self.ledger.submit(vec![&tx])?;
+
+        self.store.apply(&tx)?;
 
         Ok(ApiResponse::Unit)
     }
 
     #[instrument]
     fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
-        use self::schema::namespace::dsl as ns;
+        let tx = ChronicleTransaction::CreateAgent(CreateAgent {
+            name: name.to_owned(),
+            id: ChronicleVocab::agent(name).into(),
+            namespace: self.store.namespace_by_name(namespace)?,
+        });
 
-        self.create_namespace(namespace)?;
+        self.ledger.submit(vec![&tx])?;
+        self.store.apply(&tx);
 
-        let namespace_data = ns::namespace
-            .filter(ns::name.eq(namespace))
-            .first::<models::NameSpace>(&self.connection)?;
-
-        let namespace_iri = IriBuf::new(&format!(
-            "chronicle:{}/{}#",
-            namespace_data.name, namespace_data.uuid
-        ))?;
-
-        let id = IriBuf::new(&format!("{}agent:{}", namespace_iri, name))?;
-
-        let input = object! {
-            "http://www.w3.org/ns/prov#Agent" : {
-                "@id": (id.as_str())
-            }
-        };
-        let context = object! {};
-
-        let processed_context =
-            task::block_on(context.process::<JsonContext, _>(&mut NoLoader, None))?;
-
-        let output = task::block_on(input.compact(&processed_context, &mut NoLoader))?;
-
-        let newagent = models::NewAgent {
-            name,
-            namespace,
-            current: 0,
-            publickey: None,
-            privatekeypath: None,
-        };
-
-        diesel::insert_or_ignore_into(schema::agent::table)
-            .values(&newagent)
-            .execute(&self.connection)?;
-
-        self.ledger
-            .submit(vec![ChronicleTransaction::CreateAgent(CreateAgent {
-                id: IriBuf::from(&newagent).as_iri().into(),
-                namespace: IriBuf::from(&namespace_data).as_iri().into(),
-            })])?;
-
-        Ok(ApiResponse::Document(output))
+        Ok(ApiResponse::Unit)
     }
 
     #[instrument]
@@ -202,11 +154,6 @@ impl Api {
         name: &str,
         namespace: &str,
     ) -> Result<Option<Agent>, diesel::result::Error> {
-        use self::schema::agent::dsl as ns;
-        ns::agent
-            .filter(ns::name.eq(name).and(ns::namespace.eq(namespace)))
-            .first::<models::Agent>(&self.connection)
-            .optional()
     }
 
     #[instrument]
@@ -217,37 +164,5 @@ impl Api {
         publickey: &str,
         privatekeypath: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        use self::schema::agent::dsl as ns;
-
-        if let Some(Agent { current, .. }) = self.get_agent(name, namespace)? {
-            let update = models::NewAgent {
-                name,
-                namespace,
-                current,
-                publickey: Some(publickey),
-                privatekeypath: privatekeypath.as_deref(),
-            };
-
-            diesel::update(schema::agent::table)
-                .filter(ns::name.eq(namespace).and(ns::namespace.eq(namespace)))
-                .set(update)
-                .execute(&self.connection)
-                .map_err(ApiError::from)
-                .map(|_| ApiResponse::Unit)
-        } else {
-            let insert = models::NewAgent {
-                name,
-                namespace,
-                publickey: Some(publickey),
-                privatekeypath: privatekeypath.as_deref(),
-                ..Default::default()
-            };
-
-            diesel::insert_into(schema::agent::table)
-                .values(insert)
-                .execute(&self.connection)
-                .map_err(ApiError::from)
-                .map(|_| ApiResponse::Unit)
-        }
     }
 }

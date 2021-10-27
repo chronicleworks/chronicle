@@ -1,6 +1,4 @@
-
-
-
+use crate::address::SawtoothAddress;
 use crate::messages::MessageBuilder;
 
 use common::ledger::{LedgerWriter, SubmissionError};
@@ -11,14 +9,10 @@ use k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::messages::validator::Message_MessageType;
-use sawtooth_sdk::messaging::stream::{
-    MessageSender, ReceiveError, SendError,
-};
-use sawtooth_sdk::{
-    messaging::{
-        stream::{MessageConnection, MessageReceiver},
-        zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
-    },
+use sawtooth_sdk::messaging::stream::{MessageSender, ReceiveError, SendError};
+use sawtooth_sdk::messaging::{
+    stream::{MessageConnection, MessageReceiver},
+    zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
 };
 use tracing::debug;
 use tracing::instrument;
@@ -64,13 +58,13 @@ impl SawtoothValidator {
     #[instrument]
     fn submit(
         &self,
-        transactions: Vec<ChronicleTransaction>,
+        transactions: Vec<&ChronicleTransaction>,
     ) -> Result<(), SawtoothSubmissionError> {
         let transactions = transactions
             .iter()
             .map(|payload| {
                 self.builder
-                    .make_sawtooth_transaction(vec![], vec![], vec![], &payload)
+                    .make_sawtooth_transaction(vec![], vec![], vec![], payload)
             })
             .collect();
 
@@ -97,7 +91,7 @@ impl SawtoothValidator {
 }
 
 impl LedgerWriter for SawtoothValidator {
-    fn submit(&self, tx: Vec<ChronicleTransaction>) -> Result<(), SubmissionError> {
+    fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         self.submit(tx).map_err(SawtoothSubmissionError::into)
     }
 }

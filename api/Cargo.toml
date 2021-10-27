@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 async-std = "1.10.0"
 custom_error = "1.9.2"
-diesel = { version = "1.4.8", features = ["sqlite"] }
-diesel_migrations = { version = "1.4.0", features = ["sqlite"] }
+diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
+diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono"], git = "https://github.com/diesel-rs/diesel" }
 dotenv = "0.15.0"
 iref = "2.0.3"
 iref-enum = "1.2.0"
