@@ -29,6 +29,8 @@ pub enum Chronicle {
     HasPublicKey,
     #[iri("chronicle:Namespace")]
     NamespaceType,
+    #[iri("chronicle:hasNamespace")]
+    HasNamespace,
 }
 
 impl Chronicle {

@@ -361,10 +361,32 @@ impl ProvModel {
         }
 
         for (id, agent) in self.agents.iter() {
-            let agentdoc = object! {
+            let mut agentdoc = object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Prov::Agent).as_str(),
+                "@type": Iri::from(Prov::Agent).as_str()
             };
+            agent.publickey.as_ref().map(|publickey| {
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@value": JsonValue::String(publickey.to_owned()),
+                });
+
+                agentdoc
+                    .insert(Iri::from(Chronicle::HasPublicKey).as_str(), values)
+                    .ok();
+
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@id": JsonValue::String(agent.namespaceid.0.clone()),
+                });
+
+                agentdoc
+                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
+                    .ok();
+            });
+
             doc.push(agentdoc);
         }
 

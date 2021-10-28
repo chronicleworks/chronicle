@@ -242,4 +242,30 @@ mod test {
             _ => unreachable!(),
         }
     }
+
+    #[test]
+    fn agent_publiv_key() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+            name: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                name: "testagent".to_owned(),
+                namespace: "testns".to_owned(),
+                public: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_owned(),
+                private: Some("/test/path".to_owned()),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
 }
