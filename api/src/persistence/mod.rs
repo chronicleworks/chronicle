@@ -134,4 +134,19 @@ impl Store {
 
         Ok(())
     }
+
+    pub(crate) fn use_agent(&self, name: String, namespace: String) -> Result<(), StoreError> {
+        use schema::agent::dsl;
+        diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
+            .set(dsl::current.eq(0))
+            .execute(&mut *self.connection.borrow_mut())?;
+
+        diesel::update(
+            schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
+        )
+        .set(dsl::current.eq(1))
+        .execute(&mut *self.connection.borrow_mut())?;
+
+        Ok(())
+    }
 }

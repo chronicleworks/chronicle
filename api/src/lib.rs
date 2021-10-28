@@ -172,8 +172,10 @@ impl Api {
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
-    fn use_agent(&self, _name: String, _namespace: String) -> Result<ApiResponse, ApiError> {
-        todo!()
+    fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+        self.store.use_agent(name, namespace);
+
+        Ok(ApiResponse::Unit)
     }
 }
 

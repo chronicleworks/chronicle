@@ -1,5 +1,6 @@
 create table agent (
-    name text primary key not null,
+    id integer primary key,
+    name text key not null,
     namespace text not null,
     publickey text,
     privatekeypath text,
