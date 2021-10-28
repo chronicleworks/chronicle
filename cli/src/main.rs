@@ -3,9 +3,11 @@ extern crate serde_derive;
 
 use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
 use clap::{App, Arg, ArgMatches};
+use common::signing::DirectoryStoredKeys;
 use custom_error::custom_error;
 use k256::{elliptic_curve::sec1::ToEncodedPoint, SecretKey};
 use pkcs8::{ToPrivateKey, ToPublicKey};
+use proto::messaging::SawtoothValidator;
 use question::{Answer, Question};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
@@ -89,9 +91,14 @@ fn cli<'a>() -> App<'a> {
 
 #[instrument]
 fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
+    let ledger = SawtoothValidator::new(
+        &config.validator.address,
+        DirectoryStoredKeys::new(&config.secrets.path)?.default(),
+    );
+
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
-        &config.validator.address,
+        Box::new(ledger),
         &config.secrets.path,
     )?;
 
@@ -117,6 +124,12 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         public: m.value_of("publickey").unwrap().to_owned(),
                         private: m.value_of("privatekey").map(|x| x.to_owned()),
+                    }))
+                }),
+                m.subcommand_matches("use").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))
                 }),
             ]
@@ -319,11 +332,8 @@ fn main() {
         .and_then(|config| Ok(api_exec(config, &matches)?))
         .map(|response| {
             match response {
-                ApiResponse::Iri(iri) => {
-                    println!("{}", iri);
-                }
-                ApiResponse::Document(doc) => {
-                    println!("{}", doc.pretty(2));
+                ApiResponse::Prov(doc) => {
+                    println!("{:?}", doc);
                 }
                 ApiResponse::Unit => {}
             }

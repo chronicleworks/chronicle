@@ -1,4 +1,4 @@
-use iref::{AsIri, Iri};
+use iref::{AsIri};
 use json::{object, JsonValue};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -113,9 +113,9 @@ pub enum ChronicleTransaction {
 
 #[derive(Debug, Clone)]
 pub struct Namespace {
-    id: NamespaceId,
-    uuid: Uuid,
-    name: String,
+    pub id: NamespaceId,
+    pub uuid: Uuid,
+    pub name: String,
 }
 
 impl Namespace {
@@ -126,27 +126,32 @@ impl Namespace {
 
 #[derive(Debug, Clone)]
 pub struct Agent {
-    id: AgentId,
-    ns: NamespaceId,
-    name: String,
-    public_key: Option<String>,
+    pub id: AgentId,
+    pub namespaceid: NamespaceId,
+    pub name: String,
+    pub publickey: Option<String>,
 }
 
 impl Agent {
-    pub fn new(id: AgentId, ns: NamespaceId, name: String, public_key: Option<String>) -> Self {
+    pub fn new(
+        id: AgentId,
+        namespaceid: NamespaceId,
+        name: String,
+        publickey: Option<String>,
+    ) -> Self {
         Self {
             id,
-            ns,
+            namespaceid,
             name,
-            public_key,
+            publickey,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Activity {
-    id: ActivityId,
-    ns: NamespaceId,
+    pub id: ActivityId,
+    pub ns: NamespaceId,
 }
 
 impl Activity {
@@ -221,7 +226,7 @@ impl ProvModel {
                 }
                 self.agents
                     .get_mut(&id)
-                    .map(|x| x.public_key = Some(publickey));
+                    .map(|x| x.publickey = Some(publickey));
             }
             ChronicleTransaction::CreateActivity(CreateActivity { namespace, id }) => {
                 if !self.activities.contains_key(&id) {
@@ -280,7 +285,7 @@ impl ProvModel {
 
     /// Write the model out as a JSON-LD document in expanded form
     pub fn to_json(&self) -> ExpandedJson {
-        let mut doc = object! {};
+        let doc = object! {};
 
         ExpandedJson(doc)
     }

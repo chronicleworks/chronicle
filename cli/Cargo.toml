@@ -23,4 +23,5 @@ rand_core = "0.6.3"
 shellexpand = "2.1.0"
 tracing = "0.1.29"
 tracing-subscriber = "0.2.25"
-
+proto = {path="../proto"}
+common = {path="../common"}

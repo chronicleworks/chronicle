@@ -1,4 +1,4 @@
-use crate::address::SawtoothAddress;
+
 use crate::messages::MessageBuilder;
 
 use common::ledger::{LedgerWriter, SubmissionError};

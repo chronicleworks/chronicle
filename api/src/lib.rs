@@ -1,33 +1,21 @@
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-#[macro_use]
-extern crate iref_enum;
-#[macro_use]
-extern crate json;
-
 mod persistence;
 
-use async_std::task;
 use custom_error::*;
 use derivative::*;
-use diesel::{prelude::*, sqlite::SqliteConnection};
-use json::JsonValue;
-use json_ld::{context::Local, Document, JsonContext, NoLoader};
+
 use persistence::Store;
 use std::path::Path;
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
-    models::{ChronicleTransaction, CreateAgent, CreateNamespace},
-    signing::{DirectoryStoredKeys, SignerError},
+    models::{ChronicleTransaction, CreateAgent, CreateNamespace, ProvModel, RegisterKey},
+    signing::{SignerError},
     vocab::Chronicle as ChronicleVocab,
 };
-use iref::IriBuf;
-use proto::messaging::SawtoothValidator;
+
+
 use tracing::instrument;
-use url::Url;
+
 use user_error::UFE;
 use uuid::Uuid;
 
@@ -58,6 +46,10 @@ pub enum AgentCommand {
         public: String,
         private: Option<String>,
     },
+    Use {
+        name: String,
+        namespace: String,
+    },
 }
 
 #[derive(Debug)]
@@ -69,8 +61,7 @@ pub enum ApiCommand {
 #[derive(Debug)]
 pub enum ApiResponse {
     Unit,
-    Iri(IriBuf),
-    Document(JsonValue),
+    Prov(ProvModel),
 }
 
 #[derive(Derivative)]
@@ -85,15 +76,11 @@ pub struct Api {
 impl Api {
     pub fn new(
         database_url: &str,
-        sawtooth_url: &Url,
-        secret_path: &Path,
+        ledger: Box<dyn LedgerWriter>,
+        _secret_path: &Path,
     ) -> Result<Self, ApiError> {
-        let ledger = SawtoothValidator::new(
-            sawtooth_url,
-            DirectoryStoredKeys::new(secret_path)?.default(),
-        );
         Ok(Api {
-            ledger: Box::new(ledger),
+            ledger: ledger,
             store: Store::new(database_url)?,
         })
     }
@@ -111,9 +98,7 @@ impl Api {
 
         self.ledger.submit(vec![&tx])?;
 
-        self.store.apply(&tx)?;
-
-        Ok(ApiResponse::Unit)
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
@@ -127,7 +112,7 @@ impl Api {
         self.ledger.submit(vec![&tx])?;
         self.store.apply(&tx);
 
-        Ok(ApiResponse::Unit)
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
@@ -144,25 +129,73 @@ impl Api {
                 namespace,
                 public,
                 private,
-            }) => self.register_key(&name, &namespace, &public, private),
+            }) => self.register_key(name, namespace, public, private),
+            ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
+                self.use_agent(name, namespace)
+            }
         }
-    }
-
-    #[instrument]
-    fn get_agent(
-        &self,
-        name: &str,
-        namespace: &str,
-    ) -> Result<Option<Agent>, diesel::result::Error> {
     }
 
     #[instrument]
     fn register_key(
         &self,
-        name: &str,
-        namespace: &str,
-        publickey: &str,
+        name: String,
+        namespace: String,
+        publickey: String,
         privatekeypath: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
+        let namespaceid = self.store.namespace_by_name(&namespace)?;
+        let tx = ChronicleTransaction::RegisterKey(RegisterKey {
+            id: ChronicleVocab::agent(&name).into(),
+            name: name.clone(),
+            namespace: namespaceid,
+            publickey,
+        });
+
+        self.ledger.submit(vec![&tx])?;
+        self.store.apply(&tx)?;
+        privatekeypath.map(|pk| self.store.store_pk_path(name, namespace, pk));
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
+
+    fn use_agent(&self, _name: String, _namespace: String) -> Result<ApiResponse, ApiError> {
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use common::{ledger::InMemLedger};
+    use tempfile::{NamedTempFile, TempDir};
+
+    use crate::{AgentCommand, Api, ApiCommand, NamespaceCommand};
+
+    fn test_api() -> Api {
+        let file = NamedTempFile::new().unwrap();
+        let secretpath = TempDir::new().unwrap();
+        Api::new(
+            &*file.into_temp_path().to_string_lossy(),
+            Box::new(InMemLedger::default()),
+            &secretpath.into_path(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn create_namespace() {
+        let prov = test_api().dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+            name: "testns".to_owned(),
+        }));
+
+        insta::assert_debug_snapshot!(prov);
+    }
+
+    #[test]
+    fn create_agent_before_namespace() {
+        let _prov = test_api().dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testns".to_owned(),
+            namespace: "doesntexistyet".to_owned(),
+        }));
     }
 }
