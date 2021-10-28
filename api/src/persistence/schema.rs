@@ -2,7 +2,7 @@
 
 diesel::table! {
     activity (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         name -> Text,
         namespace -> Text,
         started -> Nullable<Text>,
@@ -12,7 +12,7 @@ diesel::table! {
 
 diesel::table! {
     agent (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         name -> Text,
         namespace -> Text,
         publickey -> Nullable<Text>,
@@ -23,7 +23,7 @@ diesel::table! {
 
 diesel::table! {
     entity (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         name -> Text,
         namespace -> Text,
         started -> Nullable<Text>,
@@ -40,33 +40,33 @@ diesel::table! {
 
 diesel::table! {
     uses (id) {
-        id -> Nullable<Integer>,
-        agent -> Nullable<Integer>,
-        entity -> Nullable<Integer>,
+        id -> Integer,
+        agent -> Integer,
+        entity -> Integer,
     }
 }
 
 diesel::table! {
     wasasociatedwith (id) {
-        id -> Nullable<Integer>,
-        agent -> Nullable<Integer>,
-        activity -> Nullable<Integer>,
+        id -> Integer,
+        agent -> Integer,
+        activity -> Integer,
     }
 }
 
 diesel::table! {
     wasattributedto (id) {
-        id -> Nullable<Integer>,
-        agent -> Nullable<Integer>,
-        activity -> Nullable<Integer>,
+        id -> Integer,
+        agent -> Integer,
+        activity -> Integer,
     }
 }
 
 diesel::table! {
     wasgeneratedby (id) {
-        id -> Nullable<Integer>,
-        agent -> Nullable<Integer>,
-        entity -> Nullable<Integer>,
+        id -> Integer,
+        agent -> Integer,
+        entity -> Integer,
     }
 }
 
