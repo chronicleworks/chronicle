@@ -1,8 +1,6 @@
 use iref::IriBuf;
 use uuid::Uuid;
 
-
-
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("prov" = "http://www.w3.org/ns/prov#")]
 pub enum Prov {
@@ -29,6 +27,8 @@ pub enum Prov {
 pub enum Chronicle {
     #[iri("chronicle:hasPublicKey")]
     HasPublicKey,
+    #[iri("chronicle:Namespace")]
+    NamespaceType,
 }
 
 impl Chronicle {

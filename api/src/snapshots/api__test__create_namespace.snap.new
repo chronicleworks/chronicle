@@ -1,29 +1,11 @@
 ---
 source: api/src/lib.rs
-expression: prov
+expression: prov.to_json().0.pretty(3)
 
 ---
-Ok(
-    Prov(
-        ProvModel {
-            namespaces: {
-                NamespaceId(
-                    "http://blockchaintp.com/chonicle/ns#:ns:testns:df1459f7-065f-4577-91bb-0367b1fab2fb",
-                ): Namespace {
-                    id: NamespaceId(
-                        "http://blockchaintp.com/chonicle/ns#:ns:testns:df1459f7-065f-4577-91bb-0367b1fab2fb",
-                    ),
-                    uuid: a7b332d0-f4ec-4aa6-a789-eaa5f58a7f68,
-                    name: "testns",
-                },
-            },
-            agents: {},
-            activities: {},
-            entities: {},
-            wasAssociatedWith: {},
-            wasAttributedTo: {},
-            wasGeneratedBy: {},
-            uses: {},
-        },
-    ),
-)
+[
+   {
+      "@id": "http://blockchaintp.com/chonicle/ns#:ns:testns:91f10574-b920-4f9c-b12e-a8a18ab86caf",
+      "@type": "http://blockchaintp.com/chonicle/ns#Namespace"
+   }
+]

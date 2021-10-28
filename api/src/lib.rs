@@ -9,10 +9,9 @@ use std::path::Path;
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{ChronicleTransaction, CreateAgent, CreateNamespace, ProvModel, RegisterKey},
-    signing::{SignerError},
+    signing::SignerError,
     vocab::Chronicle as ChronicleVocab,
 };
-
 
 use tracing::instrument;
 
@@ -74,6 +73,7 @@ pub struct Api {
 }
 
 impl Api {
+    #[instrument(skip(ledger))]
     pub fn new(
         database_url: &str,
         ledger: Box<dyn LedgerWriter>,
@@ -110,7 +110,7 @@ impl Api {
         });
 
         self.ledger.submit(vec![&tx])?;
-        self.store.apply(&tx);
+        self.store.apply(&tx)?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
@@ -166,16 +166,22 @@ impl Api {
 
 #[cfg(test)]
 mod test {
-    use common::{ledger::InMemLedger};
-    use tempfile::{NamedTempFile, TempDir};
+    use common::ledger::InMemLedger;
+    use tempfile::TempDir;
+    use tracing::Level;
 
-    use crate::{AgentCommand, Api, ApiCommand, NamespaceCommand};
+    use crate::{AgentCommand, Api, ApiCommand, ApiResponse, NamespaceCommand};
 
     fn test_api() -> Api {
-        let file = NamedTempFile::new().unwrap();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_max_level(Level::TRACE)
+            .try_init()
+            .ok();
+
         let secretpath = TempDir::new().unwrap();
         Api::new(
-            &*file.into_temp_path().to_string_lossy(),
+            "file::memory:",
             Box::new(InMemLedger::default()),
             &secretpath.into_path(),
         )
@@ -184,18 +190,58 @@ mod test {
 
     #[test]
     fn create_namespace() {
-        let prov = test_api().dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".to_owned(),
-        }));
+        let prov = test_api()
+            .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+                name: "testns".to_owned(),
+            }))
+            .unwrap();
 
-        insta::assert_debug_snapshot!(prov);
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn create_agent() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+            name: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Agent(AgentCommand::Create {
+                name: "testagent".to_owned(),
+                namespace: "testns".to_owned(),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[test]
     fn create_agent_before_namespace() {
-        let _prov = test_api().dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testns".to_owned(),
-            namespace: "doesntexistyet".to_owned(),
-        }));
+        let prov = test_api()
+            .dispatch(ApiCommand::Agent(AgentCommand::Create {
+                name: "testns".to_owned(),
+                namespace: "doesntexistyet".to_owned(),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
     }
 }

@@ -1,10 +1,20 @@
-use iref::{AsIri};
+use iref::{AsIri, Iri, IriRef};
 use json::{object, JsonValue};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::vocab::{Chronicle, Prov};
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct NamespaceId(String);
+
+impl std::ops::Deref for NamespaceId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<S> From<S> for NamespaceId
 where
@@ -18,6 +28,14 @@ where
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct EntityId(String);
 
+impl std::ops::Deref for EntityId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<S> From<S> for EntityId
 where
     S: AsIri,
@@ -30,6 +48,14 @@ where
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AgentId(String);
 
+impl std::ops::Deref for AgentId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<S> From<S> for AgentId
 where
     S: AsIri,
@@ -41,6 +67,14 @@ where
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ActivityId(String);
+
+impl std::ops::Deref for ActivityId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<S> From<S> for ActivityId
 where
@@ -211,6 +245,15 @@ impl ProvModel {
                 id,
                 name,
             }) => {
+                self.namespaces.insert(
+                    namespace,
+                    Namespace {
+                        id: namespace,
+                        uuid: (),
+                        name: (),
+                    },
+                );
+
                 self.agents
                     .insert(id.clone(), Agent::new(id, namespace, name, None));
             }
@@ -285,10 +328,25 @@ impl ProvModel {
 
     /// Write the model out as a JSON-LD document in expanded form
     pub fn to_json(&self) -> ExpandedJson {
-        let doc = object! {};
+        let mut doc = json::Array::new();
 
-        ExpandedJson(doc)
+        for (id, _ns) in self.namespaces.iter() {
+            doc.push(object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Chronicle::NamespaceType).as_str(),
+            })
+        }
+
+        for (id, agent) in self.agents.iter() {
+            let agentdoc = object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Prov::Agent).as_str(),
+            };
+            doc.push(agentdoc);
+        }
+
+        ExpandedJson(doc.into())
     }
 }
 
-pub struct ExpandedJson(JsonValue);
+pub struct ExpandedJson(pub JsonValue);

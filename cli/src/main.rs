@@ -333,7 +333,7 @@ fn main() {
         .map(|response| {
             match response {
                 ApiResponse::Prov(doc) => {
-                    println!("{:?}", doc);
+                    println!("{}", doc.to_json().0.pretty(4));
                 }
                 ApiResponse::Unit => {}
             }

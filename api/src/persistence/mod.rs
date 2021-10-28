@@ -8,6 +8,7 @@ use custom_error::custom_error;
 use derivative::Derivative;
 use diesel::{prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use tracing::{instrument, trace};
 use uuid::Uuid;
 
 mod query;
@@ -42,10 +43,13 @@ impl Store {
     }
 
     /// Apply a chronicle transaction to the store idempotently and return a prov model relevant to the transaction
+    #[instrument]
     pub fn apply(&self, tx: &ChronicleTransaction) -> Result<ProvModel, StoreError> {
         let model = ProvModel::from_tx(vec![tx]);
 
-        self.idempotently_apply_model(&model);
+        trace!(?model);
+
+        self.idempotently_apply_model(&model)?;
 
         Ok(model)
     }
@@ -61,6 +65,7 @@ impl Store {
         Ok(())
     }
 
+    #[instrument]
     fn create_namespace(
         &self,
         Namespace {
@@ -77,6 +82,7 @@ impl Store {
         Ok(())
     }
 
+    #[instrument]
     pub(crate) fn namespace_by_name(&self, namespace: &str) -> Result<NamespaceId, StoreError> {
         use self::schema::namespace::dsl as ns;
         let ns = ns::namespace
@@ -88,6 +94,7 @@ impl Store {
         Ok(Chronicle::namespace(&ns.name, &Uuid::from_str(&ns.uuid)?).into())
     }
 
+    #[instrument]
     fn create_agent(
         &self,
         Agent {
