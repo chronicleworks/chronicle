@@ -24,6 +24,7 @@ custom_error! {pub ApiError
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
+    NamespaceNotFound{name: String}                             = "Namespace {} not found, please create it",
 }
 
 impl UFE for ApiError {}
@@ -70,30 +71,38 @@ pub struct Api {
     ledger: Box<dyn LedgerWriter>,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
+    #[derivative(Debug = "ignore")]
+    uuidsource: Box<dyn Fn() -> Uuid>,
 }
 
 impl Api {
-    #[instrument(skip(ledger))]
-    pub fn new(
+    #[instrument(skip(ledger, uuidgen))]
+    pub fn new<F>(
         database_url: &str,
         ledger: Box<dyn LedgerWriter>,
         _secret_path: &Path,
-    ) -> Result<Self, ApiError> {
+        uuidgen: F,
+    ) -> Result<Self, ApiError>
+    where
+        F: Fn() -> Uuid,
+        F: 'static,
+    {
         Ok(Api {
             ledger: ledger,
             store: Store::new(database_url)?,
+            uuidsource: Box::new(uuidgen),
         })
     }
 
     #[instrument]
     fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
-        let uuid = Uuid::new_v4();
+        let uuid = (self.uuidsource)();
         let iri = ChronicleVocab::namespace(name, &uuid);
 
         let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
             id: iri.into(),
             name: name.to_owned(),
-            uuid: Uuid::new_v4(),
+            uuid,
         });
 
         self.ledger.submit(vec![&tx])?;
@@ -106,7 +115,11 @@ impl Api {
         let tx = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
             id: ChronicleVocab::agent(name).into(),
-            namespace: self.store.namespace_by_name(namespace)?,
+            namespace: self.store.namespace_by_name(namespace).map_err(|_| {
+                ApiError::NamespaceNotFound {
+                    name: namespace.to_owned(),
+                }
+            })?,
         });
 
         self.ledger.submit(vec![&tx])?;
@@ -169,6 +182,7 @@ mod test {
     use common::ledger::InMemLedger;
     use tempfile::TempDir;
     use tracing::Level;
+    use uuid::Uuid;
 
     use crate::{AgentCommand, Api, ApiCommand, ApiResponse, NamespaceCommand};
 
@@ -184,6 +198,7 @@ mod test {
             "file::memory:",
             Box::new(InMemLedger::default()),
             &secretpath.into_path(),
+            || Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap(),
         )
         .unwrap()
     }
@@ -217,23 +232,6 @@ mod test {
             .dispatch(ApiCommand::Agent(AgentCommand::Create {
                 name: "testagent".to_owned(),
                 namespace: "testns".to_owned(),
-            }))
-            .unwrap();
-
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    fn create_agent_before_namespace() {
-        let prov = test_api()
-            .dispatch(ApiCommand::Agent(AgentCommand::Create {
-                name: "testns".to_owned(),
-                namespace: "doesntexistyet".to_owned(),
             }))
             .unwrap();
 

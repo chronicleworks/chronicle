@@ -1,0 +1,15 @@
+---
+source: api/src/lib.rs
+expression: prov.to_json().0.pretty(3)
+
+---
+[
+   {
+      "@id": "http://blockchaintp.com/chonicle/ns#:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "@type": "http://blockchaintp.com/chonicle/ns#Namespace"
+   },
+   {
+      "@id": "http://blockchaintp.com/chonicle/ns#:agent:testagent",
+      "@type": "http://www.w3.org/ns/prov#Agent"
+   }
+]

@@ -16,6 +16,17 @@ impl std::ops::Deref for NamespaceId {
     }
 }
 
+impl NamespaceId {
+    /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
+    pub fn decompose(&self) -> (&str, Uuid) {
+        if let &[_, _, _, name, uuid, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+            return (name, Uuid::parse_str(uuid).unwrap());
+        }
+
+        unreachable!();
+    }
+}
+
 impl<S> From<S> for NamespaceId
 where
     S: AsIri,
@@ -231,6 +242,19 @@ impl ProvModel {
         model
     }
 
+    fn namespace_context(&mut self, ns: &NamespaceId) {
+        let (namespacename, uuid) = ns.decompose();
+
+        self.namespaces.insert(
+            ns.clone(),
+            Namespace {
+                id: ns.clone(),
+                uuid: uuid,
+                name: namespacename.to_owned(),
+            },
+        );
+    }
+
     /// Transform a sequence of ChronicleTransaction events into a provenance model,
     /// If a statement requires a subject or object that does not currently exist in the model, then we create it
     pub fn apply(&mut self, tx: &ChronicleTransaction) {
@@ -245,15 +269,7 @@ impl ProvModel {
                 id,
                 name,
             }) => {
-                self.namespaces.insert(
-                    namespace,
-                    Namespace {
-                        id: namespace,
-                        uuid: (),
-                        name: (),
-                    },
-                );
-
+                self.namespace_context(&namespace);
                 self.agents
                     .insert(id.clone(), Agent::new(id, namespace, name, None));
             }
@@ -263,6 +279,8 @@ impl ProvModel {
                 publickey,
                 name,
             }) => {
+                self.namespace_context(&namespace);
+
                 if !self.agents.contains_key(&id) {
                     self.agents
                         .insert(id.clone(), Agent::new(id.clone(), namespace, name, None));
@@ -272,6 +290,8 @@ impl ProvModel {
                     .map(|x| x.publickey = Some(publickey));
             }
             ChronicleTransaction::CreateActivity(CreateActivity { namespace, id }) => {
+                self.namespace_context(&namespace);
+
                 if !self.activities.contains_key(&id) {
                     self.activities
                         .insert(id.clone(), Activity::new(id, namespace));
@@ -282,6 +302,7 @@ impl ProvModel {
                 id,
                 agent,
             }) => {
+                self.namespace_context(&namespace);
                 if !self.activities.contains_key(&id) {
                     self.activities
                         .insert(id.clone(), Activity::new(id.clone(), namespace));
@@ -294,6 +315,8 @@ impl ProvModel {
                 id,
                 entity,
             }) => {
+                self.namespace_context(&namespace);
+
                 if !self.activities.contains_key(&id) {
                     self.activities
                         .insert(id.clone(), Activity::new(id.clone(), namespace.clone()));

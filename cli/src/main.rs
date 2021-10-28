@@ -100,6 +100,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         Box::new(ledger),
         &config.secrets.path,
+        || uuid::Uuid::new_v4(),
     )?;
 
     vec![
