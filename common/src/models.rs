@@ -1,4 +1,4 @@
-use iref::{AsIri, Iri, IriRef};
+use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -223,9 +223,9 @@ pub struct ProvModel {
     pub agents: HashMap<AgentId, Agent>,
     pub activities: HashMap<ActivityId, Activity>,
     pub entities: HashMap<EntityId, Entity>,
-    pub wasAssociatedWith: HashMap<ActivityId, AgentId>,
-    pub wasAttributedTo: HashMap<EntityId, AgentId>,
-    pub wasGeneratedBy: HashMap<EntityId, ActivityId>,
+    pub was_associated_with: HashMap<ActivityId, AgentId>,
+    pub was_attributed_to: HashMap<EntityId, AgentId>,
+    pub was_generated_by: HashMap<EntityId, ActivityId>,
     pub uses: HashMap<ActivityId, EntityId>,
 }
 
@@ -308,7 +308,7 @@ impl ProvModel {
                         .insert(id.clone(), Activity::new(id.clone(), namespace));
                 }
 
-                self.wasAssociatedWith.insert(id, agent);
+                self.was_associated_with.insert(id, agent);
             }
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
@@ -344,7 +344,7 @@ impl ProvModel {
                         .insert(id.clone(), Entity::new(id.clone(), namespace));
                 }
 
-                self.wasGeneratedBy.insert(id, activity);
+                self.was_generated_by.insert(id, activity);
             }
         };
     }

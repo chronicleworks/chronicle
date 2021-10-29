@@ -173,7 +173,7 @@ impl Api {
     }
 
     fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
-        self.store.use_agent(name, namespace);
+        self.store.use_agent(name, namespace)?;
 
         Ok(ApiResponse::Unit)
     }

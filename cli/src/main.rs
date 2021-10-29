@@ -3,7 +3,11 @@ extern crate serde_derive;
 
 use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
 use clap::{App, Arg, ArgMatches};
-use common::signing::DirectoryStoredKeys;
+use colored_json::prelude::*;
+use common::{
+    ledger::{InMemLedger, LedgerWriter},
+    signing::DirectoryStoredKeys,
+};
 use custom_error::custom_error;
 use k256::{elliptic_curve::sec1::ToEncodedPoint, SecretKey};
 use pkcs8::{ToPrivateKey, ToPublicKey};
@@ -46,59 +50,84 @@ fn cli<'a>() -> App<'a> {
                 ),
         )
         .subcommand(
-            App::new("agent").about("controls agents").subcommand(
-                App::new("create")
-                    .about("Create a new agent, if required")
-                    .arg(Arg::new("agent_name").required(true).takes_value(true))
-                    .arg(
-                        Arg::new("namespace")
-                            .short('n')
-                            .long("namespace")
-                            .default_value("default")
-                            .required(false)
-                            .takes_value(true),
-                    )
-                    .subcommand(
-                        App::new("create")
-                            .about("Create a new agent, if required")
-                            .arg(Arg::new("agent_name").required(true).takes_value(true))
-                            .arg(
-                                Arg::new("namespace")
-                                    .short('n')
-                                    .long("namespace")
-                                    .default_value("default")
-                                    .required(false)
-                                    .takes_value(true),
-                            )
-                            .arg(
-                                Arg::new("publickey")
-                                    .short('p')
-                                    .long("publickey")
-                                    .required(true)
-                                    .takes_value(true),
-                            )
-                            .arg(
-                                Arg::new("privatekey")
-                                    .short('k')
-                                    .long("privatekey")
-                                    .required(false)
-                                    .takes_value(true),
-                            ),
-                    ),
-            ),
+            App::new("agent")
+                .about("controls agents")
+                .subcommand(
+                    App::new("create")
+                        .about("Create a new agent, if required")
+                        .arg(Arg::new("agent_name").required(true).takes_value(true))
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        ),
+                )
+                .subcommand(
+                    App::new("register-key")
+                        .about("Register a key pair, or a public key with an agent")
+                        .arg(Arg::new("agent_name").required(true).takes_value(true))
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("publickey")
+                                .short('p')
+                                .long("publickey")
+                                .required(true)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("privatekey")
+                                .short('k')
+                                .long("privatekey")
+                                .required(false)
+                                .takes_value(true),
+                        ),
+                )
+                .subcommand(
+                    App::new("use")
+                        .about("Make the specified agent the context for activities and entities")
+                        .arg(Arg::new("agent_name").required(true).takes_value(true))
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        ),
+                ),
         )
+        .subcommand(App::new("activity").subcommand(App::new("create")))
+        .subcommand(App::new("entity"))
+}
+
+#[cfg(not(feature = "inmem"))]
+fn ledger(config: &Config) -> Box<dyn LedgerWriter> {
+    Box::new(SawtoothValidator::new(
+        &config.validator.address,
+        DirectoryStoredKeys::new(&config.secrets.path)?.default(),
+    ))
+}
+
+#[cfg(feature = "inmem")]
+fn ledger(_config: &Config) -> Box<dyn LedgerWriter> {
+    Box::new(InMemLedger::default())
 }
 
 #[instrument]
 fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
-    let ledger = SawtoothValidator::new(
-        &config.validator.address,
-        DirectoryStoredKeys::new(&config.secrets.path)?.default(),
-    );
-
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
-        Box::new(ledger),
+        ledger(&config),
         &config.secrets.path,
         || uuid::Uuid::new_v4(),
     )?;
@@ -138,6 +167,33 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
             .flatten()
             .next()
         }),
+        options.subcommand_matches("activity").and_then(|m| {
+            vec![
+                m.subcommand_matches("create").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    }))
+                }),
+                m.subcommand_matches("register-key").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        public: m.value_of("publickey").unwrap().to_owned(),
+                        private: m.value_of("privatekey").map(|x| x.to_owned()),
+                    }))
+                }),
+                m.subcommand_matches("use").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    }))
+                }),
+            ]
+            .into_iter()
+            .flatten()
+            .next()
+        }),
     ]
     .into_iter()
     .flatten()
@@ -148,7 +204,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
 custom_error! {pub CliError
     Api{source: api::ApiError}                  = "Api error",
     Pkcs8{source: pkcs8::Error}                 = "Key encoding",
-    FileSystem{source: std::io::Error}       = "Cannot locate configuration file",
+    FileSystem{source: std::io::Error}          = "Cannot locate configuration file",
     ConfigInvalid{source: toml::de::Error}      = "Invalid configuration file",
     InvalidPath                                 = "Invalid path",
 }
@@ -334,7 +390,10 @@ fn main() {
         .map(|response| {
             match response {
                 ApiResponse::Prov(doc) => {
-                    println!("{}", doc.to_json().0.pretty(4));
+                    println!(
+                        "{}",
+                        doc.to_json().0.pretty(4).to_colored_json_auto().unwrap()
+                    );
                 }
                 ApiResponse::Unit => {}
             }

@@ -1,9 +1,5 @@
 use custom_error::custom_error;
-use k256::{
-    ecdsa::SigningKey,
-    pkcs8::{FromPrivateKey, FromPublicKey},
-    PublicKey,
-};
+use k256::{ecdsa::SigningKey, pkcs8::FromPrivateKey};
 
 use std::{path::Path, string::FromUtf8Error};
 
@@ -18,7 +14,6 @@ custom_error! {pub SignerError
 }
 
 pub struct DirectoryStoredKeys {
-    public: PublicKey,
     signing: SigningKey,
 }
 
@@ -27,18 +22,13 @@ impl DirectoryStoredKeys {
     where
         P: AsRef<Path>,
     {
-        let public = glob::glob(&format!("{}/*.pub.pem", path.as_ref().to_string_lossy()))?.nth(0);
-
-        let public =
-            PublicKey::read_public_key_pem_file(public.ok_or(SignerError::NoPublicKeyFound {})??)?;
-
         let private =
             glob::glob(&format!("{}/*.priv.pem", path.as_ref().to_string_lossy()))?.nth(0);
 
         let signing =
             SigningKey::read_pkcs8_pem_file(private.ok_or(SignerError::NoPrivateKeyFound {})??)?;
 
-        Ok(Self { public, signing })
+        Ok(Self { signing })
     }
 
     pub fn default(&self) -> &SigningKey {
