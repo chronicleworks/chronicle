@@ -6,7 +6,7 @@ use common::{
 };
 use custom_error::custom_error;
 use derivative::Derivative;
-use diesel::{prelude::*, sqlite::SqliteConnection};
+use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::{instrument, trace};
 use uuid::Uuid;
@@ -148,5 +148,16 @@ impl Store {
         .execute(&mut *self.connection.borrow_mut())?;
 
         Ok(())
+    }
+
+    /// Ensure the name is unique within the namespace, if not, then postfix the rowid
+    pub(crate) fn disambiguate_agent_name(&self, name: &str) -> Result<String, StoreError> {
+        use schema::agent::dsl as agentdsl;
+
+        let ambiguous = schema::agent::table
+            .select(max(agentdsl::id))
+            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+
+        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
 }

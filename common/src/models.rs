@@ -353,17 +353,23 @@ impl ProvModel {
     pub fn to_json(&self) -> ExpandedJson {
         let mut doc = json::Array::new();
 
-        for (id, _ns) in self.namespaces.iter() {
+        for (id, ns) in self.namespaces.iter() {
             doc.push(object! {
                 "@id": (*id.as_str()),
                 "@type": Iri::from(Chronicle::NamespaceType).as_str(),
+                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                    "@value": ns.name.as_str(),
+                }]
             })
         }
 
         for (id, agent) in self.agents.iter() {
             let mut agentdoc = object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Prov::Agent).as_str()
+                "@type": Iri::from(Prov::Agent).as_str(),
+                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                   "@value": agent.name.as_str(),
+                }]
             };
             agent.publickey.as_ref().map(|publickey| {
                 let mut values = json::Array::new();

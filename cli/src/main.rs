@@ -106,7 +106,75 @@ fn cli<'a>() -> App<'a> {
                         ),
                 ),
         )
-        .subcommand(App::new("activity").subcommand(App::new("create")))
+        .subcommand(
+            App::new("activity").subcommand(
+                App::new("create")
+                    .about("Create a new activity, if required")
+                    .arg(Arg::new("activity_name").required(true).takes_value(true))
+                    .arg(
+                        Arg::new("namespace")
+                            .short('n')
+                            .long("namespace")
+                            .default_value("default")
+                            .required(false)
+                            .takes_value(true),
+                    )
+                    .subcommand(
+                        App::new("start")
+                            .about("Record this activity as started at the current time")
+                            .arg(Arg::new("activity_name").required(true).takes_value(true))
+                            .arg(
+                                Arg::new("namespace")
+                                    .short('n')
+                                    .long("namespace")
+                                    .default_value("default")
+                                    .required(false)
+                                    .takes_value(true),
+                            ),
+                    )
+                    .subcommand(
+                        App::new("end")
+                            .about("Record this activity as ended at the current time")
+                            .arg(Arg::new("activity_name").required(true).takes_value(true))
+                            .arg(
+                                Arg::new("namespace")
+                                    .short('n')
+                                    .long("namespace")
+                                    .default_value("default")
+                                    .required(false)
+                                    .takes_value(true),
+                            ),
+                    )
+                    .subcommand(
+                        App::new("use")
+                            .about("Record this activity as having used the specified entity")
+                            .arg(Arg::new("activity_name").required(true).takes_value(true))
+                            .arg(
+                                Arg::new("namespace")
+                                    .short('n')
+                                    .long("namespace")
+                                    .default_value("default")
+                                    .required(false)
+                                    .takes_value(true),
+                            )
+                            .arg(Arg::new("entityname").required(true).takes_value(true)),
+                    )
+                    .subcommand(
+                        App::new("generate")
+                            .about("Records this activity as having generated the specified entity")
+                            .arg(Arg::new("activity_name").required(true).takes_value(true))
+                            .arg(
+                                Arg::new("namespace")
+                                    .short('n')
+                                    .long("namespace")
+                                    .default_value("default")
+                                    .required(false)
+                                    .takes_value(true),
+                            )
+                            .arg(Arg::new("entityname").required(true).takes_value(true)),
+                    ),
+            ),
+        )
         .subcommand(App::new("entity"))
 }
 
@@ -175,15 +243,25 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))
                 }),
-                m.subcommand_matches("register-key").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                m.subcommand_matches("start").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
-                        public: m.value_of("publickey").unwrap().to_owned(),
-                        private: m.value_of("privatekey").map(|x| x.to_owned()),
+                    }))
+                }),
+                m.subcommand_matches("end").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                        name: m.value_of("agent_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    }))
+                }),
+                m.subcommand_matches("generate").map(|m| {
                     api.dispatch(ApiCommand::Agent(AgentCommand::Use {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),

@@ -53,9 +53,40 @@ pub enum AgentCommand {
 }
 
 #[derive(Debug)]
+pub enum ActivityCommand {
+    Create {
+        name: String,
+        namespace: String,
+    },
+    Start {
+        name: String,
+        namespace: String,
+    },
+    End {
+        name: Option<String>,
+        namespace: Option<String>,
+    },
+    Use {
+        name: Option<String>,
+        namespace: Option<String>,
+    },
+    Generate {
+        name: Option<String>,
+        namespace: Option<String>,
+        entityname: String,
+    },
+    Sign {
+        name: Option<String>,
+        namespace: Option<String>,
+        entityname: String,
+    },
+}
+
+#[derive(Debug)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
+    Activity(ActivityCommand),
 }
 
 #[derive(Debug)]
@@ -112,9 +143,16 @@ impl Api {
 
     #[instrument]
     fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
+        let name = self.store.disambiguate_agent_name(name)?;
+        let ns = self.store.namespace_by_name(namespace);
+
+        if ns.is_err() {
+            self.create_namespace(namespace)?;
+        }
+
         let tx = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
-            id: ChronicleVocab::agent(name).into(),
+            id: ChronicleVocab::agent(&name).into(),
             namespace: self.store.namespace_by_name(namespace).map_err(|_| {
                 ApiError::NamespaceNotFound {
                     name: namespace.to_owned(),
@@ -146,6 +184,7 @@ impl Api {
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
                 self.use_agent(name, namespace)
             }
+            ApiCommand::Activity(_) => unreachable!(),
         }
     }
 
