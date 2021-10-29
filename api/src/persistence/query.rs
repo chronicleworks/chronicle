@@ -1,7 +1,6 @@
 use super::schema::*;
 use diesel::prelude::*;
 
-
 #[derive(Queryable)]
 pub struct Namespace {
     pub name: String,
@@ -13,6 +12,13 @@ pub struct Namespace {
 pub struct NewNamespace<'a> {
     pub name: &'a str,
     pub uuid: &'a str,
+}
+
+#[derive(Insertable)]
+#[table_name = "activity"]
+pub struct NewActivity<'a> {
+    pub name: &'a str,
+    pub namespace: &'a str,
 }
 
 #[derive(Queryable)]

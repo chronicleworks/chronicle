@@ -27,7 +27,11 @@ proto = {path="../proto"}
 common = {path="../common"}
 uuid = "0.8.2"
 colored_json = "2.1.0"
+clap_generate = "3.0.0-beta.5"
+
 
 [features]
 # Use an in memory stub ledger
 inmem = []
+
+[build-dependencies]

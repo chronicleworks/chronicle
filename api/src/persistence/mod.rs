@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use common::{
-    models::{Agent, ChronicleTransaction, Namespace, NamespaceId, ProvModel},
+    models::{Activity, Agent, ChronicleTransaction, Namespace, NamespaceId, ProvModel},
     vocab::Chronicle,
 };
 use custom_error::custom_error;
@@ -61,7 +61,9 @@ impl Store {
         for (_, agent) in model.agents.iter() {
             self.create_agent(agent, &model.namespaces)?
         }
-
+        for (_, activity) in model.activities.iter() {
+            self.create_activity(activity, &model.namespaces)?
+        }
         Ok(())
     }
 
@@ -119,6 +121,27 @@ impl Store {
         Ok(())
     }
 
+    #[instrument]
+    fn create_activity(
+        &self,
+        Activity {
+            ref name,
+            id,
+            namespaceid,
+        }: &Activity,
+        ns: &HashMap<NamespaceId, Namespace>,
+    ) -> Result<(), StoreError> {
+        let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
+        diesel::insert_or_ignore_into(schema::activity::table)
+            .values(&query::NewActivity {
+                name,
+                namespace: &namespace.name,
+            })
+            .execute(&mut *self.connection.borrow_mut())?;
+
+        Ok(())
+    }
+
     pub(crate) fn store_pk_path(
         &self,
         name: String,
@@ -156,6 +179,17 @@ impl Store {
 
         let ambiguous = schema::agent::table
             .select(max(agentdsl::id))
+            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+
+        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+    }
+
+    /// Ensure the name is unique within the namespace, if not, then postfix the rowid
+    pub(crate) fn disambiguate_activity_name(&self, name: &str) -> Result<String, StoreError> {
+        use schema::activity::dsl as activitydsl;
+
+        let ambiguous = schema::activity::table
+            .select(max(activitydsl::id))
             .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))

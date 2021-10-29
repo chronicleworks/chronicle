@@ -50,4 +50,8 @@ impl Chronicle {
     pub fn agent(name: &str) -> IriBuf {
         IriBuf::new(&format!("{}:agent:{}", Self::PREFIX, name)).unwrap()
     }
+
+    pub fn activity(name: &str) -> IriBuf {
+        IriBuf::new(&format!("{}:activity:{}", Self::PREFIX, name)).unwrap()
+    }
 }

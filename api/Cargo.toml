@@ -27,6 +27,7 @@ proto = {path="../proto"}
 common = {path="../common"}
 tracing = "0.1.29"
 derivative = "2.2.0"
+chrono = "0.4.19"
 
 [dev-dependencies]
 insta = "1.8.0"

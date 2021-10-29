@@ -87,6 +87,17 @@ impl std::ops::Deref for ActivityId {
     }
 }
 
+impl ActivityId {
+    /// Extract the activity name from an id
+    pub fn decompose(&self) -> &str {
+        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+            return name;
+        }
+
+        unreachable!();
+    }
+}
+
 impl<S> From<S> for ActivityId
 where
     S: AsIri,
@@ -122,6 +133,7 @@ pub struct RegisterKey {
 pub struct CreateActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -196,12 +208,17 @@ impl Agent {
 #[derive(Debug, Clone)]
 pub struct Activity {
     pub id: ActivityId,
-    pub ns: NamespaceId,
+    pub namespaceid: NamespaceId,
+    pub name: String,
 }
 
 impl Activity {
-    pub fn new(id: ActivityId, ns: NamespaceId) -> Self {
-        Self { id, ns }
+    pub fn new(id: ActivityId, ns: NamespaceId, name: &str) -> Self {
+        Self {
+            id,
+            namespaceid: ns,
+            name: name.to_owned(),
+        }
     }
 }
 
@@ -289,12 +306,16 @@ impl ProvModel {
                     .get_mut(&id)
                     .map(|x| x.publickey = Some(publickey));
             }
-            ChronicleTransaction::CreateActivity(CreateActivity { namespace, id }) => {
+            ChronicleTransaction::CreateActivity(CreateActivity {
+                namespace,
+                id,
+                name,
+            }) => {
                 self.namespace_context(&namespace);
 
                 if !self.activities.contains_key(&id) {
                     self.activities
-                        .insert(id.clone(), Activity::new(id, namespace));
+                        .insert(id.clone(), Activity::new(id, namespace, &name));
                 }
             }
             ChronicleTransaction::StartActivity(StartActivity {
@@ -304,8 +325,11 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
                 if !self.activities.contains_key(&id) {
-                    self.activities
-                        .insert(id.clone(), Activity::new(id.clone(), namespace));
+                    let activity_name = id.decompose();
+                    self.activities.insert(
+                        id.clone(),
+                        Activity::new(id.clone(), namespace, activity_name),
+                    );
                 }
 
                 self.was_associated_with.insert(id, agent);
@@ -316,10 +340,12 @@ impl ProvModel {
                 entity,
             }) => {
                 self.namespace_context(&namespace);
-
                 if !self.activities.contains_key(&id) {
-                    self.activities
-                        .insert(id.clone(), Activity::new(id.clone(), namespace.clone()));
+                    let activity_name = id.decompose();
+                    self.activities.insert(
+                        id.clone(),
+                        Activity::new(id.clone(), namespace.clone(), activity_name),
+                    );
                 }
                 if !self.entities.contains_key(&entity) {
                     self.entities
@@ -334,9 +360,10 @@ impl ProvModel {
                 activity,
             }) => {
                 if !self.activities.contains_key(&activity) {
+                    let activity_name = activity.decompose();
                     self.activities.insert(
                         activity.clone(),
-                        Activity::new(activity.clone(), namespace.clone()),
+                        Activity::new(activity.clone(), namespace.clone(), activity_name),
                     );
                 }
                 if !self.entities.contains_key(&id) {
@@ -381,19 +408,41 @@ impl ProvModel {
                 agentdoc
                     .insert(Iri::from(Chronicle::HasPublicKey).as_str(), values)
                     .ok();
-
-                let mut values = json::Array::new();
-
-                values.push(object! {
-                    "@id": JsonValue::String(agent.namespaceid.0.clone()),
-                });
-
-                agentdoc
-                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                    .ok();
             });
 
+            let mut values = json::Array::new();
+
+            values.push(object! {
+                "@id": JsonValue::String(agent.namespaceid.0.clone()),
+            });
+
+            agentdoc
+                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
+                .ok();
+
             doc.push(agentdoc);
+        }
+
+        for (id, activity) in self.activities.iter() {
+            let mut activitydoc = object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Prov::Activity).as_str(),
+                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                   "@value": activity.name.as_str(),
+                }]
+            };
+
+            let mut values = json::Array::new();
+
+            values.push(object! {
+                "@id": JsonValue::String(activity.namespaceid.0.clone()),
+            });
+
+            activitydoc
+                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
+                .ok();
+
+            doc.push(activitydoc);
         }
 
         ExpandedJson(doc.into())

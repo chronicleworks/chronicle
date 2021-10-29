@@ -8,12 +8,14 @@ use std::path::Path;
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
-    models::{ChronicleTransaction, CreateAgent, CreateNamespace, ProvModel, RegisterKey},
+    models::{
+        ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace, ProvModel, RegisterKey,
+    },
     signing::SignerError,
     vocab::Chronicle as ChronicleVocab,
 };
 
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use user_error::UFE;
 use uuid::Uuid;
@@ -125,6 +127,19 @@ impl Api {
         })
     }
 
+    /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
+    #[instrument]
+    fn ensure_namespace(&self, namespace: &str) -> Result<(), ApiError> {
+        let ns = self.store.namespace_by_name(namespace);
+
+        if ns.is_err() {
+            debug!(namespace, "Namespace does not exist, creating");
+            self.create_namespace(namespace)?;
+        }
+
+        Ok(())
+    }
+
     #[instrument]
     fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = (self.uuidsource)();
@@ -144,11 +159,7 @@ impl Api {
     #[instrument]
     fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
         let name = self.store.disambiguate_agent_name(name)?;
-        let ns = self.store.namespace_by_name(namespace);
-
-        if ns.is_err() {
-            self.create_namespace(namespace)?;
-        }
+        self.ensure_namespace(namespace)?;
 
         let tx = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
@@ -161,7 +172,6 @@ impl Api {
         });
 
         self.ledger.submit(vec![&tx])?;
-        self.store.apply(&tx)?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
@@ -184,7 +194,10 @@ impl Api {
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
                 self.use_agent(name, namespace)
             }
-            ApiCommand::Activity(_) => unreachable!(),
+            ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
+                self.create_activity(name, namespace)
+            }
+            _ => todo!(),
         }
     }
 
@@ -196,7 +209,9 @@ impl Api {
         publickey: String,
         privatekeypath: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace)?;
         let namespaceid = self.store.namespace_by_name(&namespace)?;
+
         let tx = ChronicleTransaction::RegisterKey(RegisterKey {
             id: ChronicleVocab::agent(&name).into(),
             name: name.clone(),
@@ -215,6 +230,22 @@ impl Api {
         self.store.use_agent(name, namespace)?;
 
         Ok(ApiResponse::Unit)
+    }
+
+    fn create_activity(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace)?;
+        let name = self.store.disambiguate_activity_name(&name)?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::activity(&name);
+        let tx = ChronicleTransaction::CreateActivity(CreateActivity {
+            namespace,
+            id: id.into(),
+            name,
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 }
 
