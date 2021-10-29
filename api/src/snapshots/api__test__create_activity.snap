@@ -14,16 +14,11 @@ expression: prov.to_json().0.pretty(3)
       ]
    },
    {
-      "@id": "http://blockchaintp.com/chonicle/ns#:agent:testagent",
-      "@type": "http://www.w3.org/ns/prov#Agent",
+      "@id": "http://blockchaintp.com/chonicle/ns#:activity:testactivity_0",
+      "@type": "http://www.w3.org/ns/prov#Activity",
       "http://www.w3.org/2000/01/rdf-schema#label": [
          {
-            "@value": "testagent"
-         }
-      ],
-      "http://blockchaintp.com/chonicle/ns#hasPublicKey": [
-         {
-            "@value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "@value": "testactivity_0"
          }
       ],
       "http://blockchaintp.com/chonicle/ns#hasNamespace": [

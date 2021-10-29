@@ -23,6 +23,7 @@ pub struct NewActivity<'a> {
 
 #[derive(Queryable)]
 pub struct Agent {
+    pub id: i32,
     pub name: String,
     pub namespace: String,
     pub publickey: Option<String>,

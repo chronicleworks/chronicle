@@ -1,5 +1,6 @@
 mod persistence;
 
+use chrono::Utc;
 use custom_error::*;
 use derivative::*;
 
@@ -10,6 +11,7 @@ use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{
         ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace, ProvModel, RegisterKey,
+        StartActivity,
     },
     signing::SignerError,
     vocab::Chronicle as ChronicleVocab,
@@ -27,6 +29,7 @@ custom_error! {pub ApiError
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
     NamespaceNotFound{name: String}                             = "Namespace {} not found, please create it",
+    NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use",
 }
 
 impl UFE for ApiError {}
@@ -197,6 +200,9 @@ impl Api {
             ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
                 self.create_activity(name, namespace)
             }
+            ApiCommand::Activity(ActivityCommand::Start { name, namespace }) => {
+                self.start_activity(name, namespace)
+            }
             _ => todo!(),
         }
     }
@@ -232,6 +238,7 @@ impl Api {
         Ok(ApiResponse::Unit)
     }
 
+    #[instrument]
     fn create_activity(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace)?;
         let name = self.store.disambiguate_activity_name(&name)?;
@@ -247,16 +254,41 @@ impl Api {
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
+
+    pub(crate) fn start_activity(
+        &self,
+        name: String,
+        namespace: String,
+    ) -> Result<ApiResponse, ApiError> {
+        let agent = self
+            .store
+            .get_current_agent()
+            .map_err(|_| ApiError::NoCurrentAgent {})?;
+
+        let name = self.store.disambiguate_activity_name(&name)?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::activity(&name);
+        let tx = ChronicleTransaction::StartActivity(StartActivity {
+            namespace,
+            id: id.into(),
+            agent: ChronicleVocab::agent(&agent.name).into(),
+            time: Utc::now(),
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use common::ledger::InMemLedger;
+    use common::{ledger::InMemLedger, models::Activity};
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{AgentCommand, Api, ApiCommand, ApiResponse, NamespaceCommand};
+    use crate::{ActivityCommand, AgentCommand, Api, ApiCommand, ApiResponse, NamespaceCommand};
 
     fn test_api() -> Api {
         tracing_subscriber::fmt()
@@ -330,6 +362,25 @@ mod test {
                 namespace: "testns".to_owned(),
                 public: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_owned(),
                 private: Some("/test/path".to_owned()),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn create_activity() {
+        let api = test_api();
+
+        let prov = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                name: "testactivity".to_owned(),
+                namespace: "testns".to_owned(),
             }))
             .unwrap();
 

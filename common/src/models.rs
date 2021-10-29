@@ -1,6 +1,7 @@
+use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 use uuid::Uuid;
 
 use crate::vocab::{Chronicle, Prov};
@@ -141,6 +142,7 @@ pub struct StartActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
     pub agent: AgentId,
+    pub time: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -210,6 +212,8 @@ pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
     pub name: String,
+    pub started: Option<DateTime<Utc>>,
+    pub ended: Option<DateTime<Utc>>,
 }
 
 impl Activity {
@@ -218,6 +222,8 @@ impl Activity {
             id,
             namespaceid: ns,
             name: name.to_owned(),
+            started: None,
+            ended: None,
         }
     }
 }
@@ -322,14 +328,14 @@ impl ProvModel {
                 namespace,
                 id,
                 agent,
+                time,
             }) => {
                 self.namespace_context(&namespace);
                 if !self.activities.contains_key(&id) {
                     let activity_name = id.decompose();
-                    self.activities.insert(
-                        id.clone(),
-                        Activity::new(id.clone(), namespace, activity_name),
-                    );
+                    let mut activity = Activity::new(id.clone(), namespace, activity_name);
+                    activity.started = Some(time);
+                    self.activities.insert(id.clone(), activity);
                 }
 
                 self.was_associated_with.insert(id, agent);
@@ -431,6 +437,15 @@ impl ProvModel {
                    "@value": activity.name.as_str(),
                 }]
             };
+
+            activity.started.map(|time| {
+                let mut values = json::Array::new();
+                values.push(object! {"@value": time.to_rfc3339()});
+
+                activitydoc
+                    .insert("http://www.w3.org/ns/prov#startedAtTime", values)
+                    .ok();
+            });
 
             let mut values = json::Array::new();
 

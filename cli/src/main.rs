@@ -3,7 +3,9 @@ extern crate serde_derive;
 
 mod cli;
 
-use api::{AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand};
+use api::{
+    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand,
+};
 use clap::{App, Arg, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
@@ -31,7 +33,9 @@ use user_error::UFE;
 fn ledger(config: &Config) -> Box<dyn LedgerWriter> {
     Box::new(SawtoothValidator::new(
         &config.validator.address,
-        DirectoryStoredKeys::new(&config.secrets.path)?.default(),
+        DirectoryStoredKeys::new(&config.secrets.path)
+            .unwrap()
+            .default(),
     ))
 }
 
@@ -87,21 +91,21 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
         options.subcommand_matches("activity").and_then(|m| {
             vec![
                 m.subcommand_matches("create").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+                    api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))
                 }),
                 m.subcommand_matches("start").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                    api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))
                 }),
                 m.subcommand_matches("end").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    api.dispatch(ApiCommand::Activity(ActivityCommand::End {
+                        name: m.value_of("activity_name").map(|x| x.to_owned()),
+                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {

@@ -128,6 +128,7 @@ impl Store {
             ref name,
             id,
             namespaceid,
+            ..
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -171,6 +172,13 @@ impl Store {
         .execute(&mut *self.connection.borrow_mut())?;
 
         Ok(())
+    }
+
+    pub(crate) fn get_current_agent(&self) -> Result<query::Agent, StoreError> {
+        use schema::agent::dsl;
+        Ok(schema::agent::table
+            .filter(dsl::current.ne(0))
+            .first::<query::Agent>(&mut *self.connection.borrow_mut())?)
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
