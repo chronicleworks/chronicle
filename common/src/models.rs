@@ -72,7 +72,7 @@ impl std::ops::Deref for AgentId {
 impl AgentId {
     /// Extract the agent name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -103,7 +103,7 @@ impl std::ops::Deref for ActivityId {
 impl ActivityId {
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
             return name;
         }
 

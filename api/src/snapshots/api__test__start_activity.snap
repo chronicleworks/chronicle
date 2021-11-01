@@ -18,7 +18,7 @@ expression: prov.to_json().0.pretty(3)
       "@type": "http://www.w3.org/ns/prov#Agent",
       "http://www.w3.org/2000/01/rdf-schema#label": [
          {
-            "@value": "agent"
+            "@value": "testagent_0"
          }
       ],
       "http://blockchaintp.com/chonicle/ns#hasNamespace": [
@@ -32,7 +32,7 @@ expression: prov.to_json().0.pretty(3)
       "@type": "http://www.w3.org/ns/prov#Activity",
       "http://www.w3.org/2000/01/rdf-schema#label": [
          {
-            "@value": "activity"
+            "@value": "testactivity_0"
          }
       ],
       "http://www.w3.org/ns/prov#startedAtTime": [
