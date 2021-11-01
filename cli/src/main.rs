@@ -331,7 +331,13 @@ fn main() {
                 ApiResponse::Prov(doc) => {
                     println!(
                         "{}",
-                        doc.to_json().0.pretty(4).to_colored_json_auto().unwrap()
+                        doc.to_json()
+                            .compact()
+                            .unwrap()
+                            .0
+                            .pretty(4)
+                            .to_colored_json_auto()
+                            .unwrap()
                     );
                 }
                 ApiResponse::Unit => {}

@@ -30,7 +30,7 @@ pub enum Rdfs {
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
-#[iri_prefix("chronicle" = "http://blockchaintp.com/chonicle/ns#")]
+#[iri_prefix("chronicle" = "http://blockchaintp.com/chronicle/ns#")]
 pub enum Chronicle {
     #[iri("chronicle:hasPublicKey")]
     HasPublicKey,
@@ -41,7 +41,7 @@ pub enum Chronicle {
 }
 
 impl Chronicle {
-    const PREFIX: &'static str = "http://blockchaintp.com/chonicle/ns#";
+    const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
 
     pub fn namespace(name: &str, id: &Uuid) -> IriBuf {
         IriBuf::new(&format!("{}:ns:{}:{}", Self::PREFIX, name, id)).unwrap()

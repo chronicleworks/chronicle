@@ -1,6 +1,8 @@
+use async_std::task::block_on;
 use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
+use json_ld::{context::Local, Document, JsonContext, NoLoader};
 use multimap::MultiMap;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -499,3 +501,25 @@ impl ProvModel {
 }
 
 pub struct ExpandedJson(pub JsonValue);
+
+impl ExpandedJson {
+    pub fn compact(self) -> Result<CompactedJson, json_ld::Error> {
+        let processed_context =
+            block_on(crate::context::PROV.process::<JsonContext, _>(&mut NoLoader, None))?;
+
+        // Compaction.
+        let output = block_on(self.0.compact(&processed_context, &mut NoLoader))?;
+
+        Ok(CompactedJson(output))
+    }
+}
+
+pub struct CompactedJson(pub JsonValue);
+
+impl std::ops::Deref for CompactedJson {
+    type Target = JsonValue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
