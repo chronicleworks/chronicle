@@ -100,6 +100,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
+                        time: None,
                     }))
                 }),
                 m.subcommand_matches("end").map(|m| {

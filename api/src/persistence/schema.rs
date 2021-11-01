@@ -5,8 +5,8 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
-        started -> Nullable<Text>,
-        ended -> Nullable<Text>,
+        started -> Nullable<Timestamp>,
+        ended -> Nullable<Timestamp>,
     }
 }
 
@@ -26,8 +26,8 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
-        started -> Nullable<Text>,
-        ended -> Nullable<Text>,
+        started -> Nullable<Timestamp>,
+        ended -> Nullable<Timestamp>,
     }
 }
 
@@ -39,32 +39,28 @@ diesel::table! {
 }
 
 diesel::table! {
-    uses (id) {
-        id -> Integer,
+    uses (agent, entity) {
         agent -> Integer,
         entity -> Integer,
     }
 }
 
 diesel::table! {
-    wasasociatedwith (id) {
-        id -> Integer,
+    wasassociatedwith (agent, activity) {
         agent -> Integer,
         activity -> Integer,
     }
 }
 
 diesel::table! {
-    wasattributedto (id) {
-        id -> Integer,
+    wasattributedto (agent, activity) {
         agent -> Integer,
         activity -> Integer,
     }
 }
 
 diesel::table! {
-    wasgeneratedby (id) {
-        id -> Integer,
+    wasgeneratedby (agent, entity) {
         agent -> Integer,
         entity -> Integer,
     }
@@ -75,8 +71,8 @@ diesel::joinable!(agent -> namespace (namespace));
 diesel::joinable!(entity -> namespace (namespace));
 diesel::joinable!(uses -> agent (agent));
 diesel::joinable!(uses -> entity (entity));
-diesel::joinable!(wasasociatedwith -> activity (activity));
-diesel::joinable!(wasasociatedwith -> agent (agent));
+diesel::joinable!(wasassociatedwith -> activity (activity));
+diesel::joinable!(wasassociatedwith -> agent (agent));
 diesel::joinable!(wasattributedto -> activity (activity));
 diesel::joinable!(wasattributedto -> agent (agent));
 diesel::joinable!(wasgeneratedby -> agent (agent));
@@ -88,7 +84,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     entity,
     namespace,
     uses,
-    wasasociatedwith,
+    wasassociatedwith,
     wasattributedto,
     wasgeneratedby,
 );

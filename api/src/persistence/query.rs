@@ -1,4 +1,5 @@
 use super::schema::*;
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 #[derive(Queryable)]
@@ -19,6 +20,8 @@ pub struct NewNamespace<'a> {
 pub struct NewActivity<'a> {
     pub name: &'a str,
     pub namespace: &'a str,
+    pub started: Option<NaiveDateTime>,
+    pub ended: Option<NaiveDateTime>,
 }
 
 #[derive(Queryable)]
@@ -29,6 +32,15 @@ pub struct Agent {
     pub publickey: Option<String>,
     pub privatekeypath: Option<String>,
     pub current: i32,
+}
+
+#[derive(Queryable)]
+pub struct Activity {
+    pub id: i32,
+    pub name: String,
+    pub namespace: String,
+    pub started: Option<NaiveDateTime>,
+    pub ended: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable, AsChangeset, Default)]

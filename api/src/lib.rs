@@ -1,11 +1,11 @@
 mod persistence;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
 use persistence::Store;
-use std::path::Path;
+use std::{path::Path, task::Waker};
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
@@ -66,6 +66,7 @@ pub enum ActivityCommand {
     Start {
         name: String,
         namespace: String,
+        time: Option<DateTime<Utc>>,
     },
     End {
         name: Option<String>,
@@ -200,9 +201,11 @@ impl Api {
             ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
                 self.create_activity(name, namespace)
             }
-            ApiCommand::Activity(ActivityCommand::Start { name, namespace }) => {
-                self.start_activity(name, namespace)
-            }
+            ApiCommand::Activity(ActivityCommand::Start {
+                name,
+                namespace,
+                time,
+            }) => self.start_activity(name, namespace, time),
             _ => todo!(),
         }
     }
@@ -259,6 +262,7 @@ impl Api {
         &self,
         name: String,
         namespace: String,
+        time: Option<DateTime<Utc>>,
     ) -> Result<ApiResponse, ApiError> {
         let agent = self
             .store
@@ -272,7 +276,7 @@ impl Api {
             namespace,
             id: id.into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
-            time: Utc::now(),
+            time: time.unwrap_or(Utc::now()),
         });
 
         self.ledger.submit(vec![&tx])?;
@@ -283,6 +287,7 @@ impl Api {
 
 #[cfg(test)]
 mod test {
+    use chrono::{TimeZone, Utc};
     use common::{ledger::InMemLedger, models::Activity};
     use tempfile::TempDir;
     use tracing::Level;
@@ -381,6 +386,38 @@ mod test {
             .dispatch(ApiCommand::Activity(ActivityCommand::Create {
                 name: "testactivity".to_owned(),
                 namespace: "testns".to_owned(),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn start_activity() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+            name: "testagent_0".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
+                name: "testactivity".to_owned(),
+                namespace: "testns".to_owned(),
+                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             }))
             .unwrap();
 

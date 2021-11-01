@@ -2,8 +2,8 @@ create table activity (
     id integer primary key not null,
     name text not null,
     namespace text not null,
-    started text,
-    ended text,
+    started timestamp,
+    ended timestamp,
     foreign key(namespace) references namespace(name)
 );
 
@@ -11,41 +11,41 @@ create table entity (
     id integer primary key not null,
     name text not null,
     namespace text not null,
-    started text,
-    ended text,
+    started timestamp,
+    ended timestamp,
     foreign key(namespace) references namespace(name)
 );
 
 create table wasattributedto (
-    id integer primary key not null,
     agent integer not null,
     activity integer not null,
     foreign key(agent) references agent(id),
-    foreign key(activity) references activity(id)
+    foreign key(activity) references activity(id),
+    primary key (agent,activity)
 );
 
 create table wasgeneratedby (
-    id integer primary key not null,
     agent integer not null,
     entity integer not null,
     foreign key(agent) references agent(id),
-    foreign key(entity) references entity(id)
+    foreign key(entity) references entity(id),
+    primary key(agent,entity)
 );
 
 create table uses (
-    id integer primary key not null,
     agent integer not null,
     entity integer not null,
     foreign key(agent) references agent(id),
-    foreign key(entity) references entity(id)
+    foreign key(entity) references entity(id),
+    primary key(agent,entity)
 );
 
-create table wasasociatedwith (
-    id integer primary key not null,
+create table wasassociatedwith (
     agent integer not null,
     activity integer not null,
     foreign key(agent) references agent(id),
-    foreign key(activity) references activity(id)
+    foreign key(activity) references activity(id),
+    primary key(agent,activity)
 );
 
  

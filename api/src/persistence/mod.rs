@@ -1,7 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use common::{
-    models::{Activity, Agent, ChronicleTransaction, Namespace, NamespaceId, ProvModel},
+    models::{
+        Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Namespace, NamespaceId,
+        ProvModel,
+    },
     vocab::Chronicle,
 };
 use custom_error::custom_error;
@@ -23,6 +26,8 @@ custom_error! {pub StoreError
     Uuid{source: uuid::Error}                                   = "Invalid UUID string",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
+    ModelDoesNotContainActivity{activityid: ActivityId}         = "Could not locate {} in activities",
+    ModelDoesNotContainAgent{agentid: AgentId}                  = "Could not locate {} in agents",
 }
 
 #[derive(Derivative)]
@@ -56,19 +61,23 @@ impl Store {
 
     fn idempotently_apply_model(&self, model: &ProvModel) -> Result<(), StoreError> {
         for (_, ns) in model.namespaces.iter() {
-            self.create_namespace(ns)?
+            self.apply_namespace(ns)?
         }
         for (_, agent) in model.agents.iter() {
-            self.create_agent(agent, &model.namespaces)?
+            self.apply_agent(agent, &model.namespaces)?
         }
         for (_, activity) in model.activities.iter() {
-            self.create_activity(activity, &model.namespaces)?
+            self.apply_activity(activity, &model.namespaces)?
+        }
+
+        for (activityid, agentid) in model.was_associated_with.iter() {
+            self.apply_was_associated_with(model, activityid, agentid)?;
         }
         Ok(())
     }
 
     #[instrument]
-    fn create_namespace(
+    fn apply_namespace(
         &self,
         Namespace {
             ref name, ref uuid, ..
@@ -97,7 +106,7 @@ impl Store {
     }
 
     #[instrument]
-    fn create_agent(
+    fn apply_agent(
         &self,
         Agent {
             ref name,
@@ -122,13 +131,14 @@ impl Store {
     }
 
     #[instrument]
-    fn create_activity(
+    fn apply_activity(
         &self,
         Activity {
             ref name,
             id,
             namespaceid,
-            ..
+            started,
+            ended,
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -137,6 +147,8 @@ impl Store {
             .values(&query::NewActivity {
                 name,
                 namespace: &namespace.name,
+                started: started.map(|t| t.naive_utc()),
+                ended: ended.map(|t| t.naive_utc()),
             })
             .execute(&mut *self.connection.borrow_mut())?;
 
@@ -194,12 +206,78 @@ impl Store {
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_activity_name(&self, name: &str) -> Result<String, StoreError> {
-        use schema::activity::dsl as activitydsl;
+        use schema::activity::dsl;
 
         let ambiguous = schema::activity::table
-            .select(max(activitydsl::id))
+            .select(max(dsl::id))
             .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+    }
+
+    /// Fetch the activity record for the IRI
+    fn activity_by_activity_name_and_namespace(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Result<query::Activity, StoreError> {
+        use schema::activity::dsl;
+
+        Ok(schema::activity::table
+            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .first::<query::Activity>(&mut *self.connection.borrow_mut())?)
+    }
+
+    /// Fetch the agent record for the IRI
+    fn agent_by_agent_name_and_namespace(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Result<query::Agent, StoreError> {
+        use schema::agent::dsl;
+
+        Ok(schema::agent::table
+            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .first::<query::Agent>(&mut *self.connection.borrow_mut())?)
+    }
+
+    fn apply_was_associated_with(
+        &self,
+        model: &ProvModel,
+        activityid: &common::models::ActivityId,
+        agentid: &common::models::AgentId,
+    ) -> Result<(), StoreError> {
+        let provagent =
+            model
+                .agents
+                .get(agentid)
+                .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
+                    agentid: agentid.clone(),
+                })?;
+        let provactivity = model.activities.get(activityid).ok_or_else(|| {
+            StoreError::ModelDoesNotContainActivity {
+                activityid: activityid.clone(),
+            }
+        })?;
+
+        let storedactivity = self.activity_by_activity_name_and_namespace(
+            &provactivity.name,
+            provactivity.namespaceid.decompose().0,
+        )?;
+
+        let storedagent = self.agent_by_agent_name_and_namespace(
+            &provagent.name,
+            provagent.namespaceid.decompose().0,
+        )?;
+
+        use schema::wasassociatedwith::dsl as link;
+        diesel::insert_or_ignore_into(schema::wasassociatedwith::table)
+            .values((
+                &link::activity.eq(storedactivity.id),
+                &link::agent.eq(storedagent.id),
+            ))
+            .execute(&mut *self.connection.borrow_mut())?;
+
+        Ok(())
     }
 }

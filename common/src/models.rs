@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
-use std::{collections::HashMap, time::Instant};
+use multimap::MultiMap;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::vocab::{Chronicle, Prov};
@@ -65,6 +66,17 @@ impl std::ops::Deref for AgentId {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl AgentId {
+    /// Extract the agent name from an id
+    pub fn decompose(&self) -> &str {
+        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+            return name;
+        }
+
+        unreachable!();
     }
 }
 
@@ -246,10 +258,10 @@ pub struct ProvModel {
     pub agents: HashMap<AgentId, Agent>,
     pub activities: HashMap<ActivityId, Activity>,
     pub entities: HashMap<EntityId, Entity>,
-    pub was_associated_with: HashMap<ActivityId, AgentId>,
-    pub was_attributed_to: HashMap<EntityId, AgentId>,
-    pub was_generated_by: HashMap<EntityId, ActivityId>,
-    pub uses: HashMap<ActivityId, EntityId>,
+    pub was_associated_with: MultiMap<ActivityId, AgentId>,
+    pub was_attributed_to: MultiMap<EntityId, AgentId>,
+    pub was_generated_by: MultiMap<EntityId, ActivityId>,
+    pub uses: MultiMap<ActivityId, EntityId>,
 }
 
 impl ProvModel {
@@ -333,12 +345,22 @@ impl ProvModel {
                 self.namespace_context(&namespace);
                 if !self.activities.contains_key(&id) {
                     let activity_name = id.decompose();
-                    let mut activity = Activity::new(id.clone(), namespace, activity_name);
+                    let mut activity = Activity::new(id.clone(), namespace.clone(), activity_name);
                     activity.started = Some(time);
                     self.activities.insert(id.clone(), activity);
                 }
 
-                self.was_associated_with.insert(id, agent);
+                if !self.agents.contains_key(&agent) {
+                    let agent_name = agent.decompose();
+                    let agentmodel =
+                        Agent::new(agent.clone(), namespace, agent_name.to_owned(), None);
+                    self.agents.insert(agent.clone(), agentmodel);
+                }
+
+                self.was_associated_with
+                    .entry(id)
+                    .or_insert_vec(vec![])
+                    .push(agent.clone())
             }
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
@@ -444,6 +466,18 @@ impl ProvModel {
 
                 activitydoc
                     .insert("http://www.w3.org/ns/prov#startedAtTime", values)
+                    .ok();
+            });
+
+            self.was_associated_with.get_vec(&id).map(|asoc| {
+                let mut ids = json::Array::new();
+
+                for id in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
+
+                activitydoc
+                    .insert("http://www.w3.org/ns/prov#wasAssociatedWith", ids)
                     .ok();
             });
 
