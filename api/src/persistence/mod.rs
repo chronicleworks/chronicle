@@ -71,7 +71,9 @@ impl Store {
         }
 
         for (activityid, agentid) in model.was_associated_with.iter() {
-            self.apply_was_associated_with(model, activityid, agentid)?;
+            for agentid in agentid {
+                self.apply_was_associated_with(model, activityid, agentid)?;
+            }
         }
         Ok(())
     }
@@ -279,5 +281,23 @@ impl Store {
             .execute(&mut *self.connection.borrow_mut())?;
 
         Ok(())
+    }
+
+    /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
+    pub(crate) fn get_activity_by_name_or_last_started(
+        &self,
+        name: Option<String>,
+        namespace: Option<String>,
+    ) -> Result<query::Activity, StoreError> {
+        use schema::activity::dsl;
+
+        match (name, namespace) {
+            (Some(name), Some(namespace)) => {
+                Ok(self.activity_by_activity_name_and_namespace(&name, &namespace)?)
+            }
+            _ => Ok(schema::activity::table
+                .order(dsl::started)
+                .first::<query::Activity>(&mut *self.connection.borrow_mut())?),
+        }
     }
 }

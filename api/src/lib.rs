@@ -5,13 +5,16 @@ use custom_error::*;
 use derivative::*;
 
 use persistence::Store;
-use std::{path::Path, task::Waker};
+use std::{
+    path::{Path, PathBuf},
+    task::Waker,
+};
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{
-        ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace, ProvModel, RegisterKey,
-        StartActivity,
+        ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace, EndActivity, ProvModel,
+        RegisterKey, StartActivity,
     },
     signing::SignerError,
     vocab::Chronicle as ChronicleVocab,
@@ -71,20 +74,27 @@ pub enum ActivityCommand {
     End {
         name: Option<String>,
         namespace: Option<String>,
+        time: Option<DateTime<Utc>>,
     },
     Use {
         name: Option<String>,
         namespace: Option<String>,
+        entity: String,
     },
     Generate {
         name: Option<String>,
         namespace: Option<String>,
-        entityname: String,
+        entity: String,
     },
+}
+
+#[derive(Debug)]
+pub enum EntityCommand {
     Sign {
         name: Option<String>,
         namespace: Option<String>,
-        entityname: String,
+        file: PathBuf,
+        agent: Option<String>,
     },
 }
 
@@ -206,6 +216,11 @@ impl Api {
                 namespace,
                 time,
             }) => self.start_activity(name, namespace, time),
+            ApiCommand::Activity(ActivityCommand::End {
+                name,
+                namespace,
+                time,
+            }) => self.end_activity(name, namespace, time),
             _ => todo!(),
         }
     }
@@ -283,12 +298,42 @@ impl Api {
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
+
+    pub(crate) fn end_activity(
+        &self,
+        name: Option<String>,
+        namespace: Option<String>,
+        time: Option<DateTime<Utc>>,
+    ) -> Result<ApiResponse, ApiError> {
+        let activity = self
+            .store
+            .get_activity_by_name_or_last_started(name, namespace)?;
+
+        let agent = self
+            .store
+            .get_current_agent()
+            .map_err(|_| ApiError::NoCurrentAgent {})?;
+
+        let namespace = self.store.namespace_by_name(&activity.namespace)?;
+
+        let id = ChronicleVocab::activity(&activity.name);
+        let tx = ChronicleTransaction::EndActivity(EndActivity {
+            namespace,
+            id: id.into(),
+            agent: ChronicleVocab::agent(&agent.name).into(),
+            time: time.unwrap_or(Utc::now()),
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
 }
 
 #[cfg(test)]
 mod test {
     use chrono::{TimeZone, Utc};
-    use common::{ledger::InMemLedger, models::Activity};
+    use common::ledger::InMemLedger;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
@@ -322,7 +367,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -346,7 +391,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -372,7 +417,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -391,7 +436,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -423,7 +468,46 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn end_activity() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+            name: "testagent_0".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::End {
+                name: None,
+                namespace: None,
+                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
             }
             _ => unreachable!(),
         }

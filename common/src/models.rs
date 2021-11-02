@@ -3,8 +3,7 @@ use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
-use multimap::MultiMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::vocab::{Chronicle, Prov};
@@ -160,6 +159,14 @@ pub struct StartActivity {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct EndActivity {
+    pub namespace: NamespaceId,
+    pub id: ActivityId,
+    pub agent: AgentId,
+    pub time: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ActivityUses {
     pub namespace: NamespaceId,
     pub id: ActivityId,
@@ -180,6 +187,7 @@ pub enum ChronicleTransaction {
     RegisterKey(RegisterKey),
     CreateActivity(CreateActivity),
     StartActivity(StartActivity),
+    EndActivity(EndActivity),
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
 }
@@ -260,10 +268,10 @@ pub struct ProvModel {
     pub agents: HashMap<AgentId, Agent>,
     pub activities: HashMap<ActivityId, Activity>,
     pub entities: HashMap<EntityId, Entity>,
-    pub was_associated_with: MultiMap<ActivityId, AgentId>,
-    pub was_attributed_to: MultiMap<EntityId, AgentId>,
-    pub was_generated_by: MultiMap<EntityId, ActivityId>,
-    pub uses: MultiMap<ActivityId, EntityId>,
+    pub was_associated_with: HashMap<ActivityId, HashSet<AgentId>>,
+    pub was_attributed_to: HashMap<EntityId, HashSet<AgentId>>,
+    pub was_generated_by: HashMap<EntityId, HashSet<ActivityId>>,
+    pub uses: HashMap<ActivityId, HashSet<EntityId>>,
 }
 
 impl ProvModel {
@@ -361,8 +369,34 @@ impl ProvModel {
 
                 self.was_associated_with
                     .entry(id)
-                    .or_insert_vec(vec![])
-                    .push(agent.clone())
+                    .or_insert(HashSet::new())
+                    .insert(agent.clone());
+            }
+            ChronicleTransaction::EndActivity(EndActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            }) => {
+                self.namespace_context(&namespace);
+                if !self.activities.contains_key(&id) {
+                    let activity_name = id.decompose();
+                    let mut activity = Activity::new(id.clone(), namespace.clone(), activity_name);
+                    activity.ended = Some(time);
+                    self.activities.insert(id.clone(), activity);
+                }
+
+                if !self.agents.contains_key(&agent) {
+                    let agent_name = agent.decompose();
+                    let agentmodel =
+                        Agent::new(agent.clone(), namespace, agent_name.to_owned(), None);
+                    self.agents.insert(agent.clone(), agentmodel);
+                }
+
+                self.was_associated_with
+                    .entry(id)
+                    .or_insert(HashSet::new())
+                    .insert(agent.clone());
             }
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
@@ -382,7 +416,7 @@ impl ProvModel {
                         .insert(entity.clone(), Entity::new(entity.clone(), namespace));
                 }
 
-                self.uses.insert(id, entity);
+                self.uses.entry(id).or_insert(HashSet::new()).insert(entity);
             }
             ChronicleTransaction::GenerateEntity(GenerateEntity {
                 namespace,
@@ -401,7 +435,10 @@ impl ProvModel {
                         .insert(id.clone(), Entity::new(id.clone(), namespace));
                 }
 
-                self.was_generated_by.insert(id, activity);
+                self.was_generated_by
+                    .entry(id)
+                    .or_insert(HashSet::new())
+                    .insert(activity);
             }
         };
     }
@@ -471,7 +508,16 @@ impl ProvModel {
                     .ok();
             });
 
-            self.was_associated_with.get_vec(&id).map(|asoc| {
+            activity.ended.map(|time| {
+                let mut values = json::Array::new();
+                values.push(object! {"@value": time.to_rfc3339()});
+
+                activitydoc
+                    .insert("http://www.w3.org/ns/prov#endedAtTime", values)
+                    .ok();
+            });
+
+            self.was_associated_with.get(&id).map(|asoc| {
                 let mut ids = json::Array::new();
 
                 for id in asoc.iter() {

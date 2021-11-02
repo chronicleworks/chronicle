@@ -34,6 +34,10 @@ lazy_static! {
             "@type": "@id"
         },
 
+        "publicKey": {
+            "@id": "chronicle:hasPublicKey",
+        },
+
         "associated": {
             "@id": "prov:wasAssociatedWith",
             "@type" : "@id"

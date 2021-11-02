@@ -107,18 +107,21 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                     api.dispatch(ApiCommand::Activity(ActivityCommand::End {
                         name: m.value_of("activity_name").map(|x| x.to_owned()),
                         namespace: m.value_of("namespace").map(|x| x.to_owned()),
+                        time: None,
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
+                        name: m.value_of("activity_name").map(|x| x.to_owned()),
+                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
+                        entity: m.value_of("entity_name").unwrap().to_owned(),
                     }))
                 }),
                 m.subcommand_matches("generate").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                    api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
+                        name: m.value_of("activity_name").map(|x| x.to_owned()),
+                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
+                        entity: m.value_of("entity_name").unwrap().to_owned(),
                     }))
                 }),
             ]

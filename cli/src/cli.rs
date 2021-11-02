@@ -148,7 +148,7 @@ pub fn cli() -> App<'static> {
                                 .required(false)
                                 .takes_value(true),
                         )
-                        .arg(Arg::new("entityname").required(true).takes_value(true)),
+                        .arg(Arg::new("entity_name").required(true).takes_value(true)),
                 )
                 .subcommand(
                     App::new("generate")
@@ -162,7 +162,7 @@ pub fn cli() -> App<'static> {
                                 .required(false)
                                 .takes_value(true),
                         )
-                        .arg(Arg::new("entityname").required(true).takes_value(true)),
+                        .arg(Arg::new("entity_name").required(true).takes_value(true)),
                 ),
         )
 }

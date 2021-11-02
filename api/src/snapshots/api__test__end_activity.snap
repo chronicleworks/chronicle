@@ -6,23 +6,23 @@ expression: prov.to_json().compact().unwrap().0.pretty(3)
 {
    "@graph": [
       {
-         "@id": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-         "@type": "chronicle:Namespace",
-         "label": "testns"
-      },
-      {
          "@id": "chronicle::activity:testactivity_0",
          "@type": "prov:Activity",
-         "associated": "chronicle::agent:testagent_0",
+         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
          "label": "testactivity_0",
-         "startTime": "2014-07-08T09:10:11+00:00",
-         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+         "associated": "chronicle::agent:testagent_0",
+         "endTime": "2014-07-08T09:10:11+00:00"
       },
       {
          "@id": "chronicle::agent:testagent_0",
          "@type": "prov:Agent",
-         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-         "label": "testagent_0"
+         "label": "testagent_0",
+         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      },
+      {
+         "@id": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+         "@type": "chronicle:Namespace",
+         "label": "testns"
       }
    ],
    "@context": {
