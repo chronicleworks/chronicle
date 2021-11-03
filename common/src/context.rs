@@ -40,7 +40,20 @@ lazy_static! {
 
         "associated": {
             "@id": "prov:wasAssociatedWith",
-            "@type" : "@id"
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "used": {
+            "@id": "prov:used",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "generatedBy": {
+            "@id": "prov:wasGeneratedBy",
+            "@type" : "@id",
+            "@container": "@set"
         },
 
         "startTime": {

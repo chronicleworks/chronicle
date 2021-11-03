@@ -14,6 +14,8 @@ pub enum Prov {
     WasAssociatedWith,
     #[iri("prov:wasGeneratedBy")]
     WasGeneratedBy,
+    #[iri("prov:used")]
+    Used,
     #[iri("prov:wasAttributedTo")]
     WasAttributedTo,
     #[iri("prov:startedAtTime")]
@@ -44,14 +46,18 @@ impl Chronicle {
     const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
 
     pub fn namespace(name: &str, id: &Uuid) -> IriBuf {
-        IriBuf::new(&format!("{}:ns:{}:{}", Self::PREFIX, name, id)).unwrap()
+        IriBuf::new(&format!("{}ns:{}:{}", Self::PREFIX, name, id)).unwrap()
     }
 
     pub fn agent(name: &str) -> IriBuf {
-        IriBuf::new(&format!("{}:agent:{}", Self::PREFIX, name)).unwrap()
+        IriBuf::new(&format!("{}agent:{}", Self::PREFIX, name)).unwrap()
     }
 
     pub fn activity(name: &str) -> IriBuf {
-        IriBuf::new(&format!("{}:activity:{}", Self::PREFIX, name)).unwrap()
+        IriBuf::new(&format!("{}activity:{}", Self::PREFIX, name)).unwrap()
+    }
+
+    pub fn entity(name: &str) -> IriBuf {
+        IriBuf::new(&format!("{}entity:{}", Self::PREFIX, name)).unwrap()
     }
 }

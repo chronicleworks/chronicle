@@ -196,6 +196,17 @@ impl Store {
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
+    pub(crate) fn disambiguate_entity_name(&self, name: &str) -> Result<String, StoreError> {
+        use schema::entity::dsl as agentdsl;
+
+        let ambiguous = schema::entity::table
+            .select(max(agentdsl::id))
+            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+
+        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+    }
+
+    /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_agent_name(&self, name: &str) -> Result<String, StoreError> {
         use schema::agent::dsl as agentdsl;
 

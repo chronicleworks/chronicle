@@ -1,69 +1,54 @@
 ---
 source: api/src/lib.rs
-expression: prov.to_json().compact().unwrap().0.pretty(3)
+expression: prov.to_json().0.pretty(3)
 
 ---
-{
-   "@graph": [
-      {
-         "@id": "chronicle::activity:testactivity_0",
-         "@type": "prov:Activity",
-         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-         "label": "testactivity_0",
-         "associated": "chronicle::agent:testagent_0",
-         "endTime": "2014-07-08T09:10:11+00:00"
-      },
-      {
-         "@id": "chronicle::agent:testagent_0",
-         "@type": "prov:Agent",
-         "label": "testagent_0",
-         "namespace": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      },
-      {
-         "@id": "chronicle::ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-         "@type": "chronicle:Namespace",
-         "label": "testns"
-      }
-   ],
-   "@context": {
-      "@version": 1.1,
-      "prov": "http://www.w3.org/ns/prov#",
-      "provext": "https://openprovenance.org/ns/provext#",
-      "xsd": "http://www.w3.org/2001/XMLSchema#",
-      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-      "chronicle": "http://blockchaintp.com/chronicle/ns#",
-      "entity": {
-         "@id": "prov:entity",
-         "@type": "@id"
-      },
-      "activity": {
-         "@id": "prov:activity",
-         "@type": "@id"
-      },
-      "agent": {
-         "@id": "prov:agent",
-         "@type": "@id"
-      },
-      "label": {
-         "@id": "rdfs:label"
-      },
-      "namespace": {
-         "@id": "chronicle:hasNamespace",
-         "@type": "@id"
-      },
-      "publicKey": {
-         "@id": "chronicle:hasPublicKey"
-      },
-      "associated": {
-         "@id": "prov:wasAssociatedWith",
-         "@type": "@id"
-      },
-      "startTime": {
-         "@id": "prov:startedAtTime"
-      },
-      "endTime": {
-         "@id": "prov:endedAtTime"
-      }
+[
+   {
+      "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "@type": "http://blockchaintp.com/chronicle/ns#Namespace",
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+         {
+            "@value": "testns"
+         }
+      ]
+   },
+   {
+      "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent_0",
+      "@type": "http://www.w3.org/ns/prov#Agent",
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+         {
+            "@value": "testagent_0"
+         }
+      ],
+      "http://blockchaintp.com/chronicle/ns#hasNamespace": [
+         {
+            "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+         }
+      ]
+   },
+   {
+      "@id": "http://blockchaintp.com/chronicle/ns#activity:testactivity_0",
+      "@type": "http://www.w3.org/ns/prov#Activity",
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+         {
+            "@value": "testactivity_0"
+         }
+      ],
+      "http://www.w3.org/ns/prov#endedAtTime": [
+         {
+            "@value": "2014-07-08T09:10:11+00:00"
+         }
+      ],
+      "http://www.w3.org/ns/prov#wasAssociatedWith": [
+         {
+            "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent_0"
+         }
+      ],
+      "http://blockchaintp.com/chronicle/ns#hasNamespace": [
+         {
+            "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+         }
+      ]
    }
-}
+]

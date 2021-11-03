@@ -6,18 +6,14 @@ mod cli;
 use api::{
     ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand,
 };
-use clap::{App, Arg, ArgMatches};
+use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 use colored_json::prelude::*;
-use common::{
-    ledger::{InMemLedger, LedgerWriter},
-    signing::DirectoryStoredKeys,
-};
+use common::ledger::LedgerWriter;
 use custom_error::custom_error;
 use k256::{elliptic_curve::sec1::ToEncodedPoint, SecretKey};
 use pkcs8::{ToPrivateKey, ToPublicKey};
-use proto::messaging::SawtoothValidator;
 use question::{Answer, Question};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
@@ -31,9 +27,9 @@ use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
 fn ledger(config: &Config) -> Box<dyn LedgerWriter> {
-    Box::new(SawtoothValidator::new(
+    Box::new(proto::messaging::SawtoothValidator::new(
         &config.validator.address,
-        DirectoryStoredKeys::new(&config.secrets.path)
+        common::signing::DirectoryStoredKeys::new(&config.secrets.path)
             .unwrap()
             .default(),
     ))
@@ -41,7 +37,7 @@ fn ledger(config: &Config) -> Box<dyn LedgerWriter> {
 
 #[cfg(feature = "inmem")]
 fn ledger(_config: &Config) -> Box<dyn LedgerWriter> {
-    Box::new(InMemLedger::default())
+    Box::new(common::ledger::InMemLedger::default())
 }
 
 #[instrument]
@@ -112,16 +108,16 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                 }),
                 m.subcommand_matches("use").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-                        name: m.value_of("activity_name").map(|x| x.to_owned()),
-                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
-                        entity: m.value_of("entity_name").unwrap().to_owned(),
+                        name: m.value_of("entity_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
                     }))
                 }),
                 m.subcommand_matches("generate").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-                        name: m.value_of("activity_name").map(|x| x.to_owned()),
-                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
-                        entity: m.value_of("entity_name").unwrap().to_owned(),
+                        name: m.value_of("entity_name").unwrap().to_owned(),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
                     }))
                 }),
             ]

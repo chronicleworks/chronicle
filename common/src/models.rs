@@ -22,7 +22,7 @@ impl std::ops::Deref for NamespaceId {
 impl NamespaceId {
     /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
     pub fn decompose(&self) -> (&str, Uuid) {
-        if let &[_, _, _, name, uuid, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, uuid, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
             return (name, Uuid::parse_str(uuid).unwrap());
         }
 
@@ -59,6 +59,17 @@ where
     }
 }
 
+impl EntityId {
+    /// Extract the activity name from an id
+    pub fn decompose(&self) -> &str {
+        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+            return name;
+        }
+
+        unreachable!();
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AgentId(String);
 
@@ -73,7 +84,7 @@ impl std::ops::Deref for AgentId {
 impl AgentId {
     /// Extract the agent name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -104,7 +115,7 @@ impl std::ops::Deref for ActivityId {
 impl ActivityId {
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -169,8 +180,8 @@ pub struct EndActivity {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ActivityUses {
     pub namespace: NamespaceId,
-    pub id: ActivityId,
-    pub entity: EntityId,
+    pub id: EntityId,
+    pub activity: ActivityId,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -253,12 +264,17 @@ impl Activity {
 #[derive(Debug, Clone)]
 pub struct Entity {
     id: EntityId,
-    ns: NamespaceId,
+    namespaceid: NamespaceId,
+    name: String,
 }
 
 impl Entity {
-    pub fn new(id: EntityId, ns: NamespaceId) -> Self {
-        Self { id, ns }
+    pub fn new(id: EntityId, ns: NamespaceId, name: &str) -> Self {
+        Self {
+            id,
+            namespaceid: ns,
+            name: name.to_owned(),
+        }
     }
 }
 
@@ -271,7 +287,7 @@ pub struct ProvModel {
     pub was_associated_with: HashMap<ActivityId, HashSet<AgentId>>,
     pub was_attributed_to: HashMap<EntityId, HashSet<AgentId>>,
     pub was_generated_by: HashMap<EntityId, HashSet<ActivityId>>,
-    pub uses: HashMap<ActivityId, HashSet<EntityId>>,
+    pub used: HashMap<ActivityId, HashSet<EntityId>>,
 }
 
 impl ProvModel {
@@ -401,28 +417,9 @@ impl ProvModel {
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
                 id,
-                entity,
-            }) => {
-                self.namespace_context(&namespace);
-                if !self.activities.contains_key(&id) {
-                    let activity_name = id.decompose();
-                    self.activities.insert(
-                        id.clone(),
-                        Activity::new(id.clone(), namespace.clone(), activity_name),
-                    );
-                }
-                if !self.entities.contains_key(&entity) {
-                    self.entities
-                        .insert(entity.clone(), Entity::new(entity.clone(), namespace));
-                }
-
-                self.uses.entry(id).or_insert(HashSet::new()).insert(entity);
-            }
-            ChronicleTransaction::GenerateEntity(GenerateEntity {
-                namespace,
-                id,
                 activity,
             }) => {
+                self.namespace_context(&namespace);
                 if !self.activities.contains_key(&activity) {
                     let activity_name = activity.decompose();
                     self.activities.insert(
@@ -431,8 +428,33 @@ impl ProvModel {
                     );
                 }
                 if !self.entities.contains_key(&id) {
+                    let name = id.decompose();
                     self.entities
-                        .insert(id.clone(), Entity::new(id.clone(), namespace));
+                        .insert(id.clone(), Entity::new(id.clone(), namespace, name));
+                }
+
+                self.used
+                    .entry(activity)
+                    .or_insert(HashSet::new())
+                    .insert(id);
+            }
+            ChronicleTransaction::GenerateEntity(GenerateEntity {
+                namespace,
+                id,
+                activity,
+            }) => {
+                self.namespace_context(&namespace);
+                if !self.activities.contains_key(&activity) {
+                    let activity_name = activity.decompose();
+                    self.activities.insert(
+                        activity.clone(),
+                        Activity::new(activity.clone(), namespace.clone(), activity_name),
+                    );
+                }
+                if !self.entities.contains_key(&id) {
+                    let name = id.decompose();
+                    self.entities
+                        .insert(id.clone(), Entity::new(id.clone(), namespace, name));
                 }
 
                 self.was_generated_by
@@ -525,7 +547,19 @@ impl ProvModel {
                 }
 
                 activitydoc
-                    .insert("http://www.w3.org/ns/prov#wasAssociatedWith", ids)
+                    .insert(&Iri::from(Prov::WasAssociatedWith).to_string(), ids)
+                    .ok();
+            });
+
+            self.used.get(&id).map(|asoc| {
+                let mut ids = json::Array::new();
+
+                for id in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
+
+                activitydoc
+                    .insert(&Iri::from(Prov::Used).to_string(), ids)
                     .ok();
             });
 
@@ -542,6 +576,40 @@ impl ProvModel {
             doc.push(activitydoc);
         }
 
+        for (id, entity) in self.entities.iter() {
+            let mut entitydoc = object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Prov::Entity).as_str(),
+                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                   "@value": entity.name.as_str(),
+                }]
+            };
+
+            self.was_generated_by.get(&id).map(|asoc| {
+                let mut ids = json::Array::new();
+
+                for id in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
+
+                entitydoc
+                    .insert(Iri::from(Prov::WasGeneratedBy).as_str(), ids)
+                    .ok();
+            });
+
+            let mut values = json::Array::new();
+
+            values.push(object! {
+                "@id": JsonValue::String(entity.namespaceid.0.clone()),
+            });
+
+            entitydoc
+                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
+                .ok();
+
+            doc.push(entitydoc);
+        }
+
         ExpandedJson(doc.into())
     }
 }
@@ -553,7 +621,6 @@ impl ExpandedJson {
         let processed_context =
             block_on(crate::context::PROV.process::<JsonContext, _>(&mut NoLoader, None))?;
 
-        // Compaction.
         let output = block_on(self.0.compact(&processed_context, &mut NoLoader))?;
 
         Ok(CompactedJson(output))

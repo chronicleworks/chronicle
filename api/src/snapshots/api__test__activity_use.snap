@@ -14,21 +14,30 @@ expression: prov.to_json().0.pretty(3)
       ]
    },
    {
-      "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent",
-      "@type": "http://www.w3.org/ns/prov#Agent",
+      "@id": "http://blockchaintp.com/chronicle/ns#activity:testactivity_0",
+      "@type": "http://www.w3.org/ns/prov#Activity",
       "http://www.w3.org/2000/01/rdf-schema#label": [
          {
-            "@value": "testagent"
+            "@value": "testactivity_0"
          }
       ],
-      "http://blockchaintp.com/chronicle/ns#hasPublicKey": [
+      "http://www.w3.org/ns/prov#used": [
          {
-            "@value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "@id": "http://blockchaintp.com/chronicle/ns#entity:testactivity_0"
          }
       ],
       "http://blockchaintp.com/chronicle/ns#hasNamespace": [
          {
             "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+         }
+      ]
+   },
+   {
+      "@id": "http://blockchaintp.com/chronicle/ns#entity:testactivity_0",
+      "@type": "http://www.w3.org/ns/prov#Entity",
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+         {
+            "@value": "testactivity_0"
          }
       ]
    }

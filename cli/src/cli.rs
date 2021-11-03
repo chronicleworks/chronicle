@@ -139,7 +139,7 @@ pub fn cli() -> App<'static> {
                 .subcommand(
                     App::new("use")
                         .about("Record this activity as having used the specified entity")
-                        .arg(Arg::new("activity_name").required(true).takes_value(true))
+                        .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
                                 .short('n')
@@ -148,12 +148,18 @@ pub fn cli() -> App<'static> {
                                 .required(false)
                                 .takes_value(true),
                         )
-                        .arg(Arg::new("entity_name").required(true).takes_value(true)),
+                        .arg(
+                            Arg::new("activity_name")
+                                .required(false)
+                                .short('a')
+                                .long("activity")
+                                .takes_value(true),
+                        ),
                 )
                 .subcommand(
                     App::new("generate")
                         .about("Records this activity as having generated the specified entity")
-                        .arg(Arg::new("activity_name").required(true).takes_value(true))
+                        .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
                                 .short('n')
@@ -162,7 +168,13 @@ pub fn cli() -> App<'static> {
                                 .required(false)
                                 .takes_value(true),
                         )
-                        .arg(Arg::new("entity_name").required(true).takes_value(true)),
+                        .arg(
+                            Arg::new("activity_name")
+                                .required(false)
+                                .short('a')
+                                .long("activity")
+                                .takes_value(true),
+                        ),
                 ),
         )
 }

@@ -5,16 +5,13 @@ use custom_error::*;
 use derivative::*;
 
 use persistence::Store;
-use std::{
-    path::{Path, PathBuf},
-    task::Waker,
-};
+use std::path::{Path, PathBuf};
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{
-        ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace, EndActivity, ProvModel,
-        RegisterKey, StartActivity,
+        ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
+        EndActivity, GenerateEntity, ProvModel, RegisterKey, StartActivity,
     },
     signing::SignerError,
     vocab::Chronicle as ChronicleVocab,
@@ -31,7 +28,6 @@ custom_error! {pub ApiError
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
-    NamespaceNotFound{name: String}                             = "Namespace {} not found, please create it",
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use",
 }
 
@@ -77,14 +73,14 @@ pub enum ActivityCommand {
         time: Option<DateTime<Utc>>,
     },
     Use {
-        name: Option<String>,
-        namespace: Option<String>,
-        entity: String,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
     },
     Generate {
-        name: Option<String>,
-        namespace: Option<String>,
-        entity: String,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
     },
 }
 
@@ -172,17 +168,13 @@ impl Api {
 
     #[instrument]
     fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
-        let name = self.store.disambiguate_agent_name(name)?;
         self.ensure_namespace(namespace)?;
+        let name = self.store.disambiguate_agent_name(name)?;
 
         let tx = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
             id: ChronicleVocab::agent(&name).into(),
-            namespace: self.store.namespace_by_name(namespace).map_err(|_| {
-                ApiError::NamespaceNotFound {
-                    name: namespace.to_owned(),
-                }
-            })?,
+            namespace: self.store.namespace_by_name(namespace)?,
         });
 
         self.ledger.submit(vec![&tx])?;
@@ -221,7 +213,16 @@ impl Api {
                 namespace,
                 time,
             }) => self.end_activity(name, namespace, time),
-            _ => todo!(),
+            ApiCommand::Activity(ActivityCommand::Use {
+                name,
+                namespace,
+                activity,
+            }) => self.activity_use(name, namespace, activity),
+            ApiCommand::Activity(ActivityCommand::Generate {
+                name,
+                namespace,
+                activity,
+            }) => self.activity_generate(name, namespace, activity),
         }
     }
 
@@ -273,6 +274,7 @@ impl Api {
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
+    #[instrument]
     pub(crate) fn start_activity(
         &self,
         name: String,
@@ -299,6 +301,7 @@ impl Api {
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
+    #[instrument]
     pub(crate) fn end_activity(
         &self,
         name: Option<String>,
@@ -322,6 +325,58 @@ impl Api {
             id: id.into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
             time: time.unwrap_or(Utc::now()),
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
+
+    #[instrument]
+    pub(crate) fn activity_use(
+        &self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let activity = self
+            .store
+            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
+
+        self.ensure_namespace(&namespace)?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+
+        let name = self.store.disambiguate_entity_name(&name)?;
+        let tx = ChronicleTransaction::ActivityUses(ActivityUses {
+            namespace,
+            id: ChronicleVocab::entity(&name).into(),
+            activity: ChronicleVocab::activity(&activity.name).into(),
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
+
+    #[instrument]
+    pub(crate) fn activity_generate(
+        &self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace)?;
+        let activity = self
+            .store
+            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
+
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let name = self.store.disambiguate_entity_name(&name)?;
+
+        let tx = ChronicleTransaction::GenerateEntity(GenerateEntity {
+            namespace,
+            id: ChronicleVocab::entity(&name).into(),
+            activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
         self.ledger.submit(vec![&tx])?;
@@ -367,7 +422,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -391,7 +446,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -417,7 +472,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -436,7 +491,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -468,7 +523,7 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
@@ -507,7 +562,59 @@ mod test {
 
         match prov {
             ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().compact().unwrap().0.pretty(3))
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn activity_use() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Use {
+                name: "testactivity".to_owned(),
+                namespace: "testns".to_owned(),
+                activity: None,
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn activity_generate() {
+        let api = test_api();
+
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        let prov = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
+                name: "testactivity".to_owned(),
+                namespace: "testns".to_owned(),
+                activity: None,
+            }))
+            .unwrap();
+
+        match prov {
+            ApiResponse::Prov(prov) => {
+                insta::assert_snapshot!(prov.to_json().0.pretty(3))
             }
             _ => unreachable!(),
         }
