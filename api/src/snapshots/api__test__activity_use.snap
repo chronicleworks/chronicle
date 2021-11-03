@@ -39,6 +39,11 @@ expression: prov.to_json().0.pretty(3)
          {
             "@value": "testactivity_0"
          }
+      ],
+      "http://blockchaintp.com/chronicle/ns#hasNamespace": [
+         {
+            "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+         }
       ]
    }
 ]

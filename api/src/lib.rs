@@ -5,7 +5,10 @@ use custom_error::*;
 use derivative::*;
 
 use persistence::Store;
-use std::path::{Path, PathBuf};
+use std::{
+    convert::Infallible,
+    path::{Path, PathBuf},
+};
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
@@ -29,6 +32,13 @@ custom_error! {pub ApiError
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use",
+}
+
+///Kind of annoying but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+impl From<Infallible> for ApiError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
+    }
 }
 
 impl UFE for ApiError {}
@@ -86,7 +96,7 @@ pub enum ActivityCommand {
 
 #[derive(Debug)]
 pub enum EntityCommand {
-    Sign {
+    Attach {
         name: Option<String>,
         namespace: Option<String>,
         file: PathBuf,

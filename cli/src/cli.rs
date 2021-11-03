@@ -66,17 +66,28 @@ pub fn cli() -> App<'static> {
                                 .required(false)
                                 .takes_value(true),
                         )
+                        .arg(Arg::new("generate")
+                            .about("Automatically generate a signing key for this agent and store it in the configured key store")
+                            .required_unless_present("public_key")
+                            .short('g')
+                            .long("generate")
+                            .takes_value(false),
+                        )
                         .arg(
                             Arg::new("publickey")
+                                .about("Import the public key at this location to the configured key store")
                                 .short('p')
                                 .long("publickey")
-                                .required(true)
+                                .value_hint(ValueHint::FilePath)
+                                .required_unless_present("generate")
                                 .takes_value(true),
                         )
                         .arg(
                             Arg::new("privatekey")
+                                .about("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
                                 .short('k')
                                 .long("privatekey")
+                                .value_hint(ValueHint::FilePath)
                                 .required(false)
                                 .takes_value(true),
                         ),
@@ -165,6 +176,48 @@ pub fn cli() -> App<'static> {
                                 .short('n')
                                 .long("namespace")
                                 .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("activity_name")
+                                .required(false)
+                                .short('a')
+                                .long("activity")
+                                .takes_value(true),
+                        ),
+                ),
+        )
+        .subcommand(
+            App::new("entity")
+                .about("Operations on entities")
+                .subcommand(
+                    App::new("attach")
+                        .about("Sign the input file and record it against the entity")
+                        .arg(Arg::new("entity_name").required(true).takes_value(true))
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("file")
+                                .short('f')
+                                .about("A path to the file to be signed and attached")
+                                .long("file")
+                                .value_hint(ValueHint::FilePath)
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("locator")
+                                .short('l')
+                                .long("locator")
+                                .about("A url or other way of identifying the attachment")
+                                .value_hint(ValueHint::Url)
                                 .required(false)
                                 .takes_value(true),
                         )
