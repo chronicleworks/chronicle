@@ -16,7 +16,6 @@ diesel::table! {
         name -> Text,
         namespace -> Text,
         publickey -> Nullable<Text>,
-        privatekeypath -> Nullable<Text>,
         current -> Integer,
     }
 }
@@ -26,8 +25,9 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
-        started -> Nullable<Timestamp>,
-        ended -> Nullable<Timestamp>,
+        signature_time -> Nullable<Timestamp>,
+        signature -> Nullable<Timestamp>,
+        locator -> Nullable<Text>,
     }
 }
 

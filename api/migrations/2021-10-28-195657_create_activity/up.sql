@@ -5,15 +5,18 @@ create table activity (
     started timestamp,
     ended timestamp,
     foreign key(namespace) references namespace(name)
+    unique(name,namespace)
 );
 
 create table entity (
     id integer primary key not null,
     name text not null,
     namespace text not null,
-    started timestamp,
-    ended timestamp,
+    signature_time timestamp,
+    signature timestamp,
+    locator text,
     foreign key(namespace) references namespace(name)
+    unique(name,namespace)
 );
 
 create table wasattributedto (

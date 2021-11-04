@@ -5,4 +5,5 @@ create table agent (
     publickey text,
     current integer not null,
     foreign key(namespace) references namespace(name)
+    unique(name,namespace)
 );

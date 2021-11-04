@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
-use k256::ecdsa::VerifyingKey;
+
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -193,6 +193,16 @@ pub struct GenerateEntity {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct EntityAttach {
+    pub namespace: NamespaceId,
+    pub id: EntityId,
+    pub agent: AgentId,
+    pub signature: String,
+    pub locator: Option<String>,
+    pub signature_time: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum ChronicleTransaction {
     CreateNamespace(CreateNamespace),
     CreateAgent(CreateAgent),
@@ -202,6 +212,7 @@ pub enum ChronicleTransaction {
     EndActivity(EndActivity),
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
+    EntityAttach(EntityAttach),
 }
 
 #[derive(Debug, Clone)]
@@ -263,18 +274,73 @@ impl Activity {
 }
 
 #[derive(Debug, Clone)]
-pub struct Entity {
-    id: EntityId,
-    namespaceid: NamespaceId,
-    name: String,
+pub enum Entity {
+    Unsigned {
+        id: EntityId,
+        namespaceid: NamespaceId,
+        name: String,
+    },
+    Signed {
+        id: EntityId,
+        namespaceid: NamespaceId,
+        name: String,
+        signature: String,
+        locator: Option<String>,
+        signature_time: DateTime<Utc>,
+    },
 }
 
 impl Entity {
-    pub fn new(id: EntityId, ns: NamespaceId, name: &str) -> Self {
-        Self {
+    pub fn unsigned(id: EntityId, namespaceid: &NamespaceId, name: &str) -> Self {
+        Self::Unsigned {
             id,
-            namespaceid: ns,
+            namespaceid: namespaceid.to_owned(),
             name: name.to_owned(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Unsigned { name, .. } | Self::Signed { name, .. } => name,
+        }
+    }
+
+    pub fn id(&self) -> &EntityId {
+        match self {
+            Self::Unsigned { id, .. } | Self::Signed { id, .. } => id,
+        }
+    }
+    pub fn namespaceid(&self) -> &NamespaceId {
+        match self {
+            Self::Unsigned { namespaceid, .. } | Self::Signed { namespaceid, .. } => namespaceid,
+        }
+    }
+
+    pub fn sign(
+        self,
+        signature: String,
+        locator: Option<String>,
+        signature_time: DateTime<Utc>,
+    ) -> Self {
+        match self {
+            Self::Unsigned {
+                id,
+                namespaceid,
+                name,
+            }
+            | Self::Signed {
+                id,
+                namespaceid,
+                name,
+                ..
+            } => Self::Signed {
+                id,
+                namespaceid,
+                name,
+                signature,
+                locator,
+                signature_time,
+            },
         }
     }
 }
@@ -431,7 +497,7 @@ impl ProvModel {
                 if !self.entities.contains_key(&id) {
                     let name = id.decompose();
                     self.entities
-                        .insert(id.clone(), Entity::new(id.clone(), namespace, name));
+                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, name));
                 }
 
                 self.used
@@ -455,13 +521,43 @@ impl ProvModel {
                 if !self.entities.contains_key(&id) {
                     let name = id.decompose();
                     self.entities
-                        .insert(id.clone(), Entity::new(id.clone(), namespace, name));
+                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, &name));
                 }
 
                 self.was_generated_by
                     .entry(id)
                     .or_insert(HashSet::new())
                     .insert(activity);
+            }
+            ChronicleTransaction::EntityAttach(EntityAttach {
+                namespace,
+                id,
+                agent,
+                signature,
+                locator,
+                signature_time,
+            }) => {
+                self.namespace_context(&namespace);
+
+                if !self.entities.contains_key(&id) {
+                    let name = id.decompose();
+                    self.entities
+                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, &name));
+                }
+
+                if !self.agents.contains_key(&agent) {
+                    let agent_name = agent.decompose();
+                    let agentmodel =
+                        Agent::new(agent.clone(), namespace, agent_name.to_owned(), None);
+                    self.agents.insert(agent.clone(), agentmodel);
+                }
+
+                let unsigned = self.entities.remove(&id).unwrap();
+
+                self.entities.insert(
+                    id.clone(),
+                    unsigned.sign(signature, locator, signature_time),
+                );
             }
         };
     }
@@ -582,7 +678,7 @@ impl ProvModel {
                 "@id": (*id.as_str()),
                 "@type": Iri::from(Prov::Entity).as_str(),
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": entity.name.as_str(),
+                   "@value": entity.name()
                 }]
             };
 
@@ -598,10 +694,38 @@ impl ProvModel {
                     .ok();
             });
 
+            if let Entity::Signed {
+                signature,
+                signature_time,
+                locator,
+                ..
+            } = entity
+            {
+                entitydoc
+                    .insert(
+                        Iri::from(Chronicle::Signature).as_str(),
+                        signature.to_owned(),
+                    )
+                    .ok();
+
+                entitydoc
+                    .insert(
+                        Iri::from(Chronicle::SignedAtTime).as_str(),
+                        signature_time.to_rfc3339(),
+                    )
+                    .ok();
+
+                locator.as_ref().map(|locator| {
+                    entitydoc
+                        .insert(Iri::from(Chronicle::Locator).as_str(), locator.to_owned())
+                        .ok();
+                });
+            }
+
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(entity.namespaceid.0.clone()),
+                "@id": JsonValue::String(entity.namespaceid().0.clone()),
             });
 
             entitydoc

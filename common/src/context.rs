@@ -38,6 +38,20 @@ lazy_static! {
             "@id": "chronicle:hasPublicKey",
         },
 
+
+        "source": {
+            "@id": "chronicle:entityLocator",
+        },
+
+        "signature": {
+            "@id": "chronicle:entitySignature",
+        },
+
+        "signedAtTime": {
+            "@id": "chronicle:signedAtTime",
+        },
+
+
         "associated": {
             "@id": "prov:wasAssociatedWith",
             "@type" : "@id",

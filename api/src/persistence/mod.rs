@@ -2,13 +2,13 @@ use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use common::{
     models::{
-        Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Namespace, NamespaceId,
+        Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, Namespace, NamespaceId,
         ProvModel,
     },
     vocab::Chronicle,
 };
 use custom_error::custom_error;
-use derivative::Derivative;
+use derivative::*;
 use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::{instrument, trace};
@@ -70,11 +70,28 @@ impl Store {
             self.apply_activity(activity, &model.namespaces)?
         }
 
+        for (_, entity) in model.entities.iter() {
+            self.apply_entity(entity, &model.namespaces)?
+        }
+
         for (activityid, agentid) in model.was_associated_with.iter() {
             for agentid in agentid {
                 self.apply_was_associated_with(model, activityid, agentid)?;
             }
         }
+
+        for (activityid, entityid) in model.used.iter() {
+            for entityid in entityid {
+                self.apply_used(model, activityid, entityid)?;
+            }
+        }
+
+        for (entityid, activityid) in model.was_generated_by.iter() {
+            for activityid in activityid {
+                self.apply_was_generated_by(model, entityid, activityid)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -125,7 +142,6 @@ impl Store {
                 namespace: &namespace.name,
                 current: 0,
                 publickey: publickey.as_deref(),
-                privatekeypath: None,
             })
             .execute(&mut *self.connection.borrow_mut())?;
 
@@ -226,7 +242,7 @@ impl Store {
     }
 
     /// Fetch the agent record for the IRI
-    fn agent_by_agent_name_and_namespace(
+    pub(crate) fn agent_by_agent_name_and_namespace(
         &self,
         name: &str,
         namespace: &str,
@@ -294,5 +310,66 @@ impl Store {
                 .order(dsl::started)
                 .first::<query::Activity>(&mut *self.connection.borrow_mut())?),
         }
+    }
+
+    fn apply_entity(
+        &self,
+        entity: &common::models::Entity,
+        ns: &HashMap<NamespaceId, Namespace>,
+    ) -> Result<(), StoreError> {
+        use schema::entity::dsl;
+        let namespace = ns
+            .get(entity.namespaceid())
+            .ok_or(StoreError::InvalidNamespace {})?;
+
+        diesel::insert_into(schema::entity::table)
+            .values((
+                dsl::name.eq(entity.name()),
+                dsl::namespace.eq(&namespace.name),
+            ))
+            .on_conflict((dsl::name, dsl::namespace))
+            .do_nothing()
+            .execute(&mut *self.connection.borrow_mut())?;
+
+        if let Entity::Signed {
+            signature,
+            signature_time,
+            locator,
+            ..
+        } = entity
+        {
+            diesel::update(schema::entity::table)
+                .filter(
+                    dsl::name
+                        .eq(entity.name())
+                        .and(dsl::namespace.eq(&namespace.name)),
+                )
+                .set((
+                    dsl::locator.eq(locator),
+                    dsl::signature.eq(signature),
+                    dsl::signature_time.eq(signature_time.naive_utc()),
+                ))
+                .execute(&mut *self.connection.borrow_mut())?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_was_generated_by(
+        &self,
+        _model: &ProvModel,
+        _entityid: &common::models::EntityId,
+        _activityid: &ActivityId,
+    ) -> Result<(), StoreError> {
+        Ok(())
+    }
+
+    fn apply_used(
+        &self,
+        _model: &ProvModel,
+        _activityid: &ActivityId,
+        _entityid: &common::models::EntityId,
+    ) -> Result<(), StoreError> {
+        Ok(())
     }
 }

@@ -40,6 +40,14 @@ pub enum Chronicle {
     NamespaceType,
     #[iri("chronicle:hasNamespace")]
     HasNamespace,
+    #[iri("chronicle:entitySignature")]
+    Signature,
+    #[iri("chronicle:entityLocator")]
+    Locator,
+    #[iri("chronicle:signedAtTime")]
+    SignedAtTime,
+    #[iri("chronicle:signedBy")]
+    SignedBy,
 }
 
 impl Chronicle {

@@ -210,7 +210,7 @@ pub fn cli() -> App<'static> {
                                 .about("A path to the file to be signed and attached")
                                 .long("file")
                                 .value_hint(ValueHint::FilePath)
-                                .required(false)
+                                .required(true)
                                 .takes_value(true),
                         )
                         .arg(

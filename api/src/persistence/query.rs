@@ -30,7 +30,6 @@ pub struct Agent {
     pub name: String,
     pub namespace: String,
     pub publickey: Option<String>,
-    pub privatekeypath: Option<String>,
     pub current: i32,
 }
 
@@ -50,5 +49,4 @@ pub struct NewAgent<'a> {
     pub namespace: &'a str,
     pub current: i32,
     pub publickey: Option<&'a str>,
-    pub privatekeypath: Option<&'a str>,
 }

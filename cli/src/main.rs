@@ -5,8 +5,8 @@ mod cli;
 mod config;
 
 use api::{
-    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, KeyRegistration,
-    NamespaceCommand,
+    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, EntityCommand,
+    KeyRegistration, NamespaceCommand,
 };
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
@@ -137,9 +137,12 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
         }),
         options.subcommand_matches("entity").and_then(|m| {
             vec![m.subcommand_matches("attach").map(|m| {
-                api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                api.dispatch(ApiCommand::Entity(EntityCommand::Attach {
                     name: m.value_of("entity_name").unwrap().to_owned(),
                     namespace: m.value_of("namespace").unwrap().to_owned(),
+                    file: m.value_of_t::<PathBuf>("file").unwrap().to_owned(),
+                    locator: m.value_of("locator").map(|x| x.to_owned()),
+                    agent: m.value_of("agent").map(|x| x.to_owned()),
                 }))
             })]
             .into_iter()

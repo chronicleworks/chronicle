@@ -4,6 +4,10 @@ use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
+use k256::ecdsa::{
+    signature::{Signer},
+    Signature,
+};
 use persistence::Store;
 use std::{
     convert::Infallible,
@@ -14,7 +18,7 @@ use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-        EndActivity, GenerateEntity, ProvModel, RegisterKey, StartActivity,
+        EndActivity, EntityAttach, GenerateEntity, ProvModel, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
     vocab::Chronicle as ChronicleVocab,
@@ -32,6 +36,7 @@ custom_error! {pub ApiError
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
+    CannotFindAttachment{}                                      = "Cannot locate attachment file",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -103,9 +108,10 @@ pub enum ActivityCommand {
 #[derive(Debug)]
 pub enum EntityCommand {
     Attach {
-        name: Option<String>,
-        namespace: Option<String>,
+        name: String,
+        namespace: String,
         file: PathBuf,
+        locator: Option<String>,
         agent: Option<String>,
     },
 }
@@ -115,6 +121,7 @@ pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
     Activity(ActivityCommand),
+    Entity(EntityCommand),
 }
 
 #[derive(Debug)]
@@ -241,6 +248,13 @@ impl Api {
                 namespace,
                 activity,
             }) => self.activity_generate(name, namespace, activity),
+            ApiCommand::Entity(EntityCommand::Attach {
+                name,
+                namespace,
+                file,
+                locator,
+                agent,
+            }) => self.entity_attach(name, namespace, file, locator, agent),
         }
     }
 
@@ -405,6 +419,47 @@ impl Api {
             namespace,
             id: ChronicleVocab::entity(&name).into(),
             activity: ChronicleVocab::activity(&activity.name).into(),
+        });
+
+        self.ledger.submit(vec![&tx])?;
+
+        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
+
+    #[instrument]
+    fn entity_attach(
+        &self,
+        name: String,
+        namespace: String,
+        file: PathBuf,
+        locator: Option<String>,
+        agent: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace)?;
+
+        let agent = agent
+            .map(|agent| {
+                self.store
+                    .agent_by_agent_name_and_namespace(&agent, &namespace)
+            })
+            .unwrap_or_else(|| self.store.get_current_agent())?;
+
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::entity(&name).into();
+        let agentid = ChronicleVocab::agent(&agent.name).into();
+
+        let signature: Signature = self
+            .keystore
+            .agent_signing(&agentid)?
+            .sign(&std::fs::read(&file).map_err(|_| ApiError::CannotFindAttachment {})?);
+
+        let tx = ChronicleTransaction::EntityAttach(EntityAttach {
+            namespace,
+            id,
+            agent: agentid,
+            signature: hex::encode_upper(signature),
+            locator,
+            signature_time: Utc::now(),
         });
 
         self.ledger.submit(vec![&tx])?;
