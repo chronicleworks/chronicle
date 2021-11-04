@@ -70,9 +70,10 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                             KeyRegistration::ImportSigning {
                                 path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
                             }
-                        }
-                        KeyRegistration::ImportVerifying {
-                            path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
+                        } else {
+                            KeyRegistration::ImportVerifying {
+                                path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
+                            }
                         }
                     };
 

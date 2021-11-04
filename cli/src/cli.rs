@@ -68,7 +68,7 @@ pub fn cli() -> App<'static> {
                         )
                         .arg(Arg::new("generate")
                             .about("Automatically generate a signing key for this agent and store it in the configured key store")
-                            .required_unless_present("public_key")
+                            .required_unless_present_any(vec!["publickey", "privatekey"])
                             .short('g')
                             .long("generate")
                             .takes_value(false),
@@ -79,7 +79,7 @@ pub fn cli() -> App<'static> {
                                 .short('p')
                                 .long("publickey")
                                 .value_hint(ValueHint::FilePath)
-                                .required_unless_present("generate")
+                                .required_unless_present_any(vec!["generate","privatekey"])
                                 .takes_value(true),
                         )
                         .arg(
@@ -87,6 +87,7 @@ pub fn cli() -> App<'static> {
                                 .about("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
                                 .short('k')
                                 .long("privatekey")
+                                .required_unless_present_any(vec!["generate","publickey"])
                                 .value_hint(ValueHint::FilePath)
                                 .required(false)
                                 .takes_value(true),
