@@ -29,6 +29,7 @@ tracing = "0.1.29"
 derivative = "2.2.0"
 chrono = "0.4.19"
 multimap = "0.8.3"
+hex = "0.4.3"
 
 [dev-dependencies]
 insta = "1.8.0"

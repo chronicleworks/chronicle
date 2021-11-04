@@ -1,6 +1,10 @@
 use custom_error::custom_error;
-use k256::{ecdsa::SigningKey, pkcs8::FromPrivateKey, SecretKey};
-use pkcs8::ToPrivateKey;
+use k256::{
+    ecdsa::{SigningKey, VerifyingKey},
+    pkcs8::FromPrivateKey,
+    SecretKey,
+};
+use pkcs8::{FromPublicKey, ToPrivateKey};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
 
@@ -42,6 +46,13 @@ impl DirectoryStoredKeys {
         Self::signing_key_at(&self.agent_path(agent))
     }
 
+    /// If we have a signing key, derive the verifying key from it, else attempt to load an imported verifying key
+    pub fn agent_verifying(&self, agent: &AgentId) -> Result<VerifyingKey, SignerError> {
+        Self::signing_key_at(&self.agent_path(agent))
+            .map(|signing| signing.verifying_key())
+            .or_else(|_| Self::verifying_key_at(&self.agent_path(&agent)))
+    }
+
     pub fn import_agent(
         &self,
         agent: &AgentId,
@@ -58,7 +69,7 @@ impl DirectoryStoredKeys {
         if let Some(verifying) = verifying {
             std::fs::copy(
                 Path::new(verifying),
-                Path::join(&self.agent_path(agent), Path::new("key.priv.pem")),
+                Path::join(&self.agent_path(agent), Path::new("key.pub.pem")),
             )?;
         }
 
@@ -80,14 +91,14 @@ impl DirectoryStoredKeys {
         if let Some(verifying) = verifying {
             std::fs::copy(
                 Path::new(verifying),
-                Path::join(&self.base, Path::new("key.priv.pem")),
+                Path::join(&self.base, Path::new("key.pub.pem")),
             )?;
         }
 
         Ok(())
     }
 
-    pub fn generate_agent(&self, agent: AgentId) -> Result<(), SignerError> {
+    pub fn generate_agent(&self, agent: &AgentId) -> Result<(), SignerError> {
         let path = self.agent_path(&agent);
         std::fs::create_dir_all(&path)?;
         Ok(Self::new_signing_key(&path)?)
@@ -119,6 +130,13 @@ impl DirectoryStoredKeys {
         Ok(SigningKey::read_pkcs8_pem_file(Path::join(
             path,
             Path::new("key.priv.pem"),
+        ))?)
+    }
+
+    fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
+        Ok(VerifyingKey::read_public_key_pem_file(Path::join(
+            path,
+            Path::new("key.pub.pem"),
         ))?)
     }
 }

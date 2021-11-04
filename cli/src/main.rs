@@ -5,7 +5,8 @@ mod cli;
 mod config;
 
 use api::{
-    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, NamespaceCommand,
+    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, KeyRegistration,
+    NamespaceCommand,
 };
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
@@ -62,11 +63,23 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                     }))
                 }),
                 m.subcommand_matches("register-key").map(|m| {
+                    let registration = {
+                        if m.is_present("generate") {
+                            KeyRegistration::Generate
+                        } else if m.is_present("privatekey") {
+                            KeyRegistration::ImportSigning {
+                                path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
+                            }
+                        }
+                        KeyRegistration::ImportVerifying {
+                            path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
+                        }
+                    };
+
                     api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
-                        public: m.value_of("publickey").unwrap().to_owned(),
-                        private: m.value_of("privatekey").map(|x| x.to_owned()),
+                        registration,
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {

@@ -157,22 +157,6 @@ impl Store {
         Ok(())
     }
 
-    pub(crate) fn store_pk_path(
-        &self,
-        name: String,
-        namespace: String,
-        privatekeypath: String,
-    ) -> Result<(), StoreError> {
-        use schema::agent::dsl;
-        diesel::update(
-            schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
-        )
-        .set(dsl::privatekeypath.eq(Some(privatekeypath)))
-        .execute(&mut *self.connection.borrow_mut())?;
-
-        Ok(())
-    }
-
     pub(crate) fn use_agent(&self, name: String, namespace: String) -> Result<(), StoreError> {
         use schema::agent::dsl;
         diesel::update(schema::agent::table.filter(dsl::current.ne(0)))

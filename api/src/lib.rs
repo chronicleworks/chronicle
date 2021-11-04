@@ -16,7 +16,7 @@ use common::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, GenerateEntity, ProvModel, RegisterKey, StartActivity,
     },
-    signing::SignerError,
+    signing::{DirectoryStoredKeys, SignerError},
     vocab::Chronicle as ChronicleVocab,
 };
 
@@ -31,10 +31,10 @@ custom_error! {pub ApiError
     JsonLD{source: json_ld::Error}                              = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
-    NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use",
+    NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
 }
 
-///Kind of annoying but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+/// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
 impl From<Infallible> for ApiError {
     fn from(_: Infallible) -> Self {
         unreachable!()
@@ -49,6 +49,13 @@ pub enum NamespaceCommand {
 }
 
 #[derive(Debug)]
+pub enum KeyRegistration {
+    Generate,
+    ImportVerifying { path: PathBuf },
+    ImportSigning { path: PathBuf },
+}
+
+#[derive(Debug)]
 pub enum AgentCommand {
     Create {
         name: String,
@@ -57,8 +64,7 @@ pub enum AgentCommand {
     RegisterKey {
         name: String,
         namespace: String,
-        public: String,
-        private: Option<String>,
+        registration: KeyRegistration,
     },
     Use {
         name: String,
@@ -121,6 +127,8 @@ pub enum ApiResponse {
 #[derivative(Debug)]
 pub struct Api {
     #[derivative(Debug = "ignore")]
+    keystore: DirectoryStoredKeys,
+    #[derivative(Debug = "ignore")]
     ledger: Box<dyn LedgerWriter>,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
@@ -133,7 +141,7 @@ impl Api {
     pub fn new<F>(
         database_url: &str,
         ledger: Box<dyn LedgerWriter>,
-        _secret_path: &Path,
+        secret_path: &Path,
         uuidgen: F,
     ) -> Result<Self, ApiError>
     where
@@ -141,6 +149,7 @@ impl Api {
         F: 'static,
     {
         Ok(Api {
+            keystore: DirectoryStoredKeys::new(secret_path)?,
             ledger: ledger,
             store: Store::new(database_url)?,
             uuidsource: Box::new(uuidgen),
@@ -204,9 +213,8 @@ impl Api {
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
                 namespace,
-                public,
-                private,
-            }) => self.register_key(name, namespace, public, private),
+                registration,
+            }) => self.register_key(name, namespace, registration),
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
                 self.use_agent(name, namespace)
             }
@@ -241,22 +249,32 @@ impl Api {
         &self,
         name: String,
         namespace: String,
-        publickey: String,
-        privatekeypath: Option<String>,
+        registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace)?;
         let namespaceid = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::agent(&name).into();
+        match registration {
+            KeyRegistration::Generate => {
+                self.keystore.generate_agent(&id)?;
+            }
+            KeyRegistration::ImportSigning { path } => {
+                self.keystore.import_agent(&id, Some(&path), None)?
+            }
+            KeyRegistration::ImportVerifying { path } => {
+                self.keystore.import_agent(&id, None, Some(&path))?
+            }
+        }
 
         let tx = ChronicleTransaction::RegisterKey(RegisterKey {
-            id: ChronicleVocab::agent(&name).into(),
+            id: id.clone(),
             name: name.clone(),
             namespace: namespaceid,
-            publickey,
+            publickey: hex::encode(self.keystore.agent_verifying(&id)?.to_bytes()),
         });
 
         self.ledger.submit(vec![&tx])?;
         self.store.apply(&tx)?;
-        privatekeypath.map(|pk| self.store.store_pk_path(name, namespace, pk));
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
@@ -403,7 +421,10 @@ mod test {
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{ActivityCommand, AgentCommand, Api, ApiCommand, ApiResponse, NamespaceCommand};
+    use crate::{
+        ActivityCommand, AgentCommand, Api, ApiCommand, ApiResponse, KeyRegistration,
+        NamespaceCommand,
+    };
 
     fn test_api() -> Api {
         tracing_subscriber::fmt()
@@ -475,8 +496,7 @@ mod test {
             .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
                 name: "testagent".to_owned(),
                 namespace: "testns".to_owned(),
-                public: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_owned(),
-                private: Some("/test/path".to_owned()),
+                registration: KeyRegistration::Generate,
             }))
             .unwrap();
 

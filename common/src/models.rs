@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
+use k256::ecdsa::VerifyingKey;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
