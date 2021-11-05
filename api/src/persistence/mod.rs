@@ -15,6 +15,7 @@ use custom_error::custom_error;
 use derivative::*;
 use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use tracing::debug;
 use tracing::{instrument, trace};
 use uuid::Uuid;
 
@@ -64,6 +65,7 @@ impl Store {
             .load::<query::Agent>(&mut *self.connection.borrow_mut())?;
 
         for agent in agents {
+            debug!(?agent, "Map agent to prov");
             let agentid: AgentId = Chronicle::agent(&agent.name).into();
             let namespaceid = self.namespace_by_name(&agent.namespace)?;
             model.agents.insert(
@@ -92,6 +94,8 @@ impl Store {
             .load::<query::Activity>(&mut *self.connection.borrow_mut())?;
 
         for activity in activities {
+            debug!(?activity, "Map activity to prov");
+
             let id: ActivityId = Chronicle::activity(&activity.name).into();
             let namespaceid = self.namespace_by_name(&activity.namespace)?;
             model.activities.insert(
@@ -131,6 +135,7 @@ impl Store {
             .load::<query::Entity>(&mut *self.connection.borrow_mut())?;
 
         for entity in entites {
+            debug!(?entity, "Map entity to prov");
             let id: EntityId = Chronicle::entity(&entity.name).into();
             let namespaceid = self.namespace_by_name(&entity.namespace)?;
             model.entities.insert(id.clone(), {
@@ -398,6 +403,7 @@ impl Store {
         }
     }
 
+    #[instrument]
     fn apply_entity(
         &self,
         entity: &common::models::Entity,
@@ -508,7 +514,7 @@ impl Store {
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
-            &proventity.name(),
+            proventity.name(),
             proventity.namespaceid().decompose().0,
         )?;
 
@@ -549,7 +555,7 @@ impl Store {
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
-            &proventity.name(),
+            proventity.name(),
             proventity.namespaceid().decompose().0,
         )?;
 

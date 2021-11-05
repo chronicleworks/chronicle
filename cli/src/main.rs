@@ -149,11 +149,9 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
             .flatten()
             .next()
         }),
-        options.subcommand_matches("export").and_then(|m| {
-            Some(api.dispatch(ApiCommand::Query(QueryCommand {
+        options.subcommand_matches("export").map(|m| api.dispatch(ApiCommand::Query(QueryCommand {
                 namespace: m.value_of("namespace").unwrap().to_owned(),
-            })))
-        }),
+            }))),
     ]
     .into_iter()
     .flatten()

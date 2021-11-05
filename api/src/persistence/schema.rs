@@ -26,7 +26,7 @@ diesel::table! {
         name -> Text,
         namespace -> Text,
         signature_time -> Nullable<Timestamp>,
-        signature -> Nullable<Timestamp>,
+        signature -> Nullable<Text>,
         locator -> Nullable<Text>,
     }
 }

@@ -24,7 +24,7 @@ pub struct NewActivity<'a> {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Agent {
     pub id: i32,
     pub name: String,
@@ -33,7 +33,7 @@ pub struct Agent {
     pub current: i32,
 }
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Activity {
     pub id: i32,
     pub name: String,
@@ -42,13 +42,13 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Entity {
     pub id: i32,
     pub name: String,
     pub namespace: String,
-    pub signature: Option<String>,
     pub signature_time: Option<NaiveDateTime>,
+    pub signature: Option<String>,
     pub locator: Option<String>,
 }
 

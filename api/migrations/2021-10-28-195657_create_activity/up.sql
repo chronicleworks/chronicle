@@ -13,7 +13,7 @@ create table entity (
     name text not null,
     namespace text not null,
     signature_time timestamp,
-    signature timestamp,
+    signature text,
     locator text,
     foreign key(namespace) references namespace(name)
     unique(name,namespace)
