@@ -231,4 +231,16 @@ pub fn cli() -> App<'static> {
                         ),
                 ),
         )
+        .subcommand(
+            App::new("export")
+                .about("Query prov data")
+                .arg(
+                        Arg::new("namespace")
+                            .short('n')
+                            .long("namespace")
+                            .default_value("default")
+                            .required(false)
+                            .takes_value(true),
+                    )
+            )
 }

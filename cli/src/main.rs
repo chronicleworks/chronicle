@@ -6,7 +6,7 @@ mod config;
 
 use api::{
     ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, EntityCommand,
-    KeyRegistration, NamespaceCommand,
+    KeyRegistration, NamespaceCommand, QueryCommand,
 };
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
@@ -43,7 +43,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         ledger(&config)?,
         &config.secrets.path,
-        || uuid::Uuid::new_v4(),
+        uuid::Uuid::new_v4,
     )?;
 
     vec![
@@ -140,7 +140,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
                 api.dispatch(ApiCommand::Entity(EntityCommand::Attach {
                     name: m.value_of("entity_name").unwrap().to_owned(),
                     namespace: m.value_of("namespace").unwrap().to_owned(),
-                    file: m.value_of_t::<PathBuf>("file").unwrap().to_owned(),
+                    file: m.value_of_t::<PathBuf>("file").unwrap(),
                     locator: m.value_of("locator").map(|x| x.to_owned()),
                     agent: m.value_of("agent").map(|x| x.to_owned()),
                 }))
@@ -148,6 +148,11 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
             .into_iter()
             .flatten()
             .next()
+        }),
+        options.subcommand_matches("export").and_then(|m| {
+            Some(api.dispatch(ApiCommand::Query(QueryCommand {
+                namespace: m.value_of("namespace").unwrap().to_owned(),
+            })))
         }),
     ]
     .into_iter()
@@ -178,12 +183,11 @@ fn main() {
 
     let _tracer = {
         if matches.is_present("debug") {
-            Some(
-                tracing_subscriber::fmt()
-                    .pretty()
-                    .with_max_level(Level::TRACE)
-                    .init(),
-            )
+            tracing_subscriber::fmt()
+                .pretty()
+                .with_max_level(Level::TRACE)
+                .init();
+            Some(())
         } else {
             None
         }

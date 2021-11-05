@@ -19,28 +19,20 @@ create table entity (
     unique(name,namespace)
 );
 
-create table wasattributedto (
-    agent integer not null,
-    activity integer not null,
-    foreign key(agent) references agent(id),
-    foreign key(activity) references activity(id),
-    primary key (agent,activity)
-);
-
 create table wasgeneratedby (
-    agent integer not null,
+    activity integer not null,
     entity integer not null,
-    foreign key(agent) references agent(id),
+    foreign key(activity) references activity(id),
     foreign key(entity) references entity(id),
-    primary key(agent,entity)
+    primary key(activity,entity)
 );
 
-create table uses (
-    agent integer not null,
+create table used (
+    activity integer not null,
     entity integer not null,
-    foreign key(agent) references agent(id),
+    foreign key(activity) references activity(id),
     foreign key(entity) references entity(id),
-    primary key(agent,entity)
+    primary key(activity,entity)
 );
 
 create table wasassociatedwith (

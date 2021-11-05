@@ -82,7 +82,7 @@ impl MessageBuilder {
         let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
 
         header.batcher_public_key = pubkey.clone();
-        header.signer_public_key = pubkey.clone();
+        header.signer_public_key = pubkey;
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);

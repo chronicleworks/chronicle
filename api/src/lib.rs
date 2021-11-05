@@ -4,10 +4,7 @@ use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
-use k256::ecdsa::{
-    signature::{Signer},
-    Signature,
-};
+use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
 use std::{
     convert::Infallible,
@@ -117,11 +114,17 @@ pub enum EntityCommand {
 }
 
 #[derive(Debug)]
+pub struct QueryCommand {
+    pub namespace: String,
+}
+
+#[derive(Debug)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
     Activity(ActivityCommand),
     Entity(EntityCommand),
+    Query(QueryCommand),
 }
 
 #[derive(Debug)]
@@ -157,7 +160,7 @@ impl Api {
     {
         Ok(Api {
             keystore: DirectoryStoredKeys::new(secret_path)?,
-            ledger: ledger,
+            ledger,
             store: Store::new(database_url)?,
             uuidsource: Box::new(uuidgen),
         })
@@ -255,6 +258,7 @@ impl Api {
                 locator,
                 agent,
             }) => self.entity_attach(name, namespace, file, locator, agent),
+            ApiCommand::Query(query) => self.query(query),
         }
     }
 
@@ -282,7 +286,7 @@ impl Api {
 
         let tx = ChronicleTransaction::RegisterKey(RegisterKey {
             id: id.clone(),
-            name: name.clone(),
+            name,
             namespace: namespaceid,
             publickey: hex::encode(self.keystore.agent_verifying(&id)?.to_bytes()),
         });
@@ -465,6 +469,10 @@ impl Api {
         self.ledger.submit(vec![&tx])?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+    }
+
+    fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
+        Ok(ApiResponse::Prov(self.store.prov_model_from(query)?))
     }
 }
 

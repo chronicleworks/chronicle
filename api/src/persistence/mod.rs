@@ -1,5 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
+use chrono::DateTime;
+
+use chrono::Utc;
+use common::models::EntityId;
 use common::{
     models::{
         Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, Namespace, NamespaceId,
@@ -13,6 +17,8 @@ use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::{instrument, trace};
 use uuid::Uuid;
+
+use crate::QueryCommand;
 
 mod query;
 mod schema;
@@ -28,6 +34,7 @@ custom_error! {pub StoreError
     InvalidNamespace{}                                          = "Could not find namespace",
     ModelDoesNotContainActivity{activityid: ActivityId}         = "Could not locate {} in activities",
     ModelDoesNotContainAgent{agentid: AgentId}                  = "Could not locate {} in agents",
+    ModelDoesNotContainEntity{entityid: EntityId}               = "Could not locate {} in entities",
 }
 
 #[derive(Derivative)]
@@ -45,6 +52,113 @@ impl Store {
         Ok(Store {
             connection: connection.into(),
         })
+    }
+
+    ///TODO: any sort of query design, this should fundamentally be for export / streaming into external data pipelines or we will end up with an embedded triple store
+    #[instrument]
+    pub fn prov_model_from(&self, query: QueryCommand) -> Result<ProvModel, StoreError> {
+        let mut model = ProvModel::default();
+
+        let agents = schema::agent::table
+            .filter(schema::agent::namespace.eq(&query.namespace))
+            .load::<query::Agent>(&mut *self.connection.borrow_mut())?;
+
+        for agent in agents {
+            let agentid: AgentId = Chronicle::agent(&agent.name).into();
+            let namespaceid = self.namespace_by_name(&agent.namespace)?;
+            model.agents.insert(
+                agentid.clone(),
+                Agent {
+                    id: agentid.clone(),
+                    namespaceid,
+                    name: agent.name,
+                    publickey: agent.publickey,
+                },
+            );
+
+            for asoc in schema::wasassociatedwith::table
+                .filter(schema::wasassociatedwith::agent.eq(agent.id))
+                .inner_join(schema::activity::table)
+                .select(schema::activity::name)
+                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+            {
+                let asoc = asoc?;
+                model.associate_with(Chronicle::activity(&asoc).into(), &agentid);
+            }
+        }
+
+        let activities = schema::activity::table
+            .filter(schema::activity::namespace.eq(&query.namespace))
+            .load::<query::Activity>(&mut *self.connection.borrow_mut())?;
+
+        for activity in activities {
+            let id: ActivityId = Chronicle::activity(&activity.name).into();
+            let namespaceid = self.namespace_by_name(&activity.namespace)?;
+            model.activities.insert(
+                id.clone(),
+                Activity {
+                    id: id.clone(),
+                    namespaceid,
+                    name: activity.name,
+                    started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
+                    ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
+                },
+            );
+
+            for asoc in schema::wasgeneratedby::table
+                .filter(schema::wasgeneratedby::activity.eq(activity.id))
+                .inner_join(schema::entity::table)
+                .select(schema::entity::name)
+                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+            {
+                let asoc = asoc?;
+                model.generate_by(Chronicle::entity(&asoc).into(), &id);
+            }
+
+            for used in schema::used::table
+                .filter(schema::used::activity.eq(activity.id))
+                .inner_join(schema::entity::table)
+                .select(schema::entity::name)
+                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+            {
+                let used = used?;
+                model.used(id.clone(), &Chronicle::entity(&used).into());
+            }
+        }
+
+        let entites = schema::entity::table
+            .filter(schema::entity::namespace.eq(query.namespace))
+            .load::<query::Entity>(&mut *self.connection.borrow_mut())?;
+
+        for entity in entites {
+            let id: EntityId = Chronicle::entity(&entity.name).into();
+            let namespaceid = self.namespace_by_name(&entity.namespace)?;
+            model.entities.insert(id.clone(), {
+                match entity {
+                    query::Entity {
+                        name,
+                        signature: Some(signature),
+                        locator,
+                        signature_time: Some(signature_time),
+                        ..
+                    } => Entity::Signed {
+                        id,
+                        namespaceid,
+                        name,
+                        signature,
+                        signature_time: DateTime::from_utc(signature_time, Utc),
+                        locator,
+                    },
+                    query::Entity { name, .. } => Entity::Unsigned {
+                        id,
+                        namespaceid,
+                        name,
+                    },
+                }
+            });
+        }
+
+        Ok(model)
     }
 
     /// Apply a chronicle transaction to the store idempotently and return a prov model relevant to the transaction
@@ -254,44 +368,16 @@ impl Store {
             .first::<query::Agent>(&mut *self.connection.borrow_mut())?)
     }
 
-    fn apply_was_associated_with(
+    pub(crate) fn entity_by_entity_name_and_namespace(
         &self,
-        model: &ProvModel,
-        activityid: &common::models::ActivityId,
-        agentid: &common::models::AgentId,
-    ) -> Result<(), StoreError> {
-        let provagent =
-            model
-                .agents
-                .get(agentid)
-                .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
-                    agentid: agentid.clone(),
-                })?;
-        let provactivity = model.activities.get(activityid).ok_or_else(|| {
-            StoreError::ModelDoesNotContainActivity {
-                activityid: activityid.clone(),
-            }
-        })?;
+        name: &str,
+        namespace: &str,
+    ) -> Result<query::Entity, StoreError> {
+        use schema::entity::dsl;
 
-        let storedactivity = self.activity_by_activity_name_and_namespace(
-            &provactivity.name,
-            provactivity.namespaceid.decompose().0,
-        )?;
-
-        let storedagent = self.agent_by_agent_name_and_namespace(
-            &provagent.name,
-            provagent.namespaceid.decompose().0,
-        )?;
-
-        use schema::wasassociatedwith::dsl as link;
-        diesel::insert_or_ignore_into(schema::wasassociatedwith::table)
-            .values((
-                &link::activity.eq(storedactivity.id),
-                &link::agent.eq(storedagent.id),
-            ))
-            .execute(&mut *self.connection.borrow_mut())?;
-
-        Ok(())
+        Ok(schema::entity::table
+            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .first::<query::Entity>(&mut *self.connection.borrow_mut())?)
     }
 
     /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
@@ -355,21 +441,126 @@ impl Store {
         Ok(())
     }
 
-    fn apply_was_generated_by(
+    #[instrument]
+    fn apply_was_associated_with(
         &self,
-        _model: &ProvModel,
-        _entityid: &common::models::EntityId,
-        _activityid: &ActivityId,
+        model: &ProvModel,
+        activityid: &common::models::ActivityId,
+        agentid: &common::models::AgentId,
     ) -> Result<(), StoreError> {
+        let provagent =
+            model
+                .agents
+                .get(agentid)
+                .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
+                    agentid: agentid.clone(),
+                })?;
+        let provactivity = model.activities.get(activityid).ok_or_else(|| {
+            StoreError::ModelDoesNotContainActivity {
+                activityid: activityid.clone(),
+            }
+        })?;
+
+        let storedactivity = self.activity_by_activity_name_and_namespace(
+            &provactivity.name,
+            provactivity.namespaceid.decompose().0,
+        )?;
+
+        let storedagent = self.agent_by_agent_name_and_namespace(
+            &provagent.name,
+            provagent.namespaceid.decompose().0,
+        )?;
+
+        use schema::wasassociatedwith::dsl as link;
+        diesel::insert_or_ignore_into(schema::wasassociatedwith::table)
+            .values((
+                &link::activity.eq(storedactivity.id),
+                &link::agent.eq(storedagent.id),
+            ))
+            .execute(&mut *self.connection.borrow_mut())?;
+
         Ok(())
     }
 
+    #[instrument]
+    fn apply_was_generated_by(
+        &self,
+        model: &ProvModel,
+        entityid: &common::models::EntityId,
+        activityid: &ActivityId,
+    ) -> Result<(), StoreError> {
+        let proventity =
+            model
+                .entities
+                .get(entityid)
+                .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                    entityid: entityid.clone(),
+                })?;
+        let provactivity = model.activities.get(activityid).ok_or_else(|| {
+            StoreError::ModelDoesNotContainActivity {
+                activityid: activityid.clone(),
+            }
+        })?;
+
+        let storedactivity = self.activity_by_activity_name_and_namespace(
+            &provactivity.name,
+            provactivity.namespaceid.decompose().0,
+        )?;
+
+        let storedentity = self.entity_by_entity_name_and_namespace(
+            &proventity.name(),
+            proventity.namespaceid().decompose().0,
+        )?;
+
+        use schema::wasgeneratedby::dsl as link;
+        diesel::insert_or_ignore_into(schema::wasgeneratedby::table)
+            .values((
+                &link::activity.eq(storedactivity.id),
+                &link::entity.eq(storedentity.id),
+            ))
+            .execute(&mut *self.connection.borrow_mut())?;
+
+        Ok(())
+    }
+
+    #[instrument]
     fn apply_used(
         &self,
-        _model: &ProvModel,
-        _activityid: &ActivityId,
-        _entityid: &common::models::EntityId,
+        model: &ProvModel,
+        activityid: &ActivityId,
+        entityid: &common::models::EntityId,
     ) -> Result<(), StoreError> {
+        let proventity =
+            model
+                .entities
+                .get(entityid)
+                .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                    entityid: entityid.clone(),
+                })?;
+        let provactivity = model.activities.get(activityid).ok_or_else(|| {
+            StoreError::ModelDoesNotContainActivity {
+                activityid: activityid.clone(),
+            }
+        })?;
+
+        let storedactivity = self.activity_by_activity_name_and_namespace(
+            &provactivity.name,
+            provactivity.namespaceid.decompose().0,
+        )?;
+
+        let storedentity = self.entity_by_entity_name_and_namespace(
+            &proventity.name(),
+            proventity.namespaceid().decompose().0,
+        )?;
+
+        use schema::used::dsl as link;
+        diesel::insert_or_ignore_into(schema::used::table)
+            .values((
+                &link::activity.eq(storedactivity.id),
+                &link::entity.eq(storedentity.id),
+            ))
+            .execute(&mut *self.connection.borrow_mut())?;
+
         Ok(())
     }
 }

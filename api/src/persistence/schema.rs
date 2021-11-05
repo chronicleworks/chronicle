@@ -39,8 +39,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    uses (agent, entity) {
-        agent -> Integer,
+    used (activity, entity) {
+        activity -> Integer,
         entity -> Integer,
     }
 }
@@ -53,15 +53,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    wasattributedto (agent, activity) {
-        agent -> Integer,
+    wasgeneratedby (activity, entity) {
         activity -> Integer,
-    }
-}
-
-diesel::table! {
-    wasgeneratedby (agent, entity) {
-        agent -> Integer,
         entity -> Integer,
     }
 }
@@ -69,13 +62,11 @@ diesel::table! {
 diesel::joinable!(activity -> namespace (namespace));
 diesel::joinable!(agent -> namespace (namespace));
 diesel::joinable!(entity -> namespace (namespace));
-diesel::joinable!(uses -> agent (agent));
-diesel::joinable!(uses -> entity (entity));
+diesel::joinable!(used -> activity (activity));
+diesel::joinable!(used -> entity (entity));
 diesel::joinable!(wasassociatedwith -> activity (activity));
 diesel::joinable!(wasassociatedwith -> agent (agent));
-diesel::joinable!(wasattributedto -> activity (activity));
-diesel::joinable!(wasattributedto -> agent (agent));
-diesel::joinable!(wasgeneratedby -> agent (agent));
+diesel::joinable!(wasgeneratedby -> activity (activity));
 diesel::joinable!(wasgeneratedby -> entity (entity));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -83,8 +74,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     agent,
     entity,
     namespace,
-    uses,
+    used,
     wasassociatedwith,
-    wasattributedto,
     wasgeneratedby,
 );

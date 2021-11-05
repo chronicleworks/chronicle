@@ -23,7 +23,7 @@ impl std::ops::Deref for NamespaceId {
 impl NamespaceId {
     /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
     pub fn decompose(&self) -> (&str, Uuid) {
-        if let &[_, _, name, uuid, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
             return (name, Uuid::parse_str(uuid).unwrap());
         }
 
@@ -63,7 +63,7 @@ where
 impl EntityId {
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -85,7 +85,7 @@ impl std::ops::Deref for AgentId {
 impl AgentId {
     /// Extract the agent name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -116,7 +116,7 @@ impl std::ops::Deref for ActivityId {
 impl ActivityId {
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(":").collect::<Vec<_>>()[..] {
+        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
             return name;
         }
 
@@ -370,6 +370,27 @@ impl ProvModel {
         model
     }
 
+    pub fn associate_with(&mut self, activity: ActivityId, agent: &AgentId) {
+        self.was_associated_with
+            .entry(activity)
+            .or_insert(HashSet::new())
+            .insert(agent.clone());
+    }
+
+    pub fn generate_by(&mut self, entity: EntityId, activity: &ActivityId) {
+        self.was_generated_by
+            .entry(entity)
+            .or_insert(HashSet::new())
+            .insert(activity.clone());
+    }
+
+    pub fn used(&mut self, activity: ActivityId, entity: &EntityId) {
+        self.used
+            .entry(activity)
+            .or_insert(HashSet::new())
+            .insert(entity.clone());
+    }
+
     fn namespace_context(&mut self, ns: &NamespaceId) {
         let (namespacename, uuid) = ns.decompose();
 
@@ -377,7 +398,7 @@ impl ProvModel {
             ns.clone(),
             Namespace {
                 id: ns.clone(),
-                uuid: uuid,
+                uuid,
                 name: namespacename.to_owned(),
             },
         );
@@ -390,7 +411,7 @@ impl ProvModel {
         match tx {
             ChronicleTransaction::CreateNamespace(CreateNamespace { id, name, uuid }) => {
                 self.namespaces
-                    .insert(id.clone(), Namespace::new(id, uuid, name).into());
+                    .insert(id.clone(), Namespace::new(id, uuid, name));
             }
             ChronicleTransaction::CreateAgent(CreateAgent {
                 namespace,
@@ -453,7 +474,7 @@ impl ProvModel {
                 self.was_associated_with
                     .entry(id)
                     .or_insert(HashSet::new())
-                    .insert(agent.clone());
+                    .insert(agent);
             }
             ChronicleTransaction::EndActivity(EndActivity {
                 namespace,
@@ -479,7 +500,7 @@ impl ProvModel {
                 self.was_associated_with
                     .entry(id)
                     .or_insert(HashSet::new())
-                    .insert(agent.clone());
+                    .insert(agent);
             }
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
@@ -521,7 +542,7 @@ impl ProvModel {
                 if !self.entities.contains_key(&id) {
                     let name = id.decompose();
                     self.entities
-                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, &name));
+                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, name));
                 }
 
                 self.was_generated_by
@@ -542,7 +563,7 @@ impl ProvModel {
                 if !self.entities.contains_key(&id) {
                     let name = id.decompose();
                     self.entities
-                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, &name));
+                        .insert(id.clone(), Entity::unsigned(id.clone(), &namespace, name));
                 }
 
                 if !self.agents.contains_key(&agent) {
@@ -636,7 +657,7 @@ impl ProvModel {
                     .ok();
             });
 
-            self.was_associated_with.get(&id).map(|asoc| {
+            self.was_associated_with.get(id).map(|asoc| {
                 let mut ids = json::Array::new();
 
                 for id in asoc.iter() {
@@ -648,7 +669,7 @@ impl ProvModel {
                     .ok();
             });
 
-            self.used.get(&id).map(|asoc| {
+            self.used.get(id).map(|asoc| {
                 let mut ids = json::Array::new();
 
                 for id in asoc.iter() {
@@ -682,7 +703,7 @@ impl ProvModel {
                 }]
             };
 
-            self.was_generated_by.get(&id).map(|asoc| {
+            self.was_generated_by.get(id).map(|asoc| {
                 let mut ids = json::Array::new();
 
                 for id in asoc.iter() {
@@ -715,11 +736,9 @@ impl ProvModel {
                     )
                     .ok();
 
-                locator.as_ref().map(|locator| {
-                    entitydoc
+                if let Some(locator) = locator.as_ref() { entitydoc
                         .insert(Iri::from(Chronicle::Locator).as_str(), locator.to_owned())
-                        .ok();
-                });
+                        .ok(); }
             }
 
             let mut values = json::Array::new();

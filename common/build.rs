@@ -6,9 +6,7 @@ fn main() {
     let out_str = env::var("OUT_DIR").unwrap();
     let out_path = PathBuf::from(&out_str);
     let mut out_path = out_path
-        .ancestors() // .../target/<debug|release>/build/example-<SHA>/out
-        .skip(3) // .../target/<debug|release>
-        .next()
+        .ancestors().nth(3)
         .unwrap()
         .to_owned();
     out_path.push("assets");

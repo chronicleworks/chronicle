@@ -42,6 +42,16 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
+#[derive(Queryable)]
+pub struct Entity {
+    pub id: i32,
+    pub name: String,
+    pub namespace: String,
+    pub signature: Option<String>,
+    pub signature_time: Option<NaiveDateTime>,
+    pub locator: Option<String>,
+}
+
 #[derive(Insertable, AsChangeset, Default)]
 #[table_name = "agent"]
 pub struct NewAgent<'a> {

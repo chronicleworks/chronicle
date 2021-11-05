@@ -50,7 +50,7 @@ impl DirectoryStoredKeys {
     pub fn agent_verifying(&self, agent: &AgentId) -> Result<VerifyingKey, SignerError> {
         Self::signing_key_at(&self.agent_path(agent))
             .map(|signing| signing.verifying_key())
-            .or_else(|_| Self::verifying_key_at(&self.agent_path(&agent)))
+            .or_else(|_| Self::verifying_key_at(&self.agent_path(agent)))
     }
 
     pub fn import_agent(
@@ -99,14 +99,14 @@ impl DirectoryStoredKeys {
     }
 
     pub fn generate_agent(&self, agent: &AgentId) -> Result<(), SignerError> {
-        let path = self.agent_path(&agent);
+        let path = self.agent_path(agent);
         std::fs::create_dir_all(&path)?;
-        Ok(Self::new_signing_key(&path)?)
+        Self::new_signing_key(&path)
     }
 
     pub fn generate_chronicle(&self) -> Result<(), SignerError> {
         std::fs::create_dir_all(&self.base)?;
-        Ok(Self::new_signing_key(&self.base)?)
+        Self::new_signing_key(&self.base)
     }
 
     fn new_signing_key(secretpath: &Path) -> Result<(), SignerError> {
