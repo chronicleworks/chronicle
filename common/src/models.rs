@@ -3,8 +3,12 @@ use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
+use serde::Serialize;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Index,
+};
 use uuid::Uuid;
 
 use crate::vocab::{Chronicle, Prov};
@@ -21,6 +25,12 @@ impl std::ops::Deref for NamespaceId {
 }
 
 impl NamespaceId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        NamespaceId(s.as_ref().to_owned())
+    }
     /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
     pub fn decompose(&self) -> (&str, Uuid) {
         if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -61,6 +71,12 @@ where
 }
 
 impl EntityId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        Self(s.as_ref().to_owned())
+    }
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -83,6 +99,12 @@ impl std::ops::Deref for AgentId {
 }
 
 impl AgentId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        Self(s.as_ref().to_owned())
+    }
     /// Extract the agent name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -114,6 +136,12 @@ impl std::ops::Deref for ActivityId {
 }
 
 impl ActivityId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        Self(s.as_ref().to_owned())
+    }
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -391,7 +419,7 @@ impl ProvModel {
             .insert(entity.clone());
     }
 
-    fn namespace_context(&mut self, ns: &NamespaceId) {
+    pub fn namespace_context(&mut self, ns: &NamespaceId) {
         let (namespacename, uuid) = ns.decompose();
 
         self.namespaces.insert(
@@ -736,9 +764,11 @@ impl ProvModel {
                     )
                     .ok();
 
-                if let Some(locator) = locator.as_ref() { entitydoc
+                if let Some(locator) = locator.as_ref() {
+                    entitydoc
                         .insert(Iri::from(Chronicle::Locator).as_str(), locator.to_owned())
-                        .ok(); }
+                        .ok();
+                }
             }
 
             let mut values = json::Array::new();
@@ -755,6 +785,18 @@ impl ProvModel {
         }
 
         ExpandedJson(doc.into())
+    }
+
+    pub(crate) fn add_agent(&mut self, agent: Agent) {
+        self.agents.insert(agent.id.clone(), agent);
+    }
+
+    pub(crate) fn add_activity(&self, activity: Activity) {
+        self.activities.insert(activity.id.clone(), activity);
+    }
+
+    pub(crate) fn add_entity(&self, entity: Entity) {
+        self.entities.insert(entity.id.clone(), entity);
     }
 }
 

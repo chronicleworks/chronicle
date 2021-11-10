@@ -1,10 +1,15 @@
+use std::ops::Deref;
+
+use common::{
+    ledger::{Depdendencies, InputAddress, Processor, StateInput},
+    models::ChronicleTransaction,
+};
 use crypto::digest::Digest;
-use k256::ecdsa::{VerifyingKey};
+use k256::ecdsa::VerifyingKey;
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
-
 
 pub fn get_prefix() -> String {
     let mut sha = crypto::sha2::Sha512::new();
@@ -44,7 +49,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
     fn apply(
         &self,
         request: &TpProcessRequest,
-        _context: &mut dyn TransactionContext,
+        context: &mut dyn TransactionContext,
     ) -> Result<(), ApplyError> {
         let _signer = request
             .header
@@ -60,6 +65,18 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .ok_or(ApplyError::InvalidTransaction(String::from(
                 "Invalid header, missing signer public key",
             )))?;
+
+        let tx: ChronicleTransaction = serde_cbor::from_slice(request.get_payload())
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        let (input, output) = tx.dependencies();
+
+        let input = context
+            .get_state_entries(&input.into_iter().map(|x| x.0).collect::<Vec<_>>())?
+            .into_iter()
+            .map(|(address, data)| StateInput::new(InputAddress(address), data));
+
+        let output = tx.process(input)?;
 
         Ok(())
     }

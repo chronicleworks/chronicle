@@ -480,13 +480,14 @@ impl Api {
 mod test {
     use chrono::{TimeZone, Utc};
     use common::ledger::InMemLedger;
+    use json::JsonValue;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
     use crate::{
         ActivityCommand, AgentCommand, Api, ApiCommand, ApiResponse, KeyRegistration,
-        NamespaceCommand,
+        NamespaceCommand, QueryCommand,
     };
 
     fn test_api() -> Api {
@@ -506,20 +507,28 @@ mod test {
         .unwrap()
     }
 
-    #[test]
-    fn create_namespace() {
-        let prov = test_api()
-            .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                name: "testns".to_owned(),
+    fn dump_graph(api: &Api) -> JsonValue {
+        let prov = api
+            .dispatch(ApiCommand::Query(QueryCommand {
+                namespace: "testns".to_string(),
             }))
             .unwrap();
 
         match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
+            ApiResponse::Prov(prov) => prov.to_json().0,
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn create_namespace() {
+        let api = test_api();
+        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+            name: "testns".to_owned(),
+        }))
+        .unwrap();
+
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -531,19 +540,13 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Agent(AgentCommand::Create {
-                name: "testagent".to_owned(),
-                namespace: "testns".to_owned(),
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -555,39 +558,27 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-                name: "testagent".to_owned(),
-                namespace: "testns".to_owned(),
-                registration: KeyRegistration::Generate,
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+            registration: KeyRegistration::Generate,
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
     fn create_activity() {
         let api = test_api();
 
-        let prov = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                name: "testactivity".to_owned(),
-                namespace: "testns".to_owned(),
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -606,20 +597,14 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
-                name: "testactivity".to_owned(),
-                namespace: "testns".to_owned(),
-                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -645,20 +630,14 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::End {
-                name: None,
-                namespace: None,
-                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
+            name: None,
+            namespace: None,
+            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -671,20 +650,14 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Use {
-                name: "testactivity".to_owned(),
-                namespace: "testns".to_owned(),
-                activity: None,
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 
     #[test]
@@ -697,19 +670,13 @@ mod test {
         }))
         .unwrap();
 
-        let prov = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-                name: "testactivity".to_owned(),
-                namespace: "testns".to_owned(),
-                activity: None,
-            }))
-            .unwrap();
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+        }))
+        .unwrap();
 
-        match prov {
-            ApiResponse::Prov(prov) => {
-                insta::assert_snapshot!(prov.to_json().0.pretty(3))
-            }
-            _ => unreachable!(),
-        }
+        insta::assert_json_snapshot!(dump_graph(&api))
     }
 }

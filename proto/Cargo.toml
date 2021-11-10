@@ -27,7 +27,6 @@ hex = "0.4.3"
 rand_core = "0.6.3"
 tracing = "0.1.29"
 derivative = "2.2.0"
-signature = { version = "<1.4.0"}
 async-trait = "0.1.51"
 futures = "0.3.17"
 

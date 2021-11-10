@@ -1,18 +1,9 @@
 ---
 source: api/src/lib.rs
-expression: prov.to_json().0.pretty(3)
+expression: dump_graph(&api)
 
 ---
 [
-   {
-      "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "@type": "http://blockchaintp.com/chronicle/ns#Namespace",
-      "http://www.w3.org/2000/01/rdf-schema#label": [
-         {
-            "@value": "testns"
-         }
-      ]
-   },
    {
       "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent",
       "@type": "http://www.w3.org/ns/prov#Agent",
@@ -23,7 +14,7 @@ expression: prov.to_json().0.pretty(3)
       ],
       "http://blockchaintp.com/chronicle/ns#hasPublicKey": [
          {
-            "@value": "033da4562063d398a538c2838cf06d78fb4666c8f3763558a2dc9b3d0a6e4da10c"
+            "@value": "030b90947612c06178d96fdb3a825a7a15e78bd24f18d8a39c8f230724c85252fd"
          }
       ],
       "http://blockchaintp.com/chronicle/ns#hasNamespace": [
