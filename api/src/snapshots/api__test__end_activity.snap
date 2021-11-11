@@ -1,18 +1,9 @@
 ---
 source: api/src/lib.rs
-expression: prov.to_json().0.pretty(3)
+expression: dump_graph(&api)
 
 ---
 [
-   {
-      "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "@type": "http://blockchaintp.com/chronicle/ns#Namespace",
-      "http://www.w3.org/2000/01/rdf-schema#label": [
-         {
-            "@value": "testns"
-         }
-      ]
-   },
    {
       "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent_0",
       "@type": "http://www.w3.org/ns/prov#Agent",
@@ -35,7 +26,7 @@ expression: prov.to_json().0.pretty(3)
             "@value": "testactivity_0"
          }
       ],
-      "http://www.w3.org/ns/prov#endedAtTime": [
+      "http://www.w3.org/ns/prov#startedAtTime": [
          {
             "@value": "2014-07-08T09:10:11+00:00"
          }

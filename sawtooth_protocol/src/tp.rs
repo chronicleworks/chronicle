@@ -1,22 +1,15 @@
-use std::ops::Deref;
+use crate::address::{SawtoothAddress, PREFIX};
+use common::{ledger::StateInput, models::ChronicleTransaction};
 
-use common::{
-    ledger::{Depdendencies, InputAddress, Processor, StateInput},
-    models::ChronicleTransaction,
-};
-use crypto::digest::Digest;
 use k256::ecdsa::VerifyingKey;
+
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
+use tracing::{debug, instrument};
 
-pub fn get_prefix() -> String {
-    let mut sha = crypto::sha2::Sha512::new();
-    sha.input_str("chronicle");
-    sha.result_str()[..6].to_string()
-}
-
+#[derive(Debug)]
 pub struct ChronicleTransactionHandler {
     family_name: String,
     family_versions: Vec<String>,
@@ -28,7 +21,7 @@ impl ChronicleTransactionHandler {
         ChronicleTransactionHandler {
             family_name: "chronicle".into(),
             family_versions: vec!["1.0".into()],
-            namespaces: vec![get_prefix()],
+            namespaces: vec![PREFIX.to_string()],
         }
     }
 }
@@ -46,12 +39,13 @@ impl TransactionHandler for ChronicleTransactionHandler {
         self.namespaces.clone()
     }
 
+    #[instrument(skip(request, context))]
     fn apply(
         &self,
         request: &TpProcessRequest,
         context: &mut dyn TransactionContext,
     ) -> Result<(), ApplyError> {
-        let _signer = request
+        request
             .header
             .clone()
             .map(|h| {
@@ -64,19 +58,39 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .into_option()
             .ok_or(ApplyError::InvalidTransaction(String::from(
                 "Invalid header, missing signer public key",
-            )))?;
+            )))?
+            .ok();
 
         let tx: ChronicleTransaction = serde_cbor::from_slice(request.get_payload())
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
-        let (input, output) = tx.dependencies();
+        let deps = tx.dependencies();
 
         let input = context
-            .get_state_entries(&input.into_iter().map(|x| x.0).collect::<Vec<_>>())?
+            .get_state_entries(
+                &deps
+                    .iter()
+                    .map(|x| SawtoothAddress::from(x).into())
+                    .collect::<Vec<_>>(),
+            )?
             .into_iter()
-            .map(|(address, data)| StateInput::new(InputAddress(address), data));
+            .map(|(_, data)| StateInput::new(data))
+            .collect();
 
-        let output = tx.process(input)?;
+        debug!(?input, "Processing input state");
+
+        let output = tx
+            .process(input)
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        debug!(?output, "Storing output state");
+
+        context.set_state_entries(
+            output
+                .into_iter()
+                .map(|output| (SawtoothAddress::from(&output.address).into(), output.data))
+                .collect(),
+        )?;
 
         Ok(())
     }

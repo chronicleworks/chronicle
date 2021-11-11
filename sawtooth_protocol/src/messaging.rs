@@ -1,4 +1,3 @@
-
 use crate::messages::MessageBuilder;
 
 use common::ledger::{LedgerWriter, SubmissionError};
@@ -14,8 +13,8 @@ use sawtooth_sdk::messaging::{
     stream::{MessageConnection, MessageReceiver},
     zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
 };
-use tracing::debug;
 use tracing::instrument;
+use tracing::{debug, trace};
 
 ///
 /// The
@@ -68,9 +67,11 @@ impl SawtoothValidator {
             })
             .collect();
 
+        debug!(?transactions, "Create batch");
+
         let batch = self.builder.make_sawtooth_batch(transactions);
 
-        debug!(?batch, "Validator request");
+        trace!(?batch, "Validator request");
 
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,

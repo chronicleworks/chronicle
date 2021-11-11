@@ -23,7 +23,7 @@ uuid = { version = "0.8.2", features = ["v4"] }
 validator = { version = "0.14.0", features = ["derive"] }
 url = "2.2.2"
 glob = "0.3.0"
-proto = {path="../proto"}
+proto = {path="../sawtooth_protocol"}
 common = {path="../common"}
 tracing = "0.1.29"
 derivative = "2.2.0"

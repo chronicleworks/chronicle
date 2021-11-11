@@ -1,32 +1,33 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::hint::unreachable_unchecked;
-use std::rc::Rc;
+
 use std::slice::SliceIndex;
-use std::str::Utf8Error;
+use std::str::from_utf8;
 
 use async_std::task::block_on;
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
-use futures::future::{self, BoxFuture};
+
 use futures::{FutureExt, Stream};
-use iref::{AsIri, Iri, IriBuf, IriRef};
-use json::object::Object;
+use iref::{AsIri, IriBuf};
+
 use json::JsonValue;
-use json_ld::context::RemoteContext;
+
 use json_ld::util::AsJson;
-use json_ld::{context::Local, Document, JsonContext, NoLoader};
-use json_ld::{Error, ErrorCode, Indexed, Loader, Node, Reference, RemoteDocument};
+use json_ld::{Document, JsonContext, NoLoader};
+use json_ld::{Indexed, Node, Reference};
+use tracing::{debug, instrument};
 
 use crate::models::{
-    Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId, Namespace,
-    NamespaceId, ProvModel,
+    Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId, NamespaceId,
+    ProvModel,
 };
 use crate::vocab::{Chronicle, Prov};
 
 custom_error! {pub SubmissionError
     Implementation{source: Box<dyn std::error::Error>} = "Ledger error",
+    Peocessor{source: ProcessorError} = "Processor error for in mem ledger",
 }
 
 custom_error! {pub ProcessorError
@@ -56,43 +57,60 @@ pub trait LedgerReader {
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug, Default)]
 pub struct InMemLedger {
-    kv: RefCell<HashMap<String, Vec<u8>>>,
+    kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
 }
 
 impl LedgerWriter for InMemLedger {
+    #[instrument]
     fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         for tx in tx {
-            let deps = tx.dependencies();
+            debug!(?tx, "Process transaction");
+
+            let output = tx.process(
+                tx.dependencies()
+                    .iter()
+                    .filter_map(|dep| {
+                        self.kv
+                            .borrow()
+                            .get(dep)
+                            .map(|json| StateInput::new(json.to_string().as_bytes().into()))
+                    })
+                    .collect(),
+            )?;
+
+            for output in output {
+                let state = json::parse(&from_utf8(&output.data).unwrap()).unwrap();
+                debug!(?output.address, "Address");
+                debug!(%state, "New state");
+                self.kv.borrow_mut().insert(output.address, state);
+            }
         }
 
         Ok(())
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LedgerAddress {
-    namespace: String,
-    resource: String,
+    pub namespace: String,
+    pub resource: String,
 }
 
-pub trait Depdendencies {
-    fn dependencies(&self) -> Vec<LedgerAddress>;
-}
-
+#[derive(Debug)]
 pub struct StateInput {
-    address: LedgerAddress,
     data: Vec<u8>,
 }
 
 impl StateInput {
-    pub fn new(address: LedgerAddress, data: Vec<u8>) -> Self {
-        Self { address, data }
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data }
     }
 }
 
+#[derive(Debug)]
 pub struct StateOutput {
-    address: LedgerAddress,
-    data: Vec<u8>,
+    pub address: LedgerAddress,
+    pub data: Vec<u8>,
 }
 
 impl StateOutput {
@@ -106,23 +124,23 @@ impl ProvModel {
     /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
-    fn apply_json_ld(&mut self, json: JsonValue) -> Result<(), ProcessorError> {
+    fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
         json.remove("@context");
-        json.insert("@context", crate::context::PROV.clone());
-        let model = ProvModel::default();
+        json.insert("@context", crate::context::PROV.clone()).ok();
+        let mut model = ProvModel::default();
         let output = block_on(json.expand::<JsonContext, _>(&mut NoLoader))?;
 
         for o in output {
             let o = o
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
-                .inner();
+                .into_inner();
             if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
-                self.apply_node_as_agent(&mut model, o)?;
+                self.apply_node_as_agent(&mut model, &o)?;
             } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
-                self.apply_node_as_activity(&mut model, o)?;
+                self.apply_node_as_activity(&mut model, &o)?;
             } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
-                self.apply_node_as_entity(&mut model, o)?;
+                self.apply_node_as_entity(&mut model, &o)?;
             }
         }
 
@@ -176,11 +194,11 @@ impl ProvModel {
 
         let started = extract_scalar_prop(&Prov::StartedAtTime, activity)?
             .as_str()
-            .map(|x| DateTime::parse_from_rfc3339(x));
+            .map(DateTime::parse_from_rfc3339);
 
         let ended = extract_scalar_prop(&Prov::EndedAtTime, activity)?
             .as_str()
-            .map(|x| DateTime::parse_from_rfc3339(x));
+            .map(DateTime::parse_from_rfc3339);
 
         let used = extract_reference_ids(&Prov::Used, activity)?
             .into_iter()
@@ -190,7 +208,7 @@ impl ProvModel {
             .into_iter()
             .map(|id| AgentId::new(id.as_str()));
 
-        let activity = Activity::new(id, namespaceid, &name);
+        let mut activity = Activity::new(id, namespaceid, &name);
 
         if let Some(started) = started {
             activity.started = Some(DateTime::<Utc>::from(started?));
@@ -234,7 +252,7 @@ impl ProvModel {
         let signature = extract_scalar_prop(&Chronicle::Signature, entity)?.as_str();
         let signature_time = extract_scalar_prop(&Chronicle::Signature, entity)?
             .as_str()
-            .map(|x| DateTime::parse_from_rfc3339(x));
+            .map(DateTime::parse_from_rfc3339);
         let locator = extract_scalar_prop(&Chronicle::Signature, entity)?.as_str();
 
         let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
@@ -284,10 +302,10 @@ fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, Pr
                 })
             })
         })
-        .map(|id| id.and_then(|id| Ok(id.to_owned())))
+        .map(|id| id.map(|id| id.to_owned()))
         .collect();
 
-    Ok(ids?)
+    ids
 }
 
 fn extract_scalar_prop<'a>(
@@ -311,48 +329,46 @@ fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
     ))
 }
 
-impl Depdendencies for ChronicleTransaction {
+impl ChronicleTransaction {
     /// Compute dependencies for a chronicle transaction, input and output addresses are always symmetric
-    fn dependencies(&self) -> Vec<LedgerAddress> {
+    pub fn dependencies(&self) -> Vec<LedgerAddress> {
         let mut model = ProvModel::default();
         model.apply(self);
 
         model
             .entities
             .iter()
-            .map(|(id, o)| (**id, o.namespaceid()))
+            .map(|(id, o)| (id.to_string(), o.namespaceid()))
             .chain(
                 model
                     .activities
                     .iter()
-                    .map(|(id, o)| (**id, &o.namespaceid)),
+                    .map(|(id, o)| (id.to_string(), &o.namespaceid)),
             )
-            .chain(model.agents.iter().map(|(id, o)| (**id, &o.namespaceid)))
+            .chain(
+                model
+                    .agents
+                    .iter()
+                    .map(|(id, o)| (id.to_string(), &o.namespaceid)),
+            )
             .map(|(resource, namespace)| LedgerAddress {
-                resource: resource.to_owned(),
-                namespace: *namespace.to_owned(),
+                resource,
+                namespace: namespace.to_string(),
             })
             .collect()
     }
-}
-
-impl ChronicleTransaction {
     /// Take out input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
-    fn process(
-        &self,
-        input: Vec<StateInput>,
-        tx: &ChronicleTransaction,
-    ) -> Result<Vec<StateOutput>, ProcessorError> {
-        let model = ProvModel::default();
+    pub fn process(&self, input: Vec<StateInput>) -> Result<Vec<StateOutput>, ProcessorError> {
+        let mut model = ProvModel::default();
 
         for input in input {
             model.apply_json_ld(json::parse(std::str::from_utf8(&input.data)?)?)?;
         }
 
-        model.apply(&tx);
+        model.apply(self);
 
-        let graph = model.to_json().compact()?.0["@graph"];
+        let graph = &model.to_json().compact()?.0["@graph"];
 
         Ok(graph
             .members()
@@ -361,8 +377,11 @@ impl ChronicleTransaction {
                     namespace: resource["namespace"].to_string(),
                     resource: resource["@id"].to_string(),
                 },
-                data: json::stringify(*resource).into_bytes(),
+                data: resource.to_string().into_bytes(),
             })
             .collect())
     }
 }
+
+#[cfg(test)]
+pub mod test {}

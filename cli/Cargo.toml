@@ -23,8 +23,8 @@ rand_core = "0.6.3"
 shellexpand = "2.1.0"
 tracing = "0.1.29"
 tracing-subscriber = "0.3.1"
-proto = {path="../proto"}
 common = {path="../common"}
+proto = {path="../sawtooth_protocol"}
 uuid = "0.8.2"
 colored_json = "2.1.0"
 clap_generate = "3.0.0-beta.5"

@@ -1,16 +1,6 @@
 ---
 source: api/src/lib.rs
-expression: prov.to_json().0.pretty(3)
+expression: dump_graph(&api)
 
 ---
-[
-   {
-      "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "@type": "http://blockchaintp.com/chronicle/ns#Namespace",
-      "http://www.w3.org/2000/01/rdf-schema#label": [
-         {
-            "@value": "testns"
-         }
-      ]
-   }
-]
+[]

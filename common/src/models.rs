@@ -7,7 +7,6 @@ use serde::Serialize;
 
 use std::{
     collections::{HashMap, HashSet},
-    ops::Index,
 };
 use uuid::Uuid;
 
@@ -50,6 +49,12 @@ where
     }
 }
 
+impl Into<String> for NamespaceId {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct EntityId(String);
 
@@ -67,6 +72,12 @@ where
 {
     fn from(iri: S) -> Self {
         Self(iri.as_iri().to_string())
+    }
+}
+
+impl Into<String> for EntityId {
+    fn into(self) -> String {
+        self.0
     }
 }
 
@@ -89,6 +100,12 @@ impl EntityId {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AgentId(String);
+
+impl Into<String> for AgentId {
+    fn into(self) -> String {
+        self.0
+    }
+}
 
 impl std::ops::Deref for AgentId {
     type Target = String;
@@ -126,6 +143,12 @@ where
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ActivityId(String);
+
+impl Into<String> for ActivityId {
+    fn into(self) -> String {
+        self.0
+    }
+}
 
 impl std::ops::Deref for ActivityId {
     type Target = String;
@@ -791,12 +814,12 @@ impl ProvModel {
         self.agents.insert(agent.id.clone(), agent);
     }
 
-    pub(crate) fn add_activity(&self, activity: Activity) {
+    pub(crate) fn add_activity(&mut self, activity: Activity) {
         self.activities.insert(activity.id.clone(), activity);
     }
 
-    pub(crate) fn add_entity(&self, entity: Entity) {
-        self.entities.insert(entity.id.clone(), entity);
+    pub(crate) fn add_entity(&mut self, entity: Entity) {
+        self.entities.insert(entity.id().clone(), entity);
     }
 }
 

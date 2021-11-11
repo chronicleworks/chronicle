@@ -528,7 +528,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -546,7 +546,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -565,7 +565,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -578,7 +578,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -604,7 +604,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -637,7 +637,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -657,7 +657,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 
     #[test]
@@ -677,6 +677,6 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_graph(&api))
+        insta::assert_snapshot!(dump_graph(&api).to_string())
     }
 }
