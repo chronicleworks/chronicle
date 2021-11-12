@@ -12,7 +12,7 @@ use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 use colored_json::prelude::*;
-use common::{signing::SignerError};
+use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
 use std::{
@@ -31,12 +31,12 @@ fn ledger(config: &Config) -> Result<proto::messaging::SawtoothValidator, Signer
 }
 
 #[cfg(feature = "inmem")]
-fn ledger(_config: &Config) -> Result<InMemLedger, std::convert::Infallible> {
+fn ledger(_config: &Config) -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
     use std::convert::Infallible;
 
     use common::ledger::InMemLedger;
 
-    Ok(Box::new(common::ledger::InMemLedger::default()))
+    Ok(common::ledger::InMemLedger::default())
 }
 
 #[instrument]

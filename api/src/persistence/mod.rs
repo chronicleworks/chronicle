@@ -316,10 +316,19 @@ impl Store {
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_entity_name(&self, name: &str) -> Result<String, StoreError> {
-        use schema::entity::dsl as agentdsl;
+        use schema::entity::dsl;
+
+        let collision = schema::entity::table
+            .filter(dsl::name.eq(name))
+            .count()
+            .first::<i64>(&mut *self.connection.borrow_mut())?;
+
+        if collision == 0 {
+            return Ok(name.to_owned());
+        }
 
         let ambiguous = schema::entity::table
-            .select(max(agentdsl::id))
+            .select(max(dsl::id))
             .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
@@ -327,10 +336,19 @@ impl Store {
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_agent_name(&self, name: &str) -> Result<String, StoreError> {
-        use schema::agent::dsl as agentdsl;
+        use schema::agent::dsl;
+
+        let collision = schema::agent::table
+            .filter(dsl::name.eq(name))
+            .count()
+            .first::<i64>(&mut *self.connection.borrow_mut())?;
+
+        if collision == 0 {
+            return Ok(name.to_owned());
+        }
 
         let ambiguous = schema::agent::table
-            .select(max(agentdsl::id))
+            .select(max(dsl::id))
             .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
@@ -339,6 +357,15 @@ impl Store {
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_activity_name(&self, name: &str) -> Result<String, StoreError> {
         use schema::activity::dsl;
+
+        let collision = schema::activity::table
+            .filter(dsl::name.eq(name))
+            .count()
+            .first::<i64>(&mut *self.connection.borrow_mut())?;
+
+        if collision == 0 {
+            return Ok(name.to_owned());
+        }
 
         let ambiguous = schema::activity::table
             .select(max(dsl::id))

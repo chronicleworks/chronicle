@@ -12,7 +12,7 @@ use std::{
 };
 
 use common::{
-    ledger::{LedgerWriter, SubmissionError},
+    ledger::{InMemLedger, LedgerWriter, SubmissionError},
     models::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, ProvModel, RegisterKey, StartActivity,
@@ -687,7 +687,7 @@ mod test {
     fn many_activities() {
         let api = test_api();
 
-        for _i in 0..100 {
+        for _ in 0..100 {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                 name: "testactivity".to_owned(),
                 namespace: "testns".to_owned(),
