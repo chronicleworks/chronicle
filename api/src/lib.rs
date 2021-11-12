@@ -135,22 +135,25 @@ pub enum ApiResponse {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Api {
+pub struct Api<W>
+where
+    W: LedgerWriter,
+{
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
     #[derivative(Debug = "ignore")]
-    ledger: Box<dyn LedgerWriter>,
+    ledger: W,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
     uuidsource: Box<dyn Fn() -> Uuid>,
 }
 
-impl Api {
+impl<W: LedgerWriter> Api<W> {
     #[instrument(skip(ledger, uuidgen))]
     pub fn new<F>(
         database_url: &str,
-        ledger: Box<dyn LedgerWriter>,
+        ledger: W,
         secret_path: &Path,
         uuidgen: F,
     ) -> Result<Self, ApiError>
@@ -164,6 +167,10 @@ impl Api {
             store: Store::new(database_url)?,
             uuidsource: Box::new(uuidgen),
         })
+    }
+
+    pub fn as_ledger(self) -> W {
+        self.ledger
     }
 
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
@@ -480,17 +487,15 @@ impl Api {
 mod test {
     use chrono::{TimeZone, Utc};
     use common::ledger::InMemLedger;
-    use json::JsonValue;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
     use crate::{
-        ActivityCommand, AgentCommand, Api, ApiCommand, ApiResponse, KeyRegistration,
-        NamespaceCommand, QueryCommand,
+        ActivityCommand, AgentCommand, Api, ApiCommand, KeyRegistration, NamespaceCommand,
     };
 
-    fn test_api() -> Api {
+    fn test_api() -> Api<InMemLedger> {
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
@@ -500,24 +505,15 @@ mod test {
         let secretpath = TempDir::new().unwrap();
         Api::new(
             "file::memory:",
-            Box::new(InMemLedger::default()),
+            InMemLedger::default(),
             &secretpath.into_path(),
             || Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap(),
         )
         .unwrap()
     }
 
-    fn dump_graph(api: &Api) -> JsonValue {
-        let prov = api
-            .dispatch(ApiCommand::Query(QueryCommand {
-                namespace: "testns".to_string(),
-            }))
-            .unwrap();
-
-        match prov {
-            ApiResponse::Prov(prov) => prov.to_json().0,
-            _ => unreachable!(),
-        }
+    fn dump_ledger_state(api: Api<InMemLedger>) -> InMemLedger {
+        api.as_ledger()
     }
 
     #[test]
@@ -528,7 +524,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -546,7 +542,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -565,7 +561,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -578,7 +574,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -604,7 +600,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -637,7 +633,7 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -657,7 +653,14 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
+            name: None,
+            namespace: None,
+            time: None,
+        }))
+        .unwrap();
+
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
     #[test]
@@ -677,6 +680,21 @@ mod test {
         }))
         .unwrap();
 
-        insta::assert_snapshot!(dump_graph(&api).to_string())
+        insta::assert_json_snapshot!(dump_ledger_state(api));
+    }
+
+    #[test]
+    fn many_activities() {
+        let api = test_api();
+
+        for _i in 0..100 {
+            api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                name: "testactivity".to_owned(),
+                namespace: "testns".to_owned(),
+            }))
+            .unwrap();
+        }
+
+        insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 }

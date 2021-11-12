@@ -1,26 +1,17 @@
 ---
 source: api/src/lib.rs
-expression: dump_graph(&api)
+expression: dump_ledger_state(api)
 
 ---
 [
-   {
-      "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent",
-      "@type": "http://www.w3.org/ns/prov#Agent",
-      "http://www.w3.org/2000/01/rdf-schema#label": [
-         {
-            "@value": "testagent"
-         }
-      ],
-      "http://blockchaintp.com/chronicle/ns#hasPublicKey": [
-         {
-            "@value": "030b90947612c06178d96fdb3a825a7a15e78bd24f18d8a39c8f230724c85252fd"
-         }
-      ],
-      "http://blockchaintp.com/chronicle/ns#hasNamespace": [
-         {
-            "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-         }
-      ]
-   }
+  {
+    "namespace": "null",
+    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+  },
+  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}",
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:agent:testagent"
+  },
+  "{\"@id\":\"chronicle:agent:testagent\",\"@type\":\"prov:Agent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testagent\",\"publicKey\":\"024d30db46f6e1b64b1edaca0dd39feac0fdda2bf6010590847bec06dfcbb88e46\"}"
 ]

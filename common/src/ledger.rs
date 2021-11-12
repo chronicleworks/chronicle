@@ -17,6 +17,8 @@ use json::JsonValue;
 use json_ld::util::AsJson;
 use json_ld::{Document, JsonContext, NoLoader};
 use json_ld::{Indexed, Node, Reference};
+use serde::ser::SerializeSeq;
+use serde::Serialize;
 use tracing::{debug, instrument};
 
 use crate::models::{
@@ -60,6 +62,25 @@ pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
 }
 
+/// An inefficient serialiser implementation for an in memory ledger, used for snapshot assertions of ledger state,
+/// <v4 of json-ld doesn't use serde_json for whatever reason, so we reconstruct the ledger as a serde json map
+impl Serialize for InMemLedger {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut array = serializer
+            .serialize_seq(Some(self.kv.borrow().len()))
+            .unwrap();
+        for (k, v) in self.kv.borrow().iter() {
+            array.serialize_element(&k).ok();
+            let v = serde_json::value::to_value(v.to_string()).unwrap();
+            array.serialize_element(&v).ok();
+        }
+        array.end()
+    }
+}
+
 impl LedgerWriter for InMemLedger {
     #[instrument]
     fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
@@ -79,7 +100,7 @@ impl LedgerWriter for InMemLedger {
             )?;
 
             for output in output {
-                let state = json::parse(&from_utf8(&output.data).unwrap()).unwrap();
+                let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
                 debug!(?output.address, "Address");
                 debug!(%state, "New state");
                 self.kv.borrow_mut().insert(output.address, state);
@@ -90,7 +111,7 @@ impl LedgerWriter for InMemLedger {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
 pub struct LedgerAddress {
     pub namespace: String,
     pub resource: String,

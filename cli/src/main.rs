@@ -12,7 +12,7 @@ use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 use colored_json::prelude::*;
-use common::{ledger::LedgerWriter, signing::SignerError};
+use common::{signing::SignerError};
 use config::*;
 use custom_error::custom_error;
 use std::{
@@ -23,16 +23,18 @@ use tracing::{error, instrument, Level};
 use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
-fn ledger(config: &Config) -> Result<Box<dyn LedgerWriter>, SignerError> {
-    Ok(Box::new(proto::messaging::SawtoothValidator::new(
+fn ledger(config: &Config) -> Result<proto::messaging::SawtoothValidator, SignerError> {
+    Ok(proto::messaging::SawtoothValidator::new(
         &config.validator.address,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
-    )))
+    ))
 }
 
 #[cfg(feature = "inmem")]
-fn ledger(_config: &Config) -> Result<Box<dyn LedgerWriter>, std::convert::Infallible> {
+fn ledger(_config: &Config) -> Result<InMemLedger, std::convert::Infallible> {
     use std::convert::Infallible;
+
+    use common::ledger::InMemLedger;
 
     Ok(Box::new(common::ledger::InMemLedger::default()))
 }

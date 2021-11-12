@@ -1,21 +1,17 @@
 ---
 source: api/src/lib.rs
-expression: dump_graph(&api)
+expression: dump_ledger_state(api)
 
 ---
 [
-   {
-      "@id": "http://blockchaintp.com/chronicle/ns#agent:testagent_0",
-      "@type": "http://www.w3.org/ns/prov#Agent",
-      "http://www.w3.org/2000/01/rdf-schema#label": [
-         {
-            "@value": "testagent_0"
-         }
-      ],
-      "http://blockchaintp.com/chronicle/ns#hasNamespace": [
-         {
-            "@id": "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-         }
-      ]
-   }
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:agent:testagent_0"
+  },
+  "{\"@id\":\"chronicle:agent:testagent_0\",\"@type\":\"prov:Agent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testagent_0\"}",
+  {
+    "namespace": "null",
+    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+  },
+  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}"
 ]
