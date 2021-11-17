@@ -1,13 +1,11 @@
-use async_std::task::block_on;
 use chrono::{DateTime, Utc};
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 use serde::Serialize;
+use tokio::runtime::Handle;
 
-use std::{
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::vocab::{Chronicle, Prov};
@@ -266,7 +264,7 @@ pub enum ChronicleTransaction {
     EntityAttach(EntityAttach),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Namespace {
     pub id: NamespaceId,
     pub uuid: Uuid,
@@ -279,7 +277,7 @@ impl Namespace {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Agent {
     pub id: AgentId,
     pub namespaceid: NamespaceId,
@@ -303,7 +301,7 @@ impl Agent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
@@ -324,7 +322,7 @@ impl Activity {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Entity {
     Unsigned {
         id: EntityId,
@@ -396,7 +394,7 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
     pub namespaces: HashMap<NamespaceId, Namespace>,
     pub agents: HashMap<AgentId, Agent>,
@@ -827,10 +825,11 @@ pub struct ExpandedJson(pub JsonValue);
 
 impl ExpandedJson {
     pub fn compact(self) -> Result<CompactedJson, json_ld::Error> {
-        let processed_context =
-            block_on(crate::context::PROV.process::<JsonContext, _>(&mut NoLoader, None))?;
+        let processed_context = Handle::current()
+            .block_on(crate::context::PROV.process::<JsonContext, _>(&mut NoLoader, None))?;
 
-        let output = block_on(self.0.compact(&processed_context, &mut NoLoader))?;
+        let output =
+            Handle::current().block_on(self.0.compact(&processed_context, &mut NoLoader))?;
 
         Ok(CompactedJson(output))
     }
@@ -844,4 +843,15 @@ impl std::ops::Deref for CompactedJson {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+/// Property testing of prov models created transactionally and round tripped via JSON / LD
+#[cfg(test)]
+pub mod test {
+    
+    
+
+    
+
+    
 }

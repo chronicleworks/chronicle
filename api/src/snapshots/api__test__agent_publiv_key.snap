@@ -5,13 +5,13 @@ expression: dump_ledger_state(api)
 ---
 [
   {
-    "namespace": "null",
-    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-  },
-  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}",
-  {
     "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
     "resource": "chronicle:agent:testagent"
   },
-  "{\"@id\":\"chronicle:agent:testagent\",\"@type\":\"prov:Agent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testagent\",\"publicKey\":\"024d30db46f6e1b64b1edaca0dd39feac0fdda2bf6010590847bec06dfcbb88e46\"}"
+  "{\"@id\":\"chronicle:agent:testagent\",\"@type\":\"prov:Agent\",\"label\":\"testagent\",\"publicKey\":\"02039b4bdfbacb8c06af1bfa8da408357a701da2d70c583072c04f82ff0f62d109\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
+  {
+    "namespace": "null",
+    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+  },
+  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}"
 ]

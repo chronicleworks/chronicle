@@ -2,11 +2,10 @@
 name = "api"
 version = "0.1.0"
 edition = "2021"
-
+build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-std = "1.10.0"
 custom_error = "1.9.2"
 diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
 diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono"], git = "https://github.com/diesel-rs/diesel" }
@@ -30,8 +29,36 @@ derivative = "2.2.0"
 chrono = "0.4.19"
 multimap = "0.8.3"
 hex = "0.4.3"
+async-change-tracker = "0.3.1"
+bui-backend = "0.12.0"
+bui-backend-types = "0.8.0"
+tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
+parking_lot = "0.11.2"
+includedir = "0.6.0"
+phf = "0.8"
+serde = "1.0.130"
+serde_derive = "1.0.130"
+futures = "0.3"
+
+
+[build-dependencies]
+bui-backend-codegen = "0.9.0"
+web-bundler = "0.1.4"
 
 [dev-dependencies]
 insta = "1.8.0"
 tempfile = "3.2.0"
 tracing-subscriber = "0.3.1"
+
+# depend on the frontend project here not because we actually use it,
+# but because we want to trigger a rerun of the build.rs script if
+# anything in it changes.
+[build-dependencies.frontend]
+path = "../frontend"
+
+[features]
+# Bundle files into executable
+bundle_files = ["bui-backend/bundle_files", "bui-backend-codegen/bundle_files"]
+# Serve files from disk at runtime
+serve_files = ["bui-backend/serve_files", "bui-backend-codegen/serve_files"]
+

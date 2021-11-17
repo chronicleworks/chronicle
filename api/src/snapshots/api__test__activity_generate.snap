@@ -6,14 +6,19 @@ expression: dump_ledger_state(api)
 [
   {
     "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-    "resource": "chronicle:activity:testactivity_0"
+    "resource": "chronicle:activity:testactivity"
   },
-  "{\"@id\":\"chronicle:activity:testactivity_0\",\"@type\":\"prov:Activity\",\"label\":\"testactivity_0\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
+  "{\"@id\":\"chronicle:activity:testactivity\",\"@type\":\"prov:Activity\",\"label\":\"testactivity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
   {
     "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-    "resource": "chronicle:entity:testactivity_0"
+    "resource": "chronicle:entity:testactivity"
   },
-  "{\"@id\":\"chronicle:entity:testactivity_0\",\"@type\":\"prov:Entity\",\"generatedBy\":[\"chronicle:activity:testactivity_0\"],\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testactivity_0\"}",
+  "{\"@id\":\"chronicle:entity:testactivity\",\"@type\":\"prov:Entity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"generatedBy\":[\"chronicle:activity:testactivity\"],\"label\":\"testactivity\"}",
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:entity:testactivity_1"
+  },
+  "{\"@id\":\"chronicle:entity:testactivity_1\",\"@type\":\"prov:Entity\",\"label\":\"testactivity_1\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"generatedBy\":[\"chronicle:activity:testactivity\"]}",
   {
     "namespace": "null",
     "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"

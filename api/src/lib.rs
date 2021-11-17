@@ -1,8 +1,8 @@
 mod persistence;
-
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
+use serde_derive::{Deserialize, Serialize};
 
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
@@ -12,7 +12,7 @@ use std::{
 };
 
 use common::{
-    ledger::{InMemLedger, LedgerWriter, SubmissionError},
+    ledger::{LedgerWriter, SubmissionError},
     models::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, ProvModel, RegisterKey, StartActivity,
@@ -25,6 +25,8 @@ use tracing::{debug, instrument};
 
 use user_error::UFE;
 use uuid::Uuid;
+
+mod bui;
 
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
@@ -45,19 +47,19 @@ impl From<Infallible> for ApiError {
 
 impl UFE for ApiError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
     Create { name: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KeyRegistration {
     Generate,
     ImportVerifying { path: PathBuf },
     ImportSigning { path: PathBuf },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentCommand {
     Create {
         name: String,
@@ -74,7 +76,7 @@ pub enum AgentCommand {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityCommand {
     Create {
         name: String,
@@ -102,7 +104,7 @@ pub enum ActivityCommand {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityCommand {
     Attach {
         name: String,
@@ -113,18 +115,19 @@ pub enum EntityCommand {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryCommand {
     pub namespace: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
+    StartUi {},
 }
 
 #[derive(Debug)]
@@ -219,7 +222,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+    pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
                 self.create_namespace(&name)
@@ -266,6 +269,11 @@ impl<W: LedgerWriter> Api<W> {
                 agent,
             }) => self.entity_attach(name, namespace, file, locator, agent),
             ApiCommand::Query(query) => self.query(query),
+            ApiCommand::StartUi {} => {
+                tokio::spawn(bui::serve_ui("localhost:9982"));
+
+                Ok(ApiResponse::Unit)
+            }
         }
     }
 
@@ -516,42 +524,46 @@ mod test {
         api.as_ledger()
     }
 
-    #[test]
-    fn create_namespace() {
+    #[tokio::test]
+    async fn create_namespace() {
         let api = test_api();
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn create_agent() {
+    #[tokio::test]
+    async fn create_agent() {
         let api = test_api();
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn agent_publiv_key() {
+    #[tokio::test]
+    async fn agent_publiv_key() {
         let api = test_api();
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
@@ -559,38 +571,42 @@ mod test {
             namespace: "testns".to_owned(),
             registration: KeyRegistration::Generate,
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn create_activity() {
+    #[tokio::test]
+    async fn create_activity() {
         let api = test_api();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn start_activity() {
+    #[tokio::test]
+    async fn start_activity() {
         let api = test_api();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Use {
             name: "testagent_0".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
@@ -598,25 +614,28 @@ mod test {
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn end_activity() {
+    #[tokio::test]
+    async fn end_activity() {
         let api = test_api();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Use {
             name: "testagent_0".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
@@ -624,6 +643,7 @@ mod test {
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
@@ -631,19 +651,21 @@ mod test {
             namespace: None,
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
         }))
+        .await
         .unwrap();
 
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn activity_use() {
+    #[tokio::test]
+    async fn activity_use() {
         let api = test_api();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
@@ -651,6 +673,15 @@ mod test {
             namespace: "testns".to_owned(),
             activity: None,
         }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+        }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
@@ -658,19 +689,22 @@ mod test {
             namespace: None,
             time: None,
         }))
+        .await
         .unwrap();
 
+        // Note that use should be idempotent as the name will be unique
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn activity_generate() {
+    #[tokio::test]
+    async fn activity_generate() {
         let api = test_api();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
         }))
+        .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
@@ -678,13 +712,23 @@ mod test {
             namespace: "testns".to_owned(),
             activity: None,
         }))
+        .await
         .unwrap();
 
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
+            name: "testactivity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+        }))
+        .await
+        .unwrap();
+
+        // Note that generate should be idempotent as the name will be unique
         insta::assert_json_snapshot!(dump_ledger_state(api));
     }
 
-    #[test]
-    fn many_activities() {
+    #[tokio::test]
+    async fn many_activities() {
         let api = test_api();
 
         for _ in 0..100 {
@@ -692,6 +736,7 @@ mod test {
                 name: "testactivity".to_owned(),
                 namespace: "testns".to_owned(),
             }))
+            .await
             .unwrap();
         }
 

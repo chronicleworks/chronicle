@@ -5,7 +5,6 @@ use std::convert::Infallible;
 use std::slice::SliceIndex;
 use std::str::from_utf8;
 
-use async_std::task::block_on;
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
 
@@ -19,6 +18,7 @@ use json_ld::{Document, JsonContext, NoLoader};
 use json_ld::{Indexed, Node, Reference};
 use serde::ser::SerializeSeq;
 use serde::Serialize;
+use tokio::runtime::Handle;
 use tracing::{debug, instrument};
 
 use crate::models::{
@@ -72,9 +72,13 @@ impl Serialize for InMemLedger {
         let mut array = serializer
             .serialize_seq(Some(self.kv.borrow().len()))
             .unwrap();
-        for (k, v) in self.kv.borrow().iter() {
+        let mut keys = self.kv.borrow().keys().cloned().collect::<Vec<_>>();
+
+        keys.sort();
+        for k in keys {
             array.serialize_element(&k).ok();
-            let v = serde_json::value::to_value(v.to_string()).unwrap();
+            let v =
+                serde_json::value::to_value(self.kv.borrow().get(&k).unwrap().to_string()).unwrap();
             array.serialize_element(&v).ok();
         }
         array.end()
@@ -111,7 +115,7 @@ impl LedgerWriter for InMemLedger {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 pub struct LedgerAddress {
     pub namespace: String,
     pub resource: String,
@@ -149,7 +153,8 @@ impl ProvModel {
         json.remove("@context");
         json.insert("@context", crate::context::PROV.clone()).ok();
         let mut model = ProvModel::default();
-        let output = block_on(json.expand::<JsonContext, _>(&mut NoLoader))?;
+
+        let output = Handle::current().block_on(json.expand::<JsonContext, _>(&mut NoLoader))?;
 
         for o in output {
             let o = o

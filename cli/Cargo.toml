@@ -32,6 +32,10 @@ proto = {path="../sawtooth_protocol"}
 uuid = "0.8.2"
 colored_json = "2.1.0"
 clap_generate = "3.0.0-beta.5"
+dotenv = "0.15.0"
+futures = "0.3"
+tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
+
 
 
 [features]

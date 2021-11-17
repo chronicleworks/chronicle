@@ -6,9 +6,9 @@ expression: dump_ledger_state(api)
 [
   {
     "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-    "resource": "chronicle:activity:testactivity_0"
+    "resource": "chronicle:activity:testactivity"
   },
-  "{\"@id\":\"chronicle:activity:testactivity_0\",\"@type\":\"prov:Activity\",\"label\":\"testactivity_0\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
+  "{\"@id\":\"chronicle:activity:testactivity\",\"@type\":\"prov:Activity\",\"label\":\"testactivity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
   {
     "namespace": "null",
     "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"

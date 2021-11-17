@@ -40,7 +40,8 @@ fn ledger(_config: &Config) -> Result<common::ledger::InMemLedger, std::convert:
 }
 
 #[instrument]
-fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
+async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
+    dotenv::dotenv().ok();
     let api = Api::new(
         &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         ledger(&config)?,
@@ -48,7 +49,7 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
         uuid::Uuid::new_v4,
     )?;
 
-    vec![
+    let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {
             m.subcommand_matches("create").map(|m| {
                 api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
@@ -159,8 +160,13 @@ fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiErro
     ]
     .into_iter()
     .flatten()
-    .next()
-    .unwrap_or(Ok(ApiResponse::Unit))
+    .next();
+
+    if let Some(execution) = execution {
+        Ok(execution.await?)
+    } else {
+        Ok(ApiResponse::Unit)
+    }
 }
 
 custom_error! {pub CliError
@@ -173,7 +179,8 @@ custom_error! {pub CliError
 
 impl UFE for CliError {}
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = cli().get_matches();
 
     if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
@@ -195,32 +202,38 @@ fn main() {
         }
     };
 
-    handle_config_and_init(&matches)
-        .and_then(|config| Ok(api_exec(config, &matches)?))
-        .map(|response| {
-            match response {
-                ApiResponse::Prov(doc) => {
-                    println!(
-                        "{}",
-                        doc.to_json()
-                            .compact()
-                            .unwrap()
-                            .0
-                            .pretty(4)
-                            .to_colored_json_auto()
-                            .unwrap()
-                    );
-                }
-                ApiResponse::Unit => {}
-            }
-            std::process::exit(0);
-        })
+    config_and_exec(&matches)
+        .await
         .map_err(|e| {
             error!(?e, "Api error");
             e.into_ufe().print();
             std::process::exit(1);
         })
         .ok();
+
+    std::process::exit(0);
+}
+
+async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
+    let config = handle_config_and_init(matches)?;
+    let response = api_exec(config, matches).await?;
+
+    match response {
+        ApiResponse::Prov(doc) => {
+            println!(
+                "{}",
+                doc.to_json()
+                    .compact()
+                    .unwrap()
+                    .0
+                    .pretty(4)
+                    .to_colored_json_auto()
+                    .unwrap()
+            );
+        }
+        ApiResponse::Unit => {}
+    };
+    Ok(())
 }
 
 fn print_completions<G: Generator>(gen: G, app: &mut App) {

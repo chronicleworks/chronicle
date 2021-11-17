@@ -5,4 +5,15 @@ members = [
     "api",
     "cli",
     "sawtooth_protocol",
+    "frontend"
 ]
+
+
+[profile.release]
+lto = true
+opt-level = 'z'
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 'z'
+codegen-units = 1
