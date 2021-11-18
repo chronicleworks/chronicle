@@ -178,19 +178,19 @@ impl<W: LedgerWriter> Api<W> {
 
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
-    fn ensure_namespace(&self, namespace: &str) -> Result<(), ApiError> {
+    async fn ensure_namespace(&self, namespace: &str) -> Result<(), ApiError> {
         let ns = self.store.namespace_by_name(namespace);
 
         if ns.is_err() {
             debug!(namespace, "Namespace does not exist, creating");
-            self.create_namespace(namespace)?;
+            self.create_namespace(namespace).await?;
         }
 
         Ok(())
     }
 
     #[instrument]
-    fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = (self.uuidsource)();
         let iri = ChronicleVocab::namespace(name, &uuid);
 
@@ -200,14 +200,14 @@ impl<W: LedgerWriter> Api<W> {
             uuid,
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(namespace)?;
+    async fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(namespace).await?;
         let name = self.store.disambiguate_agent_name(name)?;
 
         let tx = ChronicleTransaction::CreateAgent(CreateAgent {
@@ -216,7 +216,7 @@ impl<W: LedgerWriter> Api<W> {
             namespace: self.store.namespace_by_name(namespace)?,
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
@@ -225,50 +225,53 @@ impl<W: LedgerWriter> Api<W> {
     pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(&name)
+                self.create_namespace(&name).await
             }
             ApiCommand::Agent(AgentCommand::Create { name, namespace }) => {
-                self.create_agent(&name, &namespace)
+                self.create_agent(&name, &namespace).await
             }
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
                 namespace,
                 registration,
-            }) => self.register_key(name, namespace, registration),
+            }) => self.register_key(name, namespace, registration).await,
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
                 self.use_agent(name, namespace)
             }
             ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
-                self.create_activity(name, namespace)
+                self.create_activity(name, namespace).await
             }
             ApiCommand::Activity(ActivityCommand::Start {
                 name,
                 namespace,
                 time,
-            }) => self.start_activity(name, namespace, time),
+            }) => self.start_activity(name, namespace, time).await,
             ApiCommand::Activity(ActivityCommand::End {
                 name,
                 namespace,
                 time,
-            }) => self.end_activity(name, namespace, time),
+            }) => self.end_activity(name, namespace, time).await,
             ApiCommand::Activity(ActivityCommand::Use {
                 name,
                 namespace,
                 activity,
-            }) => self.activity_use(name, namespace, activity),
+            }) => self.activity_use(name, namespace, activity).await,
             ApiCommand::Activity(ActivityCommand::Generate {
                 name,
                 namespace,
                 activity,
-            }) => self.activity_generate(name, namespace, activity),
+            }) => self.activity_generate(name, namespace, activity).await,
             ApiCommand::Entity(EntityCommand::Attach {
                 name,
                 namespace,
                 file,
                 locator,
                 agent,
-            }) => self.entity_attach(name, namespace, file, locator, agent),
-            ApiCommand::Query(query) => self.query(query),
+            }) => {
+                self.entity_attach(name, namespace, file, locator, agent)
+                    .await
+            }
+            ApiCommand::Query(query) => self.query(query).await,
             ApiCommand::StartUi {} => {
                 tokio::spawn(bui::serve_ui("localhost:9982"));
 
@@ -278,13 +281,13 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    fn register_key(
+    async fn register_key(
         &self,
         name: String,
         namespace: String,
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace)?;
+        self.ensure_namespace(&namespace).await?;
         let namespaceid = self.store.namespace_by_name(&namespace)?;
         let id = ChronicleVocab::agent(&name).into();
         match registration {
@@ -306,7 +309,7 @@ impl<W: LedgerWriter> Api<W> {
             publickey: hex::encode(self.keystore.agent_verifying(&id)?.to_bytes()),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
         self.store.apply(&tx)?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
@@ -319,8 +322,12 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    fn create_activity(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace)?;
+    async fn create_activity(
+        &self,
+        name: String,
+        namespace: String,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace).await?;
         let name = self.store.disambiguate_activity_name(&name)?;
         let namespace = self.store.namespace_by_name(&namespace)?;
         let id = ChronicleVocab::activity(&name);
@@ -330,13 +337,13 @@ impl<W: LedgerWriter> Api<W> {
             name,
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    pub(crate) fn start_activity(
+    pub(crate) async fn start_activity(
         &self,
         name: String,
         namespace: String,
@@ -357,13 +364,13 @@ impl<W: LedgerWriter> Api<W> {
             time: time.unwrap_or(Utc::now()),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    pub(crate) fn end_activity(
+    pub(crate) async fn end_activity(
         &self,
         name: Option<String>,
         namespace: Option<String>,
@@ -388,13 +395,13 @@ impl<W: LedgerWriter> Api<W> {
             time: time.unwrap_or(Utc::now()),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    pub(crate) fn activity_use(
+    pub(crate) async fn activity_use(
         &self,
         name: String,
         namespace: String,
@@ -404,7 +411,7 @@ impl<W: LedgerWriter> Api<W> {
             .store
             .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
 
-        self.ensure_namespace(&namespace)?;
+        self.ensure_namespace(&namespace).await?;
         let namespace = self.store.namespace_by_name(&namespace)?;
 
         let name = self.store.disambiguate_entity_name(&name)?;
@@ -414,19 +421,19 @@ impl<W: LedgerWriter> Api<W> {
             activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    pub(crate) fn activity_generate(
+    pub(crate) async fn activity_generate(
         &self,
         name: String,
         namespace: String,
         activity: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace)?;
+        self.ensure_namespace(&namespace).await?;
         let activity = self
             .store
             .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
@@ -440,13 +447,13 @@ impl<W: LedgerWriter> Api<W> {
             activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
     #[instrument]
-    fn entity_attach(
+    async fn entity_attach(
         &self,
         name: String,
         namespace: String,
@@ -454,7 +461,7 @@ impl<W: LedgerWriter> Api<W> {
         locator: Option<String>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace)?;
+        self.ensure_namespace(&namespace).await?;
 
         let agent = agent
             .map(|agent| {
@@ -481,12 +488,12 @@ impl<W: LedgerWriter> Api<W> {
             signature_time: Utc::now(),
         });
 
-        self.ledger.submit(vec![&tx])?;
+        self.ledger.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
-    fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
+    async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
         Ok(ApiResponse::Prov(self.store.prov_model_from(query)?))
     }
 }

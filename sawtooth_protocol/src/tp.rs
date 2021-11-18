@@ -7,6 +7,7 @@ use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
+use tokio::runtime::Handle;
 use tracing::{debug, instrument};
 
 #[derive(Debug)]
@@ -79,9 +80,18 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
         debug!(?input, "Processing input state");
 
-        let output = tx
-            .process(input)
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        let (send, recv) = crossbeam::channel::bounded(1);
+        Handle::current().spawn(async move {
+            send.send(
+                tx.process(input)
+                    .await
+                    .map_err(|e| ApplyError::InternalError(e.to_string())),
+            )
+        });
+
+        let output = recv
+            .recv()
+            .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
         debug!(?output, "Storing output state");
 

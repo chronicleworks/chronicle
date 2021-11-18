@@ -1,0 +1,27 @@
+---
+source: api/src/lib.rs
+expression: dump_ledger_state(api)
+
+---
+[
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:activity:testactivity"
+  },
+  "{\"@id\":\"chronicle:activity:testactivity\",\"@type\":\"prov:Activity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testactivity\"}",
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:entity:testactivity"
+  },
+  "{\"@id\":\"chronicle:entity:testactivity\",\"@type\":\"prov:Entity\",\"label\":\"testactivity\",\"generatedBy\":[\"chronicle:activity:testactivity\"],\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:entity:testactivity_1"
+  },
+  "{\"@id\":\"chronicle:entity:testactivity_1\",\"@type\":\"prov:Entity\",\"generatedBy\":[\"chronicle:activity:testactivity\"],\"label\":\"testactivity_1\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\"}",
+  {
+    "namespace": "null",
+    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+  },
+  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}"
+]

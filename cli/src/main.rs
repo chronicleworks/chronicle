@@ -23,8 +23,8 @@ use tracing::{error, instrument, Level};
 use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
-fn ledger(config: &Config) -> Result<proto::messaging::SawtoothValidator, SignerError> {
-    Ok(proto::messaging::SawtoothValidator::new(
+fn ledger(config: &Config) -> Result<sawtooth_protocol::messaging::SawtoothValidator, SignerError> {
+    Ok(sawtooth_protocol::messaging::SawtoothValidator::new(
         &config.validator.address,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
@@ -222,13 +222,7 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
         ApiResponse::Prov(doc) => {
             println!(
                 "{}",
-                doc.to_json()
-                    .compact()
-                    .unwrap()
-                    .0
-                    .pretty(4)
-                    .to_colored_json_auto()
-                    .unwrap()
+                doc.to_json().0.pretty(4).to_colored_json_auto().unwrap()
             );
         }
         ApiResponse::Unit => {}

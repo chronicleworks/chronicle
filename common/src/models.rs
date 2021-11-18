@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
+use futures::TryFutureExt;
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 use serde::Serialize;
-use tokio::runtime::Handle;
+use tokio::{task::JoinError};
 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -821,15 +822,29 @@ impl ProvModel {
     }
 }
 
+custom_error::custom_error! {pub CompactionError
+    JsonLd{inner: String}                  = "JsonLd", //TODO: contribute Send to the upstream JsonLD error type
+    Join{source : JoinError}               = "Tokio",
+}
+
 pub struct ExpandedJson(pub JsonValue);
 
 impl ExpandedJson {
-    pub fn compact(self) -> Result<CompactedJson, json_ld::Error> {
-        let processed_context = Handle::current()
-            .block_on(crate::context::PROV.process::<JsonContext, _>(&mut NoLoader, None))?;
+    pub async fn compact(self) -> Result<CompactedJson, CompactionError> {
+        let processed_context = crate::context::PROV
+            .process::<JsonContext, _>(&mut NoLoader, None)
+            .await
+            .map_err(|e| CompactionError::JsonLd {
+                inner: e.to_string(),
+            })?;
 
-        let output =
-            Handle::current().block_on(self.0.compact(&processed_context, &mut NoLoader))?;
+        let output = self
+            .0
+            .compact(&processed_context, &mut NoLoader)
+            .await
+            .map_err(|e| CompactionError::JsonLd {
+                inner: e.to_string(),
+            })?;
 
         Ok(CompactedJson(output))
     }
@@ -847,11 +862,4 @@ impl std::ops::Deref for CompactedJson {
 
 /// Property testing of prov models created transactionally and round tripped via JSON / LD
 #[cfg(test)]
-pub mod test {
-    
-    
-
-    
-
-    
-}
+pub mod test {}

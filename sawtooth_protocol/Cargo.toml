@@ -4,9 +4,18 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[lib]
+name = "sawtooth_protocol"
+path = "src/lib.rs"
+
+[[bin]]
+name = "chronicle_sawtooth_tp"
+path = "src/bin.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.0.0-beta.5", features = ["yaml"] }
 bytes = "1.1.0"
 prost = "0.9.0"
 prost-types = "0.9.0"
@@ -26,11 +35,13 @@ rust-crypto = "0.2.36"
 hex = "0.4.3"
 rand_core = "0.6.3"
 tracing = "0.1.29"
+tracing-subscriber = "0.3.1"
 derivative = "2.2.0"
 async-trait = "0.1.51"
 futures = "0.3.17"
 lazy_static = "1.4.0"
 tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
+crossbeam = "0.8.1"
 
 
 [build-dependencies]

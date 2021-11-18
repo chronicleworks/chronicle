@@ -91,8 +91,9 @@ impl SawtoothValidator {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl LedgerWriter for SawtoothValidator {
-    fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
+    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         self.submit(tx).map_err(SawtoothSubmissionError::into)
     }
 }

@@ -8,7 +8,7 @@ use std::str::from_utf8;
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
 
-use futures::{FutureExt, Stream};
+use futures::{FutureExt, Stream, TryFutureExt};
 use iref::{AsIri, IriBuf};
 
 use json::JsonValue;
@@ -18,12 +18,13 @@ use json_ld::{Document, JsonContext, NoLoader};
 use json_ld::{Indexed, Node, Reference};
 use serde::ser::SerializeSeq;
 use serde::Serialize;
-use tokio::runtime::Handle;
+
+use tokio::task::JoinError;
 use tracing::{debug, instrument};
 
 use crate::models::{
-    Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId, NamespaceId,
-    ProvModel,
+    Activity, ActivityId, Agent, AgentId, ChronicleTransaction, CompactionError, Entity, EntityId,
+    NamespaceId, ProvModel,
 };
 use crate::vocab::{Chronicle, Prov};
 
@@ -33,7 +34,9 @@ custom_error! {pub SubmissionError
 }
 
 custom_error! {pub ProcessorError
-    JsonLd{source: json_ld::Error} = "Json Ld Error",
+    Compaction{source: CompactionError} = "Json Ld Error",
+    Expansion{inner: String} = "Json Ld Error",
+    Tokio{source: JoinError} = "Tokio Error",
     MissingId{object: JsonValue} = "Missing @id",
     MissingProperty{object: JsonValue} = "Missing property",
     NotANode{} = "Json LD object is not a node",
@@ -48,8 +51,9 @@ impl From<Infallible> for ProcessorError {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 pub trait LedgerWriter {
-    fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
+    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
 }
 
 pub trait LedgerReader {
@@ -85,23 +89,26 @@ impl Serialize for InMemLedger {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl LedgerWriter for InMemLedger {
     #[instrument]
-    fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
+    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         for tx in tx {
             debug!(?tx, "Process transaction");
 
-            let output = tx.process(
-                tx.dependencies()
-                    .iter()
-                    .filter_map(|dep| {
-                        self.kv
-                            .borrow()
-                            .get(dep)
-                            .map(|json| StateInput::new(json.to_string().as_bytes().into()))
-                    })
-                    .collect(),
-            )?;
+            let output = tx
+                .process(
+                    tx.dependencies()
+                        .iter()
+                        .filter_map(|dep| {
+                            self.kv
+                                .borrow()
+                                .get(dep)
+                                .map(|json| StateInput::new(json.to_string().as_bytes().into()))
+                        })
+                        .collect(),
+                )
+                .await?;
 
             for output in output {
                 let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
@@ -149,12 +156,17 @@ impl ProvModel {
     /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
-    fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
+    async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
         json.remove("@context");
         json.insert("@context", crate::context::PROV.clone()).ok();
         let mut model = ProvModel::default();
 
-        let output = Handle::current().block_on(json.expand::<JsonContext, _>(&mut NoLoader))?;
+        let output = json
+            .expand::<JsonContext, _>(&mut NoLoader)
+            .map_err(|e| ProcessorError::Expansion {
+                inner: e.to_string(),
+            })
+            .await?;
 
         for o in output {
             let o = o
@@ -385,16 +397,21 @@ impl ChronicleTransaction {
     }
     /// Take out input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
-    pub fn process(&self, input: Vec<StateInput>) -> Result<Vec<StateOutput>, ProcessorError> {
+    pub async fn process(
+        &self,
+        input: Vec<StateInput>,
+    ) -> Result<Vec<StateOutput>, ProcessorError> {
         let mut model = ProvModel::default();
 
         for input in input {
-            model.apply_json_ld(json::parse(std::str::from_utf8(&input.data)?)?)?;
+            model
+                .apply_json_ld(json::parse(std::str::from_utf8(&input.data)?)?)
+                .await?;
         }
 
         model.apply(self);
 
-        let graph = &model.to_json().compact()?.0["@graph"];
+        let graph = &model.to_json().compact().await?.0["@graph"];
 
         Ok(graph
             .members()

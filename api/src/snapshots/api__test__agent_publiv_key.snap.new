@@ -1,0 +1,17 @@
+---
+source: api/src/lib.rs
+expression: dump_ledger_state(api)
+
+---
+[
+  {
+    "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    "resource": "chronicle:agent:testagent"
+  },
+  "{\"@id\":\"chronicle:agent:testagent\",\"@type\":\"prov:Agent\",\"publicKey\":\"03af5a47d0371f9a706d124f140fa0ee2303e59e90e36d93671d4725cd9d0351b3\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"label\":\"testagent\"}",
+  {
+    "namespace": "null",
+    "resource": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+  },
+  "{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"label\":\"testns\"}"
+]
