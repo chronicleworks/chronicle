@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
+use std::fmt::Display;
 use std::slice::SliceIndex;
 use std::str::from_utf8;
 
@@ -28,9 +29,38 @@ use crate::models::{
 };
 use crate::vocab::{Chronicle, Prov};
 
-custom_error! {pub SubmissionError
-    Implementation{source: Box<dyn std::error::Error>} = "Ledger error",
-    Peocessor{source: ProcessorError} = "Processor error for in mem ledger",
+#[derive(Debug)]
+pub enum SubmissionError {
+    Implementation {
+        source: Box<dyn std::error::Error + Send>,
+    },
+    Processor {
+        source: ProcessorError,
+    },
+}
+
+impl From<ProcessorError> for SubmissionError {
+    fn from(source: ProcessorError) -> Self {
+        SubmissionError::Processor { source }
+    }
+}
+
+impl Display for SubmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Implementation { .. } => write!(f, "Ledger error"),
+            Self::Processor { source: _ } => write!(f, "Processor error"),
+        }
+    }
+}
+
+impl std::error::Error for SubmissionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Implementation { source } => Some(source.as_ref()),
+            Self::Processor { source } => Some(source),
+        }
+    }
 }
 
 custom_error! {pub ProcessorError

@@ -9,7 +9,7 @@ use bui_backend::highlevel::{create_bui_app_inner, BuiAppInner};
 use bui_backend::AccessControl;
 use bui_backend_types::CallbackDataAndSession;
 
-use crate::ApiCommand;
+use crate::{ApiCommand, ApiDispatch};
 
 #[derive(Debug)]
 pub struct BuiError {
@@ -40,6 +40,7 @@ include!(concat!(env!("OUT_DIR"), "/public.rs")); // Despite slash, this works o
 
 /// The structure that holds our app data
 struct MyApp {
+    api: ApiDispatch,
     inner: BuiAppInner<ProvModel, ApiCommand>,
 }
 
@@ -56,7 +57,7 @@ fn is_loopback(addr_any: &std::net::SocketAddr) -> bool {
 
 impl MyApp {
     /// Create our app
-    async fn new(auth: AccessControl, config: Config) -> Result<Self, BuiError> {
+    async fn new(auth: AccessControl, config: Config, api: ApiDispatch) -> Result<Self, BuiError> {
         // Create our shared state.
         let shared_store = Arc::new(RwLock::new(ChangeTracker::new(ProvModel::default())));
 
@@ -87,11 +88,11 @@ impl MyApp {
         }));
 
         // Return our app.
-        Ok(MyApp { inner })
+        Ok(MyApp { api, inner })
     }
 }
 
-pub async fn serve_ui(addr: &str) -> Result<(), BuiError> {
+pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
     let http_server_addr = address(addr);
 
     // Get our JWT secret.
@@ -104,7 +105,7 @@ pub async fn serve_ui(addr: &str) -> Result<(), BuiError> {
         bui_backend::highlevel::generate_random_auth(http_server_addr, secret)?
     };
 
-    let my_app = MyApp::new(auth, get_default_config()).await?;
+    let my_app = MyApp::new(auth, get_default_config(), api).await?;
 
     // Clone our shared data to move it into a closure later.
     let _tracker_arc = my_app.inner.shared_arc().clone();

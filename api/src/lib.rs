@@ -10,6 +10,7 @@ use std::{
     convert::Infallible,
     path::{Path, PathBuf},
 };
+use tokio::sync::mpsc::{self, error::SendError, Sender};
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
@@ -31,11 +32,14 @@ mod bui;
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
     Iri{source: iref::Error}                                    = "Invalid IRI",
-    JsonLD{source: json_ld::Error}                              = "Json LD processing",
+    // TODO: Json LD error has a non send trait, so we can't compose it
+    JsonLD{message: String}                                     = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
     CannotFindAttachment{}                                      = "Cannot locate attachment file",
+    ApiShutdownRx                                               = "Api shut down before reply",
+    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -136,12 +140,15 @@ pub enum ApiResponse {
     Prov(ProvModel),
 }
 
+type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Api<W>
 where
     W: LedgerWriter,
 {
+    tx: Sender<ApiSendWithReply>,
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
     #[derivative(Debug = "ignore")]
@@ -149,27 +156,76 @@ where
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
-    uuidsource: Box<dyn Fn() -> Uuid>,
+    uuidsource: Box<dyn Fn() -> Uuid + Send + 'static>,
 }
 
-impl<W: LedgerWriter> Api<W> {
+#[derive(Debug, Clone)]
+/// A clonable api handle
+pub struct ApiDispatch {
+    tx: Sender<ApiSendWithReply>,
+}
+
+impl ApiDispatch {
+    #[instrument]
+    pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+        let (reply_tx, mut reply_rx) = mpsc::channel(1);
+        self.tx.clone().send((command, reply_tx)).await?;
+
+        reply_rx.recv().await.ok_or(ApiError::ApiShutdownRx {})?
+    }
+}
+
+impl<W: LedgerWriter + 'static + Send> Api<W> {
     #[instrument(skip(ledger, uuidgen))]
     pub fn new<F>(
         database_url: &str,
         ledger: W,
         secret_path: &Path,
         uuidgen: F,
-    ) -> Result<Self, ApiError>
+    ) -> Result<ApiDispatch, ApiError>
     where
-        F: Fn() -> Uuid,
-        F: 'static,
+        F: Fn() -> Uuid + Send + 'static,
     {
-        Ok(Api {
-            keystore: DirectoryStoredKeys::new(secret_path)?,
-            ledger,
-            store: Store::new(database_url)?,
-            uuidsource: Box::new(uuidgen),
-        })
+        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+
+        let dispatch = ApiDispatch { tx: tx.clone() };
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let secret_path = secret_path.to_owned();
+        let database_url = database_url.to_owned();
+
+        std::thread::spawn(move || {
+            let local = tokio::task::LocalSet::new();
+
+            local.spawn_local(async move {
+                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
+                let store = Store::new(&*database_url).unwrap();
+
+                let api = Api {
+                    tx: tx.clone(),
+                    keystore,
+                    ledger,
+                    store,
+                    uuidsource: Box::new(uuidgen),
+                };
+                loop {
+                    if let Some((command, reply)) = rx.recv().await {
+                        let result = api.dispatch(command).await;
+
+                        reply.send(result).await.ok();
+                    } else {
+                        return;
+                    }
+                }
+            });
+
+            rt.block_on(local)
+        });
+
+        Ok(dispatch)
     }
 
     pub fn as_ledger(self) -> W {
@@ -222,7 +278,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+    async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
                 self.create_namespace(&name).await
@@ -236,7 +292,7 @@ impl<W: LedgerWriter> Api<W> {
                 registration,
             }) => self.register_key(name, namespace, registration).await,
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
-                self.use_agent(name, namespace)
+                self.use_agent(name, namespace).await
             }
             ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
                 self.create_activity(name, namespace).await
@@ -273,7 +329,14 @@ impl<W: LedgerWriter> Api<W> {
             }
             ApiCommand::Query(query) => self.query(query).await,
             ApiCommand::StartUi {} => {
-                tokio::spawn(bui::serve_ui("localhost:9982"));
+                bui::serve_ui(
+                    ApiDispatch {
+                        tx: self.tx.clone(),
+                    },
+                    "localhost:9982",
+                )
+                .await
+                .ok();
 
                 Ok(ApiResponse::Unit)
             }
@@ -315,7 +378,8 @@ impl<W: LedgerWriter> Api<W> {
         Ok(ApiResponse::Prov(self.store.apply(&tx)?))
     }
 
-    fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+    #[instrument]
+    async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
         self.store.use_agent(name, namespace)?;
 
         Ok(ApiResponse::Unit)
@@ -343,7 +407,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub(crate) async fn start_activity(
+    async fn start_activity(
         &self,
         name: String,
         namespace: String,
@@ -370,7 +434,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub(crate) async fn end_activity(
+    async fn end_activity(
         &self,
         name: Option<String>,
         namespace: Option<String>,
@@ -401,7 +465,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub(crate) async fn activity_use(
+    async fn activity_use(
         &self,
         name: String,
         namespace: String,
@@ -427,7 +491,7 @@ impl<W: LedgerWriter> Api<W> {
     }
 
     #[instrument]
-    pub(crate) async fn activity_generate(
+    async fn activity_generate(
         &self,
         name: String,
         namespace: String,
@@ -507,10 +571,11 @@ mod test {
     use uuid::Uuid;
 
     use crate::{
-        ActivityCommand, AgentCommand, Api, ApiCommand, KeyRegistration, NamespaceCommand,
+        ActivityCommand, AgentCommand, Api, ApiCommand, ApiDispatch, KeyRegistration,
+        NamespaceCommand,
     };
 
-    fn test_api() -> Api<InMemLedger> {
+    fn test_api() -> ApiDispatch {
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
@@ -527,8 +592,8 @@ mod test {
         .unwrap()
     }
 
-    fn dump_ledger_state(api: Api<InMemLedger>) -> InMemLedger {
-        api.as_ledger()
+    fn dump_ledger_state(_api: ApiDispatch) -> InMemLedger {
+        todo!()
     }
 
     #[tokio::test]

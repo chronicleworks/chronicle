@@ -5,7 +5,7 @@ pub fn cli() -> App<'static> {
     App::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
-        .about("Does awesome things")
+        .about("Write and query provenance data to distributed ledgers")
         .arg(
             Arg::new("config")
                 .short('c')
@@ -28,6 +28,15 @@ pub fn cli() -> App<'static> {
                 .short('d')
                 .long("debug")
                 .about("Print debugging information"),
+        )
+        .arg(
+            Arg::new("ui")
+                .long("ui")
+                .default_value("localhost:8884")
+                .value_hint(ValueHint::Url)
+                .required(false)
+                .takes_value(true)
+                .about("Start a web user interface"),
         )
         .subcommand(
             App::new("namespace")
