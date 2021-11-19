@@ -1,10 +1,9 @@
 use chrono::{DateTime, Utc};
-use futures::TryFutureExt;
 use iref::{AsIri, Iri};
 use json::{object, JsonValue};
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 use serde::Serialize;
-use tokio::{task::JoinError};
+use tokio::task::JoinError;
 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

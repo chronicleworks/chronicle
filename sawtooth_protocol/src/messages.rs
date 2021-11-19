@@ -1,6 +1,3 @@
-
-use std::{cell::RefCell, rc::Rc};
-
 use common::models::ChronicleTransaction;
 use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
@@ -22,7 +19,7 @@ pub struct MessageBuilder {
     signer: SigningKey,
     family_name: String,
     family_version: String,
-    rng: Rc<RefCell<StdRng>>,
+    rng: StdRng,
 }
 
 impl MessageBuilder {
@@ -32,12 +29,12 @@ impl MessageBuilder {
             signer,
             family_name: family_name.to_owned(),
             family_version: family_version.to_owned(),
-            rng: Rc::new(rng.into()),
+            rng,
         }
     }
 
-    fn generate_nonce(&self) -> String {
-        let bytes = self.rng.borrow_mut().gen::<[u8; 20]>();
+    fn generate_nonce(&mut self) -> String {
+        let bytes = self.rng.gen::<[u8; 20]>();
         hex::encode_upper(bytes)
     }
 
@@ -61,7 +58,7 @@ impl MessageBuilder {
     }
 
     pub fn make_sawtooth_transaction(
-        &self,
+        &mut self,
         _input_addresses: Vec<String>,
         _output_addresses: Vec<String>,
         _dependencies: Vec<String>,

@@ -83,7 +83,7 @@ impl From<Infallible> for ProcessorError {
 
 #[async_trait::async_trait(?Send)]
 pub trait LedgerWriter {
-    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
+    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
 }
 
 pub trait LedgerReader {
@@ -122,7 +122,7 @@ impl Serialize for InMemLedger {
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for InMemLedger {
     #[instrument]
-    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
+    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         for tx in tx {
             debug!(?tx, "Process transaction");
 

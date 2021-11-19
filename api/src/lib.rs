@@ -204,7 +204,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
                 let store = Store::new(&*database_url).unwrap();
 
-                let api = Api {
+                let mut api = Api {
                     tx: tx.clone(),
                     keystore,
                     ledger,
@@ -234,7 +234,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
-    async fn ensure_namespace(&self, namespace: &str) -> Result<(), ApiError> {
+    async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
         let ns = self.store.namespace_by_name(namespace);
 
         if ns.is_err() {
@@ -246,7 +246,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     #[instrument]
-    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(&mut self, name: &str) -> Result<ApiResponse, ApiError> {
         let uuid = (self.uuidsource)();
         let iri = ChronicleVocab::namespace(name, &uuid);
 
@@ -262,7 +262,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     #[instrument]
-    async fn create_agent(&self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_agent(&mut self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(namespace).await?;
         let name = self.store.disambiguate_agent_name(name)?;
 
@@ -278,7 +278,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     #[instrument]
-    async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+    async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
                 self.create_namespace(&name).await
@@ -345,7 +345,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn register_key(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
         registration: KeyRegistration,
@@ -387,7 +387,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn create_activity(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
     ) -> Result<ApiResponse, ApiError> {
@@ -408,7 +408,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn start_activity(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
@@ -435,7 +435,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn end_activity(
-        &self,
+        &mut self,
         name: Option<String>,
         namespace: Option<String>,
         time: Option<DateTime<Utc>>,
@@ -466,7 +466,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn activity_use(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -492,7 +492,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn activity_generate(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -518,7 +518,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn entity_attach(
-        &self,
+        &mut self,
         name: String,
         namespace: String,
         file: PathBuf,

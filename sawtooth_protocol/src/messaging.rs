@@ -56,7 +56,7 @@ impl SawtoothValidator {
 
     #[instrument]
     fn submit(
-        &self,
+        &mut self,
         transactions: Vec<&ChronicleTransaction>,
     ) -> Result<(), SawtoothSubmissionError> {
         let transactions = transactions
@@ -93,7 +93,7 @@ impl SawtoothValidator {
 
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for SawtoothValidator {
-    async fn submit(&self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
+    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         self.submit(tx).map_err(SawtoothSubmissionError::into)
     }
 }
