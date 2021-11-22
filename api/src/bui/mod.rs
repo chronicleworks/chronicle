@@ -8,8 +8,10 @@ use async_change_tracker::ChangeTracker;
 use bui_backend::highlevel::{create_bui_app_inner, BuiAppInner};
 use bui_backend::AccessControl;
 use bui_backend_types::CallbackDataAndSession;
+use tokio::runtime::Handle;
+use tracing::{debug, error, instrument};
 
-use crate::{ApiCommand, ApiDispatch};
+use crate::{ApiCommand, ApiDispatch, ApiResponse};
 
 #[derive(Debug)]
 pub struct BuiError {
@@ -35,12 +37,8 @@ impl From<bui_backend::Error> for BuiError {
     }
 }
 
-// Include the files to be served and define `fn get_default_config()`.
-include!(concat!(env!("OUT_DIR"), "/public.rs")); // Despite slash, this works on Windows.
-
 /// The structure that holds our app data
-struct MyApp {
-    api: ApiDispatch,
+struct WebUi {
     inner: BuiAppInner<ProvModel, ApiCommand>,
 }
 
@@ -55,7 +53,7 @@ fn is_loopback(addr_any: &std::net::SocketAddr) -> bool {
     }
 }
 
-impl MyApp {
+impl WebUi {
     /// Create our app
     async fn new(auth: AccessControl, config: Config, api: ApiDispatch) -> Result<Self, BuiError> {
         // Create our shared state.
@@ -80,18 +78,35 @@ impl MyApp {
         .await?;
 
         // Make a clone of our shared state Arc which will be moved into our callback handler.
-        let _tracker_arc2 = inner.shared_arc().clone();
+        let tracker_arc2 = inner.shared_arc().clone();
 
         // Create a Stream to handle callbacks from clients.
-        inner.set_callback_listener(Box::new(move |_msg: CallbackDataAndSession<ApiCommand>| {
+        inner.set_callback_listener(Box::new(move |msg: CallbackDataAndSession<ApiCommand>| {
+            let mut shared = tracker_arc2.write();
+            let api = api.clone();
+            let (send, recv) = crossbeam::channel::bounded(1);
+
+            Handle::current().spawn(async move { send.send(api.dispatch(msg.payload).await) });
+
+            if let Some(response) = recv.recv().map_err(|error| error!(?error)).ok() {
+                response
+                    .map_err(|error| error!(?error))
+                    .map(|response| match response {
+                        ApiResponse::Prov(prov) => shared.modify(|shared| *shared = prov),
+                        ApiResponse::Unit => {}
+                    })
+                    .ok();
+            }
+
             futures::future::ok(())
         }));
 
         // Return our app.
-        Ok(MyApp { api, inner })
+        Ok(WebUi { inner })
     }
 }
 
+#[instrument]
 pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
     let http_server_addr = address(addr);
 
@@ -105,10 +120,12 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
         bui_backend::highlevel::generate_random_auth(http_server_addr, secret)?
     };
 
-    let my_app = MyApp::new(auth, get_default_config(), api).await?;
+    let config = get_default_config();
+
+    let bui = WebUi::new(auth, config, api.clone()).await?;
 
     // Clone our shared data to move it into a closure later.
-    let _tracker_arc = my_app.inner.shared_arc().clone();
+    let _tracker_arc = bui.inner.shared_arc().clone();
 
     // Create a stream to call our closure every second.
     let mut interval_stream = tokio::time::interval(std::time::Duration::from_millis(1000));
@@ -119,7 +136,7 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
         }
     };
 
-    let maybe_url = my_app.inner.guess_url_with_token();
+    let maybe_url = bui.inner.guess_url_with_token();
     println!(
         "Depending on IP address resolution, you may be able to login \
         with this url: {}",
@@ -131,3 +148,6 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
 
     Ok(())
 }
+
+// Include the files to be served and define `fn get_default_config()`.
+include!(concat!(env!("OUT_DIR"), "/public.rs")); // Despite slash, this works on Windows.

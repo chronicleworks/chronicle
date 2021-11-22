@@ -4,14 +4,15 @@ extern crate serde_derive;
 mod cli;
 mod config;
 
-use api::{
-    ActivityCommand, AgentCommand, Api, ApiCommand, ApiError, ApiResponse, EntityCommand,
-    KeyRegistration, NamespaceCommand, QueryCommand,
-};
+use api::{Api, ApiDispatch, ApiError};
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 use colored_json::prelude::*;
+use common::commands::{
+    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
+    NamespaceCommand, QueryCommand,
+};
 use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
@@ -51,7 +52,8 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
 
     let execution = vec![
         options
-            .value_of("ui").map(|_addr| api.dispatch(ApiCommand::StartUi {})),
+            .value_of("ui")
+            .map(|_addr| api.dispatch(ApiCommand::StartUi {})),
         options.subcommand_matches("namespace").and_then(|m| {
             m.subcommand_matches("create").map(|m| {
                 api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {

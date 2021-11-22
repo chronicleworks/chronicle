@@ -13,6 +13,7 @@ use std::{
 use tokio::sync::mpsc::{self, error::SendError, Sender};
 
 use common::{
+    commands::*,
     ledger::{LedgerWriter, SubmissionError},
     models::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
@@ -50,95 +51,6 @@ impl From<Infallible> for ApiError {
 }
 
 impl UFE for ApiError {}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum NamespaceCommand {
-    Create { name: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum KeyRegistration {
-    Generate,
-    ImportVerifying { path: PathBuf },
-    ImportSigning { path: PathBuf },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AgentCommand {
-    Create {
-        name: String,
-        namespace: String,
-    },
-    RegisterKey {
-        name: String,
-        namespace: String,
-        registration: KeyRegistration,
-    },
-    Use {
-        name: String,
-        namespace: String,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ActivityCommand {
-    Create {
-        name: String,
-        namespace: String,
-    },
-    Start {
-        name: String,
-        namespace: String,
-        time: Option<DateTime<Utc>>,
-    },
-    End {
-        name: Option<String>,
-        namespace: Option<String>,
-        time: Option<DateTime<Utc>>,
-    },
-    Use {
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-    },
-    Generate {
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EntityCommand {
-    Attach {
-        name: String,
-        namespace: String,
-        file: PathBuf,
-        locator: Option<String>,
-        agent: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryCommand {
-    pub namespace: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ApiCommand {
-    NameSpace(NamespaceCommand),
-    Agent(AgentCommand),
-    Activity(ActivityCommand),
-    Entity(EntityCommand),
-    Query(QueryCommand),
-    StartUi {},
-}
-
-#[derive(Debug)]
-pub enum ApiResponse {
-    Unit,
-    Prov(ProvModel),
-}
 
 type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
 
@@ -570,9 +482,10 @@ mod test {
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{
-        ActivityCommand, AgentCommand, Api, ApiCommand, ApiDispatch, KeyRegistration,
-        NamespaceCommand,
+    use crate::{Api, ApiDispatch};
+
+    use common::commands::{
+        ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
     };
 
     fn test_api() -> ApiDispatch {
