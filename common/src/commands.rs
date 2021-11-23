@@ -84,7 +84,6 @@ pub enum ApiCommand {
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
-    StartUi {},
 }
 
 #[derive(Debug)]

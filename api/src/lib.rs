@@ -1,4 +1,9 @@
+mod bui;
 mod persistence;
+
+pub use bui::serve_ui;
+use bui::BuiError;
+
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
@@ -17,18 +22,16 @@ use common::{
     ledger::{LedgerWriter, SubmissionError},
     models::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-        EndActivity, EntityAttach, GenerateEntity, ProvModel, RegisterKey, StartActivity,
+        EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
     vocab::Chronicle as ChronicleVocab,
 };
 
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument, trace};
 
 use user_error::UFE;
 use uuid::Uuid;
-
-mod bui;
 
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
@@ -40,7 +43,7 @@ custom_error! {pub ApiError
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
     CannotFindAttachment{}                                      = "Cannot locate attachment file",
     ApiShutdownRx                                               = "Api shut down before reply",
-    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
+    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send"
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -81,6 +84,7 @@ impl ApiDispatch {
     #[instrument]
     pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
+        trace!(?command, "Dispatch command to api");
         self.tx.clone().send((command, reply_tx)).await?;
 
         reply_rx.recv().await.ok_or(ApiError::ApiShutdownRx {})?
@@ -111,7 +115,6 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
-
             local.spawn_local(async move {
                 let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
                 let store = Store::new(&*database_url).unwrap();
@@ -123,11 +126,22 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                     store,
                     uuidsource: Box::new(uuidgen),
                 };
+
+                debug!(?api, "Api running on localset");
+
                 loop {
                     if let Some((command, reply)) = rx.recv().await {
+                        trace!(?rx, "Recv api command from channel");
                         let result = api.dispatch(command).await;
 
-                        reply.send(result).await.ok();
+                        reply
+                            .send(result)
+                            .await
+                            .map_err(|e| {
+                                error!(?e);
+                                return;
+                            })
+                            .ok();
                     } else {
                         return;
                     }
@@ -240,18 +254,6 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                     .await
             }
             ApiCommand::Query(query) => self.query(query).await,
-            ApiCommand::StartUi {} => {
-                bui::serve_ui(
-                    ApiDispatch {
-                        tx: self.tx.clone(),
-                    },
-                    "localhost:9982",
-                )
-                .await
-                .ok();
-
-                Ok(ApiResponse::Unit)
-            }
         }
     }
 
@@ -542,7 +544,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn agent_publiv_key() {
+    async fn agent_public_key() {
         let api = test_api();
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {

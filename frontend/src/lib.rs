@@ -92,7 +92,6 @@ impl Component for App {
                 { self.view_ready_state() }
                 { self.view_shared() }
                 { self.view_input() }
-                <button onclick=self.link.callback(|_| Msg::Query)>{ "Query" }</button>
             </div>
         }
     }
@@ -101,25 +100,25 @@ impl Component for App {
 impl App {
     fn view_ready_state(&self) -> Html {
         html! {
-            <p>{ format!("Connection State: {:?}", self.es.ready_state()) }</p>
+            <p class="field">{ format!("Connection State: {:?}", self.es.ready_state()) }</p>
         }
     }
 
     fn view_shared(&self) -> Html {
         if let Some(ref value) = self.shared {
             html! {
-                <p>{ format!("{:?}", value) }</p>
+                <p class="field">{ format!("{:?}", value) }</p>
             }
         } else {
             html! {
-                <p>{ "Data hasn't fetched yet." }</p>
+                <p class="field">{ "Data hasn't fetched yet." }</p>
             }
         }
     }
 
     fn view_input(&self) -> Html {
         html! {
-            <button onclick=self.link.callback(|_| Msg::Query) />
+            <button class="button is-link" onclick=self.link.callback(|_| Msg::Query)>{"Query"}</button>
         }
     }
 

@@ -1,6 +1,8 @@
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common::commands::QueryCommand;
 use common::models::ProvModel;
 use parking_lot::RwLock;
 
@@ -55,6 +57,7 @@ fn is_loopback(addr_any: &std::net::SocketAddr) -> bool {
 
 impl WebUi {
     /// Create our app
+    #[instrument(skip(config))]
     async fn new(auth: AccessControl, config: Config, api: ApiDispatch) -> Result<Self, BuiError> {
         // Create our shared state.
         let shared_store = Arc::new(RwLock::new(ChangeTracker::new(ProvModel::default())));
@@ -82,13 +85,27 @@ impl WebUi {
 
         // Create a Stream to handle callbacks from clients.
         inner.set_callback_listener(Box::new(move |msg: CallbackDataAndSession<ApiCommand>| {
+            let (send, recv) = crossbeam::channel::unbounded();
             let mut shared = tracker_arc2.write();
+
             let api = api.clone();
-            let (send, recv) = crossbeam::channel::bounded(1);
 
-            Handle::current().spawn(async move { send.send(api.dispatch(msg.payload).await) });
+            tokio::task::spawn_blocking(|| {
+                debug!(?msg, "Chronicle callback");
+                let rt = tokio::runtime::Handle::current();
 
-            if let Some(response) = recv.recv().map_err(|error| error!(?error)).ok() {
+                rt.block_on(async move {
+                    let result = api.dispatch(msg.payload).await;
+
+                    send.send(result).map_err(|e| error!(?e)).ok();
+                });
+            });
+
+            let response = recv.recv().map_err(|error| error!(?error));
+
+            if let Ok(response) = response {
+                debug!(?response, "Api response");
+
                 response
                     .map_err(|error| error!(?error))
                     .map(|response| match response {
@@ -125,14 +142,16 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
     let bui = WebUi::new(auth, config, api.clone()).await?;
 
     // Clone our shared data to move it into a closure later.
-    let _tracker_arc = bui.inner.shared_arc().clone();
+    let tracker_arc = bui.inner.shared_arc().clone();
 
     // Create a stream to call our closure every second.
     let mut interval_stream = tokio::time::interval(std::time::Duration::from_millis(1000));
-
+    let api = api.clone();
     let stream_future = async move {
         loop {
             interval_stream.tick().await;
+
+            debug!("Tick");
         }
     };
 

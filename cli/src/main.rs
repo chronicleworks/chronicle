@@ -50,10 +50,12 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
         uuid::Uuid::new_v4,
     )?;
 
+    let bui_api = api.clone();
+    if let Some(addr) = options.value_of("ui") {
+        api::serve_ui(bui_api, addr).await.ok();
+    }
+
     let execution = vec![
-        options
-            .value_of("ui")
-            .map(|_addr| api.dispatch(ApiCommand::StartUi {})),
         options.subcommand_matches("namespace").and_then(|m| {
             m.subcommand_matches("create").map(|m| {
                 api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
