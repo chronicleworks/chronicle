@@ -1,9 +1,7 @@
 use common::commands::{ApiCommand, QueryCommand};
-use common::models::ProvModel;
-use wasm_bindgen::prelude::*;
+use common::models::{Agent, ProvModel};
 
-use web_sys::console::log;
-use yew::events::KeyboardEvent;
+use wasm_bindgen::prelude::*;
 use yew::format::Json;
 use yew::prelude::*;
 
@@ -100,7 +98,7 @@ impl Component for App {
 impl App {
     fn view_ready_state(&self) -> Html {
         html! {
-            <p class="field">{ format!("Connection State: {:?}", self.es.ready_state()) }</p>
+            <p class="field">{ format!("Connection: {:?}", self.es.ready_state()) }</p>
         }
     }
 
@@ -143,7 +141,7 @@ impl App {
         match FetchService::fetch_with_options(post_request, options, callback) {
             Ok(task) => Some(task),
             Err(err) => {
-                log::error!("sending message failed with error: {}", err);
+                log::error!("sending message failed : {}", err);
                 None
             }
         }
@@ -151,7 +149,8 @@ impl App {
 }
 
 #[wasm_bindgen(start)]
-pub fn run_app() {
+pub fn main() {
+    console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());
     yew::start_app::<App>();
 }

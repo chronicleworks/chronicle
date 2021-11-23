@@ -141,17 +141,11 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
 
     let bui = WebUi::new(auth, config, api.clone()).await?;
 
-    // Clone our shared data to move it into a closure later.
-    let tracker_arc = bui.inner.shared_arc().clone();
-
     // Create a stream to call our closure every second.
     let mut interval_stream = tokio::time::interval(std::time::Duration::from_millis(1000));
-    let api = api.clone();
     let stream_future = async move {
         loop {
             interval_stream.tick().await;
-
-            debug!("Tick");
         }
     };
 
