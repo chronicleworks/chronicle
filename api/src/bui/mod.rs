@@ -1,8 +1,8 @@
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use std::time::Duration;
 
-use common::commands::QueryCommand;
+
+
 use common::models::ProvModel;
 use parking_lot::RwLock;
 
@@ -10,7 +10,7 @@ use async_change_tracker::ChangeTracker;
 use bui_backend::highlevel::{create_bui_app_inner, BuiAppInner};
 use bui_backend::AccessControl;
 use bui_backend_types::CallbackDataAndSession;
-use tokio::runtime::Handle;
+
 use tracing::{debug, error, instrument};
 
 use crate::{ApiCommand, ApiDispatch, ApiResponse};

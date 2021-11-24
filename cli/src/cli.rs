@@ -32,11 +32,17 @@ pub fn cli() -> App<'static> {
         .arg(
             Arg::new("ui")
                 .long("ui")
-                .default_value("localhost:8884")
-                .value_hint(ValueHint::Url)
+                .required(false)
+                .takes_value(false)
+                .about("Start a web user interface"),
+        )
+        .arg(
+            Arg::new("ui-interface")
+                .long("ui-interface")
                 .required(false)
                 .takes_value(true)
-                .about("Start a web user interface"),
+                .default_value("127.0.0.1:9982")
+                .about("The user interface address"),
         )
         .subcommand(
             App::new("namespace")

@@ -46,6 +46,9 @@ wasm_opt = "version_102"
 [[proxy]]
 backend = "http://127.0.0.1:9982/events"
 
+[[proxy]]
+backend = "http://127.0.0.1:9982/callback"
+
 ## hooks
 # Hooks are optional, and default to `None`.
 # Hooks are executed as part of Trunk's main build pipeline, no matter how it is run.

@@ -4,7 +4,7 @@ extern crate serde_derive;
 mod cli;
 mod config;
 
-use api::{Api, ApiDispatch, ApiError};
+use api::{Api, ApiError};
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
@@ -50,9 +50,13 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
         uuid::Uuid::new_v4,
     )?;
 
-    let bui_api = api.clone();
-    if let Some(addr) = options.value_of("ui") {
-        api::serve_ui(bui_api, addr).await.ok();
+    if options.is_present("ui") {
+        let bui_api = api.clone();
+        api::serve_ui(bui_api, options.value_of("ui-interface").unwrap())
+            .await
+            .ok();
+
+        return Ok(ApiResponse::Unit);
     }
 
     let execution = vec![

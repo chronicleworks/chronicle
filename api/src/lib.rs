@@ -2,12 +2,12 @@ mod bui;
 mod persistence;
 
 pub use bui::serve_ui;
-use bui::BuiError;
+
 
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
-use serde_derive::{Deserialize, Serialize};
+
 
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
@@ -139,7 +139,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                             .await
                             .map_err(|e| {
                                 error!(?e);
-                                return;
+                                
                             })
                             .ok();
                     } else {

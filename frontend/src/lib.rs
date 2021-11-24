@@ -1,7 +1,11 @@
 use common::commands::{ApiCommand, QueryCommand};
-use common::models::{Agent, ProvModel};
+use common::models::ProvModel;
 
 use wasm_bindgen::prelude::*;
+
+use ybc::TileCtx::{Parent};
+use ybc::TileSize::Eight;
+
 use yew::format::Json;
 use yew::prelude::*;
 
@@ -23,6 +27,108 @@ pub enum Msg {
     EsCheckState,
     Ignore,
     Query,
+}
+
+#[derive(Properties, Clone, PartialEq)]
+pub struct AgentProps {
+    agent: common::models::Agent,
+}
+
+pub struct Agent {
+    props: AgentProps,
+}
+
+impl Component for Agent {
+    type Message = ();
+    type Properties = AgentProps;
+
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        Self { props }
+    }
+
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props == props
+    }
+
+    fn view(&self) -> Html {
+        html! {
+            <ybc::Tile ctx=Parent vertical=true size=Eight>
+                <ybc::Panel heading={
+                    html!{
+                        <>
+                            <yew_feather::user::User class="mr-4"/>
+                            {&self.props.agent.name}
+                        </>
+                    }}>
+                </ybc::Panel>
+            </ybc::Tile>
+        }
+    }
+}
+
+#[derive(Properties, Clone, PartialEq)]
+pub struct ActivityProps {
+    activity: common::models::Activity,
+}
+
+pub struct Activity {
+    props: ActivityProps,
+}
+
+impl Component for Activity {
+    type Message = ();
+    type Properties = ActivityProps;
+
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        Self { props }
+    }
+
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props == props
+    }
+
+    fn view(&self) -> Html {
+        html! {
+            <ybc::Tile ctx=Parent vertical=true size=Eight>
+                <ybc::Panel heading={
+                    html!{
+                        <>
+                            <yew_feather::activity::Activity class="mr-4"/>
+                            {&self.props.activity.name}
+                        </>
+                    }}>
+                    <ybc::PanelBlock>
+                        {for self.props.activity.started.map(|started| html!{
+                            <>
+                            <ybc::Subtitle>
+                                {"Started"}
+                            </ybc::Subtitle>
+                            <br/>
+                            {started.to_rfc2822()}
+                            </>
+                        })}
+                        {for self.props.activity.ended.map(|started| html!{
+                            <>
+                            <ybc::Subtitle>
+                                {"Ended"}
+                            </ybc::Subtitle>
+                            <br/>
+                            {started.to_rfc2822()}
+                            </>
+                        })}
+                    </ybc::PanelBlock>
+                </ybc::Panel>
+            </ybc::Tile>
+        }
+    }
 }
 
 impl Component for App {
@@ -55,68 +161,83 @@ impl Component for App {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::EsReady(response) => {
-                match response {
-                    Ok(data_result) => {
-                        self.shared = Some(data_result);
-                    }
-                    Err(e) => {
-                        log::error!("{}", e);
-                    }
-                };
-            }
-            Msg::EsCheckState => {
-                return true;
-            }
-            Msg::Ignore => {
-                return false;
-            }
+            Msg::EsReady(response) => match response {
+                Ok(data_result) => {
+                    self.shared = Some(data_result);
+                    true
+                }
+                Err(e) => {
+                    log::error!("{}", e);
+                    false
+                }
+            },
+            Msg::EsCheckState => true,
+            Msg::Ignore => false,
             Msg::Query => {
                 self.ft = self.send_message(&ApiCommand::Query(QueryCommand {
                     namespace: "default".to_string(),
                 }));
+                false
             }
         }
-        true
     }
 
     fn change(&mut self, _: Self::Properties) -> ShouldRender {
         false
     }
 
+    fn rendered(&mut self, first_render: bool) {
+        if first_render {
+            self.ft = self.send_message(&ApiCommand::Query(QueryCommand {
+                namespace: "default".to_string(),
+            }));
+        }
+    }
+
     fn view(&self) -> Html {
         html! {
-            <div>
-                { self.view_ready_state() }
-                { self.view_shared() }
-                { self.view_input() }
-            </div>
+           <ybc::Container fluid=true>
+            <ybc::Title>{"Agents"}</ybc::Title>
+                {self.view_agents()}
+            <ybc::Title>{"Activities"}</ybc::Title>
+                {self.view_activities()}
+           </ybc::Container>
         }
     }
 }
 
 impl App {
-    fn view_ready_state(&self) -> Html {
-        html! {
-            <p class="field">{ format!("Connection: {:?}", self.es.ready_state()) }</p>
-        }
-    }
-
-    fn view_shared(&self) -> Html {
+    fn view_agents(&self) -> Html {
         if let Some(ref value) = self.shared {
+            let agents = value
+                .agents
+                .values()
+                .map(|agent| html! {<Agent agent={agent.clone()}/>})
+                .collect::<Vec<_>>();
             html! {
-                <p class="field">{ format!("{:?}", value) }</p>
+                <>
+                    {for agents}
+                </>
             }
         } else {
-            html! {
-                <p class="field">{ "Data hasn't fetched yet." }</p>
-            }
+            html! {}
         }
     }
 
-    fn view_input(&self) -> Html {
-        html! {
-            <button class="button is-link" onclick=self.link.callback(|_| Msg::Query)>{"Query"}</button>
+    fn view_activities(&self) -> Html {
+        if let Some(ref value) = self.shared {
+            let activities = value
+                .activities
+                .values()
+                .map(|activity| html! {<Activity activity={activity.clone()}/>})
+                .collect::<Vec<_>>();
+            html! {
+                <>
+                    {for activities}
+                </>
+            }
+        } else {
+            html! {}
         }
     }
 
