@@ -37,6 +37,13 @@ pub fn cli() -> App<'static> {
                 .about("Start a web user interface"),
         )
         .arg(
+            Arg::new("open")
+                .long("open")
+                .required(false)
+                .takes_value(false)
+                .about("Open the default browser for the user interface"),
+        )
+        .arg(
             Arg::new("ui-interface")
                 .long("ui-interface")
                 .required(false)

@@ -1,8 +1,6 @@
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
-
-
 use common::models::ProvModel;
 use parking_lot::RwLock;
 
@@ -124,7 +122,7 @@ impl WebUi {
 }
 
 #[instrument]
-pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
+pub async fn serve_ui(api: ApiDispatch, addr: &str, open: bool) -> Result<(), BuiError> {
     let http_server_addr = address(addr);
 
     // Get our JWT secret.
@@ -144,8 +142,15 @@ pub async fn serve_ui(api: ApiDispatch, addr: &str) -> Result<(), BuiError> {
     // Create a stream to call our closure every second.
     let mut interval_stream = tokio::time::interval(std::time::Duration::from_millis(1000));
     let stream_future = async move {
+        let mut opened = false;
         loop {
             interval_stream.tick().await;
+
+            if open && !opened {
+                debug!(?addr, "Open browser at");
+                open::that(&format!("http://{}", addr)).ok();
+                opened = true;
+            }
         }
     };
 

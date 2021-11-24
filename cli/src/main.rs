@@ -52,9 +52,13 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
 
     if options.is_present("ui") {
         let bui_api = api.clone();
-        api::serve_ui(bui_api, options.value_of("ui-interface").unwrap())
-            .await
-            .ok();
+        api::serve_ui(
+            bui_api,
+            options.value_of("ui-interface").unwrap(),
+            options.is_present("open"),
+        )
+        .await
+        .ok();
 
         return Ok(ApiResponse::Unit);
     }
