@@ -186,10 +186,9 @@ impl ProvModel {
     /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
-    async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
+    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
         json.remove("@context");
         json.insert("@context", crate::context::PROV.clone()).ok();
-        let mut model = ProvModel::default();
 
         let output = json
             .expand::<JsonContext, _>(&mut NoLoader)
@@ -204,22 +203,18 @@ impl ProvModel {
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
             if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
-                self.apply_node_as_agent(&mut model, &o)?;
+                self.apply_node_as_agent(&o)?;
             } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
-                self.apply_node_as_activity(&mut model, &o)?;
+                self.apply_node_as_activity(&o)?;
             } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
-                self.apply_node_as_entity(&mut model, &o)?;
+                self.apply_node_as_entity(&o)?;
             }
         }
 
         Ok(())
     }
 
-    fn apply_node_as_agent(
-        &self,
-        model: &mut ProvModel,
-        agent: &Node,
-    ) -> Result<(), ProcessorError> {
+    fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
         let id = AgentId::new(
             agent
                 .id()
@@ -230,23 +225,19 @@ impl ProvModel {
         );
 
         let namespaceid = extract_namespace(agent)?;
-        model.namespace_context(&namespaceid);
+        self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
-        let publickey = extract_scalar_prop(&Chronicle::HasPublicKey, agent)?
-            .as_str()
-            .map(|x| x.to_owned());
+        let publickey = extract_scalar_prop(&Chronicle::HasPublicKey, agent)
+            .ok()
+            .and_then(|x| x.as_str().map(|x| x.to_string()));
 
-        model.add_agent(Agent::new(id, namespaceid, name, publickey));
+        self.add_agent(Agent::new(id, namespaceid, name, publickey));
 
         Ok(())
     }
 
-    fn apply_node_as_activity(
-        &self,
-        model: &mut ProvModel,
-        activity: &Node,
-    ) -> Result<(), ProcessorError> {
+    fn apply_node_as_activity(&mut self, activity: &Node) -> Result<(), ProcessorError> {
         let id = ActivityId::new(
             activity
                 .id()
@@ -257,7 +248,7 @@ impl ProvModel {
         );
 
         let namespaceid = extract_namespace(activity)?;
-        model.namespace_context(&namespaceid);
+        self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
         let started = extract_scalar_prop(&Prov::StartedAtTime, activity)?
@@ -287,23 +278,19 @@ impl ProvModel {
         }
 
         for entity in used {
-            model.used(activity.id.to_owned(), &entity);
+            self.used(activity.id.to_owned(), &entity);
         }
 
         for agent in wasassociatedwith {
-            model.associate_with(activity.id.to_owned(), &agent);
+            self.associate_with(activity.id.to_owned(), &agent);
         }
 
-        model.add_activity(activity);
+        self.add_activity(activity);
 
         Ok(())
     }
 
-    fn apply_node_as_entity(
-        &self,
-        model: &mut ProvModel,
-        entity: &Node,
-    ) -> Result<(), ProcessorError> {
+    fn apply_node_as_entity(&mut self, entity: &Node) -> Result<(), ProcessorError> {
         let id = EntityId::new(
             entity
                 .id()
@@ -314,7 +301,7 @@ impl ProvModel {
         );
 
         let namespaceid = extract_namespace(entity)?;
-        model.namespace_context(&namespaceid);
+        self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
         let signature = extract_scalar_prop(&Chronicle::Signature, entity)?.as_str();
@@ -346,10 +333,10 @@ impl ProvModel {
             }
         };
         for activity in generatedby {
-            model.generate_by(entity.id().clone(), &activity);
+            self.generate_by(entity.id().clone(), &activity);
         }
 
-        model.add_entity(entity);
+        self.add_entity(entity);
 
         Ok(())
     }

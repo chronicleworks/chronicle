@@ -861,4 +861,78 @@ impl std::ops::Deref for CompactedJson {
 
 /// Property testing of prov models created transactionally and round tripped via JSON / LD
 #[cfg(test)]
-pub mod test {}
+pub mod test {
+    use json::JsonValue;
+    use proptest::prelude::*;
+    use tracing::Level;
+    use uuid::Uuid;
+
+    use crate::{
+        models::{ChronicleTransaction, CreateAgent, ProvModel},
+        vocab::Chronicle,
+    };
+
+    use super::{CompactedJson, Namespace, NamespaceId};
+
+    prop_compose! {
+        fn name()(name in "[-A-Za-z0-9+]+") -> String {
+            name
+        }
+    }
+
+    prop_compose! {
+        fn namespace()
+            (uuid in prop::collection::vec(0..255u8, 16),
+             name in name()) -> NamespaceId {
+            Chronicle::namespace(&name,&Uuid::from_bytes(uuid.as_slice().try_into().unwrap())).into()
+        }
+    }
+
+    prop_compose! {
+        fn create_agent() (name in name(),namespace in namespace()) -> CreateAgent {
+            let id = Chronicle::agent(&name).into();
+            CreateAgent {
+                namespace,
+                name,
+                id,
+            }
+        }
+    }
+
+    fn compact_json(prov: &ProvModel) -> CompactedJson {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async move { prov.to_json().compact().await })
+            .unwrap()
+    }
+
+    fn prov_from_json_ld(json: JsonValue) -> ProvModel {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async move {
+            let mut prov = ProvModel::default();
+            prov.apply_json_ld(json).await.unwrap();
+            prov
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn test_add(agent in create_agent()) {
+            let mut prov = ProvModel::default();
+            prov.apply(&ChronicleTransaction::CreateAgent(agent.clone()));
+
+            prop_assert_eq!(&agent.id, &prov.agents[&agent.id].id);
+            let json = compact_json(&prov).0;
+            let serialized_prov = prov_from_json_ld(json);
+
+            prop_assert_eq!(prov,serialized_prov);
+        }
+    }
+}

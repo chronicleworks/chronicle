@@ -3,7 +3,7 @@ use common::models::ProvModel;
 
 use wasm_bindgen::prelude::*;
 
-use ybc::TileCtx::{Parent};
+use ybc::TileCtx::Parent;
 use ybc::TileSize::Eight;
 
 use yew::format::Json;
@@ -57,7 +57,7 @@ impl Component for Agent {
     fn view(&self) -> Html {
         html! {
             <ybc::Tile ctx=Parent vertical=true size=Eight>
-                <ybc::Panel heading={
+                <ybc::Panel classes={classes!{"is-primary"}} heading={
                     html!{
                         <>
                             <yew_feather::user::User class="mr-4"/>
@@ -98,7 +98,7 @@ impl Component for Activity {
     fn view(&self) -> Html {
         html! {
             <ybc::Tile ctx=Parent vertical=true size=Eight>
-                <ybc::Panel heading={
+                <ybc::Panel classes={classes!{"is-link"}} heading={
                     html!{
                         <>
                             <yew_feather::activity::Activity class="mr-4"/>

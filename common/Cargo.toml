@@ -36,4 +36,5 @@ lazy_static = "1.4.0"
 
 [dev-dependencies]
 proptest = "1.0.0"
+tracing-subscriber = "0.3.2"
 
