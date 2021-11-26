@@ -868,23 +868,29 @@ pub mod test {
     use uuid::Uuid;
 
     use crate::{
-        models::{ChronicleTransaction, CreateAgent, ProvModel},
+        models::{ChronicleTransaction, CreateActivity, CreateAgent, ProvModel, RegisterKey},
         vocab::Chronicle,
     };
 
     use super::{CompactedJson, Namespace, NamespaceId};
 
     prop_compose! {
-        fn name()(name in "[-A-Za-z0-9+]+") -> String {
+        fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
             name
         }
     }
 
+    // Choose from a limited selection of names so that we get multiple references
     prop_compose! {
-        fn namespace()
-            (uuid in prop::collection::vec(0..255u8, 16),
-             name in name()) -> NamespaceId {
-            Chronicle::namespace(&name,&Uuid::from_bytes(uuid.as_slice().try_into().unwrap())).into()
+        fn name()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> String {
+            names.get(index).unwrap().to_owned()
+        }
+    }
+
+    // We skip uuid randomisation here, as it is uninteresting
+    prop_compose! {
+        fn namespace() (name in name()) -> NamespaceId {
+            Chronicle::namespace(&name,&Uuid::default()).into()
         }
     }
 
@@ -897,6 +903,41 @@ pub mod test {
                 id,
             }
         }
+    }
+
+    prop_compose! {
+        fn register_key() (name in name(),namespace in namespace(), publickey in "[0-9a-f]{64}") -> RegisterKey {
+            let id = Chronicle::agent(&name).into();
+            RegisterKey {
+                namespace,
+                name,
+                id,
+                publickey
+            }
+        }
+    }
+
+    prop_compose! {
+        fn create_activity() (name in name(),namespace in namespace()) -> CreateActivity {
+            let id = Chronicle::activity(&name).into();
+            CreateActivity {
+                namespace,
+                name,
+                id,
+            }
+        }
+    }
+
+    fn transaction() -> impl Strategy<Value = ChronicleTransaction> {
+        prop_oneof![
+            1 => create_agent().prop_map(ChronicleTransaction::CreateAgent),
+            1 => register_key().prop_map(ChronicleTransaction::RegisterKey),
+            4 => create_activity().prop_map(ChronicleTransaction::CreateActivity)
+        ]
+    }
+
+    fn transaction_seq() -> impl Strategy<Value = Vec<ChronicleTransaction>> {
+        proptest::collection::vec(transaction(), 1..20)
     }
 
     fn compact_json(prov: &ProvModel) -> CompactedJson {
@@ -924,15 +965,65 @@ pub mod test {
 
     proptest! {
         #[test]
-        fn test_add(agent in create_agent()) {
+        fn test_add(tx in transaction_seq()) {
             let mut prov = ProvModel::default();
-            prov.apply(&ChronicleTransaction::CreateAgent(agent.clone()));
 
-            prop_assert_eq!(&agent.id, &prov.agents[&agent.id].id);
-            let json = compact_json(&prov).0;
-            let serialized_prov = prov_from_json_ld(json);
+            // Apply each transaction in order
+            for tx in tx.iter() {
+                prov.apply(tx);
 
-            prop_assert_eq!(prov,serialized_prov);
+                // Test that serialisation to and from JSON-LD is symmetric at each step
+                let json = compact_json(&prov).0;
+                let serialized_prov = prov_from_json_ld(json);
+
+                prop_assert_eq!(&prov,&serialized_prov);
+            }
+
+            // Now assert the final prov object matches the input transactions
+
+            // Key registration overwrites public key, so we only assert the last one
+            let mut regkey_assertion:  Box<dyn FnOnce()->Result<(), TestCaseError>> = Box::new(|| {Ok(())});
+
+            for tx in tx.iter() {
+                match tx {
+                    ChronicleTransaction::CreateNamespace(_) => todo!(),
+                    ChronicleTransaction::CreateAgent(
+                        CreateAgent { namespace, name, id }) => {
+                        let agent = &prov.agents.get(&id);
+                        prop_assert!(agent.is_some());
+                        let agent = agent.unwrap();
+                        prop_assert_eq!(&agent.name, name);
+                        prop_assert_eq!(&agent.namespaceid, namespace);
+                    },
+                    ChronicleTransaction::RegisterKey(
+                        RegisterKey { namespace, name, id, publickey}) => {
+                            regkey_assertion = Box::new(|| {
+                                let agent = &prov.agents.get(&id.clone());
+                                prop_assert!(agent.is_some());
+                                let agent = agent.unwrap();
+                                prop_assert_eq!(&agent.name, &name.clone());
+                                prop_assert_eq!(&agent.namespaceid, &namespace.clone());
+                                prop_assert!(agent.publickey.is_some());
+                                prop_assert_eq!(&agent.publickey.clone().unwrap(), &publickey.clone());
+                                Ok(())
+                            })
+                        },
+                    ChronicleTransaction::CreateActivity(
+                        CreateActivity { namespace, id, name }) => {
+                        let activity = &prov.activities.get(&id);
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+                        prop_assert_eq!(&activity.name, name);
+                        prop_assert_eq!(&activity.namespaceid, namespace);
+                    },
+                    ChronicleTransaction::StartActivity(_) => todo!(),
+                    ChronicleTransaction::EndActivity(_) => todo!(),
+                    ChronicleTransaction::ActivityUses(_) => todo!(),
+                    ChronicleTransaction::GenerateEntity(_) => todo!(),
+                    ChronicleTransaction::EntityAttach(_) => todo!(),
+                }
+            }
+            (regkey_assertion)()?
         }
     }
 }
