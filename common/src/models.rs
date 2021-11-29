@@ -1045,6 +1045,9 @@ pub mod test {
     }
 
     proptest! {
+       #![proptest_config(ProptestConfig {
+            max_shrink_iters: std::u32::MAX, verbose: 0, .. ProptestConfig::default()
+        })]
         #[test]
         fn test_transactions(tx in transaction_seq()) {
             let mut prov = ProvModel::default();
