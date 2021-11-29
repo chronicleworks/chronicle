@@ -506,19 +506,23 @@ impl ProvModel {
                 time,
             }) => {
                 self.namespace_context(&namespace);
-                if !self.activities.contains_key(&id) {
-                    let activity_name = id.decompose();
-                    let mut activity = Activity::new(id.clone(), namespace.clone(), activity_name);
-                    activity.started = Some(time);
-                    self.activities.insert(id.clone(), activity);
-                }
 
-                if !self.agents.contains_key(&agent) {
-                    let agent_name = agent.decompose();
-                    let agentmodel =
-                        Agent::new(agent.clone(), namespace, agent_name.to_owned(), None);
-                    self.agents.insert(agent.clone(), agentmodel);
-                }
+                // Ensure started <= ended
+                self.activities
+                    .entry(id.clone())
+                    .and_modify(|mut activity| {
+                        match activity.ended {
+                            Some(ended) if ended < time => activity.ended = Some(time),
+                            _ => {}
+                        };
+                        activity.started = Some(time);
+                    })
+                    .or_insert({
+                        let mut activity =
+                            Activity::new(id.clone(), namespace.clone(), id.decompose());
+                        activity.started = Some(time);
+                        activity
+                    });
 
                 self.was_associated_with
                     .entry(id)
@@ -532,19 +536,27 @@ impl ProvModel {
                 time,
             }) => {
                 self.namespace_context(&namespace);
-                if !self.activities.contains_key(&id) {
-                    let activity_name = id.decompose();
-                    let mut activity = Activity::new(id.clone(), namespace.clone(), activity_name);
-                    activity.ended = Some(time);
-                    self.activities.insert(id.clone(), activity);
-                }
 
-                if !self.agents.contains_key(&agent) {
-                    let agent_name = agent.decompose();
-                    let agentmodel =
-                        Agent::new(agent.clone(), namespace, agent_name.to_owned(), None);
-                    self.agents.insert(agent.clone(), agentmodel);
-                }
+                // Set our end data, and also the start date if this is a new resource, or the existing resource does not specify a start time
+                // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
+                // or is greater than the end time
+                self.activities
+                    .entry(id.clone())
+                    .and_modify(|mut activity| {
+                        match activity.started {
+                            None => activity.started = Some(time),
+                            Some(started) if started > time => activity.started = Some(time),
+                            _ => {}
+                        };
+                        activity.ended = Some(time);
+                    })
+                    .or_insert({
+                        let mut activity =
+                            Activity::new(id.clone(), namespace.clone(), id.decompose());
+                        activity.ended = Some(time);
+                        activity.started = Some(time);
+                        activity
+                    });
 
                 self.was_associated_with
                     .entry(id)
@@ -862,17 +874,21 @@ impl std::ops::Deref for CompactedJson {
 /// Property testing of prov models created transactionally and round tripped via JSON / LD
 #[cfg(test)]
 pub mod test {
+    use chrono::Utc;
     use json::JsonValue;
-    use proptest::prelude::*;
+    use proptest::{collection, prelude::*};
     use tracing::Level;
     use uuid::Uuid;
 
     use crate::{
-        models::{ChronicleTransaction, CreateActivity, CreateAgent, ProvModel, RegisterKey},
+        models::{
+            ActivityId, ChronicleTransaction, CreateActivity, CreateAgent, EndActivity, ProvModel,
+            RegisterKey,
+        },
         vocab::Chronicle,
     };
 
-    use super::{CompactedJson, Namespace, NamespaceId};
+    use super::{CompactedJson, Namespace, NamespaceId, StartActivity};
 
     prop_compose! {
         fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
@@ -887,10 +903,18 @@ pub mod test {
         }
     }
 
-    // We skip uuid randomisation here, as it is uninteresting
     prop_compose! {
-        fn namespace() (name in name()) -> NamespaceId {
-            Chronicle::namespace(&name,&Uuid::default()).into()
+        fn a_namespace()
+            (uuid in prop::collection::vec(0..255u8, 16),
+             name in name()) -> NamespaceId {
+            Chronicle::namespace(&name,&Uuid::from_bytes(uuid.as_slice().try_into().unwrap())).into()
+        }
+    }
+
+    // Choose from a limited selection of namespaces so that we get multiple references
+    prop_compose! {
+        fn namespace()(namespaces in prop::collection::vec(a_namespace(), 2), index in (0..2usize)) -> NamespaceId {
+            namespaces.get(index).unwrap().to_owned()
         }
     }
 
@@ -928,6 +952,38 @@ pub mod test {
         }
     }
 
+    // Create times for start between 2-1 years in the past, to ensure start <= end
+    prop_compose! {
+        fn start_activity() (name in name(),namespace in namespace(), offset in (0..10)) -> StartActivity {
+            let id = Chronicle::activity(&name).into();
+
+            let today = Utc::today().and_hms_micro(0, 0,0,0);
+
+            StartActivity {
+                namespace,
+                agent: Chronicle::agent(&name).into(),
+                id,
+                time: today - chrono::Duration::days(offset as _)
+            }
+        }
+    }
+
+    // Create times for start between 2-1 years in the past, to ensure start <= end
+    prop_compose! {
+        fn end_activity() (name in name(),namespace in namespace(), offset in (0..10)) -> EndActivity {
+            let id = Chronicle::activity(&name).into();
+
+            let today = Utc::today().and_hms_micro(0, 0,0,0);
+
+            EndActivity {
+                namespace,
+                agent: Chronicle::agent(&name).into(),
+                id,
+                time: today - chrono::Duration::days(offset as _)
+            }
+        }
+    }
+
     fn transaction() -> impl Strategy<Value = ChronicleTransaction> {
         prop_oneof![
             1 => create_agent().prop_map(ChronicleTransaction::CreateAgent),
@@ -937,7 +993,7 @@ pub mod test {
     }
 
     fn transaction_seq() -> impl Strategy<Value = Vec<ChronicleTransaction>> {
-        proptest::collection::vec(transaction(), 1..20)
+        proptest::collection::vec(transaction(), 1..50)
     }
 
     fn compact_json(prov: &ProvModel) -> CompactedJson {
@@ -965,18 +1021,12 @@ pub mod test {
 
     proptest! {
         #[test]
-        fn test_add(tx in transaction_seq()) {
+        fn test_transactions(tx in transaction_seq()) {
             let mut prov = ProvModel::default();
 
             // Apply each transaction in order
             for tx in tx.iter() {
                 prov.apply(tx);
-
-                // Test that serialisation to and from JSON-LD is symmetric at each step
-                let json = compact_json(&prov).0;
-                let serialized_prov = prov_from_json_ld(json);
-
-                prop_assert_eq!(&prov,&serialized_prov);
             }
 
             // Now assert the final prov object matches the input transactions
@@ -1016,14 +1066,45 @@ pub mod test {
                         prop_assert_eq!(&activity.name, name);
                         prop_assert_eq!(&activity.namespaceid, namespace);
                     },
-                    ChronicleTransaction::StartActivity(_) => todo!(),
-                    ChronicleTransaction::EndActivity(_) => todo!(),
+                    ChronicleTransaction::StartActivity(
+                        StartActivity { namespace, id, agent, time }) =>  {
+                        let activity = &prov.activities.get(&id);
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+                        prop_assert_eq!(&activity.name, id.decompose());
+                        prop_assert_eq!(&activity.namespaceid, namespace);
+
+                        prop_assert!(activity.started == Some(time.to_owned()));
+                        prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
+
+                        prop_assert!(prov.was_associated_with.get(&id).unwrap().contains(&agent));
+                    },
+                    ChronicleTransaction::EndActivity(
+                        EndActivity { namespace, id, agent, time }) => {
+                        let activity = &prov.activities.get(&id);
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+                        prop_assert_eq!(&activity.name, id.decompose());
+                        prop_assert_eq!(&activity.namespaceid, namespace);
+
+                        prop_assert!(activity.ended == Some(time.to_owned()));
+                        prop_assert!(activity.started.unwrap() <= *time);
+
+                        prop_assert!(prov.was_associated_with.get(&id).unwrap().contains(&agent));
+                    }
                     ChronicleTransaction::ActivityUses(_) => todo!(),
                     ChronicleTransaction::GenerateEntity(_) => todo!(),
                     ChronicleTransaction::EntityAttach(_) => todo!(),
                 }
             }
-            (regkey_assertion)()?
+            (regkey_assertion)()?;
+
+
+            // Test that serialisation to and from JSON-LD is symmetric at each step
+            let json = compact_json(&prov).0;
+            let serialized_prov = prov_from_json_ld(json);
+
+            prop_assert_eq!(&prov,&serialized_prov, "Prov reserialisation");
         }
     }
 }

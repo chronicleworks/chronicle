@@ -68,7 +68,7 @@ custom_error! {pub ProcessorError
     Expansion{inner: String} = "Json Ld Error",
     Tokio{source: JoinError} = "Tokio Error",
     MissingId{object: JsonValue} = "Missing @id",
-    MissingProperty{object: JsonValue} = "Missing property",
+    MissingProperty{iri: String, object: JsonValue} = "Missing property",
     NotANode{} = "Json LD object is not a node",
     Time{source: chrono::ParseError} = "Unparsable date/time",
     Json{source: json::JsonError} = "Malformed JSON",
@@ -251,13 +251,13 @@ impl ProvModel {
         self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
-        let started = extract_scalar_prop(&Prov::StartedAtTime, activity)?
-            .as_str()
-            .map(DateTime::parse_from_rfc3339);
+        let started = extract_scalar_prop(&Prov::StartedAtTime, activity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
 
-        let ended = extract_scalar_prop(&Prov::EndedAtTime, activity)?
-            .as_str()
-            .map(DateTime::parse_from_rfc3339);
+        let ended = extract_scalar_prop(&Prov::EndedAtTime, activity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
 
         let used = extract_reference_ids(&Prov::Used, activity)?
             .into_iter()
@@ -304,11 +304,17 @@ impl ProvModel {
         self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
-        let signature = extract_scalar_prop(&Chronicle::Signature, entity)?.as_str();
-        let signature_time = extract_scalar_prop(&Chronicle::Signature, entity)?
-            .as_str()
-            .map(DateTime::parse_from_rfc3339);
-        let locator = extract_scalar_prop(&Chronicle::Signature, entity)?.as_str();
+        let signature = extract_scalar_prop(&Chronicle::Signature, entity)
+            .ok()
+            .and_then(|x| x.as_str());
+
+        let signature_time = extract_scalar_prop(&Chronicle::Signature, entity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
+
+        let locator = extract_scalar_prop(&Chronicle::Signature, entity)
+            .ok()
+            .and_then(|x| x.as_str());
 
         let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
             .into_iter()
@@ -369,6 +375,7 @@ fn extract_scalar_prop<'a>(
 ) -> Result<&'a Indexed<json_ld::object::Object>, ProcessorError> {
     node.get_any(&Reference::Id(iri.as_iri().into()))
         .ok_or_else(|| ProcessorError::MissingProperty {
+            iri: iri.as_iri().as_str().to_string(),
             object: node.as_json(),
         })
 }
