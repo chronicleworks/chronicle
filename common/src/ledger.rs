@@ -267,7 +267,7 @@ impl ProvModel {
             .into_iter()
             .map(|id| AgentId::new(id.as_str()));
 
-        let mut activity = Activity::new(id, namespaceid, &name);
+        let mut activity = Activity::new(id, namespaceid.clone(), &name);
 
         if let Some(started) = started {
             activity.started = Some(DateTime::<Utc>::from(started?));
@@ -278,11 +278,11 @@ impl ProvModel {
         }
 
         for entity in used {
-            self.used(activity.id.to_owned(), &entity);
+            self.used(namespaceid.clone(), activity.id.to_owned(), &entity);
         }
 
         for agent in wasassociatedwith {
-            self.associate_with(activity.id.to_owned(), &agent);
+            self.associate_with(namespaceid.clone(), activity.id.to_owned(), &agent);
         }
 
         self.add_activity(activity);
@@ -324,7 +324,7 @@ impl ProvModel {
             if let (Some(signature), Some(signature_time)) = (signature, signature_time) {
                 Entity::Signed {
                     name,
-                    namespaceid,
+                    namespaceid: namespaceid.clone(),
                     id,
                     signature: signature.to_owned(),
                     locator: locator.map(|x| x.to_owned()),
@@ -333,13 +333,13 @@ impl ProvModel {
             } else {
                 Entity::Unsigned {
                     name,
-                    namespaceid,
+                    namespaceid: namespaceid.clone(),
                     id,
                 }
             }
         };
         for activity in generatedby {
-            self.generate_by(entity.id().clone(), &activity);
+            self.generate_by(namespaceid.clone(), entity.id().clone(), &activity);
         }
 
         self.add_entity(entity);
@@ -400,18 +400,18 @@ impl ChronicleTransaction {
         model
             .entities
             .iter()
-            .map(|(id, o)| (id.to_string(), o.namespaceid()))
+            .map(|((_, id), o)| (id.to_string(), o.namespaceid()))
             .chain(
                 model
                     .activities
                     .iter()
-                    .map(|(id, o)| (id.to_string(), &o.namespaceid)),
+                    .map(|((_, id), o)| (id.to_string(), &o.namespaceid)),
             )
             .chain(
                 model
                     .agents
                     .iter()
-                    .map(|(id, o)| (id.to_string(), &o.namespaceid)),
+                    .map(|((_, id), o)| (id.to_string(), &o.namespaceid)),
             )
             .map(|(resource, namespace)| LedgerAddress {
                 resource,
