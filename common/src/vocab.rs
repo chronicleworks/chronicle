@@ -20,7 +20,7 @@ pub enum Prov {
     WasAttributedTo,
     #[iri("prov:startedAtTime")]
     StartedAtTime,
-    #[iri("prov:EndedAtTime")]
+    #[iri("prov:endedAtTime")]
     EndedAtTime,
 }
 

@@ -23,6 +23,7 @@ use serde::Serialize;
 use tokio::task::JoinError;
 use tracing::{debug, instrument};
 
+use crate::commands::NamespaceCommand;
 use crate::models::{
     Activity, ActivityId, Agent, AgentId, ChronicleTransaction, CompactionError, Entity, EntityId,
     NamespaceId, ProvModel,
@@ -202,6 +203,9 @@ impl ProvModel {
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
+            if o.has_type(&Reference::Id(Chronicle::NamespaceType.as_iri().into())) {
+                self.apply_node_as_namespace(&o)?;
+            }
             if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
                 self.apply_node_as_agent(&o)?;
             } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
@@ -214,6 +218,15 @@ impl ProvModel {
         Ok(())
     }
 
+    fn apply_node_as_namespace(&mut self, ns: &Node) -> Result<(), ProcessorError> {
+        let ns = ns.id().ok_or_else(|| ProcessorError::MissingId {
+            object: ns.as_json(),
+        })?;
+
+        self.namespace_context(&NamespaceId::new(ns.as_str()));
+
+        Ok(())
+    }
     fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
         let id = AgentId::new(
             agent
