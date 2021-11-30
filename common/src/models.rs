@@ -521,6 +521,15 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
 
+                self.agents
+                    .entry((namespace.clone(), agent.clone()))
+                    .or_insert(Agent::new(
+                        agent.clone(),
+                        namespace.clone(),
+                        agent.decompose().to_owned(),
+                        None,
+                    ));
+
                 // Ensure started <= ended
                 self.activities
                     .entry((namespace.clone(), id.clone()))
@@ -547,6 +556,15 @@ impl ProvModel {
                 time,
             }) => {
                 self.namespace_context(&namespace);
+
+                self.agents
+                    .entry((namespace.clone(), agent.clone()))
+                    .or_insert(Agent::new(
+                        agent.clone(),
+                        namespace.clone(),
+                        agent.decompose().to_owned(),
+                        None,
+                    ));
 
                 // Set our end data, and also the start date if this is a new resource, or the existing resource does not specify a start time
                 // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
@@ -899,19 +917,20 @@ impl std::ops::Deref for CompactedJson {
 pub mod test {
     use chrono::Utc;
     use json::JsonValue;
+    use pretty_assertions::{assert_eq, assert_ne};
     use proptest::{collection, prelude::*};
     use tracing::Level;
     use uuid::Uuid;
 
     use crate::{
         models::{
-            ActivityId, ChronicleTransaction, CreateActivity, CreateAgent, EndActivity, ProvModel,
-            RegisterKey,
+            ActivityId, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
+            EndActivity, GenerateEntity, ProvModel, RegisterKey,
         },
         vocab::Chronicle,
     };
 
-    use super::{CompactedJson, Namespace, NamespaceId, StartActivity};
+    use super::{ActivityUses, CompactedJson, EntityAttach, Namespace, NamespaceId, StartActivity};
 
     prop_compose! {
         fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
@@ -938,6 +957,17 @@ pub mod test {
     prop_compose! {
         fn namespace()(namespaces in prop::collection::vec(a_namespace(), 2), index in (0..2usize)) -> NamespaceId {
             namespaces.get(index).unwrap().to_owned()
+        }
+    }
+
+    prop_compose! {
+        fn create_namespace()(id in namespace()) -> CreateNamespace {
+            let (name,uuid) = id.decompose();
+            CreateNamespace {
+                id: id.clone(),
+                uuid,
+                name: name.to_owned(),
+            }
         }
     }
 
@@ -1007,13 +1037,69 @@ pub mod test {
         }
     }
 
+    prop_compose! {
+        fn activity_uses() (activity_name in name(), entity_name in name(),namespace in namespace()) -> ActivityUses {
+            let activity = Chronicle::activity(&activity_name).into();
+            let id = Chronicle::entity(&entity_name).into();
+
+
+            ActivityUses {
+                namespace,
+                id,
+                activity
+            }
+        }
+    }
+
+    prop_compose! {
+        fn generate_entity() (activity_name in name(), entity_name in name(),namespace in namespace()) -> GenerateEntity {
+            let activity = Chronicle::activity(&activity_name).into();
+            let id = Chronicle::entity(&entity_name).into();
+
+
+            GenerateEntity {
+                namespace,
+                id,
+                activity
+            }
+        }
+    }
+
+    prop_compose! {
+        fn entity_attach() (
+            offset in (0..10u32),
+            signature in "[0-9a-f]{64}",
+            locator in proptest::option::of(any::<String>()),
+            agent_name in name(),
+            name in name(),
+            namespace in namespace()) -> EntityAttach {
+            let id = Chronicle::entity(&name).into();
+            let agent = Chronicle::agent(&agent_name).into();
+
+            let signature_time = Utc::today().and_hms_micro(offset, 0,0,0);
+
+            EntityAttach {
+                namespace,
+                id,
+                locator,
+                agent,
+                signature,
+                signature_time
+            }
+        }
+    }
+
     fn transaction() -> impl Strategy<Value = ChronicleTransaction> {
         prop_oneof![
-            1 => create_agent().prop_map(ChronicleTransaction::CreateAgent),
-            1 => register_key().prop_map(ChronicleTransaction::RegisterKey),
+            1 => create_namespace().prop_map(ChronicleTransaction::CreateNamespace),
+            2 => create_agent().prop_map(ChronicleTransaction::CreateAgent),
+            2 => register_key().prop_map(ChronicleTransaction::RegisterKey),
             4 => create_activity().prop_map(ChronicleTransaction::CreateActivity),
             4 => start_activity().prop_map(ChronicleTransaction::StartActivity),
             4 => end_activity().prop_map(ChronicleTransaction::EndActivity),
+            4 => activity_uses().prop_map(ChronicleTransaction::ActivityUses),
+            4 => generate_entity().prop_map(ChronicleTransaction::GenerateEntity),
+            2 => entity_attach().prop_map(ChronicleTransaction::EntityAttach),
         ]
     }
 
@@ -1057,21 +1143,27 @@ pub mod test {
                 prov.apply(tx);
             }
 
-            // Now assert the final prov object matches the input transactions
-
             // Key registration overwrites public key, so we only assert the last one
             let mut regkey_assertion:  Box<dyn FnOnce()->Result<(), TestCaseError>> = Box::new(|| {Ok(())});
 
+
+            // Now assert the final prov object matches what we would expect from the input transactions
             for tx in tx.iter() {
                 match tx {
-                    ChronicleTransaction::CreateNamespace(_) => todo!(),
+                    ChronicleTransaction::CreateNamespace(CreateNamespace{id,name,uuid}) => {
+                        prop_assert!(prov.namespaces.contains_key(id));
+                        let ns = prov.namespaces.get(&id).unwrap();
+                        assert_eq!(&ns.id, id);
+                        assert_eq!(&ns.name, name);
+                        assert_eq!(&ns.uuid, uuid);
+                    },
                     ChronicleTransaction::CreateAgent(
                         CreateAgent { namespace, name, id }) => {
                         let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(agent.is_some());
                         let agent = agent.unwrap();
-                        prop_assert_eq!(&agent.name, name);
-                        prop_assert_eq!(&agent.namespaceid, namespace);
+                        assert_eq!(&agent.name, name);
+                        assert_eq!(&agent.namespaceid, namespace);
                     },
                     ChronicleTransaction::RegisterKey(
                         RegisterKey { namespace, name, id, publickey}) => {
@@ -1079,10 +1171,10 @@ pub mod test {
                                 let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
                                 prop_assert!(agent.is_some());
                                 let agent = agent.unwrap();
-                                prop_assert_eq!(&agent.name, &name.clone());
-                                prop_assert_eq!(&agent.namespaceid, &namespace.clone());
+                                assert_eq!(&agent.name, &name.clone());
+                                assert_eq!(&agent.namespaceid, &namespace.clone());
                                 prop_assert!(agent.publickey.is_some());
-                                prop_assert_eq!(&agent.publickey.clone().unwrap(), &publickey.clone());
+                                assert_eq!(&agent.publickey.clone().unwrap(), &publickey.clone());
                                 Ok(())
                             })
                         },
@@ -1091,16 +1183,16 @@ pub mod test {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                         prop_assert!(activity.is_some());
                         let activity = activity.unwrap();
-                        prop_assert_eq!(&activity.name, name);
-                        prop_assert_eq!(&activity.namespaceid, namespace);
+                        assert_eq!(&activity.name, name);
+                        assert_eq!(&activity.namespaceid, namespace);
                     },
                     ChronicleTransaction::StartActivity(
                         StartActivity { namespace, id, agent, time }) =>  {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                         prop_assert!(activity.is_some());
                         let activity = activity.unwrap();
-                        prop_assert_eq!(&activity.name, id.decompose());
-                        prop_assert_eq!(&activity.namespaceid, namespace);
+                        assert_eq!(&activity.name, id.decompose());
+                        assert_eq!(&activity.namespaceid, namespace);
 
                         prop_assert!(activity.started == Some(time.to_owned()));
                         prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
@@ -1115,8 +1207,8 @@ pub mod test {
                         let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(activity.is_some());
                         let activity = activity.unwrap();
-                        prop_assert_eq!(&activity.name, id.decompose());
-                        prop_assert_eq!(&activity.namespaceid, namespace);
+                        assert_eq!(&activity.name, id.decompose());
+                        assert_eq!(&activity.namespaceid, namespace);
 
                         prop_assert!(activity.ended == Some(time.to_owned()));
                         prop_assert!(activity.started.unwrap() <= *time);
@@ -1126,9 +1218,67 @@ pub mod test {
                             .unwrap()
                             .contains(&(namespace.to_owned(),agent.to_owned())));
                     }
-                    ChronicleTransaction::ActivityUses(_) => todo!(),
-                    ChronicleTransaction::GenerateEntity(_) => todo!(),
-                    ChronicleTransaction::EntityAttach(_) => todo!(),
+                    ChronicleTransaction::ActivityUses(
+                        ActivityUses { namespace, id, activity }) => {
+                        let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(entity.is_some());
+                        let entity = entity.unwrap();
+                        assert_eq!(&entity.name(), &id.decompose());
+                        assert_eq!(&entity.namespaceid(), &namespace);
+
+                        let activity = &prov.activities.get(&(namespace.to_owned(),activity.to_owned()));
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+                        assert_eq!(&activity.name, &id.decompose());
+                        assert_eq!(&activity.namespaceid, namespace);
+
+                        prop_assert!(prov.used.get(
+                            &(namespace.clone(),activity.id.clone()))
+                            .unwrap()
+                            .contains(&(namespace.to_owned(),id.to_owned())));
+
+                    },
+                    ChronicleTransaction::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
+                        let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(entity.is_some());
+                        let entity = entity.unwrap();
+                        assert_eq!(&entity.name(), &id.decompose());
+                        assert_eq!(&entity.namespaceid(), &namespace);
+
+                        let activity = &prov.activities.get(&(namespace.to_owned(),activity.to_owned()));
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+                        assert_eq!(&activity.name, &id.decompose());
+                        assert_eq!(&activity.namespaceid, namespace);
+
+                        prop_assert!(prov.was_generated_by.get(
+                            &(namespace.clone(),id.clone()))
+                            .unwrap()
+                            .contains(&(namespace.to_owned(),activity.id.to_owned())));
+                    }
+                    ChronicleTransaction::EntityAttach(
+                        EntityAttach{
+                        namespace,
+                        id,
+                        locator,
+                        agent,
+                        signature,
+                        signature_time
+                    }) =>  {
+                        let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(entity.is_some());
+                        let entity = entity.unwrap();
+                        assert_eq!(&entity.name(), &id.decompose());
+                        assert_eq!(&entity.namespaceid(), &namespace);
+
+                        let agent = &prov.agents.get(&(namespace.to_owned(),agent.to_owned()));
+                        prop_assert!(agent.is_some());
+                        let agent = agent.unwrap();
+                        assert_eq!(&agent.name, &id.decompose());
+                        assert_eq!(&agent.namespaceid, namespace);
+
+                        prop_assert!(locator.is_some());
+                    },
                 }
             }
             (regkey_assertion)()?;
@@ -1136,9 +1286,9 @@ pub mod test {
 
             // Test that serialisation to and from JSON-LD is symmetric
             let json = compact_json(&prov).0;
-            let serialized_prov = prov_from_json_ld(json);
+            let serialized_prov = prov_from_json_ld(json.clone());
 
-            prop_assert_eq!(&prov,&serialized_prov, "Prov reserialisation");
+            assert_eq!(&prov,&serialized_prov,"Prov reserialisation {} ",json)
         }
     }
 }

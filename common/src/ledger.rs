@@ -263,7 +263,7 @@ impl ProvModel {
             .into_iter()
             .map(|id| EntityId::new(id.as_str()));
 
-        let wasassociatedwith = extract_reference_ids(&Prov::Used, activity)?
+        let wasassociatedwith = extract_reference_ids(&Prov::WasAssociatedWith, activity)?
             .into_iter()
             .map(|id| AgentId::new(id.as_str()));
 
