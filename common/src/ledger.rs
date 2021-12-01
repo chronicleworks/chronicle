@@ -321,11 +321,11 @@ impl ProvModel {
             .ok()
             .and_then(|x| x.as_str());
 
-        let signature_time = extract_scalar_prop(&Chronicle::Signature, entity)
+        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, entity)
             .ok()
             .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
 
-        let locator = extract_scalar_prop(&Chronicle::Signature, entity)
+        let locator = extract_scalar_prop(&Chronicle::Locator, entity)
             .ok()
             .and_then(|x| x.as_str());
 
