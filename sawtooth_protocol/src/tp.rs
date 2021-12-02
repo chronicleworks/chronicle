@@ -1,5 +1,5 @@
 use crate::address::{SawtoothAddress, PREFIX};
-use common::{ledger::StateInput, models::ChronicleTransaction};
+use common::{ledger::StateInput, prov::ChronicleTransaction};
 
 use k256::ecdsa::VerifyingKey;
 

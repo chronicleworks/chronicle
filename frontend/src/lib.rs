@@ -1,5 +1,5 @@
 use common::commands::{ApiCommand, QueryCommand};
-use common::models::ProvModel;
+use common::prov::ProvModel;
 
 use wasm_bindgen::prelude::*;
 
@@ -31,7 +31,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone, PartialEq)]
 pub struct AgentProps {
-    agent: common::models::Agent,
+    agent: common::prov::Agent,
 }
 
 pub struct Agent {
@@ -72,7 +72,7 @@ impl Component for Agent {
 
 #[derive(Properties, Clone, PartialEq)]
 pub struct ActivityProps {
-    activity: common::models::Activity,
+    activity: common::prov::Activity,
 }
 
 pub struct Activity {

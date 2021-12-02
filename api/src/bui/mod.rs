@@ -1,7 +1,7 @@
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
-use common::models::ProvModel;
+use common::prov::ProvModel;
 use parking_lot::RwLock;
 
 use async_change_tracker::ChangeTracker;

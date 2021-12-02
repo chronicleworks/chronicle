@@ -6,6 +6,5 @@ extern crate iref_enum;
 pub mod commands;
 pub mod context;
 pub mod ledger;
-pub mod models;
+pub mod prov;
 pub mod signing;
-pub mod vocab;

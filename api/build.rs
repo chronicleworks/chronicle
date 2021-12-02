@@ -1,6 +1,6 @@
 fn main() -> Result<(), std::io::Error> {
-    use btl::{cd, shell};
-    use std::{env, path::PathBuf};
+    
+    use std::{path::PathBuf};
 
     //let release = env::var("PROFILE").expect("expected PROFILE to be set by Cargo") != "debug";
     //let out_dir = PathBuf::from(env::var("OUT_DIR").expect("expected OUT_DIR to be set by Cargo"));

@@ -3,13 +3,9 @@ use std::{cell::RefCell, collections::HashMap, str::FromStr};
 use chrono::DateTime;
 
 use chrono::Utc;
-use common::models::EntityId;
-use common::{
-    models::{
-        Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, Namespace, NamespaceId,
-        ProvModel,
-    },
-    vocab::Chronicle,
+use common::prov::{
+    vocab::Chronicle, Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId,
+    Namespace, NamespaceId, ProvModel,
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -69,10 +65,10 @@ impl Store {
             let agentid: AgentId = Chronicle::agent(&agent.name).into();
             let namespaceid = self.namespace_by_name(&agent.namespace)?;
             model.agents.insert(
-                agentid.clone(),
+                (namespaceid.clone(), agentid.clone()),
                 Agent {
                     id: agentid.clone(),
-                    namespaceid,
+                    namespaceid: namespaceid.clone(),
                     name: agent.name,
                     publickey: agent.publickey,
                 },
@@ -85,7 +81,7 @@ impl Store {
                 .load_iter::<String>(&mut *self.connection.borrow_mut())?
             {
                 let asoc = asoc?;
-                model.associate_with(Chronicle::activity(&asoc).into(), &agentid);
+                model.associate_with(&namespaceid, &Chronicle::activity(&asoc).into(), &agentid);
             }
         }
 
@@ -99,10 +95,10 @@ impl Store {
             let id: ActivityId = Chronicle::activity(&activity.name).into();
             let namespaceid = self.namespace_by_name(&activity.namespace)?;
             model.activities.insert(
-                id.clone(),
+                (namespaceid.clone(), id.clone()),
                 Activity {
                     id: id.clone(),
-                    namespaceid,
+                    namespaceid: namespaceid.clone(),
                     name: activity.name,
                     started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
                     ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
@@ -116,7 +112,7 @@ impl Store {
                 .load_iter::<String>(&mut *self.connection.borrow_mut())?
             {
                 let asoc = asoc?;
-                model.generate_by(Chronicle::entity(&asoc).into(), &id);
+                model.generate_by(namespaceid.clone(), Chronicle::entity(&asoc).into(), &id);
             }
 
             for used in schema::used::table
@@ -126,7 +122,11 @@ impl Store {
                 .load_iter::<String>(&mut *self.connection.borrow_mut())?
             {
                 let used = used?;
-                model.used(id.clone(), &Chronicle::entity(&used).into());
+                model.used(
+                    namespaceid.clone(),
+                    id.clone(),
+                    &Chronicle::entity(&used).into(),
+                );
             }
         }
 
@@ -138,7 +138,7 @@ impl Store {
             debug!(?entity, "Map entity to prov");
             let id: EntityId = Chronicle::entity(&entity.name).into();
             let namespaceid = self.namespace_by_name(&entity.namespace)?;
-            model.entities.insert(id.clone(), {
+            model.entities.insert((namespaceid.clone(), id.clone()), {
                 match entity {
                     query::Entity {
                         name,
@@ -193,21 +193,21 @@ impl Store {
             self.apply_entity(entity, &model.namespaces)?
         }
 
-        for (activityid, agentid) in model.was_associated_with.iter() {
-            for agentid in agentid {
-                self.apply_was_associated_with(model, activityid, agentid)?;
+        for ((namespaceid, activityid), agentid) in model.was_associated_with.iter() {
+            for (_, agentid) in agentid {
+                self.apply_was_associated_with(model, namespaceid, activityid, agentid)?;
             }
         }
 
-        for (activityid, entityid) in model.used.iter() {
-            for entityid in entityid {
-                self.apply_used(model, activityid, entityid)?;
+        for ((namespaceid, activityid), entityid) in model.used.iter() {
+            for (_, entityid) in entityid {
+                self.apply_used(model, namespaceid, activityid, entityid)?;
             }
         }
 
-        for (entityid, activityid) in model.was_generated_by.iter() {
-            for activityid in activityid {
-                self.apply_was_generated_by(model, entityid, activityid)?;
+        for ((namespaceid, entityid), activityid) in model.was_generated_by.iter() {
+            for (_, activityid) in activityid {
+                self.apply_was_generated_by(model, namespaceid, entityid, activityid)?;
             }
         }
 
@@ -433,7 +433,7 @@ impl Store {
     #[instrument]
     fn apply_entity(
         &self,
-        entity: &common::models::Entity,
+        entity: &common::prov::Entity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::entity::dsl;
@@ -478,21 +478,22 @@ impl Store {
     fn apply_was_associated_with(
         &self,
         model: &ProvModel,
-        activityid: &common::models::ActivityId,
-        agentid: &common::models::AgentId,
+        namespaceid: &common::prov::NamespaceId,
+        activityid: &common::prov::ActivityId,
+        agentid: &common::prov::AgentId,
     ) -> Result<(), StoreError> {
-        let provagent =
-            model
-                .agents
-                .get(agentid)
-                .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
-                    agentid: agentid.clone(),
-                })?;
-        let provactivity = model.activities.get(activityid).ok_or_else(|| {
-            StoreError::ModelDoesNotContainActivity {
+        let provagent = model
+            .agents
+            .get(&(namespaceid.to_owned(), agentid.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
+                agentid: agentid.clone(),
+            })?;
+        let provactivity = model
+            .activities
+            .get(&(namespaceid.to_owned(), activityid.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
                 activityid: activityid.clone(),
-            }
-        })?;
+            })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
             &provactivity.name,
@@ -519,21 +520,22 @@ impl Store {
     fn apply_was_generated_by(
         &self,
         model: &ProvModel,
-        entityid: &common::models::EntityId,
-        activityid: &ActivityId,
+        namespace: &common::prov::NamespaceId,
+        entity: &common::prov::EntityId,
+        activity: &ActivityId,
     ) -> Result<(), StoreError> {
-        let proventity =
-            model
-                .entities
-                .get(entityid)
-                .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                    entityid: entityid.clone(),
-                })?;
-        let provactivity = model.activities.get(activityid).ok_or_else(|| {
-            StoreError::ModelDoesNotContainActivity {
-                activityid: activityid.clone(),
-            }
-        })?;
+        let proventity = model
+            .entities
+            .get(&(namespace.to_owned(), entity.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                entityid: entity.clone(),
+            })?;
+        let provactivity = model
+            .activities
+            .get(&(namespace.to_owned(), activity.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
+                activityid: activity.clone(),
+            })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
             &provactivity.name,
@@ -560,21 +562,22 @@ impl Store {
     fn apply_used(
         &self,
         model: &ProvModel,
-        activityid: &ActivityId,
-        entityid: &common::models::EntityId,
+        namespace: &NamespaceId,
+        activity: &ActivityId,
+        entity: &common::prov::EntityId,
     ) -> Result<(), StoreError> {
-        let proventity =
-            model
-                .entities
-                .get(entityid)
-                .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                    entityid: entityid.clone(),
-                })?;
-        let provactivity = model.activities.get(activityid).ok_or_else(|| {
-            StoreError::ModelDoesNotContainActivity {
-                activityid: activityid.clone(),
-            }
-        })?;
+        let proventity = model
+            .entities
+            .get(&(namespace.to_owned(), entity.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                entityid: entity.clone(),
+            })?;
+        let provactivity = model
+            .activities
+            .get(&(namespace.to_owned(), activity.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
+                activityid: activity.clone(),
+            })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
             &provactivity.name,

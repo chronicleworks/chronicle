@@ -1,184 +1,39 @@
 use chrono::{DateTime, Utc};
-use iref::{AsIri, Iri};
+use custom_error::custom_error;
+use futures::TryFutureExt;
+use iref::{AsIri, Iri, IriBuf};
 use json::{object, JsonValue};
-use json_ld::{context::Local, Document, JsonContext, NoLoader};
+use json_ld::{
+    context::Local, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
+};
 use serde::Serialize;
+use std::{
+    collections::{HashMap, HashSet},
+    convert::Infallible,
+};
 use tokio::task::JoinError;
-
-use std::collections::{hash_map::Entry, HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::vocab::{Chronicle, Prov};
+use super::{
+    vocab::{Chronicle, Prov},
+    ActivityId, AgentId, EntityId, NamespaceId,
+};
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct NamespaceId(String);
-
-impl std::ops::Deref for NamespaceId {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+custom_error! {pub ProcessorError
+    Compaction{source: CompactionError} = "Json Ld Error",
+    Expansion{inner: String} = "Json Ld Error",
+    Tokio{source: JoinError} = "Tokio Error",
+    MissingId{object: JsonValue} = "Missing @id",
+    MissingProperty{iri: String, object: JsonValue} = "Missing property",
+    NotANode{} = "Json LD object is not a node",
+    Time{source: chrono::ParseError} = "Unparsable date/time",
+    Json{source: json::JsonError} = "Malformed JSON",
+    Utf8{source: std::str::Utf8Error} = "State is not valid utf8",
 }
 
-impl NamespaceId {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        NamespaceId(s.as_ref().to_owned())
-    }
-    /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
-    pub fn decompose(&self) -> (&str, Uuid) {
-        if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
-            return (name, Uuid::parse_str(uuid).unwrap());
-        }
-
-        unreachable!();
-    }
-}
-
-impl<S> From<S> for NamespaceId
-where
-    S: AsIri,
-{
-    fn from(iri: S) -> Self {
-        Self(iri.as_iri().to_string())
-    }
-}
-
-impl Into<String> for NamespaceId {
-    fn into(self) -> String {
-        self.0
-    }
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct EntityId(String);
-
-impl std::ops::Deref for EntityId {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<S> From<S> for EntityId
-where
-    S: AsIri,
-{
-    fn from(iri: S) -> Self {
-        Self(iri.as_iri().to_string())
-    }
-}
-
-impl Into<String> for EntityId {
-    fn into(self) -> String {
-        self.0
-    }
-}
-
-impl EntityId {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        Self(s.as_ref().to_owned())
-    }
-    /// Extract the activity name from an id
-    pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
-            return name;
-        }
-
-        unreachable!();
-    }
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct AgentId(String);
-
-impl Into<String> for AgentId {
-    fn into(self) -> String {
-        self.0
-    }
-}
-
-impl std::ops::Deref for AgentId {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl AgentId {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        Self(s.as_ref().to_owned())
-    }
-    /// Extract the agent name from an id
-    pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
-            return name;
-        }
-
-        unreachable!();
-    }
-}
-
-impl<S> From<S> for AgentId
-where
-    S: AsIri,
-{
-    fn from(iri: S) -> Self {
-        Self(iri.as_iri().to_string())
-    }
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct ActivityId(String);
-
-impl Into<String> for ActivityId {
-    fn into(self) -> String {
-        self.0
-    }
-}
-
-impl std::ops::Deref for ActivityId {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl ActivityId {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        Self(s.as_ref().to_owned())
-    }
-    /// Extract the activity name from an id
-    pub fn decompose(&self) -> &str {
-        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
-            return name;
-        }
-
-        unreachable!();
-    }
-}
-
-impl<S> From<S> for ActivityId
-where
-    S: AsIri,
-{
-    fn from(iri: S) -> Self {
-        Self(iri.as_iri().to_string())
+impl From<Infallible> for ProcessorError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
     }
 }
 
@@ -252,6 +107,13 @@ pub struct EntityAttach {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub enum Subtype {
+    Entity { id: EntityId, subtype: String },
+    Agent { id: AgentId, subtype: String },
+    Activity { id: ActivityId, subtype: String },
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum ChronicleTransaction {
     CreateNamespace(CreateNamespace),
     CreateAgent(CreateAgent),
@@ -262,6 +124,7 @@ pub enum ChronicleTransaction {
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
     EntityAttach(EntityAttach),
+    Subtype(Subtype),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -421,14 +284,14 @@ impl ProvModel {
 
     pub fn associate_with(
         &mut self,
-        namespace: NamespaceId,
-        activity: ActivityId,
+        namespace: &NamespaceId,
+        activity: &ActivityId,
         agent: &AgentId,
     ) {
         self.was_associated_with
-            .entry((namespace.clone(), activity))
+            .entry((namespace.clone(), activity.clone()))
             .or_insert(HashSet::new())
-            .insert((namespace, agent.clone()));
+            .insert((namespace.to_owned(), agent.clone()));
     }
 
     pub fn generate_by(&mut self, namespace: NamespaceId, entity: EntityId, activity: &ActivityId) {
@@ -463,7 +326,11 @@ impl ProvModel {
     pub fn apply(&mut self, tx: &ChronicleTransaction) {
         let tx = tx.to_owned();
         match tx {
-            ChronicleTransaction::CreateNamespace(CreateNamespace { id, name, uuid }) => {
+            ChronicleTransaction::CreateNamespace(CreateNamespace {
+                id,
+                name: _,
+                uuid: _,
+            }) => {
                 self.namespace_context(&id);
             }
             ChronicleTransaction::CreateAgent(CreateAgent {
@@ -485,14 +352,11 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
 
-                if !self.agents.contains_key(&(namespace.clone(), id.clone())) {
-                    self.agents.insert(
-                        (namespace.clone(), id.clone()),
-                        Agent::new(id.clone(), namespace.clone(), name, None),
-                    );
-                }
                 self.agents
-                    .get_mut(&(namespace.clone(), id.clone()))
+                    .entry((namespace.clone(), id.clone()))
+                    .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None));
+                self.agents
+                    .get_mut(&(namespace.clone(), id))
                     .map(|x| x.publickey = Some(publickey));
             }
             ChronicleTransaction::CreateActivity(CreateActivity {
@@ -502,15 +366,9 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
 
-                if !self
-                    .activities
-                    .contains_key(&(namespace.clone(), id.clone()))
-                {
-                    self.activities.insert(
-                        (namespace.clone(), id.clone()),
-                        Activity::new(id, namespace, &name),
-                    );
-                }
+                self.activities
+                    .entry((namespace.clone(), id.clone()))
+                    .or_insert_with(|| Activity::new(id, namespace, &name));
             }
             ChronicleTransaction::StartActivity(StartActivity {
                 namespace,
@@ -546,7 +404,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(namespace.clone(), id.clone(), &agent);
+                self.associate_with(&namespace, &id, &agent);
             }
             ChronicleTransaction::EndActivity(EndActivity {
                 namespace,
@@ -586,7 +444,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(namespace.clone(), id.clone(), &agent);
+                self.associate_with(&namespace, &id, &agent);
             }
             ChronicleTransaction::ActivityUses(ActivityUses {
                 namespace,
@@ -670,6 +528,7 @@ impl ProvModel {
 
                 self.add_entity(unsigned.sign(signature, locator, signature_time));
             }
+            ChronicleTransaction::Subtype(_) => todo!(),
         };
     }
 
@@ -710,7 +569,7 @@ impl ProvModel {
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(agent.namespaceid.0.clone()),
+                "@id": JsonValue::String(agent.namespaceid.to_string()),
             });
 
             agentdoc
@@ -778,7 +637,7 @@ impl ProvModel {
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(activity.namespaceid.0.clone()),
+                "@id": JsonValue::String(activity.namespaceid.to_string()),
             });
 
             activitydoc
@@ -842,7 +701,7 @@ impl ProvModel {
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(entity.namespaceid().0.clone()),
+                "@id": JsonValue::String(entity.namespaceid().to_string()),
             });
 
             entitydoc
@@ -853,6 +712,182 @@ impl ProvModel {
         }
 
         ExpandedJson(doc.into())
+    }
+
+    /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
+    /// Replace @context with our resource context
+    /// We rely on reified @types, so subclassing must also include supertypes
+    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
+        json.remove("@context");
+        json.insert("@context", crate::context::PROV.clone()).ok();
+
+        let output = json
+            .expand::<JsonContext, _>(&mut NoLoader)
+            .map_err(|e| ProcessorError::Expansion {
+                inner: e.to_string(),
+            })
+            .await?;
+
+        for o in output {
+            let o = o
+                .try_cast::<Node>()
+                .map_err(|_| ProcessorError::NotANode {})?
+                .into_inner();
+            if o.has_type(&Reference::Id(Chronicle::NamespaceType.as_iri().into())) {
+                self.apply_node_as_namespace(&o)?;
+            }
+            if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
+                self.apply_node_as_agent(&o)?;
+            } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
+                self.apply_node_as_activity(&o)?;
+            } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
+                self.apply_node_as_entity(&o)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn apply_node_as_namespace(&mut self, ns: &Node) -> Result<(), ProcessorError> {
+        let ns = ns.id().ok_or_else(|| ProcessorError::MissingId {
+            object: ns.as_json(),
+        })?;
+
+        self.namespace_context(&NamespaceId::new(ns.as_str()));
+
+        Ok(())
+    }
+    fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
+        let id = AgentId::new(
+            agent
+                .id()
+                .ok_or_else(|| ProcessorError::MissingId {
+                    object: agent.as_json(),
+                })?
+                .to_string(),
+        );
+
+        let namespaceid = extract_namespace(agent)?;
+        self.namespace_context(&namespaceid);
+        let name = id.decompose().to_owned();
+
+        let publickey = extract_scalar_prop(&Chronicle::HasPublicKey, agent)
+            .ok()
+            .and_then(|x| x.as_str().map(|x| x.to_string()));
+
+        self.add_agent(Agent::new(id, namespaceid, name, publickey));
+
+        Ok(())
+    }
+
+    fn apply_node_as_activity(&mut self, activity: &Node) -> Result<(), ProcessorError> {
+        let id = ActivityId::new(
+            activity
+                .id()
+                .ok_or_else(|| ProcessorError::MissingId {
+                    object: activity.as_json(),
+                })?
+                .to_string(),
+        );
+
+        let namespaceid = extract_namespace(activity)?;
+        self.namespace_context(&namespaceid);
+        let name = id.decompose().to_owned();
+
+        let started = extract_scalar_prop(&Prov::StartedAtTime, activity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
+
+        let ended = extract_scalar_prop(&Prov::EndedAtTime, activity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
+
+        let used = extract_reference_ids(&Prov::Used, activity)?
+            .into_iter()
+            .map(|id| EntityId::new(id.as_str()));
+
+        let wasassociatedwith = extract_reference_ids(&Prov::WasAssociatedWith, activity)?
+            .into_iter()
+            .map(|id| AgentId::new(id.as_str()));
+
+        let mut activity = Activity::new(id, namespaceid.clone(), &name);
+
+        if let Some(started) = started {
+            activity.started = Some(DateTime::<Utc>::from(started?));
+        }
+
+        if let Some(ended) = ended {
+            activity.ended = Some(DateTime::<Utc>::from(ended?));
+        }
+
+        for entity in used {
+            self.used(namespaceid.clone(), activity.id.to_owned(), &entity);
+        }
+
+        for agent in wasassociatedwith {
+            self.associate_with(&namespaceid, &activity.id, &agent);
+        }
+
+        self.add_activity(activity);
+
+        Ok(())
+    }
+
+    fn apply_node_as_entity(&mut self, entity: &Node) -> Result<(), ProcessorError> {
+        let id = EntityId::new(
+            entity
+                .id()
+                .ok_or_else(|| ProcessorError::MissingId {
+                    object: entity.as_json(),
+                })?
+                .to_string(),
+        );
+
+        let namespaceid = extract_namespace(entity)?;
+        self.namespace_context(&namespaceid);
+        let name = id.decompose().to_owned();
+
+        let signature = extract_scalar_prop(&Chronicle::Signature, entity)
+            .ok()
+            .and_then(|x| x.as_str());
+
+        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, entity)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
+
+        let locator = extract_scalar_prop(&Chronicle::Locator, entity)
+            .ok()
+            .and_then(|x| x.as_str());
+
+        let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
+            .into_iter()
+            .map(|id| ActivityId::new(id.as_str()));
+
+        let entity = {
+            if let (Some(signature), Some(signature_time)) = (signature, signature_time) {
+                Entity::Signed {
+                    name,
+                    namespaceid: namespaceid.clone(),
+                    id,
+                    signature: signature.to_owned(),
+                    locator: locator.map(|x| x.to_owned()),
+                    signature_time: DateTime::<Utc>::from(signature_time?),
+                }
+            } else {
+                Entity::Unsigned {
+                    name,
+                    namespaceid: namespaceid.clone(),
+                    id,
+                }
+            }
+        };
+        for activity in generatedby {
+            self.generate_by(namespaceid.clone(), entity.id().clone(), &activity);
+        }
+
+        self.add_entity(entity);
+
+        Ok(())
     }
 
     pub(crate) fn add_agent(&mut self, agent: Agent) {
@@ -871,6 +906,49 @@ impl ProvModel {
         self.entities
             .insert((entity.namespaceid().clone(), entity.id().clone()), entity);
     }
+}
+
+fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, ProcessorError> {
+    let ids: Result<Vec<_>, _> = node
+        .get(&Reference::Id(iri.as_iri().into()))
+        .map(|o| {
+            o.id().ok_or_else(|| ProcessorError::MissingId {
+                object: node.as_json(),
+            })
+        })
+        .map(|id| {
+            id.and_then(|id| {
+                id.as_iri().ok_or_else(|| ProcessorError::MissingId {
+                    object: node.as_json(),
+                })
+            })
+        })
+        .map(|id| id.map(|id| id.to_owned()))
+        .collect();
+
+    ids
+}
+
+fn extract_scalar_prop<'a>(
+    iri: &dyn AsIri,
+    node: &'a Node,
+) -> Result<&'a Indexed<json_ld::object::Object>, ProcessorError> {
+    node.get_any(&Reference::Id(iri.as_iri().into()))
+        .ok_or_else(|| ProcessorError::MissingProperty {
+            iri: iri.as_iri().as_str().to_string(),
+            object: node.as_json(),
+        })
+}
+
+fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
+    Ok(NamespaceId::new(
+        extract_scalar_prop(&Chronicle::HasNamespace, agent)?
+            .id()
+            .ok_or(ProcessorError::MissingId {
+                object: agent.as_json(),
+            })?
+            .to_string(),
+    ))
 }
 
 custom_error::custom_error! {pub CompactionError
@@ -916,19 +994,16 @@ impl std::ops::Deref for CompactedJson {
 pub mod test {
     use chrono::Utc;
     use json::JsonValue;
-    use proptest::{collection, prelude::*};
-    use tracing::Level;
+    use proptest::prelude::*;
+
     use uuid::Uuid;
 
-    use crate::{
-        models::{
-            ActivityId, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-            EndActivity, GenerateEntity, ProvModel, RegisterKey,
-        },
-        vocab::Chronicle,
+    use crate::prov::{
+        vocab::Chronicle, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
+        EndActivity, GenerateEntity, ProvModel, RegisterKey,
     };
 
-    use super::{ActivityUses, CompactedJson, EntityAttach, Namespace, NamespaceId, StartActivity};
+    use super::{ActivityUses, CompactedJson, EntityAttach, NamespaceId, StartActivity};
 
     prop_compose! {
         fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
@@ -1149,7 +1224,7 @@ pub mod test {
                 match tx {
                     ChronicleTransaction::CreateNamespace(CreateNamespace{id,name,uuid}) => {
                         prop_assert!(prov.namespaces.contains_key(id));
-                        let ns = prov.namespaces.get(&id).unwrap();
+                        let ns = prov.namespaces.get(id).unwrap();
                         prop_assert_eq!(&ns.id, id);
                         prop_assert_eq!(&ns.name, name);
                         prop_assert_eq!(&ns.uuid, uuid);
@@ -1259,10 +1334,10 @@ pub mod test {
                         EntityAttach{
                         namespace,
                         id,
-                        locator,
+                        locator: _,
                         agent,
-                        signature,
-                        signature_time
+                        signature: _,
+                        signature_time: _
                     }) =>  {
                         let agent_id = agent;
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
@@ -1278,6 +1353,7 @@ pub mod test {
                         prop_assert_eq!(&agent.namespaceid, namespace);
 
                     },
+                    ChronicleTransaction::Subtype(_) => todo!()
                 }
             }
             (regkey_assertion)()?;

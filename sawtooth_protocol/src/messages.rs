@@ -1,4 +1,4 @@
-use common::models::ChronicleTransaction;
+use common::prov::ChronicleTransaction;
 use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
 use k256::{

@@ -13,7 +13,7 @@ use std::{
     string::FromUtf8Error,
 };
 
-use crate::models::AgentId;
+use crate::prov::AgentId;
 
 custom_error! {pub SignerError
     Io{source: std::io::Error}                              = "Invalid key store directory",

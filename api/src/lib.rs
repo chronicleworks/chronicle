@@ -3,11 +3,9 @@ mod persistence;
 
 pub use bui::serve_ui;
 
-
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
-
 
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
@@ -20,12 +18,12 @@ use tokio::sync::mpsc::{self, error::SendError, Sender};
 use common::{
     commands::*,
     ledger::{LedgerWriter, SubmissionError},
-    models::{
+    prov::vocab::Chronicle as ChronicleVocab,
+    prov::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
-    vocab::Chronicle as ChronicleVocab,
 };
 
 use tracing::{debug, error, instrument, trace};
@@ -139,7 +137,6 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                             .await
                             .map_err(|e| {
                                 error!(?e);
-                                
                             })
                             .ok();
                     } else {

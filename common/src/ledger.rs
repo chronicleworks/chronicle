@@ -1,34 +1,13 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::convert::Infallible;
-
-use std::fmt::Display;
-use std::slice::SliceIndex;
-use std::str::from_utf8;
-
-use chrono::{DateTime, Utc};
-use custom_error::custom_error;
-
-use futures::{FutureExt, Stream, TryFutureExt};
-use iref::{AsIri, IriBuf};
-
+use futures::Stream;
 use json::JsonValue;
-
-use json_ld::util::AsJson;
-use json_ld::{Document, JsonContext, NoLoader};
-use json_ld::{Indexed, Node, Reference};
 use serde::ser::SerializeSeq;
-use serde::Serialize;
-
-use tokio::task::JoinError;
 use tracing::{debug, instrument};
 
-use crate::commands::NamespaceCommand;
-use crate::models::{
-    Activity, ActivityId, Agent, AgentId, ChronicleTransaction, CompactionError, Entity, EntityId,
-    NamespaceId, ProvModel,
-};
-use crate::vocab::{Chronicle, Prov};
+use crate::prov::{ChronicleTransaction, NamespaceId, ProcessorError, ProvModel};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::str::from_utf8;
 
 #[derive(Debug)]
 pub enum SubmissionError {
@@ -64,24 +43,6 @@ impl std::error::Error for SubmissionError {
     }
 }
 
-custom_error! {pub ProcessorError
-    Compaction{source: CompactionError} = "Json Ld Error",
-    Expansion{inner: String} = "Json Ld Error",
-    Tokio{source: JoinError} = "Tokio Error",
-    MissingId{object: JsonValue} = "Missing @id",
-    MissingProperty{iri: String, object: JsonValue} = "Missing property",
-    NotANode{} = "Json LD object is not a node",
-    Time{source: chrono::ParseError} = "Unparsable date/time",
-    Json{source: json::JsonError} = "Malformed JSON",
-    Utf8{source: std::str::Utf8Error} = "State is not valid utf8",
-}
-
-impl From<Infallible> for ProcessorError {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
-    }
-}
-
 #[async_trait::async_trait(?Send)]
 pub trait LedgerWriter {
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
@@ -99,7 +60,7 @@ pub struct InMemLedger {
 
 /// An inefficient serialiser implementation for an in memory ledger, used for snapshot assertions of ledger state,
 /// <v4 of json-ld doesn't use serde_json for whatever reason, so we reconstruct the ledger as a serde json map
-impl Serialize for InMemLedger {
+impl serde::Serialize for InMemLedger {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -183,226 +144,7 @@ impl StateOutput {
 }
 
 /// A prov model represented as one or more JSON-LD documents
-impl ProvModel {
-    /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
-    /// Replace @context with our resource context
-    /// We rely on reified @types, so subclassing must also include supertypes
-    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
-        json.remove("@context");
-        json.insert("@context", crate::context::PROV.clone()).ok();
-
-        let output = json
-            .expand::<JsonContext, _>(&mut NoLoader)
-            .map_err(|e| ProcessorError::Expansion {
-                inner: e.to_string(),
-            })
-            .await?;
-
-        for o in output {
-            let o = o
-                .try_cast::<Node>()
-                .map_err(|_| ProcessorError::NotANode {})?
-                .into_inner();
-            if o.has_type(&Reference::Id(Chronicle::NamespaceType.as_iri().into())) {
-                self.apply_node_as_namespace(&o)?;
-            }
-            if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
-                self.apply_node_as_agent(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
-                self.apply_node_as_activity(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
-                self.apply_node_as_entity(&o)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn apply_node_as_namespace(&mut self, ns: &Node) -> Result<(), ProcessorError> {
-        let ns = ns.id().ok_or_else(|| ProcessorError::MissingId {
-            object: ns.as_json(),
-        })?;
-
-        self.namespace_context(&NamespaceId::new(ns.as_str()));
-
-        Ok(())
-    }
-    fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
-        let id = AgentId::new(
-            agent
-                .id()
-                .ok_or_else(|| ProcessorError::MissingId {
-                    object: agent.as_json(),
-                })?
-                .to_string(),
-        );
-
-        let namespaceid = extract_namespace(agent)?;
-        self.namespace_context(&namespaceid);
-        let name = id.decompose().to_owned();
-
-        let publickey = extract_scalar_prop(&Chronicle::HasPublicKey, agent)
-            .ok()
-            .and_then(|x| x.as_str().map(|x| x.to_string()));
-
-        self.add_agent(Agent::new(id, namespaceid, name, publickey));
-
-        Ok(())
-    }
-
-    fn apply_node_as_activity(&mut self, activity: &Node) -> Result<(), ProcessorError> {
-        let id = ActivityId::new(
-            activity
-                .id()
-                .ok_or_else(|| ProcessorError::MissingId {
-                    object: activity.as_json(),
-                })?
-                .to_string(),
-        );
-
-        let namespaceid = extract_namespace(activity)?;
-        self.namespace_context(&namespaceid);
-        let name = id.decompose().to_owned();
-
-        let started = extract_scalar_prop(&Prov::StartedAtTime, activity)
-            .ok()
-            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
-
-        let ended = extract_scalar_prop(&Prov::EndedAtTime, activity)
-            .ok()
-            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
-
-        let used = extract_reference_ids(&Prov::Used, activity)?
-            .into_iter()
-            .map(|id| EntityId::new(id.as_str()));
-
-        let wasassociatedwith = extract_reference_ids(&Prov::WasAssociatedWith, activity)?
-            .into_iter()
-            .map(|id| AgentId::new(id.as_str()));
-
-        let mut activity = Activity::new(id, namespaceid.clone(), &name);
-
-        if let Some(started) = started {
-            activity.started = Some(DateTime::<Utc>::from(started?));
-        }
-
-        if let Some(ended) = ended {
-            activity.ended = Some(DateTime::<Utc>::from(ended?));
-        }
-
-        for entity in used {
-            self.used(namespaceid.clone(), activity.id.to_owned(), &entity);
-        }
-
-        for agent in wasassociatedwith {
-            self.associate_with(namespaceid.clone(), activity.id.to_owned(), &agent);
-        }
-
-        self.add_activity(activity);
-
-        Ok(())
-    }
-
-    fn apply_node_as_entity(&mut self, entity: &Node) -> Result<(), ProcessorError> {
-        let id = EntityId::new(
-            entity
-                .id()
-                .ok_or_else(|| ProcessorError::MissingId {
-                    object: entity.as_json(),
-                })?
-                .to_string(),
-        );
-
-        let namespaceid = extract_namespace(entity)?;
-        self.namespace_context(&namespaceid);
-        let name = id.decompose().to_owned();
-
-        let signature = extract_scalar_prop(&Chronicle::Signature, entity)
-            .ok()
-            .and_then(|x| x.as_str());
-
-        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, entity)
-            .ok()
-            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
-
-        let locator = extract_scalar_prop(&Chronicle::Locator, entity)
-            .ok()
-            .and_then(|x| x.as_str());
-
-        let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
-            .into_iter()
-            .map(|id| ActivityId::new(id.as_str()));
-
-        let entity = {
-            if let (Some(signature), Some(signature_time)) = (signature, signature_time) {
-                Entity::Signed {
-                    name,
-                    namespaceid: namespaceid.clone(),
-                    id,
-                    signature: signature.to_owned(),
-                    locator: locator.map(|x| x.to_owned()),
-                    signature_time: DateTime::<Utc>::from(signature_time?),
-                }
-            } else {
-                Entity::Unsigned {
-                    name,
-                    namespaceid: namespaceid.clone(),
-                    id,
-                }
-            }
-        };
-        for activity in generatedby {
-            self.generate_by(namespaceid.clone(), entity.id().clone(), &activity);
-        }
-
-        self.add_entity(entity);
-
-        Ok(())
-    }
-}
-
-fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, ProcessorError> {
-    let ids: Result<Vec<_>, _> = node
-        .get(&Reference::Id(iri.as_iri().into()))
-        .map(|o| {
-            o.id().ok_or_else(|| ProcessorError::MissingId {
-                object: node.as_json(),
-            })
-        })
-        .map(|id| {
-            id.and_then(|id| {
-                id.as_iri().ok_or_else(|| ProcessorError::MissingId {
-                    object: node.as_json(),
-                })
-            })
-        })
-        .map(|id| id.map(|id| id.to_owned()))
-        .collect();
-
-    ids
-}
-
-fn extract_scalar_prop<'a>(
-    iri: &dyn AsIri,
-    node: &'a Node,
-) -> Result<&'a Indexed<json_ld::object::Object>, ProcessorError> {
-    node.get_any(&Reference::Id(iri.as_iri().into()))
-        .ok_or_else(|| ProcessorError::MissingProperty {
-            iri: iri.as_iri().as_str().to_string(),
-            object: node.as_json(),
-        })
-}
-
-fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
-    Ok(NamespaceId::new(
-        extract_scalar_prop(&Chronicle::HasNamespace, agent)?
-            .id()
-            .ok_or(ProcessorError::MissingId {
-                object: agent.as_json(),
-            })?
-            .to_string(),
-    ))
-}
+impl ProvModel {}
 
 impl ChronicleTransaction {
     /// Compute dependencies for a chronicle transaction, input and output addresses are always symmetric

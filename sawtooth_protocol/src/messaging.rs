@@ -1,7 +1,7 @@
 use crate::messages::MessageBuilder;
 
 use common::ledger::{LedgerWriter, SubmissionError};
-use common::models::ChronicleTransaction;
+use common::prov::ChronicleTransaction;
 use custom_error::*;
 use derivative::Derivative;
 use k256::ecdsa::SigningKey;
