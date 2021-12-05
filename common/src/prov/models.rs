@@ -8,6 +8,7 @@ use json_ld::{
 };
 use serde::Serialize;
 use std::{
+    any::Any,
     collections::{HashMap, HashSet},
     convert::Infallible,
 };
@@ -16,7 +17,7 @@ use uuid::Uuid;
 
 use super::{
     vocab::{Chronicle, Prov},
-    ActivityId, AgentId, EntityId, NamespaceId,
+    ActivityId, AgentId, DomaintypeId, EntityId, NamespaceId,
 };
 
 custom_error! {pub ProcessorError
@@ -107,10 +108,22 @@ pub struct EntityAttach {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum Subtype {
-    Entity { id: EntityId, subtype: String },
-    Agent { id: AgentId, subtype: String },
-    Activity { id: ActivityId, subtype: String },
+pub enum Domaintype {
+    Entity {
+        namespace: NamespaceId,
+        id: EntityId,
+        domaintype: Option<DomaintypeId>,
+    },
+    Agent {
+        namespace: NamespaceId,
+        id: AgentId,
+        domaintype: Option<DomaintypeId>,
+    },
+    Activity {
+        namespace: NamespaceId,
+        id: ActivityId,
+        domaintype: Option<DomaintypeId>,
+    },
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -124,7 +137,7 @@ pub enum ChronicleTransaction {
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
     EntityAttach(EntityAttach),
-    Subtype(Subtype),
+    Domaintype(Domaintype),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +158,7 @@ pub struct Agent {
     pub id: AgentId,
     pub namespaceid: NamespaceId,
     pub name: String,
+    pub domaintypeid: Option<DomaintypeId>,
     pub publickey: Option<String>,
 }
 
@@ -154,12 +168,14 @@ impl Agent {
         namespaceid: NamespaceId,
         name: String,
         publickey: Option<String>,
+        domaintypeid: Option<DomaintypeId>,
     ) -> Self {
         Self {
             id,
             namespaceid,
             name,
             publickey,
+            domaintypeid,
         }
     }
 }
@@ -169,18 +185,25 @@ pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
     pub name: String,
+    pub domaintypeid: Option<DomaintypeId>,
     pub started: Option<DateTime<Utc>>,
     pub ended: Option<DateTime<Utc>>,
 }
 
 impl Activity {
-    pub fn new(id: ActivityId, ns: NamespaceId, name: &str) -> Self {
+    pub fn new(
+        id: ActivityId,
+        ns: NamespaceId,
+        name: &str,
+        domaintypeid: Option<DomaintypeId>,
+    ) -> Self {
         Self {
             id,
             namespaceid: ns,
             name: name.to_owned(),
             started: None,
             ended: None,
+            domaintypeid,
         }
     }
 }
@@ -191,11 +214,13 @@ pub enum Entity {
         id: EntityId,
         namespaceid: NamespaceId,
         name: String,
+        domaintypeid: Option<DomaintypeId>,
     },
     Signed {
         id: EntityId,
         namespaceid: NamespaceId,
         name: String,
+        domaintypeid: Option<DomaintypeId>,
         signature: String,
         locator: Option<String>,
         signature_time: DateTime<Utc>,
@@ -203,11 +228,17 @@ pub enum Entity {
 }
 
 impl Entity {
-    pub fn unsigned(id: EntityId, namespaceid: &NamespaceId, name: &str) -> Self {
+    pub fn unsigned(
+        id: EntityId,
+        namespaceid: &NamespaceId,
+        name: &str,
+        domaintypeid: Option<DomaintypeId>,
+    ) -> Self {
         Self::Unsigned {
             id,
             namespaceid: namespaceid.to_owned(),
             name: name.to_owned(),
+            domaintypeid,
         }
     }
 
@@ -228,6 +259,20 @@ impl Entity {
         }
     }
 
+    pub fn domaintypeid(&self) -> &Option<DomaintypeId> {
+        match self {
+            Self::Unsigned { domaintypeid, .. } | Self::Signed { domaintypeid, .. } => domaintypeid,
+        }
+    }
+
+    pub fn set_domaintypeid(&mut self, newtypeid: Option<DomaintypeId>) {
+        match self {
+            Self::Unsigned { domaintypeid, .. } | Self::Signed { domaintypeid, .. } => {
+                *domaintypeid = newtypeid
+            }
+        }
+    }
+
     pub fn sign(
         self,
         signature: String,
@@ -239,11 +284,14 @@ impl Entity {
                 id,
                 namespaceid,
                 name,
+                domaintypeid,
+                ..
             }
             | Self::Signed {
                 id,
                 namespaceid,
                 name,
+                domaintypeid,
                 ..
             } => Self::Signed {
                 id,
@@ -252,6 +300,7 @@ impl Entity {
                 signature,
                 locator,
                 signature_time,
+                domaintypeid,
             },
         }
     }
@@ -341,7 +390,7 @@ impl ProvModel {
                 self.namespace_context(&namespace);
                 self.agents.insert(
                     (namespace.clone(), id.clone()),
-                    Agent::new(id, namespace, name, None),
+                    Agent::new(id, namespace, name, None, None),
                 );
             }
             ChronicleTransaction::RegisterKey(RegisterKey {
@@ -354,7 +403,7 @@ impl ProvModel {
 
                 self.agents
                     .entry((namespace.clone(), id.clone()))
-                    .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None));
+                    .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None, None));
                 self.agents
                     .get_mut(&(namespace.clone(), id))
                     .map(|x| x.publickey = Some(publickey));
@@ -368,7 +417,7 @@ impl ProvModel {
 
                 self.activities
                     .entry((namespace.clone(), id.clone()))
-                    .or_insert_with(|| Activity::new(id, namespace, &name));
+                    .or_insert_with(|| Activity::new(id, namespace, &name, None));
             }
             ChronicleTransaction::StartActivity(StartActivity {
                 namespace,
@@ -385,6 +434,7 @@ impl ProvModel {
                         namespace.clone(),
                         agent.decompose().to_owned(),
                         None,
+                        None,
                     ));
 
                 // Ensure started <= ended
@@ -399,7 +449,7 @@ impl ProvModel {
                     })
                     .or_insert({
                         let mut activity =
-                            Activity::new(id.clone(), namespace.clone(), id.decompose());
+                            Activity::new(id.clone(), namespace.clone(), id.decompose(), None);
                         activity.started = Some(time);
                         activity
                     });
@@ -421,6 +471,7 @@ impl ProvModel {
                         namespace.clone(),
                         agent.decompose().to_owned(),
                         None,
+                        None,
                     ));
 
                 // Set our end data, and also the start date if this is a new resource, or the existing resource does not specify a start time
@@ -438,7 +489,7 @@ impl ProvModel {
                     })
                     .or_insert({
                         let mut activity =
-                            Activity::new(id.clone(), namespace.clone(), id.decompose());
+                            Activity::new(id.clone(), namespace.clone(), id.decompose(), None);
                         activity.ended = Some(time);
                         activity.started = Some(time);
                         activity
@@ -461,13 +512,14 @@ impl ProvModel {
                         activity.clone(),
                         namespace.clone(),
                         activity_name,
+                        None,
                     ));
                 }
 
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
 
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name));
+                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
                 }
 
                 self.used(namespace, activity, &id);
@@ -487,11 +539,12 @@ impl ProvModel {
                         activity.clone(),
                         namespace.clone(),
                         activity_name,
+                        None,
                     ));
                 }
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name));
+                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
                 }
 
                 self.generate_by(namespace, id, &activity)
@@ -508,7 +561,7 @@ impl ProvModel {
 
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name));
+                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
                 }
 
                 if !self
@@ -521,6 +574,7 @@ impl ProvModel {
                         namespace.clone(),
                         agent_name.to_owned(),
                         None,
+                        None,
                     ));
                 }
 
@@ -528,7 +582,62 @@ impl ProvModel {
 
                 self.add_entity(unsigned.sign(signature, locator, signature_time));
             }
-            ChronicleTransaction::Subtype(_) => todo!(),
+            ChronicleTransaction::Domaintype(Domaintype::Entity {
+                namespace,
+                id,
+                domaintype,
+            }) => {
+                self.namespace_context(&namespace);
+
+                self.entities
+                    .entry((namespace.clone(), id.clone()))
+                    .and_modify(|entity| entity.set_domaintypeid(domaintype.clone()))
+                    .or_insert(Entity::unsigned(
+                        id.clone(),
+                        &namespace,
+                        id.decompose(),
+                        domaintype,
+                    ));
+            }
+            ChronicleTransaction::Domaintype(Domaintype::Activity {
+                namespace,
+                id,
+                domaintype,
+            }) => {
+                self.namespace_context(&namespace);
+
+                self.activities
+                    .entry((namespace.clone(), id.clone()))
+                    .and_modify(|mut acitvity| {
+                        acitvity.domaintypeid = domaintype.clone();
+                    })
+                    .or_insert(Activity::new(
+                        id.clone(),
+                        namespace,
+                        id.decompose(),
+                        domaintype,
+                    ));
+            }
+            ChronicleTransaction::Domaintype(Domaintype::Agent {
+                namespace,
+                id,
+                domaintype,
+            }) => {
+                self.namespace_context(&namespace);
+
+                self.agents
+                    .entry((namespace.clone(), id.clone()))
+                    .and_modify(|mut agent| {
+                        agent.domaintypeid = domaintype.clone();
+                    })
+                    .or_insert(Agent::new(
+                        id.clone(),
+                        namespace,
+                        id.decompose().to_string(),
+                        None,
+                        domaintype,
+                    ));
+            }
         };
     }
 
@@ -547,9 +656,13 @@ impl ProvModel {
         }
 
         for ((_, id), agent) in self.agents.iter() {
+            let mut typ = vec![];
+            typ.push(Iri::from(Prov::Agent).to_string());
+            agent.domaintypeid.as_ref().map(|x| typ.push(x.to_string()));
+
             let mut agentdoc = object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Prov::Agent).as_str(),
+                "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": agent.name.as_str(),
                 }]
@@ -580,9 +693,15 @@ impl ProvModel {
         }
 
         for ((namespace, id), activity) in self.activities.iter() {
+            let mut typ = vec![];
+            typ.push(Iri::from(Prov::Activity).to_string());
+            activity
+                .domaintypeid
+                .as_ref()
+                .map(|x| typ.push(x.to_string()));
+
             let mut activitydoc = object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Prov::Activity).as_str(),
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": activity.name.as_str(),
                 }]
@@ -648,9 +767,16 @@ impl ProvModel {
         }
 
         for ((namespace, id), entity) in self.entities.iter() {
+            let mut typ = vec![];
+            typ.push(Iri::from(Prov::Entity).to_string());
+            entity
+                .domaintypeid()
+                .as_ref()
+                .map(|x| typ.push(x.to_string()));
+
             let mut entitydoc = object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Prov::Entity).as_str(),
+                "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": entity.name()
                 }]
@@ -748,6 +874,18 @@ impl ProvModel {
         Ok(())
     }
 
+    /// Extract the types and find the first that is not prov::, as we currently only alow zero or one domain types
+    /// this should be sufficient
+    fn extract_domain_type(node: &Node) -> Result<Option<DomaintypeId>, ProcessorError> {
+        Ok(node
+            .types()
+            .iter()
+            .filter_map(|x| x.as_iri())
+            .filter(|x| x.as_str().contains("domaintype"))
+            .map(|x| x.into())
+            .next())
+    }
+
     fn apply_node_as_namespace(&mut self, ns: &Node) -> Result<(), ProcessorError> {
         let ns = ns.id().ok_or_else(|| ProcessorError::MissingId {
             object: ns.as_json(),
@@ -775,7 +913,11 @@ impl ProvModel {
             .ok()
             .and_then(|x| x.as_str().map(|x| x.to_string()));
 
-        self.add_agent(Agent::new(id, namespaceid, name, publickey));
+        let domaintypeid = Self::extract_domain_type(agent)?;
+
+        let agent = Agent::new(id, namespaceid, name, publickey, domaintypeid);
+
+        self.add_agent(agent);
 
         Ok(())
     }
@@ -810,7 +952,9 @@ impl ProvModel {
             .into_iter()
             .map(|id| AgentId::new(id.as_str()));
 
-        let mut activity = Activity::new(id, namespaceid.clone(), &name);
+        let domaintypeid = Self::extract_domain_type(activity)?;
+
+        let mut activity = Activity::new(id, namespaceid.clone(), &name, domaintypeid);
 
         if let Some(started) = started {
             activity.started = Some(DateTime::<Utc>::from(started?));
@@ -863,6 +1007,8 @@ impl ProvModel {
             .into_iter()
             .map(|id| ActivityId::new(id.as_str()));
 
+        let domaintypeid = Self::extract_domain_type(entity)?;
+
         let entity = {
             if let (Some(signature), Some(signature_time)) = (signature, signature_time) {
                 Entity::Signed {
@@ -872,12 +1018,14 @@ impl ProvModel {
                     signature: signature.to_owned(),
                     locator: locator.map(|x| x.to_owned()),
                     signature_time: DateTime::<Utc>::from(signature_time?),
+                    domaintypeid,
                 }
             } else {
                 Entity::Unsigned {
                     name,
                     namespaceid: namespaceid.clone(),
                     id,
+                    domaintypeid,
                 }
             }
         };
@@ -1000,7 +1148,7 @@ pub mod test {
 
     use crate::prov::{
         vocab::Chronicle, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-        EndActivity, GenerateEntity, ProvModel, RegisterKey,
+        Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel, RegisterKey,
     };
 
     use super::{ActivityUses, CompactedJson, EntityAttach, NamespaceId, StartActivity};
@@ -1015,6 +1163,13 @@ pub mod test {
     prop_compose! {
         fn name()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> String {
             names.get(index).unwrap().to_owned()
+        }
+    }
+
+    // Choose from a limited selection of domain types
+    prop_compose! {
+        fn domain_type_id()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> DomaintypeId {
+            Chronicle::domaintype(&names.get(index).unwrap().to_owned()).into()
         }
     }
 
@@ -1162,6 +1317,37 @@ pub mod test {
         }
     }
 
+    prop_compose! {
+        fn set_domain_type() (name in name(), namespace in namespace()) -> impl Strategy<Value = Domaintype> {
+            let entityname = name.clone();
+            let entityns = namespace.clone();
+
+            let activityname = name.clone();
+            let activityns = namespace.clone();
+
+            let agentname = name.clone();
+            let agentns = namespace.clone();
+
+            prop_oneof![
+                domain_type_id().prop_map(move |domaintypeid| Domaintype::Entity{
+                    id: Chronicle::entity(&entityname).into(),
+                    domaintype: Some(domaintypeid),
+                    namespace:  entityns.clone(),
+                }),
+                domain_type_id().prop_map(move |domaintypeid| Domaintype::Activity{
+                    id: Chronicle::activity(&activityname.clone()).into(),
+                    domaintype: Some(domaintypeid),
+                    namespace: activityns.clone(),
+                }),
+                domain_type_id().prop_map(move |domaintypeid| Domaintype::Agent{
+                    id: Chronicle::agent(&agentname.clone()).into(),
+                    domaintype: Some(domaintypeid),
+                    namespace: agentns.clone()
+                })
+            ]
+        }
+    }
+
     fn transaction() -> impl Strategy<Value = ChronicleTransaction> {
         prop_oneof![
             1 => create_namespace().prop_map(ChronicleTransaction::CreateNamespace),
@@ -1173,6 +1359,7 @@ pub mod test {
             4 => activity_uses().prop_map(ChronicleTransaction::ActivityUses),
             4 => generate_entity().prop_map(ChronicleTransaction::GenerateEntity),
             2 => entity_attach().prop_map(ChronicleTransaction::EntityAttach),
+            2 => set_domain_type().prop_flat_map(|x| x.prop_map(ChronicleTransaction::Domaintype)),
         ]
     }
 
@@ -1353,7 +1540,28 @@ pub mod test {
                         prop_assert_eq!(&agent.namespaceid, namespace);
 
                     },
-                    ChronicleTransaction::Subtype(_) => todo!()
+                    ChronicleTransaction::Domaintype(
+                        Domaintype::Entity  { namespace, id, domaintype }) => {
+                        let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(entity.is_some());
+                        let entity = entity.unwrap();
+
+                        prop_assert_eq!(entity.domaintypeid(), domaintype);
+                    },
+                    ChronicleTransaction::Domaintype(Domaintype::Activity { namespace, id, domaintype }) => {
+                        let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(activity.is_some());
+                        let activity = activity.unwrap();
+
+                        prop_assert_eq!(&activity.domaintypeid, domaintype);
+                    },
+                    ChronicleTransaction::Domaintype(Domaintype::Agent { namespace, id, domaintype }) => {
+                        let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(agent.is_some());
+                        let agent = agent.unwrap();
+
+                        prop_assert_eq!(&agent.domaintypeid, domaintype);
+                    },
                 }
             }
             (regkey_assertion)()?;

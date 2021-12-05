@@ -5,6 +5,7 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
+        domaintype -> Nullable<Text>,
         started -> Nullable<Timestamp>,
         ended -> Nullable<Timestamp>,
     }
@@ -15,6 +16,7 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
+        domaintype -> Nullable<Text>,
         publickey -> Nullable<Text>,
         current -> Integer,
     }
@@ -25,6 +27,7 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         namespace -> Text,
+        domaintype -> Nullable<Text>,
         signature_time -> Nullable<Timestamp>,
         signature -> Nullable<Text>,
         locator -> Nullable<Text>,

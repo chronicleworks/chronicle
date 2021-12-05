@@ -68,4 +68,8 @@ impl Chronicle {
     pub fn entity(name: &str) -> IriBuf {
         IriBuf::new(&format!("{}entity:{}", Self::PREFIX, name)).unwrap()
     }
+
+    pub fn domaintype(name: &str) -> IriBuf {
+        IriBuf::new(&format!("{}domaintype:{}", Self::PREFIX, name)).unwrap()
+    }
 }

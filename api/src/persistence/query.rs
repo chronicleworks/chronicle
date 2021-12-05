@@ -29,6 +29,7 @@ pub struct Agent {
     pub id: i32,
     pub name: String,
     pub namespace: String,
+    pub domaintype: Option<String>,
     pub publickey: Option<String>,
     pub current: i32,
 }
@@ -38,6 +39,7 @@ pub struct Activity {
     pub id: i32,
     pub name: String,
     pub namespace: String,
+    pub domaintype: Option<String>,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
 }
@@ -47,6 +49,7 @@ pub struct Entity {
     pub id: i32,
     pub name: String,
     pub namespace: String,
+    pub domaintype: Option<String>,
     pub signature_time: Option<NaiveDateTime>,
     pub signature: Option<String>,
     pub locator: Option<String>,

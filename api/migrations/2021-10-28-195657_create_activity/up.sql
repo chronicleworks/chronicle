@@ -2,6 +2,7 @@ create table activity (
     id integer primary key not null,
     name text not null,
     namespace text not null,
+    domaintype text,
     started timestamp,
     ended timestamp,
     foreign key(namespace) references namespace(name)
@@ -12,6 +13,7 @@ create table entity (
     id integer primary key not null,
     name text not null,
     namespace text not null,
+    domaintype text,
     signature_time timestamp,
     signature text,
     locator text,

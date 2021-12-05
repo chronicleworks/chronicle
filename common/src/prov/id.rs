@@ -2,6 +2,49 @@ use iref::AsIri;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct DomaintypeId(String);
+
+impl std::ops::Deref for DomaintypeId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DomaintypeId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        DomaintypeId(s.as_ref().to_owned())
+    }
+    /// Decompose a domain type id into its constituent parts, we need to preserve the type better to justify this implementation
+    pub fn decompose(&self) -> (&str, Uuid) {
+        if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
+            return (name, Uuid::parse_str(uuid).unwrap());
+        }
+
+        unreachable!();
+    }
+}
+
+impl<S> From<S> for DomaintypeId
+where
+    S: AsIri,
+{
+    fn from(iri: S) -> Self {
+        Self(iri.as_iri().to_string())
+    }
+}
+
+impl Into<String> for DomaintypeId {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct NamespaceId(String);
 
 impl std::ops::Deref for NamespaceId {
