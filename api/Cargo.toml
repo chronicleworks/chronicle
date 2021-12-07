@@ -8,7 +8,7 @@ build = "build.rs"
 [dependencies]
 custom_error = "1.9.2"
 diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
-diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono"], git = "https://github.com/diesel-rs/diesel" }
+diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono", "r2d2"], git = "https://github.com/diesel-rs/diesel" }
 dotenv = "0.15.0"
 iref = "2.0.3"
 iref-enum = "1.2.0"
@@ -29,9 +29,6 @@ derivative = "2.2.0"
 chrono = "0.4.19"
 multimap = "0.8.3"
 hex = "0.4.3"
-async-change-tracker = "0.3.1"
-bui-backend = "0.12.0"
-bui-backend-types = "0.8.0"
 tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
 parking_lot = "0.11.2"
 includedir = "0.6.0"
@@ -42,23 +39,13 @@ futures = "0.3"
 async-trait = "0.1.51"
 crossbeam = "0.8.1"
 open = "2.0.1"
-
-
-[build-dependencies]
-bui-backend-codegen = "0.9.0"
-bts = "0.3.0"
-btl = "0.3.0"
+async-graphql = "3.0.12"
+warp = "0.3.2"
+async-graphql-warp = "3.0.12"
+r2d2 = "0.8.9"
 
 [dev-dependencies]
 insta = "1.8.0"
 tempfile = "3.2.0"
 tracing-subscriber = "0.3.1"
 trunk = "0.14.0"
-
-
-[features]
-# Bundle files into executable
-bundle_files = ["bui-backend/bundle_files", "bui-backend-codegen/bundle_files"]
-# Serve files from disk at runtime
-serve_files = ["bui-backend/serve_files", "bui-backend-codegen/serve_files"]
-

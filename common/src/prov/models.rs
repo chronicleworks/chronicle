@@ -8,7 +8,6 @@ use json_ld::{
 };
 use serde::Serialize;
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
     convert::Infallible,
 };
@@ -658,7 +657,7 @@ impl ProvModel {
         for ((_, id), agent) in self.agents.iter() {
             let mut typ = vec![];
             typ.push(Iri::from(Prov::Agent).to_string());
-            agent.domaintypeid.as_ref().map(|x| typ.push(x.to_string()));
+            if let Some(x) = agent.domaintypeid.as_ref() { typ.push(x.to_string()) }
 
             let mut agentdoc = object! {
                 "@id": (*id.as_str()),
@@ -695,10 +694,9 @@ impl ProvModel {
         for ((namespace, id), activity) in self.activities.iter() {
             let mut typ = vec![];
             typ.push(Iri::from(Prov::Activity).to_string());
-            activity
+            if let Some(x) = activity
                 .domaintypeid
-                .as_ref()
-                .map(|x| typ.push(x.to_string()));
+                .as_ref() { typ.push(x.to_string()) }
 
             let mut activitydoc = object! {
                 "@id": (*id.as_str()),
@@ -769,10 +767,9 @@ impl ProvModel {
         for ((namespace, id), entity) in self.entities.iter() {
             let mut typ = vec![];
             typ.push(Iri::from(Prov::Entity).to_string());
-            entity
+            if let Some(x) = entity
                 .domaintypeid()
-                .as_ref()
-                .map(|x| typ.push(x.to_string()));
+                .as_ref() { typ.push(x.to_string()) }
 
             let mut entitydoc = object! {
                 "@id": (*id.as_str()),
@@ -1325,8 +1322,8 @@ pub mod test {
             let activityname = name.clone();
             let activityns = namespace.clone();
 
-            let agentname = name.clone();
-            let agentns = namespace.clone();
+            let agentname = name;
+            let agentns = namespace;
 
             prop_oneof![
                 domain_type_id().prop_map(move |domaintypeid| Domaintype::Entity{

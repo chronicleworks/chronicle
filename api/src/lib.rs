@@ -1,17 +1,20 @@
-mod bui;
+mod graphql;
 mod persistence;
-
-pub use bui::serve_ui;
 
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
+use diesel::{r2d2::ConnectionManager, SqliteConnection};
+use futures::{Future, TryFutureExt};
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
+use r2d2::Pool;
 use std::{
     convert::Infallible,
+    net::{AddrParseError, SocketAddr},
     path::{Path, PathBuf},
+    process::Output,
 };
 use tokio::sync::mpsc::{self, error::SendError, Sender};
 
@@ -31,6 +34,8 @@ use tracing::{debug, error, instrument, trace};
 use user_error::UFE;
 use uuid::Uuid;
 
+pub use graphql::serve_graphql;
+
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
     Iri{source: iref::Error}                                    = "Invalid IRI",
@@ -41,7 +46,10 @@ custom_error! {pub ApiError
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
     CannotFindAttachment{}                                      = "Cannot locate attachment file",
     ApiShutdownRx                                               = "Api shut down before reply",
-    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send"
+    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
+    AddressParse{source: AddrParseError}                        = "Invalid socket address",
+    ConnectionPool{source: r2d2::Error}                         = "Connection pool",
+    GraphQlError{source: crate::graphql::GraphQlError}          = "GraphQl",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -66,6 +74,8 @@ where
     keystore: DirectoryStoredKeys,
     #[derivative(Debug = "ignore")]
     ledger: W,
+    #[derivative(Debug = "ignore")]
+    pool: Pool<ConnectionManager<SqliteConnection>>,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
@@ -92,15 +102,20 @@ impl ApiDispatch {
 impl<W: LedgerWriter + 'static + Send> Api<W> {
     #[instrument(skip(ledger, uuidgen))]
     pub fn new<F>(
-        database_url: &str,
+        addr: SocketAddr,
+        dbpath: &str,
         ledger: W,
         secret_path: &Path,
         uuidgen: F,
-    ) -> Result<ApiDispatch, ApiError>
+    ) -> Result<(ApiDispatch, impl Future<Output = Result<(), ApiError>>), ApiError>
     where
         F: Fn() -> Uuid + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+
+        let pool = Pool::builder()
+            .build(ConnectionManager::<SqliteConnection>::new(dbpath))
+            .unwrap();
 
         let dispatch = ApiDispatch { tx: tx.clone() };
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -109,18 +124,21 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             .unwrap();
 
         let secret_path = secret_path.to_owned();
-        let database_url = database_url.to_owned();
+
+        let store = Store::new(pool.clone())?;
+
+        let ql_pool = pool.clone();
 
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
                 let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-                let store = Store::new(&*database_url).unwrap();
 
                 let mut api = Api {
                     tx: tx.clone(),
                     keystore,
                     ledger,
+                    pool,
                     store,
                     uuidsource: Box::new(uuidgen),
                 };
@@ -130,6 +148,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 loop {
                     if let Some((command, reply)) = rx.recv().await {
                         trace!(?rx, "Recv api command from channel");
+
                         let result = api.dispatch(command).await;
 
                         reply
@@ -148,7 +167,10 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             rt.block_on(local)
         });
 
-        Ok(dispatch)
+        Ok((
+            dispatch,
+            graphql::serve_graphql(ql_pool, addr, true).map_err(ApiError::from),
+        ))
     }
 
     pub fn as_ledger(self) -> W {
@@ -475,6 +497,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
 #[cfg(test)]
 mod test {
+    use std::{net::SocketAddr, str::FromStr};
+
     use chrono::{TimeZone, Utc};
     use common::ledger::InMemLedger;
     use tempfile::TempDir;
@@ -495,13 +519,17 @@ mod test {
             .ok();
 
         let secretpath = TempDir::new().unwrap();
-        Api::new(
+
+        let (dispatch, _ui) = Api::new(
+            SocketAddr::from_str("localhost:8080").unwrap(),
             "file::memory:",
             InMemLedger::default(),
             &secretpath.into_path(),
             || Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap(),
         )
-        .unwrap()
+        .unwrap();
+
+        dispatch
     }
 
     fn dump_ledger_state(_api: ApiDispatch) -> InMemLedger {

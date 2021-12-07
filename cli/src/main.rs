@@ -16,10 +16,13 @@ use common::commands::{
 use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
+use tokio::join;
+
 use std::{
     io,
     path::{Path, PathBuf},
 };
+
 use tracing::{error, instrument, Level};
 use user_error::UFE;
 
@@ -43,25 +46,14 @@ fn ledger(_config: &Config) -> Result<common::ledger::InMemLedger, std::convert:
 #[instrument]
 async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     dotenv::dotenv().ok();
-    let api = Api::new(
-        &Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+
+    let (api, ui) = Api::new(
+        options.value_of("ui-interface").unwrap().parse()?,
+        &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         ledger(&config)?,
         &config.secrets.path,
         uuid::Uuid::new_v4,
     )?;
-
-    if options.is_present("ui") {
-        let bui_api = api.clone();
-        api::serve_ui(
-            bui_api,
-            options.value_of("ui-interface").unwrap(),
-            options.is_present("open"),
-        )
-        .await
-        .ok();
-
-        return Ok(ApiResponse::Unit);
-    }
 
     let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {
@@ -177,8 +169,13 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
     .next();
 
     if let Some(execution) = execution {
-        Ok(execution.await?)
+        let (exresult, uiresult) = join![execution, ui];
+
+        uiresult?;
+
+        Ok(exresult?)
     } else {
+        ui.await?;
         Ok(ApiResponse::Unit)
     }
 }

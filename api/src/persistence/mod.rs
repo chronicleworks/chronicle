@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 
 use chrono::DateTime;
 
@@ -9,6 +9,7 @@ use common::prov::{
 };
 use custom_error::custom_error;
 use derivative::*;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::debug;
@@ -18,7 +19,7 @@ use uuid::Uuid;
 use crate::QueryCommand;
 
 mod query;
-mod schema;
+pub(crate) mod schema;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -26,6 +27,7 @@ custom_error! {pub StoreError
     Db{source: diesel::result::Error}                           = "Database operation failed",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
     DbMigration{source: diesel_migrations::MigrationError}      = "Database migration failed",
+    DbPool{source: r2d2::Error}                         = "Connection pool error",
     Uuid{source: uuid::Error}                                   = "Invalid UUID string",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
@@ -38,17 +40,20 @@ custom_error! {pub StoreError
 #[derivative(Debug)]
 pub struct Store {
     #[derivative(Debug = "ignore")]
-    connection: RefCell<SqliteConnection>,
+    pool: Pool<ConnectionManager<SqliteConnection>>,
 }
 
 impl Store {
-    pub fn new(database_url: &str) -> Result<Self, StoreError> {
-        let mut connection = SqliteConnection::establish(database_url)?;
-        connection.run_pending_migrations(MIGRATIONS).unwrap();
+    fn connection(
+        &self,
+    ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
+        Ok(self.pool.get()?)
+    }
 
-        Ok(Store {
-            connection: connection.into(),
-        })
+    pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
+        pool.get()?.run_pending_migrations(MIGRATIONS).unwrap();
+
+        Ok(Store { pool })
     }
 
     ///TODO: any sort of query design, this should fundamentally be for export / streaming into external data pipelines or we will end up with an embedded triple store
@@ -58,7 +63,7 @@ impl Store {
 
         let agents = schema::agent::table
             .filter(schema::agent::namespace.eq(&query.namespace))
-            .load::<query::Agent>(&mut *self.connection.borrow_mut())?;
+            .load::<query::Agent>(&mut self.connection()?)?;
 
         for agent in agents {
             debug!(?agent, "Map agent to prov");
@@ -71,6 +76,7 @@ impl Store {
                     namespaceid: namespaceid.clone(),
                     name: agent.name,
                     publickey: agent.publickey,
+                    domaintypeid: agent.domaintype.map(|x| Chronicle::domaintype(&x).into()),
                 },
             );
 
@@ -78,7 +84,7 @@ impl Store {
                 .filter(schema::wasassociatedwith::agent.eq(agent.id))
                 .inner_join(schema::activity::table)
                 .select(schema::activity::name)
-                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+                .load_iter::<String>(&mut self.connection()?)?
             {
                 let asoc = asoc?;
                 model.associate_with(&namespaceid, &Chronicle::activity(&asoc).into(), &agentid);
@@ -87,7 +93,7 @@ impl Store {
 
         let activities = schema::activity::table
             .filter(schema::activity::namespace.eq(&query.namespace))
-            .load::<query::Activity>(&mut *self.connection.borrow_mut())?;
+            .load::<query::Activity>(&mut self.connection()?)?;
 
         for activity in activities {
             debug!(?activity, "Map activity to prov");
@@ -102,6 +108,9 @@ impl Store {
                     name: activity.name,
                     started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
                     ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
+                    domaintypeid: activity
+                        .domaintype
+                        .map(|x| Chronicle::domaintype(&x).into()),
                 },
             );
 
@@ -109,7 +118,7 @@ impl Store {
                 .filter(schema::wasgeneratedby::activity.eq(activity.id))
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+                .load_iter::<String>(&mut self.connection()?)?
             {
                 let asoc = asoc?;
                 model.generate_by(namespaceid.clone(), Chronicle::entity(&asoc).into(), &id);
@@ -119,7 +128,7 @@ impl Store {
                 .filter(schema::used::activity.eq(activity.id))
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(&mut *self.connection.borrow_mut())?
+                .load_iter::<String>(&mut self.connection()?)?
             {
                 let used = used?;
                 model.used(
@@ -132,7 +141,7 @@ impl Store {
 
         let entites = schema::entity::table
             .filter(schema::entity::namespace.eq(query.namespace))
-            .load::<query::Entity>(&mut *self.connection.borrow_mut())?;
+            .load::<query::Entity>(&mut self.connection()?)?;
 
         for entity in entites {
             debug!(?entity, "Map entity to prov");
@@ -145,6 +154,7 @@ impl Store {
                         signature: Some(signature),
                         locator,
                         signature_time: Some(signature_time),
+                        domaintype,
                         ..
                     } => Entity::Signed {
                         id,
@@ -153,11 +163,15 @@ impl Store {
                         signature,
                         signature_time: DateTime::from_utc(signature_time, Utc),
                         locator,
+                        domaintypeid: domaintype.map(|x| Chronicle::domaintype(&x).into()),
                     },
-                    query::Entity { name, .. } => Entity::Unsigned {
+                    query::Entity {
+                        name, domaintype, ..
+                    } => Entity::Unsigned {
                         id,
                         namespaceid,
                         name,
+                        domaintypeid: domaintype.map(|x| Chronicle::domaintype(&x).into()),
                     },
                 }
             });
@@ -226,7 +240,7 @@ impl Store {
                 name,
                 uuid: &uuid.to_string(),
             })
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -236,7 +250,7 @@ impl Store {
         use self::schema::namespace::dsl as ns;
         let ns = ns::namespace
             .filter(ns::name.eq(namespace))
-            .first::<query::Namespace>(&mut *self.connection.borrow_mut())
+            .first::<query::Namespace>(&mut self.connection()?)
             .optional()?
             .ok_or(StoreError::RecordNotFound {})?;
 
@@ -251,6 +265,7 @@ impl Store {
             namespaceid,
             publickey,
             id: _,
+            domaintypeid,
         }: &Agent,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -262,7 +277,7 @@ impl Store {
                 current: 0,
                 publickey: publickey.as_deref(),
             })
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -276,6 +291,7 @@ impl Store {
             namespaceid,
             started,
             ended,
+            domaintypeid,
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -287,7 +303,7 @@ impl Store {
                 started: started.map(|t| t.naive_utc()),
                 ended: ended.map(|t| t.naive_utc()),
             })
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -296,13 +312,13 @@ impl Store {
         use schema::agent::dsl;
         diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
             .set(dsl::current.eq(0))
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         diesel::update(
             schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
         )
         .set(dsl::current.eq(1))
-        .execute(&mut *self.connection.borrow_mut())?;
+        .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -311,7 +327,7 @@ impl Store {
         use schema::agent::dsl;
         Ok(schema::agent::table
             .filter(dsl::current.ne(0))
-            .first::<query::Agent>(&mut *self.connection.borrow_mut())?)
+            .first::<query::Agent>(&mut self.connection()?)?)
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
@@ -321,7 +337,7 @@ impl Store {
         let collision = schema::entity::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut *self.connection.borrow_mut())?;
+            .first::<i64>(&mut self.connection()?)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -329,7 +345,7 @@ impl Store {
 
         let ambiguous = schema::entity::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+            .first::<Option<i32>>(&mut self.connection()?)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
@@ -341,7 +357,7 @@ impl Store {
         let collision = schema::agent::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut *self.connection.borrow_mut())?;
+            .first::<i64>(&mut self.connection()?)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -349,7 +365,7 @@ impl Store {
 
         let ambiguous = schema::agent::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+            .first::<Option<i32>>(&mut self.connection()?)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
@@ -361,7 +377,7 @@ impl Store {
         let collision = schema::activity::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut *self.connection.borrow_mut())?;
+            .first::<i64>(&mut self.connection()?)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -369,7 +385,7 @@ impl Store {
 
         let ambiguous = schema::activity::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut *self.connection.borrow_mut())?;
+            .first::<Option<i32>>(&mut self.connection()?)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
@@ -384,7 +400,7 @@ impl Store {
 
         Ok(schema::activity::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Activity>(&mut *self.connection.borrow_mut())?)
+            .first::<query::Activity>(&mut self.connection()?)?)
     }
 
     /// Fetch the agent record for the IRI
@@ -397,7 +413,7 @@ impl Store {
 
         Ok(schema::agent::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Agent>(&mut *self.connection.borrow_mut())?)
+            .first::<query::Agent>(&mut self.connection()?)?)
     }
 
     pub(crate) fn entity_by_entity_name_and_namespace(
@@ -409,7 +425,7 @@ impl Store {
 
         Ok(schema::entity::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Entity>(&mut *self.connection.borrow_mut())?)
+            .first::<query::Entity>(&mut self.connection()?)?)
     }
 
     /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
@@ -426,7 +442,7 @@ impl Store {
             }
             _ => Ok(schema::activity::table
                 .order(dsl::started)
-                .first::<query::Activity>(&mut *self.connection.borrow_mut())?),
+                .first::<query::Activity>(&mut self.connection()?)?),
         }
     }
 
@@ -448,7 +464,7 @@ impl Store {
             ))
             .on_conflict((dsl::name, dsl::namespace))
             .do_nothing()
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         if let Entity::Signed {
             signature,
@@ -468,7 +484,7 @@ impl Store {
                     dsl::signature.eq(signature),
                     dsl::signature_time.eq(signature_time.naive_utc()),
                 ))
-                .execute(&mut *self.connection.borrow_mut())?;
+                .execute(&mut self.connection()?)?;
         }
 
         Ok(())
@@ -511,7 +527,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::agent.eq(storedagent.id),
             ))
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -553,7 +569,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::entity.eq(storedentity.id),
             ))
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
@@ -595,7 +611,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::entity.eq(storedentity.id),
             ))
-            .execute(&mut *self.connection.borrow_mut())?;
+            .execute(&mut self.connection()?)?;
 
         Ok(())
     }
