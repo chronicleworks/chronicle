@@ -169,13 +169,11 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
     .next();
 
     if let Some(execution) = execution {
-        let (exresult, uiresult) = join![execution, ui];
-
-        uiresult?;
+        let (exresult, _) = join![execution, ui];
 
         Ok(exresult?)
     } else {
-        ui.await?;
+        ui.await;
         Ok(ApiResponse::Unit)
     }
 }

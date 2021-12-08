@@ -14,7 +14,6 @@ use std::{
     convert::Infallible,
     net::{AddrParseError, SocketAddr},
     path::{Path, PathBuf},
-    process::Output,
 };
 use tokio::sync::mpsc::{self, error::SendError, Sender};
 
@@ -49,7 +48,6 @@ custom_error! {pub ApiError
     ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
     AddressParse{source: AddrParseError}                        = "Invalid socket address",
     ConnectionPool{source: r2d2::Error}                         = "Connection pool",
-    GraphQlError{source: crate::graphql::GraphQlError}          = "GraphQl",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -107,15 +105,13 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         ledger: W,
         secret_path: &Path,
         uuidgen: F,
-    ) -> Result<(ApiDispatch, impl Future<Output = Result<(), ApiError>>), ApiError>
+    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
     where
         F: Fn() -> Uuid + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
 
-        let pool = Pool::builder()
-            .build(ConnectionManager::<SqliteConnection>::new(dbpath))
-            .unwrap();
+        let pool = Pool::builder().build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
 
         let dispatch = ApiDispatch { tx: tx.clone() };
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -168,8 +164,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         });
 
         Ok((
-            dispatch,
-            graphql::serve_graphql(ql_pool, addr, true).map_err(ApiError::from),
+            dispatch.clone(),
+            graphql::serve_graphql(ql_pool, dispatch, addr, true),
         ))
     }
 

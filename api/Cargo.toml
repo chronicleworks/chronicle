@@ -39,10 +39,12 @@ futures = "0.3"
 async-trait = "0.1.51"
 crossbeam = "0.8.1"
 open = "2.0.1"
-async-graphql = "3.0.12"
+async-graphql = {vesion = "3.0.12", features = ["tracing","chrono","default"]}
 warp = "0.3.2"
 async-graphql-warp = "3.0.12"
 r2d2 = "0.8.9"
+async-graphql-extension-apollo-tracing = {version="2.1.0", features=["tokio-comp"]}
+async-stream = "0.3.2"
 
 [dev-dependencies]
 insta = "1.8.0"

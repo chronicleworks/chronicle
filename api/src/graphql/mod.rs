@@ -1,27 +1,32 @@
-use std::{
-    convert::Infallible,
-    net::SocketAddr,
-    time::Duration,
-};
+use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use async_graphql::{
+    extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, EmptyMutation, EmptySubscription, Error, ErrorExtensions, Object, Schema, ID,
+    Context, EmptySubscription, Error, ErrorExtensions, Object, Schema,
+    Subscription, ID,
+};
+use async_graphql_extension_apollo_tracing::{
+    ApolloTracing, ApolloTracingDataExt, HTTPMethod,
 };
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, Utc};
+use common::{
+    commands::{AgentCommand, ApiCommand},
+    prov::{vocab::Chronicle},
+};
 use custom_error::custom_error;
 use derivative::*;
-use diesel::{
-    prelude::*,
-    r2d2::{Pool},
-};
+use diesel::{prelude::*, r2d2::Pool};
 use diesel::{r2d2::ConnectionManager, Connection, Queryable, SqliteConnection};
+use futures::Stream;
 use tracing::{debug, instrument};
 use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
 };
+
+use crate::ApiDispatch;
 
 #[derive(Default, Queryable)]
 pub struct Agent {
@@ -36,9 +41,9 @@ pub struct Agent {
 #[derive(Default)]
 pub struct Activity {
     pub id: i32,
-    pub namespace: ID,
-    pub name: ID,
-    pub domaintypeid: Option<ID>,
+    pub namespace: String,
+    pub name: String,
+    pub domaintypeid: Option<String>,
     pub started: Option<DateTime<Utc>>,
     pub ended: Option<DateTime<Utc>>,
 }
@@ -61,6 +66,13 @@ pub enum Entity {
     },
 }
 
+/*
+    pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
+    pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
+    pub was_generated_by: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
+    pub used: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, EntityId)>>,
+*/
+
 #[Object]
 impl Agent {
     async fn namespace(&self) -> &str {
@@ -81,6 +93,10 @@ impl Activity {
     async fn name(&self) -> &str {
         &self.namespace
     }
+
+    async fn was_associated_with<'a>(&self, _ctx: &Context<'a>) -> Vec<Agent> {
+        todo!()
+    }
 }
 
 #[Object]
@@ -92,12 +108,10 @@ impl Entity {
     }
 }
 
-#[derive(Default)]
-pub struct QueryRoot;
-
 custom_error! {pub GraphQlError
     Db{source: diesel::result::Error}                           = "Database operation failed",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
+    Api{source: crate::ApiError}                                = "API",
 }
 
 impl ErrorExtensions for GraphQlError {
@@ -115,15 +129,16 @@ pub struct Store {
 }
 
 impl Store {
-    pub fn new(
-        connection: Pool<ConnectionManager<SqliteConnection>>,
-    ) -> Result<Self, GraphQlError> {
-        Ok(Store { pool: connection })
+    pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Self {
+        Store { pool }
     }
 }
 
+#[derive(Default)]
+pub struct Query;
+
 #[Object]
-impl QueryRoot {
+impl Query {
     async fn agent<'a>(
         &self,
         ctx: &Context<'a>,
@@ -134,31 +149,122 @@ impl QueryRoot {
 
         let store = ctx.data_unchecked::<Store>();
 
-        let mut connection = store.pool.get().unwrap();
+        let mut connection = store.pool.get()?;
 
         Ok(agent::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
             .first::<Agent>(&mut connection)
             .optional()?)
     }
+
+    async fn activities_by_time<'a>(
+        &self,
+        ctx: &Context<'a>,
+        _types: Vec<String>,
+        _from_inclusive: Option<DateTime<Utc>>,
+        _end_exclusive: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Vec<Activity>> {
+        
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let _connection = store.pool.get()?;
+
+        Ok(vec![])
+    }
+}
+
+struct Mutation;
+
+#[Object]
+impl Mutation {
+    pub async fn create_agent<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<String> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let id = Chronicle::agent(&name);
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let _res = api
+            .dispatch(ApiCommand::Agent(AgentCommand::Create { name, namespace }))
+            .await;
+
+        Ok(id.to_string())
+    }
+}
+
+pub struct SubscriptionRoot;
+
+#[Subscription]
+impl SubscriptionRoot {
+    async fn interval(&self, #[graphql(default = 1)] n: i32) -> impl Stream<Item = i32> {
+        let mut value = 0;
+        async_stream::stream! {
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                value += n;
+                yield value;
+            }
+        }
+    }
 }
 
 #[instrument]
 pub async fn serve_graphql(
     pool: Pool<ConnectionManager<SqliteConnection>>,
+    api: ApiDispatch,
     address: SocketAddr,
     open: bool,
-) -> Result<(), GraphQlError> {
-    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
-        .data(Store::new(pool.clone())?)
+) {
+    let schema = Schema::build(Query, Mutation, EmptySubscription)
+        .extension(ApolloTracing::new(
+            "authorization_token".into(),
+            "https://yourdomain.ltd".into(),
+            "your_graph@variant".into(),
+            "v1.0.0".into(),
+            10,
+        ))
+        .extension(Tracing)
+        .data(Store::new(pool.clone()))
+        .data(api)
         .finish();
+
+    async_graphql_extension_apollo_tracing::register::register(
+        "authorization_token",
+        &schema,
+        "my-allocation-id",
+        "variant",
+        "1.0.0",
+        "staging",
+    )
+    .await
+    .ok();
 
     let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
         |(schema, request): (
-            Schema<QueryRoot, EmptyMutation, EmptySubscription>,
+            Schema<Query, Mutation, EmptySubscription>,
             async_graphql::Request,
         )| async move {
-            Ok::<_, Infallible>(GraphQLResponse::from(schema.execute(request).await))
+            Ok::<_, Infallible>(GraphQLResponse::from(
+                schema
+                    .execute(request.data(ApolloTracingDataExt {
+                        userid: None,
+                        path: Some("/".to_string()),
+                        host: None,
+                        method: Some(HTTPMethod::POST),
+                        secure: Some(false),
+                        protocol: Some("HTTP/1.1".to_string()),
+                        status_code: Some(200),
+                        client_name: None,
+                        client_version: None,
+                    }))
+                    .await,
+            ))
         },
     );
 
@@ -195,5 +301,4 @@ pub async fn serve_graphql(
         });
 
     warp::serve(routes).run(address).await;
-    Ok(())
 }
