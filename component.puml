@@ -1,0 +1,42 @@
+@startuml
+skinparam componentStyle rectangle
+
+
+component "Chronicle" {
+    database sqlite
+    
+    file keystore
+
+    () CLI
+
+    [API]
+
+    [graphql playground]
+
+    () graphql
+}
+
+
+component "Sawtooth" {
+    [sawtooth API]
+    
+    [sawtooth transaction processor]
+}
+
+[Apollo Server] 
+
+
+
+[Apollo Server] <..> graphql: federates
+[API] ..> [graphql playground]: serves
+[graphql playground] <..> graphql
+CLI <..> API: spawns or uses remote
+CLI <..> graphql: uses
+[API] <..> graphql
+[API] <..> sqlite
+[API] <..> keystore 
+[API] <..> [sawtooth API]
+
+[sawtooth API] <..> [sawtooth transaction processor]
+
+@enduml

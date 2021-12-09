@@ -74,7 +74,19 @@ pub fn cli() -> App<'static> {
                                 .default_value("default")
                                 .required(false)
                                 .takes_value(true),
-                        ),
+                        ).arg(
+                            Arg::new("domaintype")
+                                .short('t')
+                                .long("domaintype")
+                                .default_value("default")
+                                .takes_value(true),
+                        ).arg(
+                            Arg::new("untyped")
+                                .long("untyped")
+                                .takes_value(false),
+                        ).group(ArgGroup::with_name("type")
+                                    .args(&["domaintype","untyped"])
+                                    .required(true)),
                 )
                 .subcommand(
                     App::new("register-key")
@@ -142,7 +154,19 @@ pub fn cli() -> App<'static> {
                                 .default_value("default")
                                 .required(false)
                                 .takes_value(true),
-                        ),
+                        ).arg(
+                            Arg::new("domaintype")
+                                .short('t')
+                                .long("domaintype")
+                                .default_value("default")
+                                .takes_value(true),
+                        ).arg(
+                            Arg::new("untyped")
+                                .long("untyped")
+                                .takes_value(false),
+                        ).group(ArgGroup::with_name("type")
+                                    .args(&["domaintype","untyped"])
+                                    .required(true)),
                 )
                 .subcommand(
                     App::new("start")
@@ -172,7 +196,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("use")
-                        .about("Record this activity as having used the specified entity")
+                        .about("Record this activity as having used the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -188,11 +212,23 @@ pub fn cli() -> App<'static> {
                                 .short('a')
                                 .long("activity")
                                 .takes_value(true),
-                        ),
+                        ).arg(
+                            Arg::new("domaintype")
+                                .short('t')
+                                .long("domaintype")
+                                .default_value("default")
+                                .takes_value(true),
+                        ).arg(
+                            Arg::new("untyped")
+                                .long("untyped")
+                                .takes_value(false),
+                        ).group(ArgGroup::with_name("type")
+                                    .args(&["domaintype","untyped"])
+                                    .required(true)),
                 )
                 .subcommand(
                     App::new("generate")
-                        .about("Records this activity as having generated the specified entity")
+                        .about("Records this activity as having generated the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -208,7 +244,19 @@ pub fn cli() -> App<'static> {
                                 .short('a')
                                 .long("activity")
                                 .takes_value(true),
-                        ),
+                        ).arg(
+                            Arg::new("domaintype")
+                                .short('t')
+                                .long("domaintype")
+                                .default_value("default")
+                                .takes_value(true),
+                        ).arg(
+                            Arg::new("untyped")
+                                .long("untyped")
+                                .takes_value(false),
+                        ).group(ArgGroup::with_name("type")
+                                    .args(&["domaintype","untyped"])
+                                    .required(true)),
                 ),
         )
         .subcommand(

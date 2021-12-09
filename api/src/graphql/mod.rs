@@ -3,17 +3,14 @@ use std::{convert::Infallible, net::SocketAddr, time::Duration};
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, EmptySubscription, Error, ErrorExtensions, Object, Schema,
-    Subscription, ID,
+    Context, Error, ErrorExtensions, Object, Schema, Subscription, ID,
 };
-use async_graphql_extension_apollo_tracing::{
-    ApolloTracing, ApolloTracingDataExt, HTTPMethod,
-};
+use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt, HTTPMethod};
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, Utc};
 use common::{
     commands::{AgentCommand, ApiCommand},
-    prov::{vocab::Chronicle},
+    prov::vocab::Chronicle,
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -164,8 +161,6 @@ impl Query {
         _from_inclusive: Option<DateTime<Utc>>,
         _end_exclusive: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Vec<Activity>> {
-        
-
         let store = ctx.data_unchecked::<Store>();
 
         let _connection = store.pool.get()?;
@@ -183,6 +178,7 @@ impl Mutation {
         ctx: &Context<'a>,
         name: String,
         namespace: Option<String>,
+        typ: String,
     ) -> async_graphql::Result<String> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
@@ -191,17 +187,21 @@ impl Mutation {
         let namespace = namespace.unwrap_or("default".to_owned());
 
         let _res = api
-            .dispatch(ApiCommand::Agent(AgentCommand::Create { name, namespace }))
+            .dispatch(ApiCommand::Agent(AgentCommand::Create {
+                name,
+                namespace,
+                domaintype: Some(typ),
+            }))
             .await;
 
         Ok(id.to_string())
     }
 }
 
-pub struct SubscriptionRoot;
+pub struct Subscription;
 
 #[Subscription]
-impl SubscriptionRoot {
+impl Subscription {
     async fn interval(&self, #[graphql(default = 1)] n: i32) -> impl Stream<Item = i32> {
         let mut value = 0;
         async_stream::stream! {
@@ -221,7 +221,7 @@ pub async fn serve_graphql(
     address: SocketAddr,
     open: bool,
 ) {
-    let schema = Schema::build(Query, Mutation, EmptySubscription)
+    let schema = Schema::build(Query, Mutation, Subscription)
         .extension(ApolloTracing::new(
             "authorization_token".into(),
             "https://yourdomain.ltd".into(),
@@ -247,7 +247,7 @@ pub async fn serve_graphql(
 
     let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
         |(schema, request): (
-            Schema<Query, Mutation, EmptySubscription>,
+            Schema<Query, Mutation, Subscription>,
             async_graphql::Request,
         )| async move {
             Ok::<_, Infallible>(GraphQLResponse::from(

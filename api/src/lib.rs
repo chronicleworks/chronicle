@@ -7,6 +7,7 @@ use derivative::*;
 
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use futures::{Future, TryFutureExt};
+use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
 use r2d2::Pool;
@@ -20,7 +21,7 @@ use tokio::sync::mpsc::{self, error::SendError, Sender};
 use common::{
     commands::*,
     ledger::{LedgerWriter, SubmissionError},
-    prov::vocab::Chronicle as ChronicleVocab,
+    prov::{vocab::Chronicle as ChronicleVocab, Domaintype},
     prov::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
@@ -192,30 +193,55 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         let iri = ChronicleVocab::namespace(name, &uuid);
 
         let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
-            id: iri.into(),
+            id: iri.clone().into(),
             name: name.to_owned(),
             uuid,
         });
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        Ok(ApiResponse::Prov(iri, vec![self.store.apply(&tx)?]))
     }
 
     #[instrument]
-    async fn create_agent(&mut self, name: &str, namespace: &str) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(namespace).await?;
-        let name = self.store.disambiguate_agent_name(name)?;
+    async fn create_agent(
+        &mut self,
+        name: String,
+        namespace: String,
+        domaintype: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace).await?;
+        let name = self.store.disambiguate_agent_name(&name)?;
 
-        let tx = ChronicleTransaction::CreateAgent(CreateAgent {
+        let iri = ChronicleVocab::agent(&name);
+
+        let create = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
-            id: ChronicleVocab::agent(&name).into(),
-            namespace: self.store.namespace_by_name(namespace)?,
+            id: iri.clone().into(),
+            namespace: self.store.namespace_by_name(&namespace)?,
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        let mut to_apply = vec![create];
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
+                id: ChronicleVocab::agent(&name).into(),
+                namespace: self.store.namespace_by_name(&namespace)?,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            iri,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
     }
 
     #[instrument]
@@ -224,9 +250,11 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
                 self.create_namespace(&name).await
             }
-            ApiCommand::Agent(AgentCommand::Create { name, namespace }) => {
-                self.create_agent(&name, &namespace).await
-            }
+            ApiCommand::Agent(AgentCommand::Create {
+                name,
+                namespace,
+                domaintype,
+            }) => self.create_agent(name, namespace, domaintype).await,
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
                 namespace,
@@ -235,9 +263,11 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
                 self.use_agent(name, namespace).await
             }
-            ApiCommand::Activity(ActivityCommand::Create { name, namespace }) => {
-                self.create_activity(name, namespace).await
-            }
+            ApiCommand::Activity(ActivityCommand::Create {
+                name,
+                namespace,
+                domaintype,
+            }) => self.create_activity(name, namespace, domaintype).await,
             ApiCommand::Activity(ActivityCommand::Start {
                 name,
                 namespace,
@@ -252,12 +282,20 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 name,
                 namespace,
                 activity,
-            }) => self.activity_use(name, namespace, activity).await,
+                domaintype,
+            }) => {
+                self.activity_use(name, namespace, activity, domaintype)
+                    .await
+            }
             ApiCommand::Activity(ActivityCommand::Generate {
                 name,
                 namespace,
                 activity,
-            }) => self.activity_generate(name, namespace, activity).await,
+                domaintype,
+            }) => {
+                self.activity_generate(name, namespace, activity, domaintype)
+                    .await
+            }
             ApiCommand::Entity(EntityCommand::Attach {
                 name,
                 namespace,
@@ -281,30 +319,36 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
         let namespaceid = self.store.namespace_by_name(&namespace)?;
-        let id = ChronicleVocab::agent(&name).into();
+        let id = ChronicleVocab::agent(&name);
         match registration {
             KeyRegistration::Generate => {
-                self.keystore.generate_agent(&id)?;
+                self.keystore.generate_agent(&id.clone().into())?;
             }
             KeyRegistration::ImportSigning { path } => {
-                self.keystore.import_agent(&id, Some(&path), None)?
+                self.keystore
+                    .import_agent(&id.clone().into(), Some(&path), None)?
             }
             KeyRegistration::ImportVerifying { path } => {
-                self.keystore.import_agent(&id, None, Some(&path))?
+                self.keystore
+                    .import_agent(&id.clone().into(), None, Some(&path))?
             }
         }
 
         let tx = ChronicleTransaction::RegisterKey(RegisterKey {
-            id: id.clone(),
+            id: id.clone().into(),
             name,
             namespace: namespaceid,
-            publickey: hex::encode(self.keystore.agent_verifying(&id)?.to_bytes()),
+            publickey: hex::encode(
+                self.keystore
+                    .agent_verifying(&id.clone().into())?
+                    .to_bytes(),
+            ),
         });
 
         self.ledger.submit(vec![&tx]).await?;
         self.store.apply(&tx)?;
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
     #[instrument]
@@ -319,20 +363,39 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         &mut self,
         name: String,
         namespace: String,
+        domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
         let name = self.store.disambiguate_activity_name(&name)?;
         let namespace = self.store.namespace_by_name(&namespace)?;
         let id = ChronicleVocab::activity(&name);
-        let tx = ChronicleTransaction::CreateActivity(CreateActivity {
-            namespace,
-            id: id.into(),
+        let create = ChronicleTransaction::CreateActivity(CreateActivity {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
             name,
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        let mut to_apply = vec![create];
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
     }
 
     #[instrument]
@@ -352,14 +415,14 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         let id = ChronicleVocab::activity(&name);
         let tx = ChronicleTransaction::StartActivity(StartActivity {
             namespace,
-            id: id.into(),
+            id: id.clone().into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
             time: time.unwrap_or(Utc::now()),
         });
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
     #[instrument]
@@ -383,14 +446,14 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         let id = ChronicleVocab::activity(&activity.name);
         let tx = ChronicleTransaction::EndActivity(EndActivity {
             namespace,
-            id: id.into(),
+            id: id.clone().into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
             time: time.unwrap_or(Utc::now()),
         });
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
     #[instrument]
@@ -399,6 +462,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         name: String,
         namespace: String,
         activity: Option<String>,
+        domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let activity = self
             .store
@@ -408,15 +472,35 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         let namespace = self.store.namespace_by_name(&namespace)?;
 
         let name = self.store.disambiguate_entity_name(&name)?;
-        let tx = ChronicleTransaction::ActivityUses(ActivityUses {
-            namespace,
-            id: ChronicleVocab::entity(&name).into(),
+        let id = ChronicleVocab::entity(&name);
+
+        let create = ChronicleTransaction::ActivityUses(ActivityUses {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
             activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        let mut to_apply = vec![create];
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
     }
 
     #[instrument]
@@ -425,6 +509,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         name: String,
         namespace: String,
         activity: Option<String>,
+        domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
         let activity = self
@@ -433,16 +518,34 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         let namespace = self.store.namespace_by_name(&namespace)?;
         let name = self.store.disambiguate_entity_name(&name)?;
-
-        let tx = ChronicleTransaction::GenerateEntity(GenerateEntity {
-            namespace,
-            id: ChronicleVocab::entity(&name).into(),
+        let id = ChronicleVocab::entity(&name);
+        let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
             activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        let mut to_apply = vec![create];
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
     }
 
     #[instrument]
@@ -464,7 +567,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             .unwrap_or_else(|| self.store.get_current_agent())?;
 
         let namespace = self.store.namespace_by_name(&namespace)?;
-        let id = ChronicleVocab::entity(&name).into();
+        let id = ChronicleVocab::entity(&name);
         let agentid = ChronicleVocab::agent(&agent.name).into();
 
         let signature: Signature = self
@@ -474,7 +577,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         let tx = ChronicleTransaction::EntityAttach(EntityAttach {
             namespace,
-            id,
+            id: id.clone().into(),
             agent: agentid,
             signature: hex::encode_upper(signature),
             locator,
@@ -483,11 +586,15 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(self.store.apply(&tx)?))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
-        Ok(ApiResponse::Prov(self.store.prov_model_from(query)?))
+        let id = self.store.namespace_by_name(&query.namespace)?;
+        Ok(ApiResponse::Prov(
+            IriBuf::new(id.as_str()).unwrap(),
+            vec![self.store.prov_model_from(query)?],
+        ))
     }
 }
 
@@ -557,6 +664,7 @@ mod test {
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -592,6 +700,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -606,6 +715,7 @@ mod test {
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -635,6 +745,7 @@ mod test {
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -672,6 +783,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -679,6 +791,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
             activity: None,
         }))
         .await
@@ -687,6 +800,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
             activity: None,
         }))
         .await
@@ -711,6 +825,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
         }))
         .await
         .unwrap();
@@ -718,6 +833,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
             activity: None,
         }))
         .await
@@ -726,6 +842,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
             activity: None,
         }))
         .await
@@ -743,6 +860,7 @@ mod test {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                 name: "testactivity".to_owned(),
                 namespace: "testns".to_owned(),
+                domaintype: Some("testtype".to_owned()),
             }))
             .await
             .unwrap();

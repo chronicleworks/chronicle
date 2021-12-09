@@ -1,6 +1,7 @@
-use std::{path::PathBuf};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
+use iref::IriBuf;
 
 use crate::prov::ProvModel;
 
@@ -21,6 +22,7 @@ pub enum AgentCommand {
     Create {
         name: String,
         namespace: String,
+        domaintype: Option<String>,
     },
     RegisterKey {
         name: String,
@@ -38,6 +40,7 @@ pub enum ActivityCommand {
     Create {
         name: String,
         namespace: String,
+        domaintype: Option<String>,
     },
     Start {
         name: String,
@@ -52,11 +55,13 @@ pub enum ActivityCommand {
     Use {
         name: String,
         namespace: String,
+        domaintype: Option<String>,
         activity: Option<String>,
     },
     Generate {
         name: String,
         namespace: String,
+        domaintype: Option<String>,
         activity: Option<String>,
     },
 }
@@ -89,5 +94,6 @@ pub enum ApiCommand {
 #[derive(Debug)]
 pub enum ApiResponse {
     Unit,
-    Prov(ProvModel),
+    /// Context iri (i.e the subject resource) and delta
+    Prov(IriBuf, Vec<ProvModel>),
 }

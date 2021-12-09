@@ -8,7 +8,7 @@ use api::{Api, ApiError};
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
-use colored_json::prelude::*;
+
 use common::commands::{
     ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
     NamespaceCommand, QueryCommand,
@@ -43,6 +43,14 @@ fn ledger(_config: &Config) -> Result<common::ledger::InMemLedger, std::convert:
     Ok(common::ledger::InMemLedger::default())
 }
 
+fn domain_type(args: &ArgMatches) -> Option<String> {
+    if args.is_present("untyped") {
+        None
+    } else {
+        args.value_of("domaintype").map(|x| x.to_owned())
+    }
+}
+
 #[instrument]
 async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     dotenv::dotenv().ok();
@@ -69,6 +77,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
+                        domaintype: domain_type(options),
                     }))
                 }),
                 m.subcommand_matches("register-key").map(|m| {
@@ -109,6 +118,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
+                        domaintype: domain_type(options),
                     }))
                 }),
                 m.subcommand_matches("start").map(|m| {
@@ -130,6 +140,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("entity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         activity: m.value_of("activity_name").map(|x| x.to_owned()),
+                        domaintype: domain_type(options),
                     }))
                 }),
                 m.subcommand_matches("generate").map(|m| {
@@ -137,6 +148,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("entity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         activity: m.value_of("activity_name").map(|x| x.to_owned()),
+                        domaintype: domain_type(options),
                     }))
                 }),
             ]
@@ -228,11 +240,8 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     let response = api_exec(config, matches).await?;
 
     match response {
-        ApiResponse::Prov(doc) => {
-            println!(
-                "{}",
-                doc.to_json().0.pretty(4).to_colored_json_auto().unwrap()
-            );
+        ApiResponse::Prov(context, _delta) => {
+            println!("{}", context);
         }
         ApiResponse::Unit => {}
     };
