@@ -7,9 +7,9 @@ use async_graphql::{
 };
 use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt, HTTPMethod};
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    commands::{AgentCommand, ApiCommand},
+    commands::{ActivityCommand, AgentCommand, ApiCommand},
     prov::vocab::Chronicle,
 };
 use custom_error::custom_error;
@@ -35,40 +35,26 @@ pub struct Agent {
     pub current: i32,
 }
 
-#[derive(Default)]
+#[derive(Default, Queryable)]
 pub struct Activity {
     pub id: i32,
-    pub namespace: String,
     pub name: String,
-    pub domaintypeid: Option<String>,
-    pub started: Option<DateTime<Utc>>,
-    pub ended: Option<DateTime<Utc>>,
+    pub namespace: String,
+    pub domaintype: Option<String>,
+    pub started: Option<NaiveDateTime>,
+    pub ended: Option<NaiveDateTime>,
 }
 
-pub enum Entity {
-    Unsigned {
-        id: i32,
-        namespaceid: ID,
-        name: ID,
-        domaintypeid: Option<ID>,
-    },
-    Signed {
-        id: i32,
-        namespaceid: ID,
-        name: ID,
-        domaintypeid: Option<ID>,
-        signature: String,
-        locator: Option<String>,
-        signature_time: DateTime<Utc>,
-    },
+#[derive(Default, Queryable)]
+pub struct Entity {
+    id: i32,
+    name: String,
+    namespace: String,
+    domaintype: Option<String>,
+    signature_time: Option<NaiveDateTime>,
+    signature: Option<String>,
+    locator: Option<String>,
 }
-
-/*
-    pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_generated_by: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
-    pub used: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, EntityId)>>,
-*/
 
 #[Object]
 impl Agent {
@@ -77,7 +63,20 @@ impl Agent {
     }
 
     async fn name(&self) -> &str {
-        &self.namespace
+        &self.name
+    }
+
+    async fn public_key(&self) -> Option<&str> {
+        self.publickey.as_deref()
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> &str {
+        if let Some(ref typ) = self.domaintype {
+            &typ
+        } else {
+            "agent"
+        }
     }
 }
 
@@ -91,17 +90,122 @@ impl Activity {
         &self.namespace
     }
 
-    async fn was_associated_with<'a>(&self, _ctx: &Context<'a>) -> Vec<Agent> {
-        todo!()
+    async fn started(&self) -> Option<DateTime<Utc>> {
+        self.started.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    async fn ended(&self) -> Option<DateTime<Utc>> {
+        self.ended.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> &str {
+        if let Some(ref typ) = self.domaintype {
+            &typ
+        } else {
+            "entity"
+        }
+    }
+
+    async fn was_associated_with<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Agent>> {
+        use crate::persistence::schema::wasassociatedwith::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = wasassociatedwith::table
+            .filter(dsl::activity.eq(self.id))
+            .inner_join(crate::persistence::schema::agent::table)
+            .load::<((i32, i32), Agent)>(&mut connection)?;
+
+        Ok(res.into_iter().map(|(_, x)| x).collect())
+    }
+
+    async fn used<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        use crate::persistence::schema::used::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = used::table
+            .filter(dsl::activity.eq(self.id))
+            .inner_join(crate::persistence::schema::entity::table)
+            .load::<((i32, i32), Entity)>(&mut connection)?;
+
+        Ok(res.into_iter().map(|(_, x)| x).collect())
     }
 }
 
 #[Object]
 impl Entity {
-    async fn name(&self) -> &ID {
-        match self {
-            Entity::Signed { name, .. } | Entity::Unsigned { name, .. } => name,
+    async fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    async fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> &str {
+        if let Some(ref typ) = self.domaintype {
+            &typ
+        } else {
+            "entity"
         }
+    }
+
+    async fn signature_time(&self) -> Option<DateTime<Utc>> {
+        self.signature_time.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    async fn signature(&self) -> Option<&str> {
+        self.signature.as_deref()
+    }
+
+    async fn locator(&self) -> Option<&str> {
+        self.locator.as_deref()
+    }
+
+    async fn was_attributed_to<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Activity>> {
+        use crate::persistence::schema::wasgeneratedby::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = wasgeneratedby::table
+            .filter(dsl::entity.eq(self.id))
+            .inner_join(crate::persistence::schema::activity::table)
+            .load::<((i32, i32), Activity)>(&mut connection)?;
+
+        Ok(res.into_iter().map(|(_, x)| x).collect())
+    }
+
+    async fn was_generated_by<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Activity>> {
+        use crate::persistence::schema::wasgeneratedby::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = wasgeneratedby::table
+            .filter(dsl::entity.eq(self.id))
+            .inner_join(crate::persistence::schema::activity::table)
+            .load::<((i32, i32), Activity)>(&mut connection)?;
+
+        Ok(res.into_iter().map(|(_, x)| x).collect())
     }
 }
 
@@ -157,15 +261,29 @@ impl Query {
     async fn activities_by_time<'a>(
         &self,
         ctx: &Context<'a>,
-        _types: Vec<String>,
-        _from_inclusive: Option<DateTime<Utc>>,
-        _end_exclusive: Option<DateTime<Utc>>,
+        types: Vec<String>,
+        from_inclusive: Option<DateTime<Utc>>,
+        end_exclusive: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Vec<Activity>> {
+        use crate::persistence::schema::activity;
         let store = ctx.data_unchecked::<Store>();
 
-        let _connection = store.pool.get()?;
+        let mut connection = store.pool.get()?;
+        let mut query = activity::table.into_boxed();
 
-        Ok(vec![])
+        if let Some(start) = from_inclusive {
+            query = query.filter(activity::started.gt(start.naive_utc()));
+        }
+
+        if let Some(end) = end_exclusive {
+            query = query.filter(activity::started.lt(end.naive_utc()));
+        }
+
+        for t in types {
+            query = query.or_filter(activity::domaintype.eq(t))
+        }
+
+        Ok(query.load::<Activity>(&mut connection)?)
     }
 }
 
@@ -178,7 +296,7 @@ impl Mutation {
         ctx: &Context<'a>,
         name: String,
         namespace: Option<String>,
-        typ: String,
+        typ: Option<String>,
     ) -> async_graphql::Result<String> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
@@ -190,7 +308,31 @@ impl Mutation {
             .dispatch(ApiCommand::Agent(AgentCommand::Create {
                 name,
                 namespace,
-                domaintype: Some(typ),
+                domaintype: typ,
+            }))
+            .await;
+
+        Ok(id.to_string())
+    }
+
+    pub async fn create_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        typ: Option<String>,
+    ) -> async_graphql::Result<String> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let id = Chronicle::agent(&name);
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let _res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                name,
+                namespace,
+                domaintype: typ,
             }))
             .await;
 
