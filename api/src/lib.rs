@@ -272,12 +272,14 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 name,
                 namespace,
                 time,
-            }) => self.start_activity(name, namespace, time).await,
+                agent,
+            }) => self.start_activity(name, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::End {
                 name,
                 namespace,
                 time,
-            }) => self.end_activity(name, namespace, time).await,
+                agent,
+            }) => self.end_activity(name, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::Use {
                 name,
                 namespace,
@@ -404,11 +406,18 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
+        agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let agent = self
-            .store
-            .get_current_agent()
-            .map_err(|_| ApiError::NoCurrentAgent {})?;
+        let agent = {
+            if let Some(agent) = agent {
+                self.store
+                    .agent_by_agent_name_and_namespace(&agent, &namespace)?
+            } else {
+                self.store
+                    .get_current_agent()
+                    .map_err(|_| ApiError::NoCurrentAgent {})?
+            }
+        };
 
         let name = self.store.disambiguate_activity_name(&name)?;
         let namespace = self.store.namespace_by_name(&namespace)?;
@@ -431,17 +440,23 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         name: Option<String>,
         namespace: Option<String>,
         time: Option<DateTime<Utc>>,
+        agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let activity = self
             .store
             .get_activity_by_name_or_last_started(name, namespace)?;
-
-        let agent = self
-            .store
-            .get_current_agent()
-            .map_err(|_| ApiError::NoCurrentAgent {})?;
-
         let namespace = self.store.namespace_by_name(&activity.namespace)?;
+
+        let agent = {
+            if let Some(agent) = agent {
+                self.store
+                    .agent_by_agent_name_and_namespace(&agent, namespace.decompose().0)?
+            } else {
+                self.store
+                    .get_current_agent()
+                    .map_err(|_| ApiError::NoCurrentAgent {})?
+            }
+        };
 
         let id = ChronicleVocab::activity(&activity.name);
         let tx = ChronicleTransaction::EndActivity(EndActivity {
@@ -731,6 +746,7 @@ mod test {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            agent: None,
         }))
         .await
         .unwrap();
@@ -761,6 +777,7 @@ mod test {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            agent: None,
         }))
         .await
         .unwrap();
@@ -769,6 +786,7 @@ mod test {
             name: None,
             namespace: None,
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            agent: None,
         }))
         .await
         .unwrap();
@@ -810,6 +828,7 @@ mod test {
             name: None,
             namespace: None,
             time: None,
+            agent: None,
         }))
         .await
         .unwrap();

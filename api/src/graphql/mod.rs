@@ -9,8 +9,9 @@ use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    commands::{ActivityCommand, AgentCommand, ApiCommand},
+    commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse, KeyRegistration},
     prov::vocab::Chronicle,
+    prov::{ActivityId, AgentId, EntityId},
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -87,7 +88,7 @@ impl Activity {
     }
 
     async fn name(&self) -> &str {
-        &self.namespace
+        &self.name
     }
 
     async fn started(&self) -> Option<DateTime<Utc>> {
@@ -103,7 +104,7 @@ impl Activity {
         if let Some(ref typ) = self.domaintype {
             &typ
         } else {
-            "entity"
+            "activity"
         }
     }
 
@@ -289,6 +290,81 @@ impl Query {
 
 struct Mutation;
 
+async fn agent_context<'a>(
+    namespace: &str,
+    res: ApiResponse,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Agent> {
+    match res {
+        ApiResponse::Prov(id, _) => {
+            use crate::persistence::schema::agent::{self, dsl};
+
+            let store = ctx.data_unchecked::<Store>();
+
+            let mut connection = store.pool.get()?;
+
+            Ok(agent::table
+                .filter(
+                    dsl::name
+                        .eq(AgentId::from(id).decompose())
+                        .and(dsl::namespace.eq(namespace)),
+                )
+                .first::<Agent>(&mut connection)?)
+        }
+        _ => unreachable!(),
+    }
+}
+
+async fn activity_context<'a>(
+    namespace: &str,
+    res: ApiResponse,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Activity> {
+    match res {
+        ApiResponse::Prov(id, _) => {
+            use crate::persistence::schema::activity::{self, dsl};
+
+            let store = ctx.data_unchecked::<Store>();
+
+            let mut connection = store.pool.get()?;
+
+            Ok(activity::table
+                .filter(
+                    dsl::name
+                        .eq(ActivityId::from(id).decompose())
+                        .and(dsl::namespace.eq(namespace)),
+                )
+                .first::<Activity>(&mut connection)?)
+        }
+        _ => unreachable!(),
+    }
+}
+
+async fn entity_context<'a>(
+    namespace: &str,
+    res: ApiResponse,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Entity> {
+    match res {
+        ApiResponse::Prov(id, _) => {
+            use crate::persistence::schema::entity::{self, dsl};
+
+            let store = ctx.data_unchecked::<Store>();
+
+            let mut connection = store.pool.get()?;
+
+            Ok(entity::table
+                .filter(
+                    dsl::name
+                        .eq(EntityId::from(id).decompose())
+                        .and(dsl::namespace.eq(namespace)),
+                )
+                .first::<Entity>(&mut connection)?)
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[Object]
 impl Mutation {
     pub async fn create_agent<'a>(
@@ -297,22 +373,20 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<String> {
+    ) -> async_graphql::Result<Agent> {
         let api = ctx.data_unchecked::<ApiDispatch>();
-
-        let id = Chronicle::agent(&name);
 
         let namespace = namespace.unwrap_or("default".to_owned());
 
-        let _res = api
+        let res = api
             .dispatch(ApiCommand::Agent(AgentCommand::Create {
                 name,
-                namespace,
+                namespace: namespace.clone(),
                 domaintype: typ,
             }))
-            .await;
+            .await?;
 
-        Ok(id.to_string())
+        agent_context(&namespace, res, ctx).await
     }
 
     pub async fn create_activity<'a>(
@@ -321,22 +395,137 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<String> {
+    ) -> async_graphql::Result<Activity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
-
-        let id = Chronicle::agent(&name);
 
         let namespace = namespace.unwrap_or("default".to_owned());
 
-        let _res = api
+        let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::Create {
                 name,
-                namespace,
+                namespace: namespace.clone(),
                 domaintype: typ,
             }))
-            .await;
+            .await?;
 
-        Ok(id.to_string())
+        activity_context(&namespace, res, ctx).await
+    }
+
+    pub async fn generate_key<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Agent> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                name,
+                namespace: namespace.clone(),
+                registration: KeyRegistration::Generate,
+            }))
+            .await?;
+
+        agent_context(&namespace, res, ctx).await
+    }
+
+    pub async fn start_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Activity> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
+                name,
+                namespace: namespace.clone(),
+                time,
+                agent: Some(agent),
+            }))
+            .await?;
+
+        activity_context(&namespace, res, ctx).await
+    }
+
+    pub async fn end_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Activity> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::End {
+                name: Some(name),
+                namespace: Some(namespace.clone()),
+                time,
+                agent: Some(agent),
+            }))
+            .await?;
+
+        activity_context(&namespace, res, ctx).await
+    }
+
+    pub async fn acitvity_use<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+        typ: Option<String>,
+    ) -> async_graphql::Result<Entity> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Use {
+                name,
+                namespace: namespace.clone(),
+                domaintype: typ,
+                activity: Some(activity),
+            }))
+            .await?;
+
+        entity_context(&namespace, res, ctx).await
+    }
+
+    pub async fn acitvity_generate<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+        typ: Option<String>,
+    ) -> async_graphql::Result<Entity> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or("default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
+                name,
+                namespace: namespace.clone(),
+                domaintype: typ,
+                activity: Some(activity),
+            }))
+            .await?;
+
+        entity_context(&namespace, res, ctx).await
     }
 }
 

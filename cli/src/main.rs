@@ -126,6 +126,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         time: None,
+                        agent: None,
                     }))
                 }),
                 m.subcommand_matches("end").map(|m| {
@@ -133,6 +134,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("activity_name").map(|x| x.to_owned()),
                         namespace: m.value_of("namespace").map(|x| x.to_owned()),
                         time: None,
+                        agent: None,
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {

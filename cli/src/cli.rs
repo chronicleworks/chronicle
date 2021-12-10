@@ -84,7 +84,7 @@ pub fn cli() -> App<'static> {
                             Arg::new("untyped")
                                 .long("untyped")
                                 .takes_value(false),
-                        ).group(ArgGroup::with_name("type")
+                        ).group(ArgGroup::new("type")
                                     .args(&["domaintype","untyped"])
                                     .required(true)),
                 )
@@ -164,7 +164,7 @@ pub fn cli() -> App<'static> {
                             Arg::new("untyped")
                                 .long("untyped")
                                 .takes_value(false),
-                        ).group(ArgGroup::with_name("type")
+                        ).group(ArgGroup::new("type")
                                     .args(&["domaintype","untyped"])
                                     .required(true)),
                 )
@@ -222,7 +222,7 @@ pub fn cli() -> App<'static> {
                             Arg::new("untyped")
                                 .long("untyped")
                                 .takes_value(false),
-                        ).group(ArgGroup::with_name("type")
+                        ).group(ArgGroup::new("type")
                                     .args(&["domaintype","untyped"])
                                     .required(true)),
                 )
@@ -254,7 +254,7 @@ pub fn cli() -> App<'static> {
                             Arg::new("untyped")
                                 .long("untyped")
                                 .takes_value(false),
-                        ).group(ArgGroup::with_name("type")
+                        ).group(ArgGroup::new("type")
                                     .args(&["domaintype","untyped"])
                                     .required(true)),
                 ),

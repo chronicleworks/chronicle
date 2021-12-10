@@ -12,7 +12,7 @@ use std::str::from_utf8;
 #[derive(Debug)]
 pub enum SubmissionError {
     Implementation {
-        source: Box<dyn std::error::Error + Send>,
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
     Processor {
         source: ProcessorError,

@@ -46,11 +46,13 @@ pub enum ActivityCommand {
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
+        agent: Option<String>,
     },
     End {
         name: Option<String>,
         namespace: Option<String>,
         time: Option<DateTime<Utc>>,
+        agent: Option<String>,
     },
     Use {
         name: String,
