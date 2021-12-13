@@ -10,8 +10,8 @@ use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 
 use common::commands::{
-    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
-    NamespaceCommand, QueryCommand,
+    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
+    KeyRegistration, NamespaceCommand, QueryCommand,
 };
 use common::signing::SignerError;
 use config::*;
@@ -85,13 +85,13 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         if m.is_present("generate") {
                             KeyRegistration::Generate
                         } else if m.is_present("privatekey") {
-                            KeyRegistration::ImportSigning {
+                            KeyRegistration::ImportSigning(KeyImport::FromPath {
                                 path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
-                            }
+                            })
                         } else {
-                            KeyRegistration::ImportVerifying {
+                            KeyRegistration::ImportVerifying(KeyImport::FromPath {
                                 path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
-                            }
+                            })
                         }
                     };
 
