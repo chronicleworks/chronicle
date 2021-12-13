@@ -578,14 +578,18 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             KeyRegistration::Generate => {
                 self.keystore.generate_agent(&id.clone().into())?;
             }
-            KeyRegistration::ImportSigning { path } => {
-                self.keystore
-                    .import_agent(&id.clone().into(), Some(&path), None)?
-            }
-            KeyRegistration::ImportVerifying { path } => {
-                self.keystore
-                    .import_agent(&id.clone().into(), None, Some(&path))?
-            }
+            KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => self
+                .keystore
+                .import_agent(&id.clone().into(), Some(&path), None)?,
+            KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => self
+                .keystore
+                .store_agent(&id.clone().into(), Some(&buffer), None)?,
+            KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => self
+                .keystore
+                .import_agent(&id.clone().into(), None, Some(&path))?,
+            KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => self
+                .keystore
+                .store_agent(&id.clone().into(), None, Some(&buffer))?,
         }
 
         let tx = ChronicleTransaction::RegisterKey(RegisterKey {
@@ -652,18 +656,30 @@ mod test {
     use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
-    use common::ledger::InMemLedger;
+    use common::{commands::ApiResponse, ledger::InMemLedger, prov::ProvModel};
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{Api, ApiDispatch};
+    use crate::{Api, ApiDispatch, ApiError};
 
     use common::commands::{
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
     };
 
-    fn test_api() -> ApiDispatch {
+    struct TestDispatch(ApiDispatch, Vec<ProvModel>);
+
+    impl TestDispatch {
+        pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
+            if let ApiResponse::Prov(_, mut prov) = self.0.dispatch(command).await? {
+                self.1.append(&mut prov);
+            }
+
+            Ok(())
+        }
+    }
+
+    fn test_api() -> TestDispatch {
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
@@ -673,7 +689,7 @@ mod test {
         let secretpath = TempDir::new().unwrap();
 
         let (dispatch, _ui) = Api::new(
-            SocketAddr::from_str("localhost:8080").unwrap(),
+            SocketAddr::from_str("0.0.0.0:8080").unwrap(),
             "file::memory:",
             InMemLedger::default(),
             &secretpath.into_path(),
@@ -681,28 +697,25 @@ mod test {
         )
         .unwrap();
 
-        dispatch
-    }
-
-    fn dump_ledger_state(_api: ApiDispatch) -> InMemLedger {
-        todo!()
+        TestDispatch(dispatch, vec![])
     }
 
     #[tokio::test]
     async fn create_namespace() {
-        let api = test_api();
+        let mut api = test_api();
+
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
         }))
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn create_agent() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
@@ -718,12 +731,12 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn agent_public_key() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
@@ -739,12 +752,14 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1, {
+            ".*.publickey" => "[public]"
+        });
     }
 
     #[tokio::test]
     async fn create_activity() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
@@ -754,12 +769,12 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn start_activity() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -770,7 +785,7 @@ mod test {
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Use {
-            name: "testagent_0".to_owned(),
+            name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
         .await
@@ -785,12 +800,12 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn end_activity() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -801,7 +816,7 @@ mod test {
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Use {
-            name: "testagent_0".to_owned(),
+            name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
         .await
@@ -825,12 +840,27 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn activity_use() {
-        let api = test_api();
+        let mut api = test_api();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+            domaintype: Some("testtype".to_owned()),
+        }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+            name: "testagent".to_owned(),
+            namespace: "testns".to_owned(),
+        }))
+        .await
+        .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
@@ -861,19 +891,19 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
             namespace: None,
-            time: None,
+            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
         .await
         .unwrap();
 
         // Note that use should be idempotent as the name will be unique
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn activity_generate() {
-        let api = test_api();
+        let mut api = test_api();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
@@ -902,12 +932,12 @@ mod test {
         .unwrap();
 
         // Note that generate should be idempotent as the name will be unique
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 
     #[tokio::test]
     async fn many_activities() {
-        let api = test_api();
+        let mut api = test_api();
 
         for _ in 0..100 {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
@@ -919,6 +949,6 @@ mod test {
             .unwrap();
         }
 
-        insta::assert_json_snapshot!(dump_ledger_state(api));
+        insta::assert_yaml_snapshot!(api.1);
     }
 }

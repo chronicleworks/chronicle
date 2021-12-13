@@ -217,7 +217,7 @@ async fn main() {
         if matches.is_present("debug") {
             tracing_subscriber::fmt()
                 .pretty()
-                .with_max_level(Level::TRACE)
+                .with_max_level(Level::DEBUG)
                 .init();
             Some(())
         } else {

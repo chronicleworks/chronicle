@@ -9,15 +9,7 @@ expression: api.1
       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
       name: testns
   agents: {}
-  activities:
-    ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#activity:testactivity"
-    : id: "http://blockchaintp.com/chronicle/ns#activity:testactivity"
-      namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      name: testactivity
-      domaintypeid: ~
-      started: ~
-      ended: ~
+  activities: {}
   entities: {}
   was_associated_with: {}
   was_attributed_to: {}
@@ -28,16 +20,15 @@ expression: api.1
       id: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
       name: testns
-  agents: {}
-  activities:
+  agents:
     ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#activity:testactivity"
-    : id: "http://blockchaintp.com/chronicle/ns#activity:testactivity"
+      - "http://blockchaintp.com/chronicle/ns#agent:testagent"
+    : id: "http://blockchaintp.com/chronicle/ns#agent:testagent"
       namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      name: testactivity
-      domaintypeid: "http://blockchaintp.com/chronicle/ns#domaintype:testtype"
-      started: ~
-      ended: ~
+      name: testagent
+      domaintypeid: ~
+      publickey: 03c4c663d96ec83af004ba21839cebcefedadde8b3905fbeaf9bb3f4fb3b9a13fe
+  activities: {}
   entities: {}
   was_associated_with: {}
   was_attributed_to: {}

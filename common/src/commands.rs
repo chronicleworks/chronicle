@@ -11,10 +11,16 @@ pub enum NamespaceCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum KeyImport {
+    FromPath { path: PathBuf },
+    FromPEMBuffer { buffer: Vec<u8> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KeyRegistration {
     Generate,
-    ImportVerifying { path: PathBuf },
-    ImportSigning { path: PathBuf },
+    ImportVerifying(KeyImport),
+    ImportSigning(KeyImport),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

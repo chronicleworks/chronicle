@@ -53,6 +53,29 @@ impl DirectoryStoredKeys {
             .or_else(|_| Self::verifying_key_at(&self.agent_path(agent)))
     }
 
+    pub fn store_agent(
+        &self,
+        agent: &AgentId,
+        signing: Option<&Vec<u8>>,
+        verifying: Option<&Vec<u8>>,
+    ) -> Result<(), SignerError> {
+        if let Some(signing) = signing {
+            std::fs::write(
+                Path::join(&self.agent_path(agent), Path::new("key.priv.pem")),
+                signing,
+            )?;
+        }
+
+        if let Some(verifying) = verifying {
+            std::fs::write(
+                Path::join(&self.agent_path(agent), Path::new("key.pub.pem")),
+                verifying,
+            )?;
+        }
+
+        Ok(())
+    }
+
     pub fn import_agent(
         &self,
         agent: &AgentId,

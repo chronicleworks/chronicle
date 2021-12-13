@@ -47,7 +47,7 @@ async-graphql-extension-apollo-tracing = {version="2.1.0", features=["tokio-comp
 async-stream = "0.3.2"
 
 [dev-dependencies]
-insta = "1.8.0"
+insta = {version = "1.8.0", features=["redactions"]}
 tempfile = "3.2.0"
 tracing-subscriber = "0.3.1"
 trunk = "0.14.0"

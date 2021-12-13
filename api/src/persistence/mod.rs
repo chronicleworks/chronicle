@@ -235,12 +235,14 @@ impl Store {
             ref name, ref uuid, ..
         }: &Namespace,
     ) -> Result<(), StoreError> {
-        diesel::insert_or_ignore_into(schema::namespace::table)
-            .values(&query::NewNamespace {
-                name,
-                uuid: &uuid.to_string(),
-            })
-            .execute(&mut self.connection()?)?;
+        self.connection()?.immediate_transaction(|connection| {
+            diesel::insert_or_ignore_into(schema::namespace::table)
+                .values(&query::NewNamespace {
+                    name,
+                    uuid: &uuid.to_string(),
+                })
+                .execute(connection)
+        })?;
 
         Ok(())
     }
@@ -248,11 +250,14 @@ impl Store {
     #[instrument]
     pub(crate) fn namespace_by_name(&self, namespace: &str) -> Result<NamespaceId, StoreError> {
         use self::schema::namespace::dsl as ns;
-        let ns = ns::namespace
-            .filter(ns::name.eq(namespace))
-            .first::<query::Namespace>(&mut self.connection()?)
-            .optional()?
-            .ok_or(StoreError::RecordNotFound {})?;
+
+        let ns = self.connection()?.immediate_transaction(|connection| {
+            ns::namespace
+                .filter(ns::name.eq(namespace))
+                .first::<query::Namespace>(connection)
+                .optional()?
+                .ok_or(StoreError::RecordNotFound {})
+        })?;
 
         Ok(Chronicle::namespace(&ns.name, &Uuid::from_str(&ns.uuid)?).into())
     }
@@ -270,14 +275,17 @@ impl Store {
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        diesel::insert_or_ignore_into(schema::agent::table)
-            .values(&query::NewAgent {
-                name,
-                namespace: &namespace.name,
-                current: 0,
-                publickey: publickey.as_deref(),
-            })
-            .execute(&mut self.connection()?)?;
+
+        self.connection()?.immediate_transaction(|connection| {
+            diesel::insert_or_ignore_into(schema::agent::table)
+                .values(&query::NewAgent {
+                    name,
+                    namespace: &namespace.name,
+                    current: 0,
+                    publickey: publickey.as_deref(),
+                })
+                .execute(connection)
+        })?;
 
         Ok(())
     }
@@ -296,29 +304,35 @@ impl Store {
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        diesel::insert_or_ignore_into(schema::activity::table)
-            .values(&query::NewActivity {
-                name,
-                namespace: &namespace.name,
-                started: started.map(|t| t.naive_utc()),
-                ended: ended.map(|t| t.naive_utc()),
-            })
-            .execute(&mut self.connection()?)?;
+
+        self.connection()?.immediate_transaction(|connection| {
+            diesel::insert_or_ignore_into(schema::activity::table)
+                .values(&query::NewActivity {
+                    name,
+                    namespace: &namespace.name,
+                    started: started.map(|t| t.naive_utc()),
+                    ended: ended.map(|t| t.naive_utc()),
+                })
+                .execute(connection)
+        })?;
 
         Ok(())
     }
 
     pub(crate) fn use_agent(&self, name: String, namespace: String) -> Result<(), StoreError> {
         use schema::agent::dsl;
-        diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
-            .set(dsl::current.eq(0))
-            .execute(&mut self.connection()?)?;
 
-        diesel::update(
-            schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
-        )
-        .set(dsl::current.eq(1))
-        .execute(&mut self.connection()?)?;
+        self.connection()?.immediate_transaction(|connection| {
+            diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
+                .set(dsl::current.eq(0))
+                .execute(connection)?;
+
+            diesel::update(
+                schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
+            )
+            .set(dsl::current.eq(1))
+            .execute(connection)
+        })?;
 
         Ok(())
     }
