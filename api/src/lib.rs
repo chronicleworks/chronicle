@@ -5,16 +5,17 @@ use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
-use diesel::{r2d2::ConnectionManager, SqliteConnection};
+use diesel::{connection::SimpleConnection, r2d2::ConnectionManager, SqliteConnection};
 use futures::{Future, TryFutureExt};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
-use r2d2::Pool;
+use r2d2::{CustomizeConnection, Pool};
 use std::{
     convert::Infallible,
     net::{AddrParseError, SocketAddr},
     path::{Path, PathBuf},
+    time::Duration,
 };
 use tokio::sync::mpsc::{self, error::SendError, Sender};
 
@@ -81,6 +82,33 @@ where
     uuidsource: Box<dyn Fn() -> Uuid + Send + 'static>,
 }
 
+#[derive(Debug)]
+pub struct ConnectionOptions {
+    pub enable_wal: bool,
+    pub enable_foreign_keys: bool,
+    pub busy_timeout: Option<Duration>,
+}
+
+impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
+    for ConnectionOptions
+{
+    fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
+        (|| {
+            if self.enable_wal {
+                conn.batch_execute("PRAGMA journal_mode = WAL2; PRAGMA synchronous = NORMAL;")?;
+            }
+            if self.enable_foreign_keys {
+                conn.batch_execute("PRAGMA foreign_keys = ON;")?;
+            }
+            if let Some(d) = self.busy_timeout {
+                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
+            }
+            Ok(())
+        })()
+        .map_err(diesel::r2d2::Error::QueryError)
+    }
+}
+
 #[derive(Debug, Clone)]
 /// A clonable api handle
 pub struct ApiDispatch {
@@ -99,74 +127,95 @@ impl ApiDispatch {
 }
 
 impl<W: LedgerWriter + 'static + Send> Api<W> {
-    #[instrument(skip(ledger, uuidgen))]
-    pub fn new<F>(
-        addr: SocketAddr,
-        dbpath: &str,
-        ledger: W,
-        secret_path: &Path,
-        uuidgen: F,
-    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
-    where
-        F: Fn() -> Uuid + Send + 'static,
-    {
-        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+    #[instrument]
+    async fn activity_generate(
+        &mut self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+        domaintype: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace).await?;
+        let activity = self
+            .store
+            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
 
-        let pool = Pool::builder().build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
-
-        let dispatch = ApiDispatch { tx: tx.clone() };
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let secret_path = secret_path.to_owned();
-
-        let store = Store::new(pool.clone())?;
-
-        let ql_pool = pool.clone();
-
-        std::thread::spawn(move || {
-            let local = tokio::task::LocalSet::new();
-            local.spawn_local(async move {
-                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-
-                let mut api = Api {
-                    tx: tx.clone(),
-                    keystore,
-                    ledger,
-                    pool,
-                    store,
-                    uuidsource: Box::new(uuidgen),
-                };
-
-                debug!(?api, "Api running on localset");
-
-                loop {
-                    if let Some((command, reply)) = rx.recv().await {
-                        trace!(?rx, "Recv api command from channel");
-
-                        let result = api.dispatch(command).await;
-
-                        reply
-                            .send(result)
-                            .await
-                            .map_err(|e| {
-                                error!(?e);
-                            })
-                            .ok();
-                    } else {
-                        return;
-                    }
-                }
-            });
-
-            rt.block_on(local)
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let name = self.store.disambiguate_entity_name(&name)?;
+        let id = ChronicleVocab::entity(&name);
+        let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
+            activity: ChronicleVocab::activity(&activity.name).into(),
         });
 
-        Ok((
-            dispatch.clone(),
-            graphql::serve_graphql(ql_pool, dispatch, addr, true),
+        let mut to_apply = vec![create];
+
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
+    }
+
+    #[instrument]
+    async fn activity_use(
+        &mut self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+        domaintype: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let activity = self
+            .store
+            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
+
+        self.ensure_namespace(&namespace).await?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+
+        let name = self.store.disambiguate_entity_name(&name)?;
+        let id = ChronicleVocab::entity(&name);
+
+        let create = ChronicleTransaction::ActivityUses(ActivityUses {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
+            activity: ChronicleVocab::activity(&activity.name).into(),
+        });
+
+        let mut to_apply = vec![create];
+
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
         ))
     }
 
@@ -174,33 +223,44 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         self.ledger
     }
 
-    /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
-    async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
-        let ns = self.store.namespace_by_name(namespace);
-
-        if ns.is_err() {
-            debug!(namespace, "Namespace does not exist, creating");
-            self.create_namespace(namespace).await?;
-        }
-
-        Ok(())
-    }
-
-    #[instrument]
-    async fn create_namespace(&mut self, name: &str) -> Result<ApiResponse, ApiError> {
-        let uuid = (self.uuidsource)();
-        let iri = ChronicleVocab::namespace(name, &uuid);
-
-        let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
-            id: iri.clone().into(),
-            name: name.to_owned(),
-            uuid,
+    async fn create_activity(
+        &mut self,
+        name: String,
+        namespace: String,
+        domaintype: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace).await?;
+        let name = self.store.disambiguate_activity_name(&name)?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::activity(&name);
+        let create = ChronicleTransaction::CreateActivity(CreateActivity {
+            namespace: namespace.clone(),
+            id: id.clone().into(),
+            name,
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        let mut to_apply = vec![create];
 
-        Ok(ApiResponse::Prov(iri, vec![self.store.apply(&tx)?]))
+        if let Some(domaintype) = domaintype {
+            let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                id: id.clone().into(),
+                namespace,
+                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+            });
+
+            to_apply.push(set_type)
+        }
+
+        self.ledger.submit(to_apply.iter().collect()).await?;
+
+        Ok(ApiResponse::Prov(
+            id,
+            vec![
+                self.store.apply(&to_apply[0])?,
+                self.store.apply(&to_apply[1])?,
+            ],
+        ))
     }
 
     #[instrument]
@@ -242,6 +302,22 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 self.store.apply(&to_apply[1])?,
             ],
         ))
+    }
+
+    #[instrument]
+    async fn create_namespace(&mut self, name: &str) -> Result<ApiResponse, ApiError> {
+        let uuid = (self.uuidsource)();
+        let iri = ChronicleVocab::namespace(name, &uuid);
+
+        let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
+            id: iri.clone().into(),
+            name: name.to_owned(),
+            uuid,
+        });
+
+        self.ledger.submit(vec![&tx]).await?;
+
+        Ok(ApiResponse::Prov(iri, vec![self.store.apply(&tx)?]))
     }
 
     #[instrument]
@@ -313,128 +389,6 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     #[instrument]
-    async fn register_key(
-        &mut self,
-        name: String,
-        namespace: String,
-        registration: KeyRegistration,
-    ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-        let namespaceid = self.store.namespace_by_name(&namespace)?;
-        let id = ChronicleVocab::agent(&name);
-        match registration {
-            KeyRegistration::Generate => {
-                self.keystore.generate_agent(&id.clone().into())?;
-            }
-            KeyRegistration::ImportSigning { path } => {
-                self.keystore
-                    .import_agent(&id.clone().into(), Some(&path), None)?
-            }
-            KeyRegistration::ImportVerifying { path } => {
-                self.keystore
-                    .import_agent(&id.clone().into(), None, Some(&path))?
-            }
-        }
-
-        let tx = ChronicleTransaction::RegisterKey(RegisterKey {
-            id: id.clone().into(),
-            name,
-            namespace: namespaceid,
-            publickey: hex::encode(
-                self.keystore
-                    .agent_verifying(&id.clone().into())?
-                    .to_bytes(),
-            ),
-        });
-
-        self.ledger.submit(vec![&tx]).await?;
-        self.store.apply(&tx)?;
-
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
-    }
-
-    #[instrument]
-    async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
-        self.store.use_agent(name, namespace)?;
-
-        Ok(ApiResponse::Unit)
-    }
-
-    #[instrument]
-    async fn create_activity(
-        &mut self,
-        name: String,
-        namespace: String,
-        domaintype: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-        let name = self.store.disambiguate_activity_name(&name)?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
-        let id = ChronicleVocab::activity(&name);
-        let create = ChronicleTransaction::CreateActivity(CreateActivity {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            name,
-        });
-
-        let mut to_apply = vec![create];
-
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
-                id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-            });
-
-            to_apply.push(set_type)
-        }
-
-        self.ledger.submit(to_apply.iter().collect()).await?;
-
-        Ok(ApiResponse::Prov(
-            id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
-        ))
-    }
-
-    #[instrument]
-    async fn start_activity(
-        &mut self,
-        name: String,
-        namespace: String,
-        time: Option<DateTime<Utc>>,
-        agent: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        let agent = {
-            if let Some(agent) = agent {
-                self.store
-                    .agent_by_agent_name_and_namespace(&agent, &namespace)?
-            } else {
-                self.store
-                    .get_current_agent()
-                    .map_err(|_| ApiError::NoCurrentAgent {})?
-            }
-        };
-
-        let name = self.store.disambiguate_activity_name(&name)?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
-        let id = ChronicleVocab::activity(&name);
-        let tx = ChronicleTransaction::StartActivity(StartActivity {
-            namespace,
-            id: id.clone().into(),
-            agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or(Utc::now()),
-        });
-
-        self.ledger.submit(vec![&tx]).await?;
-
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
-    }
-
-    #[instrument]
     async fn end_activity(
         &mut self,
         name: Option<String>,
@@ -471,96 +425,17 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
+    /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
-    async fn activity_use(
-        &mut self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-        domaintype: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        let activity = self
-            .store
-            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
+    async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
+        let ns = self.store.namespace_by_name(namespace);
 
-        self.ensure_namespace(&namespace).await?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
-
-        let name = self.store.disambiguate_entity_name(&name)?;
-        let id = ChronicleVocab::entity(&name);
-
-        let create = ChronicleTransaction::ActivityUses(ActivityUses {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            activity: ChronicleVocab::activity(&activity.name).into(),
-        });
-
-        let mut to_apply = vec![create];
-
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
-                id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-            });
-
-            to_apply.push(set_type)
+        if ns.is_err() {
+            debug!(namespace, "Namespace does not exist, creating");
+            self.create_namespace(namespace).await?;
         }
 
-        self.ledger.submit(to_apply.iter().collect()).await?;
-
-        Ok(ApiResponse::Prov(
-            id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
-        ))
-    }
-
-    #[instrument]
-    async fn activity_generate(
-        &mut self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-        domaintype: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-        let activity = self
-            .store
-            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
-
-        let namespace = self.store.namespace_by_name(&namespace)?;
-        let name = self.store.disambiguate_entity_name(&name)?;
-        let id = ChronicleVocab::entity(&name);
-        let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            activity: ChronicleVocab::activity(&activity.name).into(),
-        });
-
-        let mut to_apply = vec![create];
-
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
-                id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-            });
-
-            to_apply.push(set_type)
-        }
-
-        self.ledger.submit(to_apply.iter().collect()).await?;
-
-        Ok(ApiResponse::Prov(
-            id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
-        ))
+        Ok(())
     }
 
     #[instrument]
@@ -604,12 +479,171 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
     }
 
+    #[instrument(skip(ledger, uuidgen))]
+    pub fn new<F>(
+        addr: SocketAddr,
+        dbpath: &str,
+        ledger: W,
+        secret_path: &Path,
+        uuidgen: F,
+    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
+    where
+        F: Fn() -> Uuid + Send + 'static,
+    {
+        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(Duration::from_secs(30)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
+
+        let dispatch = ApiDispatch { tx: tx.clone() };
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let secret_path = secret_path.to_owned();
+
+        let store = Store::new(pool.clone())?;
+
+        let ql_pool = pool.clone();
+
+        std::thread::spawn(move || {
+            let local = tokio::task::LocalSet::new();
+            local.spawn_local(async move {
+                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
+
+                let mut api = Api {
+                    tx: tx.clone(),
+                    keystore,
+                    ledger,
+                    pool,
+                    store,
+                    uuidsource: Box::new(uuidgen),
+                };
+
+                debug!(?api, "Api running on localset");
+
+                loop {
+                    if let Some((command, reply)) = rx.recv().await {
+                        trace!(?rx, "Recv api command from channel");
+
+                        let result = api.dispatch(command).await;
+
+                        reply
+                            .send(result)
+                            .await
+                            .map_err(|e| {
+                                error!(?e);
+                            })
+                            .ok();
+                    } else {
+                        return;
+                    }
+                }
+            });
+
+            rt.block_on(local)
+        });
+
+        Ok((
+            dispatch.clone(),
+            graphql::serve_graphql(ql_pool, dispatch, addr, true),
+        ))
+    }
+
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
         let id = self.store.namespace_by_name(&query.namespace)?;
         Ok(ApiResponse::Prov(
             IriBuf::new(id.as_str()).unwrap(),
             vec![self.store.prov_model_from(query)?],
         ))
+    }
+
+    #[instrument]
+    async fn register_key(
+        &mut self,
+        name: String,
+        namespace: String,
+        registration: KeyRegistration,
+    ) -> Result<ApiResponse, ApiError> {
+        self.ensure_namespace(&namespace).await?;
+        let namespaceid = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::agent(&name);
+        match registration {
+            KeyRegistration::Generate => {
+                self.keystore.generate_agent(&id.clone().into())?;
+            }
+            KeyRegistration::ImportSigning { path } => {
+                self.keystore
+                    .import_agent(&id.clone().into(), Some(&path), None)?
+            }
+            KeyRegistration::ImportVerifying { path } => {
+                self.keystore
+                    .import_agent(&id.clone().into(), None, Some(&path))?
+            }
+        }
+
+        let tx = ChronicleTransaction::RegisterKey(RegisterKey {
+            id: id.clone().into(),
+            name,
+            namespace: namespaceid,
+            publickey: hex::encode(
+                self.keystore
+                    .agent_verifying(&id.clone().into())?
+                    .to_bytes(),
+            ),
+        });
+
+        self.ledger.submit(vec![&tx]).await?;
+        self.store.apply(&tx)?;
+
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+    }
+
+    #[instrument]
+    async fn start_activity(
+        &mut self,
+        name: String,
+        namespace: String,
+        time: Option<DateTime<Utc>>,
+        agent: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let agent = {
+            if let Some(agent) = agent {
+                self.store
+                    .agent_by_agent_name_and_namespace(&agent, &namespace)?
+            } else {
+                self.store
+                    .get_current_agent()
+                    .map_err(|_| ApiError::NoCurrentAgent {})?
+            }
+        };
+
+        let name = self.store.disambiguate_activity_name(&name)?;
+        let namespace = self.store.namespace_by_name(&namespace)?;
+        let id = ChronicleVocab::activity(&name);
+        let tx = ChronicleTransaction::StartActivity(StartActivity {
+            namespace,
+            id: id.clone().into(),
+            agent: ChronicleVocab::agent(&agent.name).into(),
+            time: time.unwrap_or(Utc::now()),
+        });
+
+        self.ledger.submit(vec![&tx]).await?;
+
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+    }
+
+    #[instrument]
+    async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+        self.store.use_agent(name, namespace)?;
+
+        Ok(ApiResponse::Unit)
     }
 }
 
