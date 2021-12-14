@@ -20,9 +20,9 @@ impl DomaintypeId {
         DomaintypeId(s.as_ref().to_owned())
     }
     /// Decompose a domain type id into its constituent parts, we need to preserve the type better to justify this implementation
-    pub fn decompose(&self) -> (&str, Uuid) {
-        if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
-            return (name, Uuid::parse_str(uuid).unwrap());
+    pub fn decompose(&self) -> &str {
+        if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
+            return name;
         }
 
         unreachable!();

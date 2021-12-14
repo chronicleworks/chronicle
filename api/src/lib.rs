@@ -120,7 +120,13 @@ impl ApiDispatch {
         trace!(?command, "Dispatch command to api");
         self.tx.clone().send((command, reply_tx)).await?;
 
-        reply_rx.recv().await.ok_or(ApiError::ApiShutdownRx {})?
+        let reply = reply_rx.recv().await;
+
+        if let Some(Err(ref error)) = reply {
+            error!(?error, "Api dispatch");
+        }
+
+        reply.ok_or(ApiError::ApiShutdownRx {})?
     }
 }
 

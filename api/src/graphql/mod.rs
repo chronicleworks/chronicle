@@ -479,7 +479,7 @@ impl Mutation {
         activity_context(&namespace, res, ctx).await
     }
 
-    pub async fn acitvity_use<'a>(
+    pub async fn activity_use<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,
@@ -503,7 +503,7 @@ impl Mutation {
         entity_context(&namespace, res, ctx).await
     }
 
-    pub async fn acitvity_generate<'a>(
+    pub async fn activity_generate<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,

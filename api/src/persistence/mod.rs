@@ -279,6 +279,8 @@ impl Store {
         Ok(Chronicle::namespace(&ns.name, &Uuid::from_str(&ns.uuid)?).into())
     }
 
+    /// Apply an agent to persistent storage, name + namespace are a key, so we update publickey + domaintype on conflict
+    /// current is a special case, only relevent to local CLI context. A possibly improved design would be to store this in another table given its scope
     #[instrument(skip(connection))]
     fn apply_agent(
         &self,
@@ -292,20 +294,31 @@ impl Store {
         }: &Agent,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
+        use schema::agent::{self as dsl};
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 
-        diesel::insert_or_ignore_into(schema::agent::table)
-            .values(&query::NewAgent {
-                name,
-                namespace: &namespace.name,
-                current: 0,
-                publickey: publickey.as_deref(),
-            })
+        let agent = query::NewAgent {
+            name,
+            namespace: &namespace.name,
+            current: 0,
+            publickey: publickey.as_deref(),
+            domaintype: domaintypeid.as_ref().map(|x| x.decompose()),
+        };
+
+        diesel::insert_into(schema::agent::table)
+            .values(&agent)
+            .on_conflict((dsl::name, dsl::namespace))
+            .do_update()
+            .set((
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
+                dsl::publickey.eq(publickey.as_deref()),
+            ))
             .execute(connection)?;
 
         Ok(())
     }
 
+    /// Apply an activity to persistent storage, name + namespace are a key, so we update times + domaintype on conflict
     #[instrument(skip(connection))]
     fn apply_activity(
         &self,
@@ -320,15 +333,24 @@ impl Store {
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
+        use schema::activity::{self as dsl};
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 
-        diesel::insert_or_ignore_into(schema::activity::table)
+        diesel::insert_into(schema::activity::table)
             .values(&query::NewActivity {
                 name,
                 namespace: &namespace.name,
                 started: started.map(|t| t.naive_utc()),
                 ended: ended.map(|t| t.naive_utc()),
+                domaintype: domaintypeid.as_ref().map(|x| x.decompose()),
             })
+            .on_conflict((dsl::name, dsl::namespace))
+            .do_update()
+            .set((
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
+                dsl::started.eq(started.map(|t| t.naive_utc())),
+                dsl::ended.eq(ended.map(|t| t.naive_utc())),
+            ))
             .execute(connection)?;
 
         Ok(())
@@ -515,9 +537,11 @@ impl Store {
             .values((
                 dsl::name.eq(entity.name()),
                 dsl::namespace.eq(&namespace.name),
+                dsl::domaintype.eq(entity.domaintypeid().as_ref().map(|x| x.as_str())),
             ))
             .on_conflict((dsl::name, dsl::namespace))
-            .do_nothing()
+            .do_update()
+            .set(dsl::domaintype.eq(entity.domaintypeid().as_ref().map(|x| x.decompose())))
             .execute(connection)?;
 
         if let Entity::Signed {

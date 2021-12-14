@@ -22,6 +22,7 @@ pub struct NewActivity<'a> {
     pub namespace: &'a str,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
+    pub domaintype: Option<&'a str>,
 }
 
 #[derive(Debug, Queryable)]
@@ -62,4 +63,5 @@ pub struct NewAgent<'a> {
     pub namespace: &'a str,
     pub current: i32,
     pub publickey: Option<&'a str>,
+    pub domaintype: Option<&'a str>,
 }
