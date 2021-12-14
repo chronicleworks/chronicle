@@ -186,8 +186,8 @@ impl Store {
 
     /// Apply a chronicle transaction to the store idempotently and return a prov model relevant to the transaction
     #[instrument]
-    pub fn apply(&self, tx: &ChronicleTransaction) -> Result<ProvModel, StoreError> {
-        let model = ProvModel::from_tx(vec![tx]);
+    pub fn apply(&self, tx: Vec<&ChronicleTransaction>) -> Result<ProvModel, StoreError> {
+        let model = ProvModel::from_tx(tx);
 
         trace!(?model);
 

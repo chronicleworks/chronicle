@@ -9,17 +9,15 @@ build = "build.rs"
 custom_error = "1.9.2"
 diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
 diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono", "r2d2"], git = "https://github.com/diesel-rs/diesel" }
-dotenv = "0.15.0"
-iref = "2.0.3"
+iref = "2.1.0"
 iref-enum = "1.2.0"
 json = "0.12.4"
-json-ld = "0.4.0"
+json-ld = "0.3.0"
 k256 = { version = "0.9.6", features = ["pem","std"] }
 pkcs8 = { version = "0.7.6", features = ["pem","std","alloc"] }
 static-iref = "1.0.0"
 user-error = "1.2.8"
 uuid = { version = "0.8.2", features = ["v4"] }
-validator = { version = "0.14.0", features = ["derive"] }
 url = "2.2.2"
 glob = "0.3.0"
 proto = {path="../sawtooth_protocol"}
@@ -27,27 +25,22 @@ common = {path="../common"}
 tracing = "0.1.29"
 derivative = "2.2.0"
 chrono = "0.4.19"
-multimap = "0.8.3"
 hex = "0.4.3"
 tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
 parking_lot = "0.11.2"
-includedir = "0.6.0"
-phf = "0.8"
-serde = "1.0.130"
-serde_derive = "1.0.130"
-futures = "0.3"
-async-trait = "0.1.51"
-crossbeam = "0.8.1"
-open = "2.0.1"
-async-graphql = {vesion = "3.0.12", features = ["tracing","chrono","default"]}
+serde = "1.0.131"
+serde_derive = "1.0.131"
+futures = "0.3.18"
+async-trait = "0.1.52"
+open = "2.0.2"
+async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","default"], version = "3.0.15" }
 warp = "0.3.2"
-async-graphql-warp = "3.0.12"
+async-graphql-warp = "3.0.15"
 r2d2 = "0.8.9"
-async-graphql-extension-apollo-tracing = {version="2.1.0", features=["tokio-comp"]}
+async-graphql-extension-apollo-tracing = { version = "2.1.0", features = ["tokio-comp"] }
 async-stream = "0.3.2"
 
 [dev-dependencies]
-insta = {version = "1.8.0", features=["redactions"]}
+insta = { version = "1.8.0", features = ["redactions"] }
 tempfile = "3.2.0"
-tracing-subscriber = "0.3.1"
-trunk = "0.14.0"
+tracing-subscriber = "0.3.3"

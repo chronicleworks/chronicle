@@ -175,10 +175,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         Ok(ApiResponse::Prov(
             id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
+            vec![self.store.apply(to_apply.iter().collect())?],
         ))
     }
 
@@ -190,47 +187,48 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         activity: Option<String>,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-        let activity = self.store.get_activity_by_name_or_last_started(
-            &mut connection,
-            activity,
-            Some(namespace.clone()),
-        )?;
+        let (id, to_apply) = {
+            let mut connection = self.store.connection()?;
 
-        self.ensure_namespace(&namespace).await?;
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
+            self.ensure_namespace(&namespace).await?;
+            let ns = self.store.namespace_by_name(&mut connection, &namespace)?;
 
-        let name = self
-            .store
-            .disambiguate_entity_name(&mut connection, &name)?;
-        let id = ChronicleVocab::entity(&name);
+            let activity = self.store.get_activity_by_name_or_last_started(
+                &mut connection,
+                activity,
+                Some(namespace.clone()),
+            )?;
 
-        let create = ChronicleTransaction::ActivityUses(ActivityUses {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            activity: ChronicleVocab::activity(&activity.name).into(),
-        });
+            let name = self
+                .store
+                .disambiguate_entity_name(&mut connection, &name)?;
+            let id = ChronicleVocab::entity(&name);
 
-        let mut to_apply = vec![create];
-
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+            let create = ChronicleTransaction::ActivityUses(ActivityUses {
+                namespace: ns.clone(),
                 id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                activity: ChronicleVocab::activity(&activity.name).into(),
             });
 
-            to_apply.push(set_type)
-        }
+            let mut to_apply = vec![create];
+
+            if let Some(domaintype) = domaintype {
+                let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                    id: id.clone().into(),
+                    namespace: ns,
+                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                });
+
+                to_apply.push(set_type)
+            }
+            (id, to_apply)
+        };
 
         self.ledger.submit(to_apply.iter().collect()).await?;
 
         Ok(ApiResponse::Prov(
             id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
+            vec![self.store.apply(to_apply.iter().collect())?],
         ))
     }
 
@@ -275,10 +273,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         Ok(ApiResponse::Prov(
             id,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
+            vec![self.store.apply(to_apply.iter().collect())?],
         ))
     }
 
@@ -318,10 +313,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         Ok(ApiResponse::Prov(
             iri,
-            vec![
-                self.store.apply(&to_apply[0])?,
-                self.store.apply(&to_apply[1])?,
-            ],
+            vec![self.store.apply(to_apply.iter().collect())?],
         ))
     }
 
@@ -338,7 +330,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(iri, vec![self.store.apply(&tx)?]))
+        Ok(ApiResponse::Prov(iri, vec![self.store.apply(vec![&tx])?]))
     }
 
     #[instrument]
@@ -449,7 +441,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
@@ -505,7 +497,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
     #[instrument(skip(ledger, uuidgen))]
@@ -636,9 +628,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         });
 
         self.ledger.submit(vec![&tx]).await?;
-        self.store.apply(&tx)?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
     #[instrument]
@@ -675,7 +666,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         self.ledger.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(&tx)?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
     #[instrument]

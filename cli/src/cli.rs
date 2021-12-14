@@ -5,7 +5,7 @@ pub fn cli() -> App<'static> {
     App::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
-        .about("Write and query provenance data to distributed ledgers")
+        .help("Write and query provenance data to distributed ledgers")
         .arg(
             Arg::new("config")
                 .short('c')
@@ -13,35 +13,35 @@ pub fn cli() -> App<'static> {
                 .value_name("config")
                 .value_hint(ValueHint::FilePath)
                 .default_value("~/.chronicle/config.toml")
-                .about("Sets a custom config file")
+                .help("Sets a custom config file")
                 .takes_value(true),
         )
         .arg(
             Arg::new("completions")
                 .long("completions")
                 .value_name("completions")
-                .possible_values(Shell::arg_values())
-                .about("Generate shell completions and exit"),
+                .possible_values(Shell::possible_values())
+                .help("Generate shell completions and exit"),
         )
         .arg(
             Arg::new("debug")
                 .short('d')
                 .long("debug")
-                .about("Print debugging information"),
+                .help("Print debugging information"),
         )
         .arg(
             Arg::new("ui")
                 .long("ui")
                 .required(false)
                 .takes_value(false)
-                .about("Start a web user interface"),
+                .help("Start a web user interface"),
         )
         .arg(
             Arg::new("open")
                 .long("open")
                 .required(false)
                 .takes_value(false)
-                .about("Open the default browser for the user interface"),
+                .help("Open the default browser for the user interface"),
         )
         .arg(
             Arg::new("ui-interface")
@@ -49,23 +49,23 @@ pub fn cli() -> App<'static> {
                 .required(false)
                 .takes_value(true)
                 .default_value("127.0.0.1:9982")
-                .about("The user interface address"),
+                .help("The user interface address"),
         )
         .subcommand(
             App::new("namespace")
-                .about("controls namespace features")
+                .help("controls namespace features")
                 .subcommand(
                     App::new("create")
-                        .about("Create a new namespace")
+                        .help("Create a new namespace")
                         .arg(Arg::new("namespace").required(true).takes_value(true)),
                 ),
         )
         .subcommand(
             App::new("agent")
-                .about("controls agents")
+                .help("controls agents")
                 .subcommand(
                     App::new("create")
-                        .about("Create a new agent, if required")
+                        .help("Create a new agent, if required")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -90,7 +90,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("register-key")
-                        .about("Register a key pair, or a public key with an agent")
+                        .help("Register a key pair, or a public key with an agent")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -101,7 +101,7 @@ pub fn cli() -> App<'static> {
                                 .takes_value(true),
                         )
                         .arg(Arg::new("generate")
-                            .about("Automatically generate a signing key for this agent and store it in the configured key store")
+                            .help("Automatically generate a signing key for this agent and store it in the configured key store")
                             .required_unless_present_any(vec!["publickey", "privatekey"])
                             .short('g')
                             .long("generate")
@@ -109,7 +109,7 @@ pub fn cli() -> App<'static> {
                         )
                         .arg(
                             Arg::new("publickey")
-                                .about("Import the public key at this location to the configured key store")
+                                .help("Import the public key at this location to the configured key store")
                                 .short('p')
                                 .long("publickey")
                                 .value_hint(ValueHint::FilePath)
@@ -118,7 +118,7 @@ pub fn cli() -> App<'static> {
                         )
                         .arg(
                             Arg::new("privatekey")
-                                .about("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
+                                .help("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
                                 .short('k')
                                 .long("privatekey")
                                 .required_unless_present_any(vec!["generate","publickey"])
@@ -129,7 +129,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("use")
-                        .about("Make the specified agent the context for activities and entities")
+                        .help("Make the specified agent the context for activities and entities")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -145,7 +145,7 @@ pub fn cli() -> App<'static> {
             App::new("activity")
                 .subcommand(
                     App::new("create")
-                        .about("Create a new activity, if required")
+                        .help("Create a new activity, if required")
                         .arg(Arg::new("activity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -170,7 +170,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("start")
-                        .about("Record this activity as started at the current time")
+                        .help("Record this activity as started at the current time")
                         .arg(Arg::new("activity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -183,7 +183,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("end")
-                        .about("Record this activity as ended at the current time")
+                        .help("Record this activity as ended at the current time")
                         .arg(Arg::new("activity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -196,7 +196,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("use")
-                        .about("Record this activity as having used the specified entity, creating it if required")
+                        .help("Record this activity as having used the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -228,7 +228,7 @@ pub fn cli() -> App<'static> {
                 )
                 .subcommand(
                     App::new("generate")
-                        .about("Records this activity as having generated the specified entity, creating it if required")
+                        .help("Records this activity as having generated the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -261,10 +261,10 @@ pub fn cli() -> App<'static> {
         )
         .subcommand(
             App::new("entity")
-                .about("Operations on entities")
+                .help("Operations on entities")
                 .subcommand(
                     App::new("attach")
-                        .about("Sign the input file and record it against the entity")
+                        .help("Sign the input file and record it against the entity")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
                             Arg::new("namespace")
@@ -277,7 +277,7 @@ pub fn cli() -> App<'static> {
                         .arg(
                             Arg::new("file")
                                 .short('f')
-                                .about("A path to the file to be signed and attached")
+                                .help("A path to the file to be signed and attached")
                                 .long("file")
                                 .value_hint(ValueHint::FilePath)
                                 .required(true)
@@ -287,7 +287,7 @@ pub fn cli() -> App<'static> {
                             Arg::new("locator")
                                 .short('l')
                                 .long("locator")
-                                .about("A url or other way of identifying the attachment")
+                                .help("A url or other way of identifying the attachment")
                                 .value_hint(ValueHint::Url)
                                 .required(false)
                                 .takes_value(true),
@@ -303,7 +303,7 @@ pub fn cli() -> App<'static> {
         )
         .subcommand(
             App::new("export")
-                .about("Query prov data")
+                .help("Query prov data")
                 .arg(
                         Arg::new("namespace")
                             .short('n')
