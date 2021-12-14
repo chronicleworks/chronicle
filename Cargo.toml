@@ -5,7 +5,6 @@ members = [
     "api",
     "cli",
     "sawtooth_protocol",
-    "frontend"
 ]
 
 

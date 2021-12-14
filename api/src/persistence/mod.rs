@@ -44,7 +44,7 @@ pub struct Store {
 }
 
 impl Store {
-    fn connection(
+    pub fn connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
         Ok(self.pool.get()?)
@@ -57,8 +57,12 @@ impl Store {
     }
 
     ///TODO: any sort of query design, this should fundamentally be for export / streaming into external data pipelines or we will end up with an embedded triple store
-    #[instrument]
-    pub fn prov_model_from(&self, query: QueryCommand) -> Result<ProvModel, StoreError> {
+    #[instrument(skip(connection))]
+    pub fn prov_model_from(
+        &self,
+        connection: &mut SqliteConnection,
+        query: QueryCommand,
+    ) -> Result<ProvModel, StoreError> {
         let mut model = ProvModel::default();
 
         let agents = schema::agent::table
@@ -68,7 +72,7 @@ impl Store {
         for agent in agents {
             debug!(?agent, "Map agent to prov");
             let agentid: AgentId = Chronicle::agent(&agent.name).into();
-            let namespaceid = self.namespace_by_name(&agent.namespace)?;
+            let namespaceid = self.namespace_by_name(connection, &agent.namespace)?;
             model.agents.insert(
                 (namespaceid.clone(), agentid.clone()),
                 Agent {
@@ -99,7 +103,7 @@ impl Store {
             debug!(?activity, "Map activity to prov");
 
             let id: ActivityId = Chronicle::activity(&activity.name).into();
-            let namespaceid = self.namespace_by_name(&activity.namespace)?;
+            let namespaceid = self.namespace_by_name(connection, &activity.namespace)?;
             model.activities.insert(
                 (namespaceid.clone(), id.clone()),
                 Activity {
@@ -146,7 +150,7 @@ impl Store {
         for entity in entites {
             debug!(?entity, "Map entity to prov");
             let id: EntityId = Chronicle::entity(&entity.name).into();
-            let namespaceid = self.namespace_by_name(&entity.namespace)?;
+            let namespaceid = self.namespace_by_name(connection, &entity.namespace)?;
             model.entities.insert((namespaceid.clone(), id.clone()), {
                 match entity {
                     query::Entity {
@@ -187,84 +191,98 @@ impl Store {
 
         trace!(?model);
 
-        self.idempotently_apply_model(&model)?;
+        self.connection()?.immediate_transaction(|connection| {
+            self.idempotently_apply_model(connection, &model)
+        })?;
 
         Ok(model)
     }
 
-    fn idempotently_apply_model(&self, model: &ProvModel) -> Result<(), StoreError> {
+    fn idempotently_apply_model(
+        &self,
+        connection: &mut SqliteConnection,
+        model: &ProvModel,
+    ) -> Result<(), StoreError> {
         for (_, ns) in model.namespaces.iter() {
-            self.apply_namespace(ns)?
+            self.apply_namespace(connection, ns)?
         }
         for (_, agent) in model.agents.iter() {
-            self.apply_agent(agent, &model.namespaces)?
+            self.apply_agent(connection, agent, &model.namespaces)?
         }
         for (_, activity) in model.activities.iter() {
-            self.apply_activity(activity, &model.namespaces)?
+            self.apply_activity(connection, activity, &model.namespaces)?
         }
 
         for (_, entity) in model.entities.iter() {
-            self.apply_entity(entity, &model.namespaces)?
+            self.apply_entity(connection, entity, &model.namespaces)?
         }
 
         for ((namespaceid, activityid), agentid) in model.was_associated_with.iter() {
             for (_, agentid) in agentid {
-                self.apply_was_associated_with(model, namespaceid, activityid, agentid)?;
+                self.apply_was_associated_with(
+                    connection,
+                    model,
+                    namespaceid,
+                    activityid,
+                    agentid,
+                )?;
             }
         }
 
         for ((namespaceid, activityid), entityid) in model.used.iter() {
             for (_, entityid) in entityid {
-                self.apply_used(model, namespaceid, activityid, entityid)?;
+                self.apply_used(connection, model, namespaceid, activityid, entityid)?;
             }
         }
 
         for ((namespaceid, entityid), activityid) in model.was_generated_by.iter() {
             for (_, activityid) in activityid {
-                self.apply_was_generated_by(model, namespaceid, entityid, activityid)?;
+                self.apply_was_generated_by(connection, model, namespaceid, entityid, activityid)?;
             }
         }
 
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_namespace(
         &self,
+        connection: &mut SqliteConnection,
         Namespace {
             ref name, ref uuid, ..
         }: &Namespace,
     ) -> Result<(), StoreError> {
-        self.connection()?.immediate_transaction(|connection| {
-            diesel::insert_or_ignore_into(schema::namespace::table)
-                .values(&query::NewNamespace {
-                    name,
-                    uuid: &uuid.to_string(),
-                })
-                .execute(connection)
-        })?;
+        diesel::insert_or_ignore_into(schema::namespace::table)
+            .values(&query::NewNamespace {
+                name,
+                uuid: &uuid.to_string(),
+            })
+            .execute(connection)?;
 
         Ok(())
     }
 
-    #[instrument]
-    pub(crate) fn namespace_by_name(&self, namespace: &str) -> Result<NamespaceId, StoreError> {
+    #[instrument(skip(connection))]
+    pub(crate) fn namespace_by_name(
+        &self,
+        connection: &mut SqliteConnection,
+        namespace: &str,
+    ) -> Result<NamespaceId, StoreError> {
         use self::schema::namespace::dsl as ns;
 
-        let ns = self.connection()?.immediate_transaction(|connection| {
-            ns::namespace
-                .filter(ns::name.eq(namespace))
-                .first::<query::Namespace>(connection)
-                .optional()?
-                .ok_or(StoreError::RecordNotFound {})
-        })?;
+        let ns = ns::namespace
+            .filter(ns::name.eq(namespace))
+            .first::<query::Namespace>(connection)
+            .optional()?
+            .ok_or(StoreError::RecordNotFound {})?;
 
         Ok(Chronicle::namespace(&ns.name, &Uuid::from_str(&ns.uuid)?).into())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_agent(
         &self,
+        connection: &mut SqliteConnection,
         Agent {
             ref name,
             namespaceid,
@@ -276,23 +294,22 @@ impl Store {
     ) -> Result<(), StoreError> {
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 
-        self.connection()?.immediate_transaction(|connection| {
-            diesel::insert_or_ignore_into(schema::agent::table)
-                .values(&query::NewAgent {
-                    name,
-                    namespace: &namespace.name,
-                    current: 0,
-                    publickey: publickey.as_deref(),
-                })
-                .execute(connection)
-        })?;
+        diesel::insert_or_ignore_into(schema::agent::table)
+            .values(&query::NewAgent {
+                name,
+                namespace: &namespace.name,
+                current: 0,
+                publickey: publickey.as_deref(),
+            })
+            .execute(connection)?;
 
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_activity(
         &self,
+        connection: &mut SqliteConnection,
         Activity {
             ref name,
             id,
@@ -305,53 +322,63 @@ impl Store {
     ) -> Result<(), StoreError> {
         let namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 
-        self.connection()?.immediate_transaction(|connection| {
-            diesel::insert_or_ignore_into(schema::activity::table)
-                .values(&query::NewActivity {
-                    name,
-                    namespace: &namespace.name,
-                    started: started.map(|t| t.naive_utc()),
-                    ended: ended.map(|t| t.naive_utc()),
-                })
-                .execute(connection)
-        })?;
+        diesel::insert_or_ignore_into(schema::activity::table)
+            .values(&query::NewActivity {
+                name,
+                namespace: &namespace.name,
+                started: started.map(|t| t.naive_utc()),
+                ended: ended.map(|t| t.naive_utc()),
+            })
+            .execute(connection)?;
 
         Ok(())
     }
 
-    pub(crate) fn use_agent(&self, name: String, namespace: String) -> Result<(), StoreError> {
+    #[instrument(skip(connection))]
+    pub(crate) fn use_agent(
+        &self,
+        connection: &mut SqliteConnection,
+        name: String,
+        namespace: String,
+    ) -> Result<(), StoreError> {
         use schema::agent::dsl;
 
-        self.connection()?.immediate_transaction(|connection| {
-            diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
-                .set(dsl::current.eq(0))
-                .execute(connection)?;
+        diesel::update(schema::agent::table.filter(dsl::current.ne(0)))
+            .set(dsl::current.eq(0))
+            .execute(connection)?;
 
-            diesel::update(
-                schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
-            )
-            .set(dsl::current.eq(1))
-            .execute(connection)
-        })?;
+        diesel::update(
+            schema::agent::table.filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace))),
+        )
+        .set(dsl::current.eq(1))
+        .execute(connection)?;
 
         Ok(())
     }
 
-    pub(crate) fn get_current_agent(&self) -> Result<query::Agent, StoreError> {
+    #[instrument(skip(connection))]
+    pub(crate) fn get_current_agent(
+        &self,
+        connection: &mut SqliteConnection,
+    ) -> Result<query::Agent, StoreError> {
         use schema::agent::dsl;
         Ok(schema::agent::table
             .filter(dsl::current.ne(0))
-            .first::<query::Agent>(&mut self.connection()?)?)
+            .first::<query::Agent>(connection)?)
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
-    pub(crate) fn disambiguate_entity_name(&self, name: &str) -> Result<String, StoreError> {
+    pub(crate) fn disambiguate_entity_name(
+        &self,
+        connection: &mut SqliteConnection,
+        name: &str,
+    ) -> Result<String, StoreError> {
         use schema::entity::dsl;
 
         let collision = schema::entity::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut self.connection()?)?;
+            .first::<i64>(connection)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -359,19 +386,23 @@ impl Store {
 
         let ambiguous = schema::entity::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut self.connection()?)?;
+            .first::<Option<i32>>(connection)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
-    pub(crate) fn disambiguate_agent_name(&self, name: &str) -> Result<String, StoreError> {
+    pub(crate) fn disambiguate_agent_name(
+        &self,
+        connection: &mut SqliteConnection,
+        name: &str,
+    ) -> Result<String, StoreError> {
         use schema::agent::dsl;
 
         let collision = schema::agent::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut self.connection()?)?;
+            .first::<i64>(connection)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -379,19 +410,23 @@ impl Store {
 
         let ambiguous = schema::agent::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut self.connection()?)?;
+            .first::<Option<i32>>(connection)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
-    pub(crate) fn disambiguate_activity_name(&self, name: &str) -> Result<String, StoreError> {
+    pub(crate) fn disambiguate_activity_name(
+        &self,
+        connection: &mut SqliteConnection,
+        name: &str,
+    ) -> Result<String, StoreError> {
         use schema::activity::dsl;
 
         let collision = schema::activity::table
             .filter(dsl::name.eq(name))
             .count()
-            .first::<i64>(&mut self.connection()?)?;
+            .first::<i64>(connection)?;
 
         if collision == 0 {
             return Ok(name.to_owned());
@@ -399,7 +434,7 @@ impl Store {
 
         let ambiguous = schema::activity::table
             .select(max(dsl::id))
-            .first::<Option<i32>>(&mut self.connection()?)?;
+            .first::<Option<i32>>(connection)?;
 
         Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
     }
@@ -407,6 +442,7 @@ impl Store {
     /// Fetch the activity record for the IRI
     fn activity_by_activity_name_and_namespace(
         &self,
+        connection: &mut SqliteConnection,
         name: &str,
         namespace: &str,
     ) -> Result<query::Activity, StoreError> {
@@ -414,12 +450,13 @@ impl Store {
 
         Ok(schema::activity::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Activity>(&mut self.connection()?)?)
+            .first::<query::Activity>(connection)?)
     }
 
     /// Fetch the agent record for the IRI
     pub(crate) fn agent_by_agent_name_and_namespace(
         &self,
+        connection: &mut SqliteConnection,
         name: &str,
         namespace: &str,
     ) -> Result<query::Agent, StoreError> {
@@ -427,11 +464,12 @@ impl Store {
 
         Ok(schema::agent::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Agent>(&mut self.connection()?)?)
+            .first::<query::Agent>(connection)?)
     }
 
     pub(crate) fn entity_by_entity_name_and_namespace(
         &self,
+        connection: &mut SqliteConnection,
         name: &str,
         namespace: &str,
     ) -> Result<query::Entity, StoreError> {
@@ -439,12 +477,13 @@ impl Store {
 
         Ok(schema::entity::table
             .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<query::Entity>(&mut self.connection()?)?)
+            .first::<query::Entity>(connection)?)
     }
 
     /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
     pub(crate) fn get_activity_by_name_or_last_started(
         &self,
+        connection: &mut SqliteConnection,
         name: Option<String>,
         namespace: Option<String>,
     ) -> Result<query::Activity, StoreError> {
@@ -452,17 +491,18 @@ impl Store {
 
         match (name, namespace) {
             (Some(name), Some(namespace)) => {
-                Ok(self.activity_by_activity_name_and_namespace(&name, &namespace)?)
+                Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
             }
             _ => Ok(schema::activity::table
                 .order(dsl::started)
-                .first::<query::Activity>(&mut self.connection()?)?),
+                .first::<query::Activity>(connection)?),
         }
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_entity(
         &self,
+        connection: &mut SqliteConnection,
         entity: &common::prov::Entity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -478,7 +518,7 @@ impl Store {
             ))
             .on_conflict((dsl::name, dsl::namespace))
             .do_nothing()
-            .execute(&mut self.connection()?)?;
+            .execute(connection)?;
 
         if let Entity::Signed {
             signature,
@@ -504,9 +544,10 @@ impl Store {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_was_associated_with(
         &self,
+        connection: &mut SqliteConnection,
         model: &ProvModel,
         namespaceid: &common::prov::NamespaceId,
         activityid: &common::prov::ActivityId,
@@ -526,11 +567,13 @@ impl Store {
             })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
+            connection,
             &provactivity.name,
             provactivity.namespaceid.decompose().0,
         )?;
 
         let storedagent = self.agent_by_agent_name_and_namespace(
+            connection,
             &provagent.name,
             provagent.namespaceid.decompose().0,
         )?;
@@ -546,9 +589,10 @@ impl Store {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_was_generated_by(
         &self,
+        connection: &mut SqliteConnection,
         model: &ProvModel,
         namespace: &common::prov::NamespaceId,
         entity: &common::prov::EntityId,
@@ -568,11 +612,13 @@ impl Store {
             })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
+            connection,
             &provactivity.name,
             provactivity.namespaceid.decompose().0,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
+            connection,
             proventity.name(),
             proventity.namespaceid().decompose().0,
         )?;
@@ -588,9 +634,10 @@ impl Store {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(connection))]
     fn apply_used(
         &self,
+        connection: &mut SqliteConnection,
         model: &ProvModel,
         namespace: &NamespaceId,
         activity: &ActivityId,
@@ -610,11 +657,13 @@ impl Store {
             })?;
 
         let storedactivity = self.activity_by_activity_name_and_namespace(
+            connection,
             &provactivity.name,
             provactivity.namespaceid.decompose().0,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
+            connection,
             proventity.name(),
             proventity.namespaceid().decompose().0,
         )?;

@@ -59,9 +59,9 @@ impl MessageBuilder {
 
     pub fn make_sawtooth_transaction(
         &mut self,
-        _input_addresses: Vec<String>,
-        _output_addresses: Vec<String>,
-        _dependencies: Vec<String>,
+        input_addresses: Vec<String>,
+        output_addresses: Vec<String>,
+        dependencies: Vec<String>,
         payload: &ChronicleTransaction,
     ) -> Transaction {
         let bytes = serde_cbor::to_vec(payload).unwrap();
@@ -69,26 +69,27 @@ impl MessageBuilder {
         let mut hasher = Sha512::new();
         hasher.input(&*bytes);
 
-        let mut header = TransactionHeader::default();
-
-        header.payload_sha512 = hasher.result_str();
-        header.family_name = self.family_name.clone();
-        header.family_version = self.family_version.clone();
-        header.nonce = self.generate_nonce();
-
         let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
 
-        header.batcher_public_key = pubkey.clone();
-        header.signer_public_key = pubkey;
+        let header = TransactionHeader {
+            payload_sha512: hasher.result_str(),
+            family_name: self.family_name.clone(),
+            family_version: self.family_version.clone(),
+            nonce: self.generate_nonce(),
+            batcher_public_key: pubkey.clone(),
+            signer_public_key: pubkey,
+            dependencies,
+            inputs: input_addresses,
+            outputs: output_addresses,
+        };
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);
 
-        let mut tx = Transaction::default();
-        tx.header = encoded_header;
-        tx.header_signature = hex::encode_upper(s.as_ref());
-        tx.payload = bytes;
-
-        tx
+        Transaction {
+            header: encoded_header,
+            header_signature: hex::encode_upper(s.as_ref()),
+            payload: bytes,
+        }
     }
 }

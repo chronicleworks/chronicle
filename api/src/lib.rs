@@ -6,11 +6,11 @@ use custom_error::*;
 use derivative::*;
 
 use diesel::{connection::SimpleConnection, r2d2::ConnectionManager, SqliteConnection};
-use futures::{Future, TryFutureExt};
+use futures::Future;
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
-use r2d2::{CustomizeConnection, Pool};
+use r2d2::Pool;
 use std::{
     convert::Infallible,
     net::{AddrParseError, SocketAddr},
@@ -75,8 +75,6 @@ where
     #[derivative(Debug = "ignore")]
     ledger: W,
     #[derivative(Debug = "ignore")]
-    pool: Pool<ConnectionManager<SqliteConnection>>,
-    #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
     uuidsource: Box<dyn Fn() -> Uuid + Send + 'static>,
@@ -136,12 +134,18 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
-        let activity = self
-            .store
-            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
 
-        let namespace = self.store.namespace_by_name(&namespace)?;
-        let name = self.store.disambiguate_entity_name(&name)?;
+        let mut connection = self.store.connection()?;
+        let activity = self.store.get_activity_by_name_or_last_started(
+            &mut connection,
+            activity,
+            Some(namespace.clone()),
+        )?;
+
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
+        let name = self
+            .store
+            .disambiguate_entity_name(&mut connection, &name)?;
         let id = ChronicleVocab::entity(&name);
         let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
             namespace: namespace.clone(),
@@ -180,14 +184,19 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         activity: Option<String>,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let activity = self
-            .store
-            .get_activity_by_name_or_last_started(activity, Some(namespace.clone()))?;
+        let mut connection = self.store.connection()?;
+        let activity = self.store.get_activity_by_name_or_last_started(
+            &mut connection,
+            activity,
+            Some(namespace.clone()),
+        )?;
 
         self.ensure_namespace(&namespace).await?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
 
-        let name = self.store.disambiguate_entity_name(&name)?;
+        let name = self
+            .store
+            .disambiguate_entity_name(&mut connection, &name)?;
         let id = ChronicleVocab::entity(&name);
 
         let create = ChronicleTransaction::ActivityUses(ActivityUses {
@@ -231,8 +240,12 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
-        let name = self.store.disambiguate_activity_name(&name)?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
+
+        let mut connection = self.store.connection()?;
+        let name = self
+            .store
+            .disambiguate_activity_name(&mut connection, &name)?;
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
         let id = ChronicleVocab::activity(&name);
         let create = ChronicleTransaction::CreateActivity(CreateActivity {
             namespace: namespace.clone(),
@@ -271,14 +284,16 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
-        let name = self.store.disambiguate_agent_name(&name)?;
+
+        let mut connection = self.store.connection()?;
+        let name = self.store.disambiguate_agent_name(&mut connection, &name)?;
 
         let iri = ChronicleVocab::agent(&name);
 
         let create = ChronicleTransaction::CreateAgent(CreateAgent {
             name: name.to_owned(),
             id: iri.clone().into(),
-            namespace: self.store.namespace_by_name(&namespace)?,
+            namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
         });
 
         let mut to_apply = vec![create];
@@ -286,7 +301,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         if let Some(domaintype) = domaintype {
             let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
                 id: ChronicleVocab::agent(&name).into(),
-                namespace: self.store.namespace_by_name(&namespace)?,
+                namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
                 domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
             });
 
@@ -396,18 +411,24 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         time: Option<DateTime<Utc>>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let activity = self
+        let mut connection = self.store.connection()?;
+        let activity =
+            self.store
+                .get_activity_by_name_or_last_started(&mut connection, name, namespace)?;
+        let namespace = self
             .store
-            .get_activity_by_name_or_last_started(name, namespace)?;
-        let namespace = self.store.namespace_by_name(&activity.namespace)?;
+            .namespace_by_name(&mut connection, &activity.namespace)?;
 
         let agent = {
             if let Some(agent) = agent {
-                self.store
-                    .agent_by_agent_name_and_namespace(&agent, namespace.decompose().0)?
+                self.store.agent_by_agent_name_and_namespace(
+                    &mut connection,
+                    &agent,
+                    namespace.decompose().0,
+                )?
             } else {
                 self.store
-                    .get_current_agent()
+                    .get_current_agent(&mut connection)
                     .map_err(|_| ApiError::NoCurrentAgent {})?
             }
         };
@@ -417,7 +438,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             namespace,
             id: id.clone().into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or(Utc::now()),
+            time: time.unwrap_or_else(Utc::now),
         });
 
         self.ledger.submit(vec![&tx]).await?;
@@ -428,7 +449,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
     async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
-        let ns = self.store.namespace_by_name(namespace);
+        let mut connection = self.store.connection()?;
+        let ns = self.store.namespace_by_name(&mut connection, namespace);
 
         if ns.is_err() {
             debug!(namespace, "Namespace does not exist, creating");
@@ -449,14 +471,15 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     ) -> Result<ApiResponse, ApiError> {
         self.ensure_namespace(&namespace).await?;
 
+        let mut connection = self.store.connection()?;
         let agent = agent
             .map(|agent| {
                 self.store
-                    .agent_by_agent_name_and_namespace(&agent, &namespace)
+                    .agent_by_agent_name_and_namespace(&mut connection, &agent, &namespace)
             })
-            .unwrap_or_else(|| self.store.get_current_agent())?;
+            .unwrap_or_else(|| self.store.get_current_agent(&mut connection))?;
 
-        let namespace = self.store.namespace_by_name(&namespace)?;
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
         let id = ChronicleVocab::entity(&name);
         let agentid = ChronicleVocab::agent(&agent.name).into();
 
@@ -510,7 +533,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
         let store = Store::new(pool.clone())?;
 
-        let ql_pool = pool.clone();
+        let ql_pool = pool;
 
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
@@ -521,7 +544,6 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                     tx: tx.clone(),
                     keystore,
                     ledger,
-                    pool,
                     store,
                     uuidsource: Box::new(uuidgen),
                 };
@@ -557,10 +579,13 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
-        let id = self.store.namespace_by_name(&query.namespace)?;
+        let mut connection = self.store.connection()?;
+        let id = self
+            .store
+            .namespace_by_name(&mut connection, &query.namespace)?;
         Ok(ApiResponse::Prov(
             IriBuf::new(id.as_str()).unwrap(),
-            vec![self.store.prov_model_from(query)?],
+            vec![self.store.prov_model_from(&mut connection, query)?],
         ))
     }
 
@@ -571,8 +596,9 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         namespace: String,
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
+        let mut connection = self.store.connection()?;
         self.ensure_namespace(&namespace).await?;
-        let namespaceid = self.store.namespace_by_name(&namespace)?;
+        let namespaceid = self.store.namespace_by_name(&mut connection, &namespace)?;
         let id = ChronicleVocab::agent(&name);
         match registration {
             KeyRegistration::Generate => {
@@ -617,25 +643,28 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         time: Option<DateTime<Utc>>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
+        let mut connection = self.store.connection()?;
         let agent = {
             if let Some(agent) = agent {
                 self.store
-                    .agent_by_agent_name_and_namespace(&agent, &namespace)?
+                    .agent_by_agent_name_and_namespace(&mut connection, &agent, &namespace)?
             } else {
                 self.store
-                    .get_current_agent()
+                    .get_current_agent(&mut connection)
                     .map_err(|_| ApiError::NoCurrentAgent {})?
             }
         };
 
-        let name = self.store.disambiguate_activity_name(&name)?;
-        let namespace = self.store.namespace_by_name(&namespace)?;
+        let name = self
+            .store
+            .disambiguate_activity_name(&mut connection, &name)?;
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
         let id = ChronicleVocab::activity(&name);
         let tx = ChronicleTransaction::StartActivity(StartActivity {
             namespace,
             id: id.clone().into(),
             agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or(Utc::now()),
+            time: time.unwrap_or_else(Utc::now),
         });
 
         self.ledger.submit(vec![&tx]).await?;
@@ -645,7 +674,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
 
     #[instrument]
     async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
-        self.store.use_agent(name, namespace)?;
+        let mut connection = self.store.connection()?;
+        self.store.use_agent(&mut connection, name, namespace)?;
 
         Ok(ApiResponse::Unit)
     }

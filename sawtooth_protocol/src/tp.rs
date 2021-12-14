@@ -57,9 +57,11 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))
             })
             .into_option()
-            .ok_or(ApplyError::InvalidTransaction(String::from(
-                "Invalid header, missing signer public key",
-            )))?
+            .ok_or_else(|| {
+                ApplyError::InvalidTransaction(String::from(
+                    "Invalid header, missing signer public key",
+                ))
+            })?
             .ok();
 
         let tx: ChronicleTransaction = serde_cbor::from_slice(request.get_payload())

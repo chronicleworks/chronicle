@@ -338,21 +338,21 @@ impl ProvModel {
     ) {
         self.was_associated_with
             .entry((namespace.clone(), activity.clone()))
-            .or_insert(HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert((namespace.to_owned(), agent.clone()));
     }
 
     pub fn generate_by(&mut self, namespace: NamespaceId, entity: EntityId, activity: &ActivityId) {
         self.was_generated_by
             .entry((namespace.clone(), entity))
-            .or_insert(HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert((namespace, activity.clone()));
     }
 
     pub fn used(&mut self, namespace: NamespaceId, activity: ActivityId, entity: &EntityId) {
         self.used
             .entry((namespace.clone(), activity))
-            .or_insert(HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert((namespace, entity.clone()));
     }
 
@@ -446,7 +446,7 @@ impl ProvModel {
                         };
                         activity.started = Some(time);
                     })
-                    .or_insert({
+                    .or_insert_with(|| {
                         let mut activity =
                             Activity::new(id.clone(), namespace.clone(), id.decompose(), None);
                         activity.started = Some(time);
@@ -465,13 +465,15 @@ impl ProvModel {
 
                 self.agents
                     .entry((namespace.clone(), agent.clone()))
-                    .or_insert(Agent::new(
-                        agent.clone(),
-                        namespace.clone(),
-                        agent.decompose().to_owned(),
-                        None,
-                        None,
-                    ));
+                    .or_insert_with(|| {
+                        Agent::new(
+                            agent.clone(),
+                            namespace.clone(),
+                            agent.decompose().to_owned(),
+                            None,
+                            None,
+                        )
+                    });
 
                 // Set our end data, and also the start date if this is a new resource, or the existing resource does not specify a start time
                 // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
@@ -767,8 +769,7 @@ impl ProvModel {
         }
 
         for ((namespace, id), entity) in self.entities.iter() {
-            let mut typ = vec![];
-            typ.push(Iri::from(Prov::Entity).to_string());
+            let mut typ = vec![Iri::from(Prov::Entity).to_string()];
             if let Some(x) = entity.domaintypeid().as_ref() {
                 typ.push(x.to_string())
             }

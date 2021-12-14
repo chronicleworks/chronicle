@@ -3,20 +3,19 @@ use std::{convert::Infallible, net::SocketAddr, time::Duration};
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, Schema, Subscription, ID,
+    Context, Error, ErrorExtensions, Object, Schema, Subscription,
 };
 use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt, HTTPMethod};
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse, KeyRegistration},
-    prov::vocab::Chronicle,
     prov::{ActivityId, AgentId, EntityId},
 };
 use custom_error::custom_error;
 use derivative::*;
 use diesel::{prelude::*, r2d2::Pool};
-use diesel::{r2d2::ConnectionManager, Connection, Queryable, SqliteConnection};
+use diesel::{r2d2::ConnectionManager, Queryable, SqliteConnection};
 use futures::Stream;
 use tracing::{debug, instrument};
 use warp::{
@@ -74,7 +73,7 @@ impl Agent {
     #[graphql(name = "type")]
     async fn typ(&self) -> &str {
         if let Some(ref typ) = self.domaintype {
-            &typ
+            typ
         } else {
             "agent"
         }
@@ -102,7 +101,7 @@ impl Activity {
     #[graphql(name = "type")]
     async fn typ(&self) -> &str {
         if let Some(ref typ) = self.domaintype {
-            &typ
+            typ
         } else {
             "activity"
         }
@@ -155,7 +154,7 @@ impl Entity {
     #[graphql(name = "type")]
     async fn typ(&self) -> &str {
         if let Some(ref typ) = self.domaintype {
-            &typ
+            typ
         } else {
             "entity"
         }
@@ -376,7 +375,7 @@ impl Mutation {
     ) -> async_graphql::Result<Agent> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Agent(AgentCommand::Create {
@@ -398,7 +397,7 @@ impl Mutation {
     ) -> async_graphql::Result<Activity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::Create {
@@ -419,7 +418,7 @@ impl Mutation {
     ) -> async_graphql::Result<Agent> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
@@ -442,7 +441,7 @@ impl Mutation {
     ) -> async_graphql::Result<Activity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::Start {
@@ -466,7 +465,7 @@ impl Mutation {
     ) -> async_graphql::Result<Activity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::End {
@@ -490,7 +489,7 @@ impl Mutation {
     ) -> async_graphql::Result<Entity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::Use {
@@ -514,7 +513,7 @@ impl Mutation {
     ) -> async_graphql::Result<Entity> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
-        let namespace = namespace.unwrap_or("default".to_owned());
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
