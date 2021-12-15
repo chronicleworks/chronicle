@@ -67,7 +67,7 @@ impl Store {
 
         let agents = schema::agent::table
             .filter(schema::agent::namespace.eq(&query.namespace))
-            .load::<query::Agent>(&mut self.connection()?)?;
+            .load::<query::Agent>(connection)?;
 
         for agent in agents {
             debug!(?agent, "Map agent to prov");
@@ -88,7 +88,7 @@ impl Store {
                 .filter(schema::wasassociatedwith::agent.eq(agent.id))
                 .inner_join(schema::activity::table)
                 .select(schema::activity::name)
-                .load_iter::<String>(&mut self.connection()?)?
+                .load_iter::<String>(connection)?
             {
                 let asoc = asoc?;
                 model.associate_with(&namespaceid, &Chronicle::activity(&asoc).into(), &agentid);
@@ -97,7 +97,7 @@ impl Store {
 
         let activities = schema::activity::table
             .filter(schema::activity::namespace.eq(&query.namespace))
-            .load::<query::Activity>(&mut self.connection()?)?;
+            .load::<query::Activity>(connection)?;
 
         for activity in activities {
             debug!(?activity, "Map activity to prov");
@@ -122,7 +122,7 @@ impl Store {
                 .filter(schema::wasgeneratedby::activity.eq(activity.id))
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(&mut self.connection()?)?
+                .load_iter::<String>(connection)?
             {
                 let asoc = asoc?;
                 model.generate_by(namespaceid.clone(), Chronicle::entity(&asoc).into(), &id);
@@ -132,7 +132,7 @@ impl Store {
                 .filter(schema::used::activity.eq(activity.id))
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(&mut self.connection()?)?
+                .load_iter::<String>(connection)?
             {
                 let used = used?;
                 model.used(
@@ -145,7 +145,7 @@ impl Store {
 
         let entites = schema::entity::table
             .filter(schema::entity::namespace.eq(query.namespace))
-            .load::<query::Entity>(&mut self.connection()?)?;
+            .load::<query::Entity>(connection)?;
 
         for entity in entites {
             debug!(?entity, "Map entity to prov");
@@ -191,9 +191,12 @@ impl Store {
 
         trace!(?model);
 
+        debug!("Enter transaction");
         self.connection()?.immediate_transaction(|connection| {
+            debug!("Entered transaction");
             self.idempotently_apply_model(connection, &model)
         })?;
+        debug!("Completed transaction");
 
         Ok(model)
     }
@@ -562,7 +565,7 @@ impl Store {
                     dsl::signature.eq(signature),
                     dsl::signature_time.eq(signature_time.naive_utc()),
                 ))
-                .execute(&mut self.connection()?)?;
+                .execute(connection)?;
         }
 
         Ok(())
@@ -608,7 +611,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::agent.eq(storedagent.id),
             ))
-            .execute(&mut self.connection()?)?;
+            .execute(connection)?;
 
         Ok(())
     }
@@ -653,7 +656,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::entity.eq(storedentity.id),
             ))
-            .execute(&mut self.connection()?)?;
+            .execute(connection)?;
 
         Ok(())
     }
@@ -698,7 +701,7 @@ impl Store {
                 &link::activity.eq(storedactivity.id),
                 &link::entity.eq(storedentity.id),
             ))
-            .execute(&mut self.connection()?)?;
+            .execute(connection)?;
 
         Ok(())
     }
