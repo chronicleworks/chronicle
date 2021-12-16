@@ -1,15 +1,18 @@
-use std::{convert::Infallible, net::SocketAddr, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, Schema, Subscription,
+    Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
 };
 use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt, HTTPMethod};
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse, KeyRegistration},
+    commands::{
+        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
+        PathOrFile,
+    },
     prov::{ActivityId, AgentId, EntityId},
 };
 use custom_error::custom_error;
@@ -521,6 +524,34 @@ impl Mutation {
                 namespace: namespace.clone(),
                 domaintype: typ,
                 activity: Some(activity),
+            }))
+            .await?;
+
+        entity_context(&namespace, res, ctx).await
+    }
+
+    pub async fn entity_attach<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attachment: Upload,
+        on_behalf_of_agent: String,
+        locator: String,
+    ) -> async_graphql::Result<Entity> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+
+        let res = api
+            .dispatch(ApiCommand::Entity(EntityCommand::Attach {
+                name,
+                namespace: namespace.clone(),
+                agent: Some(on_behalf_of_agent),
+                file: PathOrFile::File(Arc::new(Box::pin(
+                    attachment.value(ctx)?.into_async_read(),
+                ))),
+                locator: Some(locator),
             }))
             .await?;
 

@@ -6,7 +6,7 @@ use custom_error::*;
 use derivative::*;
 
 use diesel::{connection::SimpleConnection, r2d2::ConnectionManager, SqliteConnection};
-use futures::Future;
+use futures::{AsyncReadExt, Future};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::Store;
@@ -14,7 +14,8 @@ use r2d2::Pool;
 use std::{
     convert::Infallible,
     net::{AddrParseError, SocketAddr},
-    path::{Path, PathBuf},
+    path::Path,
+    sync::Arc,
     time::Duration,
 };
 use tokio::sync::mpsc::{self, error::SendError, Sender};
@@ -50,6 +51,7 @@ custom_error! {pub ApiError
     ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
     AddressParse{source: AddrParseError}                        = "Invalid socket address",
     ConnectionPool{source: r2d2::Error}                         = "Connection pool",
+    FileUpload{source: std::io::Error}                          = "File upload",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -463,7 +465,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         &mut self,
         name: String,
         namespace: String,
-        file: PathBuf,
+        file: PathOrFile,
         locator: Option<String>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
@@ -481,10 +483,24 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         let id = ChronicleVocab::entity(&name);
         let agentid = ChronicleVocab::agent(&agent.name).into();
 
-        let signature: Signature = self
-            .keystore
-            .agent_signing(&agentid)?
-            .sign(&std::fs::read(&file).map_err(|_| ApiError::CannotFindAttachment {})?);
+        let signature: Signature = {
+            let signer = self.keystore.agent_signing(&agentid)?;
+
+            match file {
+                PathOrFile::Path(ref path) => signer
+                    .sign(&std::fs::read(path).map_err(|_| ApiError::CannotFindAttachment {})?),
+                PathOrFile::File(mut file) => {
+                    let mut buf = vec![];
+                    Arc::get_mut(&mut file)
+                        .unwrap()
+                        .read_to_end(&mut buf)
+                        .await
+                        .map_err(|e| ApiError::FileUpload { source: e })?;
+
+                    signer.sign(&*buf)
+                }
+            }
+        };
 
         let tx = ChronicleTransaction::EntityAttach(EntityAttach {
             namespace,

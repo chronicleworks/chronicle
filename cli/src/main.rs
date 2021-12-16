@@ -11,7 +11,7 @@ use cli::cli;
 
 use common::commands::{
     ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
-    KeyRegistration, NamespaceCommand, QueryCommand,
+    KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
 };
 use common::signing::SignerError;
 use config::*;
@@ -163,7 +163,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                 api.dispatch(ApiCommand::Entity(EntityCommand::Attach {
                     name: m.value_of("entity_name").unwrap().to_owned(),
                     namespace: m.value_of("namespace").unwrap().to_owned(),
-                    file: m.value_of_t::<PathBuf>("file").unwrap(),
+                    file: PathOrFile::Path(m.value_of_t::<PathBuf>("file").unwrap()),
                     locator: m.value_of("locator").map(|x| x.to_owned()),
                     agent: m.value_of("agent").map(|x| x.to_owned()),
                 }))

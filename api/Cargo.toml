@@ -33,7 +33,7 @@ serde_derive = "1.0.131"
 futures = "0.3.18"
 async-trait = "0.1.52"
 open = "2.0.2"
-async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","default"], version = "3.0.15" }
+async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","default"], version = "3.0.15" }
 warp = "0.3.2"
 async-graphql-warp = "3.0.15"
 r2d2 = "0.8.9"
