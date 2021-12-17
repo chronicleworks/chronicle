@@ -7,7 +7,7 @@ Lightweight todo, to save jira clicks
 * Daemonisation, with initial boot from CLI
 * Fix the terrible IRI / identity handling with contexts and buf/ref types
 * CLI connects to graphql
-* CLI output works as Kevin suggested (uri outputs) to be composable, as we now have a query interface
+* DONE CLI output works as Kevin suggested (uri outputs) to be composable, as we now have a query interface
 * CLI handles domain types
 * Secure graphql endpoint + UI
 * Actuallly connect it to a real blockchain
