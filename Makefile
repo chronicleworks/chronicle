@@ -1,13 +1,12 @@
+export ISOLATION_ID=local
+
 MAKEFILE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
-include $(MAKEFILE_DIR)/standard_defs.mk
 
 export AWS_REGION ?= us-east-1
 export AWS_ACCESS_KEY_ID ?=
 export AWS_SECRET_ACCESS_KEY ?=
 
 CLEAN_DIRS := $(CLEAN_DIRS) 
-
-export LEDGER_NAME = $(ISOLATION_ID)
 
 clean: clean_containers
 
@@ -23,9 +22,8 @@ analyze: analyze_fossa analyze_sonar_cargo
 
 publish: $(MARKERS)/publish_cargo
 
-$(MARKERS)/aarch64%:
+$(MARKERS)/aarch64:
 	docker run --rm -it -v "$(PWD)":/home/rust/src $(ISOLATION_ID)_chronicle_musl_aarch64 cargo build --release
-
 
 $(MARKERS)/build_musl_aarch64:
 	docker build docker/build/aarch64/ -t $(ISOLATION_ID)_chronicle_musl_aarch64

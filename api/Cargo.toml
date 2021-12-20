@@ -30,7 +30,7 @@ tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
 parking_lot = "0.11.2"
 serde = "1.0.131"
 serde_derive = "1.0.131"
-futures = "0.3.18"
+futures = "0.3.17"
 async-trait = "0.1.52"
 open = "2.0.2"
 async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","default"], version = "3.0.15" }
@@ -39,7 +39,7 @@ async-graphql-warp = "3.0.15"
 r2d2 = "0.8.9"
 async-graphql-extension-apollo-tracing = { version = "2.1.0", features = ["tokio-comp"] }
 async-stream = "0.3.2"
-
+ 
 [dev-dependencies]
 insta = { version = "1.8.0", features = ["redactions"] }
 tempfile = "3.2.0"
