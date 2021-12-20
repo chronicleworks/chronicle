@@ -25,13 +25,20 @@ publish: $(MARKERS)/publish_cargo
 $(MARKERS)/aarch64:
 	docker run --rm -it -v "$(PWD)":/home/rust/src $(ISOLATION_ID)_chronicle_musl_aarch64 cargo build --release
 
+$(MARKERS)/x86_64:
+	docker run --rm -it -v "$(PWD)":/home/rust/src $(ISOLATION_ID)_chronicle_musl_x86_64 cargo build --release
+
 $(MARKERS)/build_musl_aarch64:
 	docker build docker/build/aarch64/ -t $(ISOLATION_ID)_chronicle_musl_aarch64
 
-$(MARKERS)/build_musl: $(MARKERS)/build_musl_aarch64
+$(MARKERS)/build_musl_x86_64:
+	docker build docker/build/x86_64/ -t $(ISOLATION_ID)_chronicle_musl_x86_64
 
-$(MARKERS)/build_cargo: $(MARKERS)/aarch64
+$(MARKERS)/build_musl: $(MARKERS)/build_musl_x86_64 $(MARKERS)/build_musl_aarch64
+
+$(MARKERS)/build_cargo: $(MARKERS)/x86_64 $(MARKERS)/aarch64
 
 .PHONY: clean_containers
 clean_containers:
 	docker rm $(ISOLATION_ID)_chronicle_musl_aarch64
+	docker rm $(ISOLATION_ID)_chronicle_musl_x86_64
