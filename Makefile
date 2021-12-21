@@ -13,7 +13,7 @@ clean: clean_containers
 
 distclean: clean_docker clean_markers
 
-build: $(MARKERS)/build_musl $(MARKERS)/build_cargo 
+build: $(MARKERS)/build
 
 package: $(MARKERS)/package_cargo $(MARKERS)/package_docker
 
@@ -23,14 +23,10 @@ analyze: analyze_fossa analyze_sonar_cargo
 
 publish: $(MARKERS)/publish_cargo
 
-$(MARKERS)/aarch64:
-	docker run --rm -it -v "$(PWD)":/home/rust/src -w /home/rust/src $(ISOLATION_ID)_chronicle_musl  cargo build --release --target=aarch64-unknown-linux-musl
 
-$(MARKERS)/x86_64:
-	docker run --rm -it -v "$(PWD)":/home/rust/src -w /home/rust/src $(ISOLATION_ID)_chronicle_musl cargo build --release --target=x86_64-unknown-linux-musl
-
-$(MARKERS)/build_musl: 
-	docker build docker/build/ -t $(ISOLATION_ID)_chronicle_musl
+$(MARKERS)/build:
+	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle -t $(ISOLATION_ID)_chronicle .
+	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle_sawtooth_tp -t $(ISOLATION_ID)_chronicle_sawtooth_tp .
 
 $(MARKERS)/build_cargo: $(MARKERS)/x86_64 # $(MARKERS)/aarch64
 
