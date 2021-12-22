@@ -25,8 +25,8 @@ publish: $(MARKERS)/publish_cargo
 
 
 $(MARKERS)/build:
-	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle -t $(ISOLATION_ID)_chronicle .
-	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle_sawtooth_tp -t $(ISOLATION_ID)_chronicle_sawtooth_tp .
+	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle -t chronicle:$(ISOLATION_ID) .
+	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle_sawtooth_tp -t chronicle_sawtooth_tp:$(ISOLATION_ID) .
 
 $(MARKERS)/build_cargo: $(MARKERS)/x86_64 # $(MARKERS)/aarch64
 

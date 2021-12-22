@@ -1,0 +1,6 @@
+          [secrets]
+   3   │  path = "~/.chronicle/secrets"
+   4   │  [store]
+   5   │  path = "~/.chronicle/store"
+   6   │  [validator]
+   7   │  address = "tcp://validator:4004"
