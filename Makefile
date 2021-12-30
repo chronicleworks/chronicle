@@ -1,4 +1,5 @@
 export ISOLATION_ID=local
+export REGISTRY=localhost:5000
 
 MAKEFILE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
@@ -23,10 +24,9 @@ analyze: analyze_fossa analyze_sonar_cargo
 
 publish: $(MARKERS)/publish_cargo
 
-
 $(MARKERS)/build:
-	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle -t chronicle:$(ISOLATION_ID) .
-	docker buildx build --platform linux/arm64,linux/amd64 --target chronicle_sawtooth_tp -t chronicle_sawtooth_tp:$(ISOLATION_ID) .
+	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle -t $(REGISTRY)/chronicle:$(ISOLATION_ID) .
+	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle_sawtooth_tp -t $(REGISTRY)/chronicle_sawtooth_tp:$(ISOLATION_ID) .
 
 $(MARKERS)/build_cargo: $(MARKERS)/x86_64 # $(MARKERS)/aarch64
 

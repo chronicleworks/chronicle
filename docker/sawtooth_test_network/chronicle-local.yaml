@@ -71,7 +71,9 @@ services:
       - /dev/urandom:/dev/urandom
 
   chronicle-sawtooth-api:
-    dockerfile: "chronicle-api.docker"
+    build:
+      context: .
+      dockerfile: "chronicle-api.docker"
     command: "chronicle --ui"
     depends_on:
       - validator
