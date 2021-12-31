@@ -840,10 +840,15 @@ impl ProvModel {
         ExpandedJson(doc.into())
     }
 
+    pub async fn apply_json_ld_bytes(self, buf: &[u8]) -> Result<Self, ProcessorError> {
+        self.apply_json_ld(json::parse(std::str::from_utf8(buf)?)?)
+            .await
+    }
+
     /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
-    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
+    pub async fn apply_json_ld(mut self, mut json: JsonValue) -> Result<Self, ProcessorError> {
         json.remove("@context");
         json.insert("@context", crate::context::PROV.clone()).ok();
 
@@ -871,7 +876,7 @@ impl ProvModel {
             }
         }
 
-        Ok(())
+        Ok(self)
     }
 
     /// Extract the types and find the first that is not prov::, as we currently only alow zero or one domain types
@@ -1384,9 +1389,8 @@ pub mod test {
             .unwrap();
 
         rt.block_on(async move {
-            let mut prov = ProvModel::default();
-            prov.apply_json_ld(json).await.unwrap();
-            prov
+            let prov = ProvModel::default();
+            prov.apply_json_ld(json).await.unwrap()
         })
     }
 

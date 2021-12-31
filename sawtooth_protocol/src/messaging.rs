@@ -16,8 +16,6 @@ use sawtooth_sdk::messaging::{
 use tracing::instrument;
 use tracing::{debug, trace};
 
-///
-/// The
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct SawtoothValidator {
@@ -45,7 +43,6 @@ impl Into<SubmissionError> for SawtoothSubmissionError {
     }
 }
 
-///
 /// The sawtooth futures and their soickets are not controlled by a compatible reactor
 impl SawtoothValidator {
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {

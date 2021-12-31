@@ -1,4 +1,4 @@
-use common::prov::ChronicleTransaction;
+use common::{ledger::Offset, prov::ChronicleTransaction};
 use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
 use k256::{
@@ -7,6 +7,8 @@ use k256::{
 };
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
+
+use crate::{address::PREFIX, sawtooth::event_filter::FilterType};
 
 use super::sawtooth::*;
 
@@ -36,6 +38,27 @@ impl MessageBuilder {
     fn generate_nonce(&mut self) -> String {
         let bytes = self.rng.gen::<[u8; 20]>();
         hex::encode_upper(bytes)
+    }
+
+    pub fn make_subcription_request(&self, offset: Offset) -> ClientEventsSubscribeRequest {
+        let mut request = ClientEventsSubscribeRequest::default();
+
+        request.last_known_block_ids = vec![offset.into()];
+        let mut subscription = EventSubscription::default();
+        let mut filter_address = EventFilter::default();
+
+        filter_address.key = "address".to_string();
+        filter_address.match_string = format!("{}", *PREFIX);
+        filter_address.filter_type = FilterType::RegexAll as _;
+
+        let mut filter_type = EventFilter::default();
+        filter_type.match_string = "sawtooth/state-delta".to_owned();
+        filter_type.filter_type = FilterType::RegexAll as _;
+
+        subscription.filters = vec![filter_address, filter_type];
+        request.subscriptions = vec![subscription];
+
+        request
     }
 
     pub fn make_sawtooth_batch(&self, tx: Vec<Transaction>) -> Batch {

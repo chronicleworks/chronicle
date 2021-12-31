@@ -1,7 +1,7 @@
 use clap::clap_app;
 use sawtooth_protocol::tp::ChronicleTransactionHandler;
 use sawtooth_sdk::processor::TransactionProcessor;
-use tracing::{instrument, Level};
+use tracing::{Level};
 
 #[tokio::main]
 async fn main() {

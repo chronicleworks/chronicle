@@ -7,6 +7,7 @@ use crate::prov::{ChronicleTransaction, NamespaceId, ProcessorError, ProvModel};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::pin::Pin;
 use std::str::from_utf8;
 
 #[derive(Debug)]
@@ -16,6 +17,13 @@ pub enum SubmissionError {
     },
     Processor {
         source: ProcessorError,
+    },
+}
+
+#[derive(Debug)]
+pub enum SubscriptionError {
+    Implementation {
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
 }
 
@@ -48,8 +56,28 @@ pub trait LedgerWriter {
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Offset {
+    Genesis,
+    From(u64),
+}
+
+impl From<Offset> for String {
+    fn from(offset: Offset) -> Self {
+        match offset {
+            Offset::Genesis => "".to_string(),
+            Offset::From(x) => format!("{}", x),
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
 pub trait LedgerReader {
-    fn namespace_updates(&self, namespace: NamespaceId) -> Box<dyn Stream<Item = ProvModel>>;
+    async fn namespace_updates(
+        &self,
+        namespace: NamespaceId,
+        offset: Offset,
+    ) -> Result<Pin<Box<dyn Stream<Item = ProvModel> + Send>>, SubscriptionError>;
 }
 
 /// An in memory ledger implementation for development and testing purposes
@@ -183,7 +211,7 @@ impl ChronicleTransaction {
         let mut model = ProvModel::default();
 
         for input in input {
-            model
+            model = model
                 .apply_json_ld(json::parse(std::str::from_utf8(&input.data)?)?)
                 .await?;
         }
