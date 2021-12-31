@@ -1,4 +1,9 @@
-FROM lukemathwalker/cargo-chef AS chef
+FROM rust:buster AS chef 
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+RUN cargo install cargo-chef 
+WORKDIR app
+
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive

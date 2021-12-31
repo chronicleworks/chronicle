@@ -62,7 +62,7 @@ services:
       - /dev/urandom:/dev/urandom
 
   chronicle-sawtooth-tp:
-    image: chronicle-sawtooth-tp:${ISOLATION_ID}
+    image: "${REGISTRY}chronicle-sawtooth-tp:${ISOLATION_ID}"
     command: "chronicle_sawtooth_tp tcp://validator:4004"
     depends_on:
       - validator
@@ -71,9 +71,7 @@ services:
       - /dev/urandom:/dev/urandom
 
   chronicle-sawtooth-api:
-    build:
-      context: .
-      dockerfile: "chronicle-api.docker"
+    image: "${REGISTRY}chronicle:${ISOLATION_ID}"
     command: "chronicle --ui"
     depends_on:
       - validator

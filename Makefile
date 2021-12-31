@@ -26,7 +26,7 @@ publish: $(MARKERS)/publish_cargo
 
 $(MARKERS)/build:
 	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle -t $(REGISTRY)/chronicle:$(ISOLATION_ID) .
-	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle_sawtooth_tp -t $(REGISTRY)/chronicle_sawtooth_tp:$(ISOLATION_ID) .
+	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle_sawtooth_tp -t $(REGISTRY)/chronicle-sawtooth-tp:$(ISOLATION_ID) .
 
 $(MARKERS)/build_cargo: $(MARKERS)/x86_64 # $(MARKERS)/aarch64
 
