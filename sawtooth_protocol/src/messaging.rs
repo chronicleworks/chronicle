@@ -18,7 +18,7 @@ use tracing::{debug, trace};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct SawtoothValidator {
+pub struct SawtoothSubmitter {
     #[derivative(Debug = "ignore")]
     tx: ZmqMessageSender,
     rx: MessageReceiver,
@@ -44,11 +44,11 @@ impl Into<SubmissionError> for SawtoothSubmissionError {
 }
 
 /// The sawtooth futures and their soickets are not controlled by a compatible reactor
-impl SawtoothValidator {
+impl SawtoothSubmitter {
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
-        SawtoothValidator { tx, rx, builder }
+        SawtoothSubmitter { tx, rx, builder }
     }
 
     #[instrument]
@@ -89,7 +89,7 @@ impl SawtoothValidator {
 }
 
 #[async_trait::async_trait(?Send)]
-impl LedgerWriter for SawtoothValidator {
+impl LedgerWriter for SawtoothSubmitter {
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         self.submit(tx).map_err(SawtoothSubmissionError::into)
     }

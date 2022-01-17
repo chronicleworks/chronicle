@@ -1,9 +1,11 @@
-pub mod address;
-pub mod messages;
-pub mod messaging;
-pub mod state_delta;
-pub mod tp;
+mod address;
+mod messages;
+mod messaging;
+mod state_delta;
 
-pub mod sawtooth {
+mod sawtooth {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
+
+pub use messaging::{SawtoothSubmissionError, SawtoothSubmitter};
+pub use state_delta::{StateDelta, StateError};

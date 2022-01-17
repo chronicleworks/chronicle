@@ -1,9 +1,10 @@
-use futures::Stream;
+use futures::{stream, FutureExt, SinkExt, Stream, StreamExt};
 use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
 
 use crate::prov::{ChronicleTransaction, NamespaceId, ProcessorError, ProvModel};
+use futures::channel::mpsc::{Receiver, Sender};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -81,9 +82,53 @@ pub trait LedgerReader {
 }
 
 /// An in memory ledger implementation for development and testing purposes
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
+    chan: Sender<ProvModel>,
+    reader: Option<InMemLedgerReader>,
+}
+
+impl InMemLedger {
+    pub fn new() -> InMemLedger {
+        let (tx, rx) = futures::channel::mpsc::channel(1);
+
+        InMemLedger {
+            kv: HashMap::new().into(),
+            chan: tx,
+            reader: Some(InMemLedgerReader {
+                chan: Some(rx).into(),
+            }),
+        }
+    }
+
+    pub fn reader(&mut self) -> InMemLedgerReader {
+        self.reader.take().unwrap()
+    }
+}
+
+#[derive(Debug)]
+pub struct InMemLedgerReader {
+    chan: RefCell<Option<Receiver<ProvModel>>>,
+}
+
+#[async_trait::async_trait(?Send)]
+impl LedgerReader for InMemLedgerReader {
+    async fn namespace_updates(
+        &self,
+        _namespace: NamespaceId,
+        _offset: Offset,
+    ) -> Result<Pin<Box<dyn Stream<Item = ProvModel> + Send>>, SubscriptionError> {
+        let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
+            if let Some(prov) = chan.next().await {
+                Some((prov, chan))
+            } else {
+                None
+            }
+        });
+
+        Ok(stream.boxed())
+    }
 }
 
 /// An inefficient serialiser implementation for an in memory ledger, used for snapshot assertions of ledger state,
@@ -135,6 +180,16 @@ impl LedgerWriter for InMemLedger {
                 debug!(?output.address, "Address");
                 debug!(%state, "New state");
                 self.kv.borrow_mut().insert(output.address, state);
+
+                self.chan
+                    .send(
+                        ProvModel::default()
+                            .apply_json_ld_bytes(&output.data)
+                            .await
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
             }
         }
 

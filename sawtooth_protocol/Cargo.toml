@@ -44,7 +44,6 @@ tokio = { version = "1.14.0", features = ["time", "macros", "rt-multi-thread"] }
 crossbeam = "0.8.1"
 openssl = "0.10"
 zmq = "0.9"
-async-stream = "0.3.2"
 
 [build-dependencies]
 glob = "0.3.0"

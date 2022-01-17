@@ -1,11 +1,19 @@
+mod address;
+mod messages;
+mod messaging;
+mod tp;
+
+mod sawtooth {
+    include!(concat!(env!("OUT_DIR"), "/_.rs"));
+}
+
 use clap::clap_app;
-use sawtooth_protocol::tp::ChronicleTransactionHandler;
 use sawtooth_sdk::processor::TransactionProcessor;
-use tracing::{Level};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() {
-    let handler = ChronicleTransactionHandler::new();
+    let handler = crate::tp::ChronicleTransactionHandler::new();
 
     let matches = clap_app!(intkey =>
         (about: "Intkey Transaction Processor (Rust)")

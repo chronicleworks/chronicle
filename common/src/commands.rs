@@ -1,8 +1,4 @@
-use std::{
-    path::{PathBuf},
-    pin::Pin,
-    sync::Arc,
-};
+use std::{path::PathBuf, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use derivative::*;
@@ -134,6 +130,7 @@ pub enum ApiCommand {
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
+    Sync(ProvModel),
 }
 
 #[derive(Debug)]

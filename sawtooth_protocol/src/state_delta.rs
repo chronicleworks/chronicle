@@ -8,9 +8,13 @@ use derivative::*;
 use futures::{stream, FutureExt, Stream, StreamExt};
 
 use futures::future::join_all;
+use k256::ecdsa::SigningKey;
 use prost::{DecodeError, EncodeError, Message};
 use sawtooth_sdk::messages::validator::Message_MessageType;
-use sawtooth_sdk::messaging::stream::{MessageFuture, MessageResult, ReceiveError, SendError};
+use sawtooth_sdk::messaging::stream::{
+    MessageConnection, MessageFuture, MessageResult, ReceiveError, SendError,
+};
+use sawtooth_sdk::messaging::zmq_stream::ZmqMessageConnection;
 use sawtooth_sdk::messaging::{
     stream::MessageReceiver, stream::MessageSender, zmq_stream::ZmqMessageSender,
 };
@@ -49,6 +53,12 @@ pub struct StateDelta {
 }
 
 impl StateDelta {
+    pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
+        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
+        let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
+        StateDelta { tx, rx, builder }
+    }
+
     async fn recv_from(
         mut fut: MessageFuture,
     ) -> Result<(MessageFuture, MessageResult), StateError> {
@@ -92,7 +102,7 @@ impl StateDelta {
             });
         }
 
-        let stream = futures::stream::unfold(fut, |fut| async move {
+        let stream = stream::unfold(fut, |fut| async move {
             let mut futs = vec![fut];
 
             loop {

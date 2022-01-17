@@ -22,8 +22,8 @@ use tokio::sync::mpsc::{self, error::SendError, Sender};
 
 use common::{
     commands::*,
-    ledger::{LedgerWriter, SubmissionError},
-    prov::{vocab::Chronicle as ChronicleVocab, Domaintype},
+    ledger::{LedgerReader, LedgerWriter, SubmissionError},
+    prov::{vocab::Chronicle as ChronicleVocab, Domaintype, ProvModel},
     prov::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
@@ -41,7 +41,6 @@ pub use graphql::serve_graphql;
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
     Iri{source: iref::Error}                                    = "Invalid IRI",
-    // TODO: Json LD error has a non send trait, so we can't compose it
     JsonLD{message: String}                                     = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
     Signing{source: SignerError}                                = "Signing",
@@ -67,15 +66,18 @@ type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Api<W>
+pub struct Api<W, R>
 where
     W: LedgerWriter,
+    R: LedgerReader,
 {
     tx: Sender<ApiSendWithReply>,
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
     #[derivative(Debug = "ignore")]
-    ledger: W,
+    ledger_writer: W,
+    #[derivative(Debug = "ignore")]
+    ledger_reader: R,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
@@ -132,7 +134,7 @@ impl ApiDispatch {
     }
 }
 
-impl<W: LedgerWriter + 'static + Send> Api<W> {
+impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, R> {
     #[instrument]
     async fn activity_generate(
         &mut self,
@@ -173,7 +175,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             to_apply.push(set_type)
         }
 
-        self.ledger.submit(to_apply.iter().collect()).await?;
+        self.ledger_writer.submit(to_apply.iter().collect()).await?;
 
         Ok(ApiResponse::Prov(
             id,
@@ -226,7 +228,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             (id, to_apply)
         };
 
-        self.ledger.submit(to_apply.iter().collect()).await?;
+        self.ledger_writer.submit(to_apply.iter().collect()).await?;
 
         Ok(ApiResponse::Prov(
             id,
@@ -235,7 +237,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
     }
 
     pub fn as_ledger(self) -> W {
-        self.ledger
+        self.ledger_writer
     }
 
     #[instrument]
@@ -271,7 +273,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             to_apply.push(set_type)
         }
 
-        self.ledger.submit(to_apply.iter().collect()).await?;
+        self.ledger_writer.submit(to_apply.iter().collect()).await?;
 
         Ok(ApiResponse::Prov(
             id,
@@ -311,7 +313,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             to_apply.push(set_type)
         }
 
-        self.ledger.submit(to_apply.iter().collect()).await?;
+        self.ledger_writer.submit(to_apply.iter().collect()).await?;
 
         Ok(ApiResponse::Prov(
             iri,
@@ -330,7 +332,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             uuid,
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        self.ledger_writer.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(iri, vec![self.store.apply(vec![&tx])?]))
     }
@@ -400,6 +402,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                     .await
             }
             ApiCommand::Query(query) => self.query(query).await,
+            ApiCommand::Sync(prov) => self.sync(prov).await,
         }
     }
 
@@ -441,7 +444,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             time: time.unwrap_or_else(Utc::now),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        self.ledger_writer.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
@@ -511,16 +514,17 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             signature_time: Utc::now(),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        self.ledger_writer.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
-    #[instrument(skip(ledger, uuidgen))]
+    #[instrument(skip(ledger_writer, ledger_reader, uuidgen))]
     pub fn new<F>(
         addr: SocketAddr,
         dbpath: &str,
-        ledger: W,
+        ledger_writer: W,
+        ledger_reader: R,
         secret_path: &Path,
         uuidgen: F,
     ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
@@ -557,7 +561,8 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
                 let mut api = Api {
                     tx: tx.clone(),
                     keystore,
-                    ledger,
+                    ledger_writer,
+                    ledger_reader,
                     store,
                     uuidsource: Box::new(uuidgen),
                 };
@@ -603,6 +608,12 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
         ))
     }
 
+    async fn sync(&self, prov: ProvModel) -> Result<ApiResponse, ApiError> {
+        self.store.apply_prov(&prov)?;
+
+        Ok(ApiResponse::Unit)
+    }
+
     #[instrument]
     async fn register_key(
         &mut self,
@@ -643,7 +654,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             ),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        self.ledger_writer.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
@@ -680,7 +691,7 @@ impl<W: LedgerWriter + 'static + Send> Api<W> {
             time: time.unwrap_or_else(Utc::now),
         });
 
-        self.ledger.submit(vec![&tx]).await?;
+        self.ledger_writer.submit(vec![&tx]).await?;
 
         Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
@@ -731,10 +742,14 @@ mod test {
 
         let secretpath = TempDir::new().unwrap();
 
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+
         let (dispatch, _ui) = Api::new(
             SocketAddr::from_str("0.0.0.0:8080").unwrap(),
             "file::memory:",
-            InMemLedger::default(),
+            ledger,
+            reader,
             &secretpath.into_path(),
             || Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap(),
         )

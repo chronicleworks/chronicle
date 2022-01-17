@@ -50,6 +50,7 @@ impl Store {
         Ok(self.pool.get()?)
     }
 
+    #[instrument]
     pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
         pool.get()?.run_pending_migrations(MIGRATIONS).unwrap();
 
@@ -199,6 +200,20 @@ impl Store {
         debug!("Completed transaction");
 
         Ok(model)
+    }
+
+    #[instrument]
+    pub fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
+        debug!("Enter transaction");
+
+        trace!(?prov);
+        self.connection()?.immediate_transaction(|connection| {
+            debug!("Entered transaction");
+            self.idempotently_apply_model(connection, prov)
+        })?;
+        debug!("Completed transaction");
+
+        Ok(())
     }
 
     fn idempotently_apply_model(

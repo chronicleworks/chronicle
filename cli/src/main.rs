@@ -4,7 +4,7 @@ extern crate serde_derive;
 mod cli;
 mod config;
 
-use api::{Api, ApiError};
+use api::{Api, ApiDispatch, ApiError};
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
@@ -16,6 +16,7 @@ use common::commands::{
 use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
+use futures::Future;
 use tokio::join;
 
 use std::{
@@ -27,20 +28,62 @@ use tracing::{error, instrument, Level};
 use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
-fn ledger(config: &Config) -> Result<sawtooth_protocol::messaging::SawtoothValidator, SignerError> {
-    Ok(sawtooth_protocol::messaging::SawtoothValidator::new(
+fn submitter(config: &Config) -> Result<sawtooth_protocol::SawtoothSubmitter, SignerError> {
+    Ok(sawtooth_protocol::SawtoothSubmitter::new(
+        &config.validator.address,
+        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
+    ))
+}
+
+#[cfg(not(feature = "inmem"))]
+fn state_delta(config: &Config) -> Result<sawtooth_protocol::StateDelta, SignerError> {
+    Ok(sawtooth_protocol::StateDelta::new(
         &config.validator.address,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
 
 #[cfg(feature = "inmem")]
-fn ledger(_config: &Config) -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
+fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
     use std::convert::Infallible;
 
     use common::ledger::InMemLedger;
 
     Ok(common::ledger::InMemLedger::default())
+}
+
+fn api(
+    options: &ArgMatches,
+    config: &Config,
+) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError> {
+    #[cfg(not(feature = "inmem"))]
+    {
+        let submitter = submitter(config)?;
+        let state = state_delta(config)?;
+
+        Ok(Api::new(
+            options.value_of("ui-interface").unwrap().parse()?,
+            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+            submitter,
+            state,
+            &config.secrets.path,
+            uuid::Uuid::new_v4,
+        )?)
+    }
+    #[cfg(feature = "inmem")]
+    {
+        let mut ledger = ledger()?;
+        let state = ledger.reader();
+
+        Ok(Api::new(
+            options.value_of("ui-interface").unwrap().parse()?,
+            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+            ledger,
+            state,
+            &config.secrets.path,
+            uuid::Uuid::new_v4,
+        )?)
+    }
 }
 
 fn domain_type(args: &ArgMatches) -> Option<String> {
@@ -55,13 +98,7 @@ fn domain_type(args: &ArgMatches) -> Option<String> {
 async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     dotenv::dotenv().ok();
 
-    let (api, ui) = Api::new(
-        options.value_of("ui-interface").unwrap().parse()?,
-        &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
-        ledger(&config)?,
-        &config.secrets.path,
-        uuid::Uuid::new_v4,
-    )?;
+    let (api, ui) = api(&options, &config)?;
 
     let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {
