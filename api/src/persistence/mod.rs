@@ -190,7 +190,7 @@ impl Store {
     pub fn apply(&self, tx: Vec<&ChronicleTransaction>) -> Result<ProvModel, StoreError> {
         let model = ProvModel::from_tx(tx);
 
-        trace!(?model);
+        debug!(?model, "Apply model");
 
         debug!("Enter transaction");
         self.connection()?.immediate_transaction(|connection| {

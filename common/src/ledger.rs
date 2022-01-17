@@ -4,7 +4,7 @@ use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
 
 use crate::prov::{ChronicleTransaction, NamespaceId, ProcessorError, ProvModel};
-use futures::channel::mpsc::{Receiver, Sender};
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -85,13 +85,13 @@ pub trait LedgerReader {
 #[derive(Debug)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
-    chan: Sender<ProvModel>,
+    chan: UnboundedSender<ProvModel>,
     reader: Option<InMemLedgerReader>,
 }
 
 impl InMemLedger {
     pub fn new() -> InMemLedger {
-        let (tx, rx) = futures::channel::mpsc::channel(1);
+        let (tx, rx) = futures::channel::mpsc::unbounded();
 
         InMemLedger {
             kv: HashMap::new().into(),
@@ -109,7 +109,7 @@ impl InMemLedger {
 
 #[derive(Debug)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<Receiver<ProvModel>>>,
+    chan: RefCell<Option<UnboundedReceiver<ProvModel>>>,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -257,7 +257,7 @@ impl ChronicleTransaction {
             })
             .collect()
     }
-    /// Take out input states and apply them to the prov model, then apply transaction,
+    /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
     pub async fn process(
         &self,

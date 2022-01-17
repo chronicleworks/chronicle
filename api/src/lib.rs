@@ -734,6 +734,7 @@ mod test {
     }
 
     fn test_api() -> TestDispatch {
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).unwrap();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)

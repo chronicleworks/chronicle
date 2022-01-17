@@ -40,6 +40,7 @@ async-graphql-warp = "3.0.15"
 r2d2 = "0.8.9"
 async-graphql-extension-apollo-tracing = { version = "2.1.0", features = ["tokio-comp"] }
 async-stream = "0.3.2"
+tracing-log = "0.1.2"
  
 [dev-dependencies]
 insta = { version = "1.8.0", features = ["redactions"] }
