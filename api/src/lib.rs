@@ -683,7 +683,11 @@ mod test {
     use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
-    use common::{commands::ApiResponse, ledger::InMemLedger, prov::ProvModel};
+    use common::{
+        commands::{ApiResponse, KeyImport},
+        ledger::InMemLedger,
+        prov::ProvModel,
+    };
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
@@ -770,6 +774,14 @@ mod test {
     async fn agent_public_key() {
         let mut api = test_api();
 
+        let pk = r#"
+-----BEGIN PRIVATE KEY-----
+MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
+CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
+Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
+-----END PRIVATE KEY-----
+"#;
+
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
         }))
@@ -779,7 +791,9 @@ mod test {
         api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
-            registration: KeyRegistration::Generate,
+            registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
+                buffer: pk.as_bytes().into(),
+            }),
         }))
         .await
         .unwrap();

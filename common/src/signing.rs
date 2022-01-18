@@ -7,6 +7,7 @@ use k256::{
 use pkcs8::{FromPublicKey, ToPrivateKey};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
+use tracing::error;
 
 use std::{
     path::{Path, PathBuf},
@@ -48,9 +49,13 @@ impl DirectoryStoredKeys {
 
     /// If we have a signing key, derive the verifying key from it, else attempt to load an imported verifying key
     pub fn agent_verifying(&self, agent: &AgentId) -> Result<VerifyingKey, SignerError> {
-        Self::signing_key_at(&self.agent_path(agent))
+        let path = &self.agent_path(agent);
+        Self::signing_key_at(path)
             .map(|signing| signing.verifying_key())
-            .or_else(|_| Self::verifying_key_at(&self.agent_path(agent)))
+            .or_else(|error| {
+                error!(?error, ?path, "Loading signing key");
+                Self::verifying_key_at(path)
+            })
     }
 
     pub fn store_agent(
@@ -59,6 +64,8 @@ impl DirectoryStoredKeys {
         signing: Option<&Vec<u8>>,
         verifying: Option<&Vec<u8>>,
     ) -> Result<(), SignerError> {
+        std::fs::create_dir_all(&self.agent_path(agent))?;
+
         if let Some(signing) = signing {
             std::fs::write(
                 Path::join(&self.agent_path(agent), Path::new("key.priv.pem")),
@@ -82,6 +89,8 @@ impl DirectoryStoredKeys {
         signing: Option<&Path>,
         verifying: Option<&Path>,
     ) -> Result<(), SignerError> {
+        std::fs::create_dir_all(&self.agent_path(agent))?;
+
         if let Some(signing) = signing {
             std::fs::copy(
                 Path::new(signing),
@@ -104,6 +113,7 @@ impl DirectoryStoredKeys {
         signing: Option<&Path>,
         verifying: Option<&Path>,
     ) -> Result<(), SignerError> {
+        std::fs::create_dir_all(&self.base)?;
         if let Some(signing) = signing {
             std::fs::copy(
                 Path::new(signing),
