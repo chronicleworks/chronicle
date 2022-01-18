@@ -76,7 +76,7 @@ impl StateDelta {
     async fn get_state_from(
         &self,
         offset: Offset,
-    ) -> Result<impl futures::Stream<Item = Vec<ProvModel>>, StateError> {
+    ) -> Result<impl futures::Stream<Item = Vec<(Offset, ProvModel)>>, StateError> {
         let request = self.builder.make_subcription_request(offset);
 
         debug!(?request, "Subscription request");
@@ -119,7 +119,9 @@ impl StateDelta {
                             let prov =
                                 join_all(events.events.into_iter().map(|event| async move {
                                     let prov = ProvModel::default();
-                                    prov.apply_json_ld_bytes(&*event.data).await
+                                    prov.apply_json_ld_bytes(&*event.data)
+                                        .await
+                                        .map(|prov| (Offset::Genesis, prov))
                                 }))
                                 .await
                                 .into_iter()
@@ -151,12 +153,13 @@ impl StateDelta {
 
 #[async_trait::async_trait(?Send)]
 impl LedgerReader for StateDelta {
-    async fn namespace_updates(
+    async fn state_updates(
         &self,
-        _namespace: common::prov::NamespaceId,
         offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = ProvModel> + Send>>, common::ledger::SubscriptionError>
-    {
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>,
+        common::ledger::SubscriptionError,
+    > {
         Ok(self
             .get_state_from(offset)
             .await?

@@ -72,21 +72,31 @@ impl From<Offset> for String {
     }
 }
 
+impl From<u64> for Offset {
+    fn from(offset: u64) -> Self {
+        match offset {
+            0 => Offset::Genesis,
+            x => Offset::From(x),
+        }
+    }
+}
+
 #[async_trait::async_trait(?Send)]
 pub trait LedgerReader {
-    async fn namespace_updates(
+    /// Subscribe to state updates from this ledger, starting at [offset]
+    async fn state_updates(
         &self,
-        namespace: NamespaceId,
         offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = ProvModel> + Send>>, SubscriptionError>;
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>, SubscriptionError>;
 }
 
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
-    chan: UnboundedSender<ProvModel>,
+    chan: UnboundedSender<(Offset, ProvModel)>,
     reader: Option<InMemLedgerReader>,
+    head: u64,
 }
 
 impl InMemLedger {
@@ -99,6 +109,7 @@ impl InMemLedger {
             reader: Some(InMemLedgerReader {
                 chan: Some(rx).into(),
             }),
+            head: 0u64,
         }
     }
 
@@ -109,16 +120,15 @@ impl InMemLedger {
 
 #[derive(Debug)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<UnboundedReceiver<ProvModel>>>,
+    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel)>>>,
 }
 
 #[async_trait::async_trait(?Send)]
 impl LedgerReader for InMemLedgerReader {
-    async fn namespace_updates(
+    async fn state_updates(
         &self,
-        _namespace: NamespaceId,
         _offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = ProvModel> + Send>>, SubscriptionError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>, SubscriptionError> {
         let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
             if let Some(prov) = chan.next().await {
                 Some((prov, chan))
@@ -182,15 +192,18 @@ impl LedgerWriter for InMemLedger {
                 self.kv.borrow_mut().insert(output.address, state);
 
                 self.chan
-                    .send(
+                    .send((
+                        Offset::from(self.head),
                         ProvModel::default()
                             .apply_json_ld_bytes(&output.data)
                             .await
                             .unwrap(),
-                    )
+                    ))
                     .await
                     .unwrap();
             }
+
+            self.head += 1;
         }
 
         Ok(())
