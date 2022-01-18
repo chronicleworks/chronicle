@@ -1,15 +1,15 @@
 Lightweight todo, to save jira clicks
 
 
-* Enough query for graphql to be useful
-* Graphql mutations (Apicommand)
+* DONE Enough query for graphql to be useful
+* DONE Graphql mutations (Apicommand)
 * Graphql subscriptions
 * Daemonisation, with initial boot from CLI
 * Fix the terrible IRI / identity handling with contexts and buf/ref types
-* CLI connects to graphql
+* CLI connects to graphql ?
 * DONE CLI output works as Kevin suggested (uri outputs) to be composable, as we now have a query interface
-* CLI handles domain types
-* Secure graphql endpoint + UI
+* DONE CLI handles domain types
+* Secure graphql endpoint + UI (just needs tls/psk)
 * Actuallly connect it to a real blockchain
 * Emit committed events to subscriptions
 * CLI optionally blocks on submitted or comitted

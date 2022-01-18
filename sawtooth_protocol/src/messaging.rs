@@ -13,6 +13,7 @@ use sawtooth_sdk::messaging::{
     stream::{MessageConnection, MessageReceiver},
     zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
 };
+use tokio::task::JoinError;
 use tracing::instrument;
 use tracing::{debug, trace};
 
@@ -30,9 +31,10 @@ pub enum SubmissionResult {
 }
 
 custom_error! {pub SawtoothSubmissionError
-    Send{source: SendError}                              = "Submission failed to send to validator",
-    Recv{source: ReceiveError}                           = "Submission failed to send to validator",
-    UnexpectedReply{}                                    = "Validator reply unexpected",
+    Send{source: SendError}                                 = "Submission failed to send to validator",
+    Recv{source: ReceiveError}                              = "Submission failed to send to validator",
+    UnexpectedReply{}                                       = "Validator reply unexpected",
+    Join{source: JoinError}                                 = "Submission blocking thread pool",
 }
 
 impl Into<SubmissionError> for SawtoothSubmissionError {
@@ -43,7 +45,7 @@ impl Into<SubmissionError> for SawtoothSubmissionError {
     }
 }
 
-/// The sawtooth futures and their soickets are not controlled by a compatible reactor
+/// The sawtooth futures and their sockets are not controlled by a compatible reactor
 impl SawtoothSubmitter {
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
@@ -90,6 +92,8 @@ impl SawtoothSubmitter {
 
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for SawtoothSubmitter {
+    /// TODO: This blocks on a bunch of non tokio / futures 'futures' in the sawtooth rust SDK,
+    /// which also exposes a buch of non clonable types so we probably need another dispatch / join mpsc here
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         self.submit(tx).map_err(SawtoothSubmissionError::into)
     }

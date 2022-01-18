@@ -9,7 +9,7 @@ use diesel::{connection::SimpleConnection, r2d2::ConnectionManager, SqliteConnec
 use futures::{AsyncReadExt, Future};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
-use persistence::Store;
+use persistence::{ConnectionOptions, Store};
 use r2d2::Pool;
 use std::{
     convert::Infallible,
@@ -84,33 +84,6 @@ where
     uuidsource: Box<dyn Fn() -> Uuid + Send + 'static>,
 }
 
-#[derive(Debug)]
-pub struct ConnectionOptions {
-    pub enable_wal: bool,
-    pub enable_foreign_keys: bool,
-    pub busy_timeout: Option<Duration>,
-}
-
-impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
-    for ConnectionOptions
-{
-    fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-        (|| {
-            if self.enable_wal {
-                conn.batch_execute("PRAGMA journal_mode = WAL2; PRAGMA synchronous = NORMAL;")?;
-            }
-            if self.enable_foreign_keys {
-                conn.batch_execute("PRAGMA foreign_keys = ON;")?;
-            }
-            if let Some(d) = self.busy_timeout {
-                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
-            }
-            Ok(())
-        })()
-        .map_err(diesel::r2d2::Error::QueryError)
-    }
-}
-
 #[derive(Debug, Clone)]
 /// A clonable api handle
 pub struct ApiDispatch {
@@ -135,6 +108,84 @@ impl ApiDispatch {
 }
 
 impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, R> {
+    #[instrument(skip(ledger_writer, ledger_reader, uuidgen))]
+    pub fn new<F>(
+        addr: SocketAddr,
+        dbpath: &str,
+        ledger_writer: W,
+        ledger_reader: R,
+        secret_path: &Path,
+        uuidgen: F,
+    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
+    where
+        F: Fn() -> Uuid + Send + 'static,
+    {
+        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: false,
+                enable_foreign_keys: true,
+                busy_timeout: Some(Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
+
+        let dispatch = ApiDispatch { tx: tx.clone() };
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let secret_path = secret_path.to_owned();
+
+        let store = Store::new(pool.clone())?;
+
+        let ql_pool = pool;
+
+        std::thread::spawn(move || {
+            let local = tokio::task::LocalSet::new();
+            local.spawn_local(async move {
+                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
+
+                let mut api = Api {
+                    tx: tx.clone(),
+                    keystore,
+                    ledger_writer,
+                    ledger_reader,
+                    store,
+                    uuidsource: Box::new(uuidgen),
+                };
+
+                debug!(?api, "Api running on localset");
+
+                loop {
+                    if let Some((command, reply)) = rx.recv().await {
+                        trace!(?rx, "Recv api command from channel");
+
+                        let result = api.dispatch(command).await;
+
+                        reply
+                            .send(result)
+                            .await
+                            .map_err(|e| {
+                                error!(?e);
+                            })
+                            .ok();
+                    } else {
+                        return;
+                    }
+                }
+            });
+
+            rt.block_on(local)
+        });
+
+        Ok((
+            dispatch.clone(),
+            graphql::serve_graphql(ql_pool, dispatch, addr, true),
+        ))
+    }
+
     #[instrument]
     async fn activity_generate(
         &mut self,
@@ -519,84 +570,6 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
     }
 
-    #[instrument(skip(ledger_writer, ledger_reader, uuidgen))]
-    pub fn new<F>(
-        addr: SocketAddr,
-        dbpath: &str,
-        ledger_writer: W,
-        ledger_reader: R,
-        secret_path: &Path,
-        uuidgen: F,
-    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
-    where
-        F: Fn() -> Uuid + Send + 'static,
-    {
-        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
-
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(Duration::from_secs(30)),
-            }))
-            .build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
-
-        let dispatch = ApiDispatch { tx: tx.clone() };
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let secret_path = secret_path.to_owned();
-
-        let store = Store::new(pool.clone())?;
-
-        let ql_pool = pool;
-
-        std::thread::spawn(move || {
-            let local = tokio::task::LocalSet::new();
-            local.spawn_local(async move {
-                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-
-                let mut api = Api {
-                    tx: tx.clone(),
-                    keystore,
-                    ledger_writer,
-                    ledger_reader,
-                    store,
-                    uuidsource: Box::new(uuidgen),
-                };
-
-                debug!(?api, "Api running on localset");
-
-                loop {
-                    if let Some((command, reply)) = rx.recv().await {
-                        trace!(?rx, "Recv api command from channel");
-
-                        let result = api.dispatch(command).await;
-
-                        reply
-                            .send(result)
-                            .await
-                            .map_err(|e| {
-                                error!(?e);
-                            })
-                            .ok();
-                    } else {
-                        return;
-                    }
-                }
-            });
-
-            rt.block_on(local)
-        });
-
-        Ok((
-            dispatch.clone(),
-            graphql::serve_graphql(ql_pool, dispatch, addr, true),
-        ))
-    }
-
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
         let id = self
@@ -748,7 +721,7 @@ mod test {
 
         let (dispatch, _ui) = Api::new(
             SocketAddr::from_str("0.0.0.0:8080").unwrap(),
-            "file::memory:",
+            "file::memory:?cache=shared",
             ledger,
             reader,
             &secretpath.into_path(),

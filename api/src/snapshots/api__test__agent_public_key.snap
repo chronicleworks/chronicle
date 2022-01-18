@@ -27,7 +27,7 @@ expression: api.1
       namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
       name: testagent
       domaintypeid: ~
-      publickey: 03c4c663d96ec83af004ba21839cebcefedadde8b3905fbeaf9bb3f4fb3b9a13fe
+      publickey: 029661abae004943aa0c8ad0cd1071004b8d0d57c54bc67e5f1ea79082e1ef2f66
   activities: {}
   entities: {}
   was_associated_with: {}
