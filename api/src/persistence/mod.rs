@@ -4,6 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 use chrono::DateTime;
 
 use chrono::Utc;
+use common::ledger::Offset;
 use common::prov::{
     vocab::Chronicle, Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId,
     Namespace, NamespaceId, ProvModel,
@@ -88,9 +89,8 @@ impl Store {
         Ok(Store { pool })
     }
 
-    ///TODO: any sort of query design, this should fundamentally be for export / streaming into external data pipelines or we will end up with an embedded triple store
     #[instrument(skip(connection))]
-    pub fn prov_model_from(
+    pub fn prov_model_for_namespace(
         &self,
         connection: &mut SqliteConnection,
         query: QueryCommand,
@@ -216,9 +216,39 @@ impl Store {
         Ok(model)
     }
 
-    /// Apply a chronicle transaction to the store idempotently and return a prov model relevant to the transaction
+    /// Get the last fully syncronised offset
     #[instrument]
-    pub fn apply(&self, tx: Vec<&ChronicleTransaction>) -> Result<ProvModel, StoreError> {
+    pub fn get_last_offset(&self) -> Result<Option<Offset>, StoreError> {
+        use schema::ledgersync::{self as dsl};
+        Ok(self.connection()?.immediate_transaction(|connection| {
+            dsl::table
+                .order_by(dsl::sync_time)
+                .first::<query::LedgerSync>(connection)
+                .optional()
+                .map(|sync| sync.map(|sync| Offset::from(&*sync.offset)))
+        })?)
+    }
+
+    /// Get the last fully syncronised offset
+    #[instrument]
+    pub fn set_last_offset(&self, offset: Offset) -> Result<(), StoreError> {
+        use schema::ledgersync::{self as dsl};
+
+        self.connection()?.immediate_transaction(|connection| {
+            diesel::insert_into(dsl::table)
+                .values(&query::NewOffset {
+                    offset: &*offset.to_string(),
+                    sync_time: Some(Utc::now().naive_utc()),
+                })
+                .execute(connection)
+        });
+
+        Ok(())
+    }
+
+    /// Apply a chronicle transaction to the store and return a prov model relevant to the transaction
+    #[instrument]
+    pub fn apply_tx(&self, tx: Vec<&ChronicleTransaction>) -> Result<ProvModel, StoreError> {
         let model = ProvModel::from_tx(tx);
 
         debug!(?model, "Apply model");
@@ -226,7 +256,7 @@ impl Store {
         debug!("Enter transaction");
         self.connection()?.immediate_transaction(|connection| {
             debug!("Entered transaction");
-            self.idempotently_apply_model(connection, &model)
+            self.apply_model(connection, &model)
         })?;
         debug!("Completed transaction");
 
@@ -240,7 +270,7 @@ impl Store {
         trace!(?prov);
         self.connection()?.immediate_transaction(|connection| {
             debug!("Entered transaction");
-            self.idempotently_apply_model(connection, prov)
+            self.apply_model(connection, prov)
         })?;
         debug!("Completed transaction");
 
@@ -248,7 +278,7 @@ impl Store {
     }
 
     #[instrument(skip(connection))]
-    fn idempotently_apply_model(
+    fn apply_model(
         &self,
         connection: &mut SqliteConnection,
         model: &ProvModel,

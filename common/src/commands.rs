@@ -6,7 +6,7 @@ use futures::AsyncRead;
 use iref::IriBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::prov::ProvModel;
+use crate::{ledger::Offset, prov::ProvModel};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -124,13 +124,19 @@ pub struct QueryCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncCommand {
+    pub offset: Offset,
+    pub prov: ProvModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
-    Sync(ProvModel),
+    Sync(SyncCommand),
 }
 
 #[derive(Debug)]

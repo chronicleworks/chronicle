@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
 
-use diesel::{connection::SimpleConnection, r2d2::ConnectionManager, SqliteConnection};
+use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use futures::{AsyncReadExt, Future};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
@@ -142,6 +142,8 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         let ql_pool = pool;
 
+        // Get last committed offset from the store before we attach it to ledger state updates and the api
+
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
@@ -230,7 +232,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         Ok(ApiResponse::Prov(
             id,
-            vec![self.store.apply(to_apply.iter().collect())?],
+            vec![self.store.apply_tx(to_apply.iter().collect())?],
         ))
     }
 
@@ -283,7 +285,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         Ok(ApiResponse::Prov(
             id,
-            vec![self.store.apply(to_apply.iter().collect())?],
+            vec![self.store.apply_tx(to_apply.iter().collect())?],
         ))
     }
 
@@ -328,7 +330,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         Ok(ApiResponse::Prov(
             id,
-            vec![self.store.apply(to_apply.iter().collect())?],
+            vec![self.store.apply_tx(to_apply.iter().collect())?],
         ))
     }
 
@@ -368,7 +370,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         Ok(ApiResponse::Prov(
             iri,
-            vec![self.store.apply(to_apply.iter().collect())?],
+            vec![self.store.apply_tx(to_apply.iter().collect())?],
         ))
     }
 
@@ -385,7 +387,10 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         self.ledger_writer.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(iri, vec![self.store.apply(vec![&tx])?]))
+        Ok(ApiResponse::Prov(
+            iri,
+            vec![self.store.apply_tx(vec![&tx])?],
+        ))
     }
 
     #[instrument]
@@ -453,7 +458,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
                     .await
             }
             ApiCommand::Query(query) => self.query(query).await,
-            ApiCommand::Sync(prov) => self.sync(prov).await,
+            ApiCommand::Sync(SyncCommand { offset: _, prov }) => self.sync(prov).await,
         }
     }
 
@@ -497,7 +502,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         self.ledger_writer.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
     }
 
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
@@ -567,7 +572,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         self.ledger_writer.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
     }
 
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
@@ -577,7 +582,9 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
             .namespace_by_name(&mut connection, &query.namespace)?;
         Ok(ApiResponse::Prov(
             IriBuf::new(id.as_str()).unwrap(),
-            vec![self.store.prov_model_from(&mut connection, query)?],
+            vec![self
+                .store
+                .prov_model_for_namespace(&mut connection, query)?],
         ))
     }
 
@@ -629,7 +636,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         self.ledger_writer.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
     }
 
     #[instrument]
@@ -666,7 +673,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
 
         self.ledger_writer.submit(vec![&tx]).await?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply(vec![&tx])?]))
+        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
     }
 
     #[instrument]

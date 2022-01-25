@@ -3,7 +3,7 @@ use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
 
-use crate::prov::{ChronicleTransaction, NamespaceId, ProcessorError, ProvModel};
+use crate::prov::{ChronicleTransaction, ProcessorError, ProvModel};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -57,17 +57,17 @@ pub trait LedgerWriter {
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Offset {
     Genesis,
     From(u64),
 }
 
-impl From<Offset> for String {
-    fn from(offset: Offset) -> Self {
-        match offset {
-            Offset::Genesis => "".to_string(),
-            Offset::From(x) => format!("{}", x),
+impl std::fmt::Display for Offset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Offset::Genesis => f.write_str(""),
+            Offset::From(x) => f.write_fmt(format_args!("{}", x)),
         }
     }
 }
@@ -77,6 +77,19 @@ impl From<u64> for Offset {
         match offset {
             0 => Offset::Genesis,
             x => Offset::From(x),
+        }
+    }
+}
+
+/// Infallible string conversion for offset, fall back to genesis if we cannot parse
+impl From<&str> for Offset {
+    fn from(offset: &str) -> Self {
+        match offset {
+            "" => Offset::Genesis,
+            x => x
+                .parse::<u64>()
+                .map(Offset::From)
+                .unwrap_or(Offset::Genesis),
         }
     }
 }

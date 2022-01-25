@@ -35,6 +35,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    ledgersync (offset) {
+        offset -> Text,
+        sync_time -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     namespace (name) {
         name -> Text,
         uuid -> Text,
@@ -76,6 +83,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     activity,
     agent,
     entity,
+    ledgersync,
     namespace,
     used,
     wasassociatedwith,

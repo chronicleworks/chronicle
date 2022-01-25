@@ -5,7 +5,7 @@ use common::ledger::{LedgerReader, Offset, SubscriptionError};
 use common::prov::ProvModel;
 use custom_error::custom_error;
 use derivative::*;
-use futures::{stream, FutureExt, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 
 use futures::future::join_all;
 use k256::ecdsa::SigningKey;
@@ -26,9 +26,9 @@ custom_error! {pub StateError
     Runtime{source: JoinError}                      = "Failed to return from blocking operation",
     ZmqRx{source: ReceiveError}                     = "No response from validator",
     ZmqTx{source: SendError}                        = "No response from validator",
-    ProtobufEncode{source: EncodeError}                   = "Protobuf encoding",
-    ProtobufDecode{source: DecodeError}                   = "Protobuf decoding",
-    SubscribeError{msg: String} = "Subscription failed",
+    ProtobufEncode{source: EncodeError}             = "Protobuf encoding",
+    ProtobufDecode{source: DecodeError}             = "Protobuf decoding",
+    SubscribeError{msg: String}                     = "Subscription failed",
 }
 
 impl From<StateError> for SubscriptionError {

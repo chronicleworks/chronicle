@@ -8,11 +8,24 @@ pub struct Namespace {
     pub uuid: String,
 }
 
+#[derive(Queryable)]
+pub struct LedgerSync {
+    pub offset: String,
+    pub sync_time: Option<NaiveDateTime>,
+}
+
 #[derive(Insertable)]
 #[table_name = "namespace"]
 pub struct NewNamespace<'a> {
     pub name: &'a str,
     pub uuid: &'a str,
+}
+
+#[derive(Insertable)]
+#[table_name = "ledgersync"]
+pub struct NewOffset<'a> {
+    pub offset: &'a str,
+    pub sync_time: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable)]

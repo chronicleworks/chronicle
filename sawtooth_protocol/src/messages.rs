@@ -43,7 +43,7 @@ impl MessageBuilder {
     pub fn make_subcription_request(&self, offset: Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
 
-        request.last_known_block_ids = vec![offset.into()];
+        request.last_known_block_ids = vec![offset.to_string()];
         let mut subscription = EventSubscription::default();
         let mut filter_address = EventFilter::default();
 
