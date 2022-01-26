@@ -1,10 +1,9 @@
 use custom_error::custom_error;
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},
-    pkcs8::FromPrivateKey,
+    pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
     SecretKey,
 };
-use pkcs8::{FromPublicKey, ToPrivateKey};
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
 use tracing::error;
@@ -21,6 +20,7 @@ custom_error! {pub SignerError
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
     InvalidPublicKey{source: k256::pkcs8::Error}            = "Invalid public key",
+    InvalidPrivateKey{source:  k256::pkcs8::spki::Error}    = "Invalid public key",
     NoPublicKeyFound{}                                      = "No public key found",
     NoPrivateKeyFound{}                                     = "No private key found",
 }
@@ -145,7 +145,7 @@ impl DirectoryStoredKeys {
     fn new_signing_key(secretpath: &Path) -> Result<(), SignerError> {
         let secret = SecretKey::random(StdRng::from_entropy());
 
-        let privpem = secret.to_pkcs8_pem()?;
+        let privpem = secret.to_pkcs8_pem(LineEnding::CRLF)?;
 
         std::fs::write(
             Path::join(Path::new(&secretpath), Path::new("key.priv.pem")),

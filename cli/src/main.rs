@@ -49,7 +49,7 @@ fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
 
     use common::ledger::InMemLedger;
 
-    Ok(common::ledger::InMemLedger::default())
+    Ok(common::ledger::InMemLedger::new())
 }
 
 fn api(
@@ -87,7 +87,7 @@ fn api(
 }
 
 fn domain_type(args: &ArgMatches) -> Option<String> {
-    if args.is_present("untyped") {
+    if !args.is_present("domaintype") {
         None
     } else {
         args.value_of("domaintype").map(|x| x.to_owned())
@@ -114,7 +114,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
-                        domaintype: domain_type(options),
+                        domaintype: domain_type(m),
                     }))
                 }),
                 m.subcommand_matches("register-key").map(|m| {
@@ -155,7 +155,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                         name: m.value_of("activity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
-                        domaintype: domain_type(options),
+                        domaintype: domain_type(m),
                     }))
                 }),
                 m.subcommand_matches("start").map(|m| {
@@ -179,7 +179,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("entity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         activity: m.value_of("activity_name").map(|x| x.to_owned()),
-                        domaintype: domain_type(options),
+                        domaintype: domain_type(m),
                     }))
                 }),
                 m.subcommand_matches("generate").map(|m| {
@@ -187,7 +187,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                         name: m.value_of("entity_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                         activity: m.value_of("activity_name").map(|x| x.to_owned()),
-                        domaintype: domain_type(options),
+                        domaintype: domain_type(m),
                     }))
                 }),
             ]
@@ -220,7 +220,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
     .next();
 
     if let Some(execution) = execution {
-        let (exresult, _) = join![execution, ui];
+        let exresult = execution.await;
 
         Ok(exresult?)
     } else {
