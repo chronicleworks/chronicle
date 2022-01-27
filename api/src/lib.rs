@@ -256,9 +256,21 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
                 Some(namespace.clone()),
             )?;
 
-            let name = self
-                .store
-                .disambiguate_entity_name(&mut connection, &name)?;
+            let entity =
+                self.store
+                    .entity_by_entity_name_and_namespace(&mut connection, &name, &namespace);
+
+            let name = {
+                if let Ok(existing) = entity {
+                    debug!(?existing, "Use existing entity");
+                    existing.name
+                } else {
+                    debug!(?name, "Need new entity");
+                    self.store
+                        .disambiguate_entity_name(&mut connection, &name)?
+                }
+            };
+
             let id = ChronicleVocab::entity(&name);
 
             let create = ChronicleTransaction::ActivityUses(ActivityUses {
@@ -462,49 +474,6 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         }
     }
 
-    #[instrument]
-    async fn end_activity(
-        &mut self,
-        name: Option<String>,
-        namespace: Option<String>,
-        time: Option<DateTime<Utc>>,
-        agent: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-        let activity =
-            self.store
-                .get_activity_by_name_or_last_started(&mut connection, name, namespace)?;
-        let namespace = self
-            .store
-            .namespace_by_name(&mut connection, &activity.namespace)?;
-
-        let agent = {
-            if let Some(agent) = agent {
-                self.store.agent_by_agent_name_and_namespace(
-                    &mut connection,
-                    &agent,
-                    namespace.decompose().0,
-                )?
-            } else {
-                self.store
-                    .get_current_agent(&mut connection)
-                    .map_err(|_| ApiError::NoCurrentAgent {})?
-            }
-        };
-
-        let id = ChronicleVocab::activity(&activity.name);
-        let tx = ChronicleTransaction::EndActivity(EndActivity {
-            namespace,
-            id: id.clone().into(),
-            agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or_else(Utc::now),
-        });
-
-        self.ledger_writer.submit(vec![&tx]).await?;
-
-        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
-    }
-
     /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
     #[instrument]
     async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
@@ -648,6 +617,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
+        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
         let agent = {
             if let Some(agent) = agent {
                 self.store
@@ -659,12 +629,68 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
             }
         };
 
-        let name = self
-            .store
-            .disambiguate_activity_name(&mut connection, &name)?;
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
+        let activity = self.store.activity_by_activity_name_and_namespace(
+            &mut connection,
+            &name,
+            &namespace.decompose().0,
+        );
+
+        let name = {
+            if let Ok(existing) = activity {
+                debug!(?existing, "Use existing activity");
+                existing.name
+            } else {
+                debug!(?name, "Need new activity");
+                self.store
+                    .disambiguate_activity_name(&mut connection, &name)?
+            }
+        };
+
         let id = ChronicleVocab::activity(&name);
         let tx = ChronicleTransaction::StartActivity(StartActivity {
+            namespace,
+            id: id.clone().into(),
+            agent: ChronicleVocab::agent(&agent.name).into(),
+            time: time.unwrap_or_else(Utc::now),
+        });
+
+        self.ledger_writer.submit(vec![&tx]).await?;
+
+        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
+    }
+
+    #[instrument]
+    async fn end_activity(
+        &mut self,
+        name: Option<String>,
+        namespace: Option<String>,
+        time: Option<DateTime<Utc>>,
+        agent: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut connection = self.store.connection()?;
+        let activity =
+            self.store
+                .get_activity_by_name_or_last_started(&mut connection, name, namespace)?;
+        let namespace = self
+            .store
+            .namespace_by_name(&mut connection, &activity.namespace)?;
+
+        let agent = {
+            if let Some(agent) = agent {
+                self.store.agent_by_agent_name_and_namespace(
+                    &mut connection,
+                    &agent,
+                    namespace.decompose().0,
+                )?
+            } else {
+                self.store
+                    .get_current_agent(&mut connection)
+                    .map_err(|_| ApiError::NoCurrentAgent {})?
+            }
+        };
+
+        let id = ChronicleVocab::activity(&activity.name);
+        let tx = ChronicleTransaction::EndActivity(EndActivity {
             namespace,
             id: id.clone().into(),
             agent: ChronicleVocab::agent(&agent.name).into(),

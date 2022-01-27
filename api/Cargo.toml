@@ -10,12 +10,12 @@ custom_error = "1.9.2"
 diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
 diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono", "r2d2"], git = "https://github.com/diesel-rs/diesel" }
 libsqlite3-sys = { version = "0.23.2", features = ["bundled","bundled_bindings"] } #transitive via diesel, but we want it built from source
-iref = "2.1.0"
+iref = "2.0.3"
 iref-enum = "1.2.0"
+static-iref = "1.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
 k256 = { version = "0.10.2", features = ["arithmetic","ecdsa", "pkcs8", "sha256", "std", "pem"] }
-static-iref = "1.0.0"
 user-error = "1.2.8"
 uuid = { version = "0.8.2", features = ["v4"] }
 url = "2.2.2"

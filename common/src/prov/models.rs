@@ -704,6 +704,7 @@ impl ProvModel {
 
             let mut activitydoc = object! {
                 "@id": (*id.as_str()),
+                "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": activity.name.as_str(),
                 }]

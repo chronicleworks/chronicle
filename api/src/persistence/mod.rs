@@ -411,10 +411,7 @@ impl Store {
             .values(&agent)
             .on_conflict((dsl::name, dsl::namespace))
             .do_update()
-            .set((
-                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
-                dsl::publickey.eq(publickey.as_deref()),
-            ))
+            .set((dsl::publickey.eq(publickey.as_deref()),))
             .execute(connection)?;
 
         Ok(())
@@ -449,7 +446,6 @@ impl Store {
             .on_conflict((dsl::name, dsl::namespace))
             .do_update()
             .set((
-                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
                 dsl::started.eq(started.map(|t| t.naive_utc())),
                 dsl::ended.eq(ended.map(|t| t.naive_utc())),
             ))
@@ -512,7 +508,7 @@ impl Store {
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
 
-        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
@@ -536,7 +532,7 @@ impl Store {
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
 
-        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
@@ -560,11 +556,11 @@ impl Store {
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
 
-        Ok(format!("{}_{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
     }
 
     /// Fetch the activity record for the IRI
-    fn activity_by_activity_name_and_namespace(
+    pub fn activity_by_activity_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
         name: &str,
@@ -635,15 +631,12 @@ impl Store {
             .get(entity.namespaceid())
             .ok_or(StoreError::InvalidNamespace {})?;
 
-        diesel::insert_into(schema::entity::table)
+        diesel::insert_or_ignore_into(schema::entity::table)
             .values((
                 dsl::name.eq(entity.name()),
                 dsl::namespace.eq(&namespace.name),
-                dsl::domaintype.eq(entity.domaintypeid().as_ref().map(|x| x.as_str())),
+                dsl::domaintype.eq(entity.domaintypeid().as_ref().map(|x| x.decompose())),
             ))
-            .on_conflict((dsl::name, dsl::namespace))
-            .do_update()
-            .set(dsl::domaintype.eq(entity.domaintypeid().as_ref().map(|x| x.decompose())))
             .execute(connection)?;
 
         if let Entity::Signed {

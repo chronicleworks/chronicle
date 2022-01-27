@@ -184,7 +184,7 @@ pub fn cli() -> App<'static> {
                 .subcommand(
                     App::new("end")
                         .about("Record this activity as ended at the current time")
-                        .arg(Arg::new("activity_name").required(true).takes_value(true))
+                        .arg(Arg::new("activity_name").required(false).takes_value(true))
                         .arg(
                             Arg::new("namespace")
                                 .short('n')
@@ -289,6 +289,13 @@ pub fn cli() -> App<'static> {
                                 .long("locator")
                                 .help("A url or other way of identifying the attachment")
                                 .value_hint(ValueHint::Url)
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("agent")
+                                .long("agent")
+                                .help("The agent id attaching the entity")
                                 .required(false)
                                 .takes_value(true),
                         )

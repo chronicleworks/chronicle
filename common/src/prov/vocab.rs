@@ -70,6 +70,7 @@ impl Chronicle {
     }
 
     pub fn domaintype(name: &str) -> IriBuf {
-        IriBuf::new(&format!("{}domaintype:{}", Self::PREFIX, name)).unwrap()
+        IriBuf::new(&format!("{}domaintype:{}", Self::PREFIX, name))
+            .unwrap_or_else(|_| panic!("{}domaintype:{}", Self::PREFIX, name))
     }
 }

@@ -13,11 +13,11 @@ use common::commands::{
     ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
     KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
 };
+use common::prov::CompactionError;
 use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
 use futures::Future;
-use tokio::join;
 
 use std::{
     io,
@@ -219,6 +219,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
     .flatten()
     .next();
 
+    // If we actually execute a command, then do not run the api
     if let Some(execution) = execution {
         let exresult = execution.await;
 
@@ -234,7 +235,8 @@ custom_error! {pub CliError
     Keys{source: SignerError}                   = "Key storage",
     FileSystem{source: std::io::Error}          = "Cannot locate configuration file",
     ConfigInvalid{source: toml::de::Error}      = "Invalid configuration file",
-    InvalidPath                                 = "Invalid path",
+    InvalidPath                                 = "Invalid path",//TODO - the path, you know how annoying this is
+    Ld{source: CompactionError}                 = "Invalid Json LD",
 }
 
 impl UFE for CliError {}
@@ -275,12 +277,28 @@ async fn main() {
 }
 
 async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
+    use colored_json::prelude::*;
     let config = handle_config_and_init(matches)?;
     let response = api_exec(config, matches).await?;
 
     match response {
-        ApiResponse::Prov(context, _delta) => {
-            println!("{}", context);
+        ApiResponse::Prov(context, delta) => {
+            if let Some(_) = matches.subcommand_matches("export") {
+                for delta in delta {
+                    println!(
+                        "{}",
+                        delta
+                            .to_json()
+                            .compact()
+                            .await?
+                            .to_string()
+                            .to_colored_json_auto()
+                            .unwrap()
+                    )
+                }
+            } else {
+                println!("{}", context);
+            }
         }
         ApiResponse::Unit => {}
     };
