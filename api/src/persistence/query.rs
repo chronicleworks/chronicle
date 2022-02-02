@@ -15,21 +15,21 @@ pub struct LedgerSync {
 }
 
 #[derive(Insertable)]
-#[table_name = "namespace"]
+#[diesel(table_name = namespace)]
 pub struct NewNamespace<'a> {
     pub name: &'a str,
     pub uuid: &'a str,
 }
 
 #[derive(Insertable)]
-#[table_name = "ledgersync"]
+#[diesel(table_name = ledgersync)]
 pub struct NewOffset<'a> {
     pub offset: &'a str,
     pub sync_time: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable)]
-#[table_name = "activity"]
+#[diesel(table_name = activity)]
 pub struct NewActivity<'a> {
     pub name: &'a str,
     pub namespace: &'a str,
@@ -70,7 +70,7 @@ pub struct Entity {
 }
 
 #[derive(Insertable, AsChangeset, Default)]
-#[table_name = "agent"]
+#[diesel(table_name = agent)]
 pub struct NewAgent<'a> {
     pub name: &'a str,
     pub namespace: &'a str,

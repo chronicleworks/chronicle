@@ -70,6 +70,14 @@ impl NamespaceId {
 
         unreachable!();
     }
+
+    pub fn name_part(&self) -> &str {
+        self.decompose().0
+    }
+
+    pub fn uuid_part(&self) -> Uuid {
+        self.decompose().1
+    }
 }
 
 impl<S> From<S> for NamespaceId

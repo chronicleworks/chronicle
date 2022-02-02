@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
 use std::str::from_utf8;
+use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum SubmissionError {
@@ -106,7 +107,7 @@ pub trait LedgerReader {
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug)]
 pub struct InMemLedger {
-    kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
+    kv: Mutex<RefCell<HashMap<LedgerAddress, JsonValue>>>,
     chan: UnboundedSender<(Offset, ProvModel)>,
     reader: Option<InMemLedgerReader>,
     head: u64,
@@ -117,7 +118,7 @@ impl InMemLedger {
         let (tx, rx) = futures::channel::mpsc::unbounded();
 
         InMemLedger {
-            kv: HashMap::new().into(),
+            kv: Mutex::new(HashMap::new().into()),
             chan: tx,
             reader: Some(InMemLedgerReader {
                 chan: Some(rx).into(),
@@ -162,15 +163,30 @@ impl serde::Serialize for InMemLedger {
         S: serde::Serializer,
     {
         let mut array = serializer
-            .serialize_seq(Some(self.kv.borrow().len()))
+            .serialize_seq(Some(self.kv.lock().unwrap().borrow().len()))
             .unwrap();
-        let mut keys = self.kv.borrow().keys().cloned().collect::<Vec<_>>();
+        let mut keys = self
+            .kv
+            .lock()
+            .unwrap()
+            .borrow()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
 
         keys.sort();
         for k in keys {
             array.serialize_element(&k).ok();
-            let v =
-                serde_json::value::to_value(self.kv.borrow().get(&k).unwrap().to_string()).unwrap();
+            let v = serde_json::value::to_value(
+                self.kv
+                    .lock()
+                    .unwrap()
+                    .borrow()
+                    .get(&k)
+                    .unwrap()
+                    .to_string(),
+            )
+            .unwrap();
             array.serialize_element(&v).ok();
         }
         array.end()
@@ -190,6 +206,8 @@ impl LedgerWriter for InMemLedger {
                         .iter()
                         .filter_map(|dep| {
                             self.kv
+                                .lock()
+                                .unwrap()
                                 .borrow()
                                 .get(dep)
                                 .map(|json| StateInput::new(json.to_string().as_bytes().into()))
@@ -202,7 +220,11 @@ impl LedgerWriter for InMemLedger {
                 let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
                 debug!(?output.address, "Address");
                 debug!(%state, "New state");
-                self.kv.borrow_mut().insert(output.address, state);
+                self.kv
+                    .lock()
+                    .unwrap()
+                    .borrow_mut()
+                    .insert(output.address, state);
 
                 self.chan
                     .send((

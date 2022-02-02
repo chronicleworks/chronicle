@@ -25,6 +25,7 @@ custom_error! {pub SignerError
     NoPrivateKeyFound{}                                     = "No private key found",
 }
 
+#[derive(Debug, Clone)]
 pub struct DirectoryStoredKeys {
     base: PathBuf,
 }

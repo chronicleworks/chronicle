@@ -23,7 +23,7 @@ use tokio::sync::mpsc::{self, error::SendError, Sender};
 use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, SubmissionError},
-    prov::{vocab::Chronicle as ChronicleVocab, Domaintype, ProvModel},
+    prov::{vocab::Chronicle as ChronicleVocab, Domaintype, NamespaceId, ProvModel},
     prov::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
         EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
@@ -40,6 +40,7 @@ pub use graphql::serve_graphql;
 
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
+    Transaction{source: diesel::result::Error}                  = "Transaction failed",
     Iri{source: iref::Error}                                    = "Invalid IRI",
     JsonLD{message: String}                                     = "Json LD processing",
     Ledger{source: SubmissionError}                             = "Ledger error",
@@ -48,6 +49,7 @@ custom_error! {pub ApiError
     CannotFindAttachment{}                                      = "Cannot locate attachment file",
     ApiShutdownRx                                               = "Api shut down before reply",
     ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
+    LedgerShutdownTx{source: SendError<LedgerSendWithReply>}    = "Ledger shut down before send",
     AddressParse{source: AddrParseError}                        = "Invalid socket address",
     ConnectionPool{source: r2d2::Error}                         = "Connection pool",
     FileUpload{source: std::io::Error}                          = "File upload",
@@ -62,26 +64,84 @@ impl From<Infallible> for ApiError {
 
 impl UFE for ApiError {}
 
+type LedgerSendWithReply = (
+    Vec<ChronicleTransaction>,
+    Sender<Result<(), SubmissionError>>,
+);
+
+/// Blocking ledger writer, as we need to execute this within diesel transaction scope
+#[derive(Derivative)]
+#[derivative(Debug, Clone)]
+pub struct BlockingLedgerWriter {
+    tx: Sender<LedgerSendWithReply>,
+}
+
+impl BlockingLedgerWriter {
+    #[instrument(skip(ledger_writer))]
+    pub fn new<W: LedgerWriter + 'static + Send>(mut ledger_writer: W) -> Self {
+        let (tx, mut rx) = mpsc::channel::<LedgerSendWithReply>(10);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        std::thread::spawn(move || {
+            let local = tokio::task::LocalSet::new();
+            local.spawn_local(async move {
+                loop {
+                    if let Some((submission, reply)) = rx.recv().await {
+                        trace!(?rx, "Recv submittion from channel");
+
+                        let result = ledger_writer.submit(submission.iter().collect()).await;
+
+                        reply
+                            .send(result)
+                            .await
+                            .map_err(|e| {
+                                error!(?e);
+                            })
+                            .ok();
+                    } else {
+                        return;
+                    }
+                }
+            });
+
+            rt.block_on(local)
+        });
+
+        Self { tx }
+    }
+
+    fn submit_blocking(&mut self, tx: &Vec<ChronicleTransaction>) -> Result<(), ApiError> {
+        let (reply_tx, mut reply_rx) = mpsc::channel(1);
+        trace!(?tx, "Dispatch submission to ledger");
+        self.tx.clone().blocking_send((tx.clone(), reply_tx))?;
+
+        let reply = reply_rx.blocking_recv();
+
+        if let Some(Err(ref error)) = reply {
+            error!(?error, "Ledger dispatch");
+        }
+
+        Ok(reply.ok_or(ApiError::ApiShutdownRx {})??)
+    }
+}
+
 type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
 
 #[derive(Derivative)]
-#[derivative(Debug)]
-pub struct Api<W, R>
-where
-    W: LedgerWriter,
-    R: LedgerReader,
-{
+#[derivative(Debug, Clone)]
+pub struct Api<U: Fn() -> Uuid> {
     tx: Sender<ApiSendWithReply>,
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
-    #[derivative(Debug = "ignore")]
-    ledger_writer: W,
-    #[derivative(Debug = "ignore")]
-    ledger_reader: R,
+    ledger_writer: BlockingLedgerWriter,
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
-    uuidsource: Box<dyn Fn() -> Uuid + Send + 'static>,
+    uuidsource: U,
 }
 
 #[derive(Debug, Clone)]
@@ -107,24 +167,25 @@ impl ApiDispatch {
     }
 }
 
-impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, R> {
+impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument(skip(ledger_writer, ledger_reader, uuidgen))]
-    pub fn new<F>(
+    pub fn new<R, W>(
         addr: SocketAddr,
         dbpath: &str,
         ledger_writer: W,
         ledger_reader: R,
         secret_path: &Path,
-        uuidgen: F,
+        uuidgen: U,
     ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
     where
-        F: Fn() -> Uuid + Send + 'static,
+        R: LedgerReader + 'static + Send,
+        W: LedgerWriter + 'static + Send,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
 
         let pool = Pool::builder()
             .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: false,
+                enable_wal: true,
                 enable_foreign_keys: true,
                 busy_timeout: Some(Duration::from_secs(2)),
             }))
@@ -143,7 +204,6 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         let ql_pool = pool;
 
         // Get last committed offset from the store before we attach it to ledger state updates and the api
-
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
@@ -152,8 +212,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
                 let mut api = Api {
                     tx: tx.clone(),
                     keystore,
-                    ledger_writer,
-                    ledger_reader,
+                    ledger_writer: BlockingLedgerWriter::new(ledger_writer),
                     store,
                     uuidsource: Box::new(uuidgen),
                 };
@@ -188,6 +247,43 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         ))
     }
 
+    /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
+    ///
+    /// A namespace uri is of the form chronicle:ns:{name}:{uuid}
+    /// Namespaces must be globally unique, so are disambiguated by uuid but are locally referred to by name only
+    /// For coordination between chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to a name
+    /// # Arguments
+    /// * `name` - an arbitrary namespace identifier
+    #[instrument(skip(connection))]
+    fn ensure_namespace(
+        &mut self,
+        connection: &mut SqliteConnection,
+        name: &str,
+    ) -> Result<(NamespaceId, Vec<ChronicleTransaction>), ApiError> {
+        let ns = self.store.namespace_by_name(connection, name);
+
+        if ns.is_err() {
+            debug!(?ns, "Namespace does not exist, creating");
+
+            let uuid = (self.uuidsource)();
+            let iri = ChronicleVocab::namespace(name, &uuid);
+            let id: NamespaceId = iri.into();
+            Ok((
+                id.clone(),
+                vec![ChronicleTransaction::CreateNamespace(CreateNamespace {
+                    id,
+                    name: name.to_owned(),
+                    uuid,
+                })],
+            ))
+        } else {
+            Ok((ns?, vec![]))
+        }
+    }
+
+    /// Creates and submits a (ChronicleTransaction::GenerateEntity), and possibly (ChronicleTransaction::Domaintype) if specified
+    ///
+    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
     #[instrument]
     async fn activity_generate(
         &mut self,
@@ -196,46 +292,50 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         activity: Option<String>,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-
         let mut connection = self.store.connection()?;
-        let activity = self.store.get_activity_by_name_or_last_started(
-            &mut connection,
-            activity,
-            Some(namespace.clone()),
-        )?;
 
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
-        let name = self
-            .store
-            .disambiguate_entity_name(&mut connection, &name)?;
-        let id = ChronicleVocab::entity(&name);
-        let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            activity: ChronicleVocab::activity(&activity.name).into(),
-        });
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+            let activity = self.store.get_activity_by_name_or_last_started(
+                &mut connection,
+                activity,
+                Some(namespace.name_part().to_string()),
+            )?;
 
-        let mut to_apply = vec![create];
-
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+            let name = self
+                .store
+                .disambiguate_entity_name(&mut connection, &name)?;
+            let id = ChronicleVocab::entity(&name);
+            let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
+                namespace: namespace.clone(),
                 id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                activity: ChronicleVocab::activity(&activity.name).into(),
             });
 
-            to_apply.push(set_type)
-        }
+            to_apply.push(create);
 
-        self.ledger_writer.submit(to_apply.iter().collect()).await?;
+            if let Some(domaintype) = domaintype {
+                let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                    id: id.clone().into(),
+                    namespace,
+                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                });
 
-        Ok(ApiResponse::Prov(
-            id,
-            vec![self.store.apply_tx(to_apply.iter().collect())?],
-        ))
+                to_apply.push(set_type)
+            }
+
+            self.ledger_writer.submit_blocking(&to_apply)?;
+
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
+    /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
+    ///
+    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
     #[instrument]
     async fn activity_use(
         &mut self,
@@ -244,67 +344,68 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         activity: Option<String>,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let (id, to_apply) = {
-            let mut connection = self.store.connection()?;
+        let mut connection = self.store.connection()?;
 
-            self.ensure_namespace(&namespace).await?;
-            let ns = self.store.namespace_by_name(&mut connection, &namespace)?;
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+            let (id, to_apply) = {
+                let activity = self.store.get_activity_by_name_or_last_started(
+                    &mut connection,
+                    activity,
+                    Some(namespace.name_part().to_string()),
+                )?;
 
-            let activity = self.store.get_activity_by_name_or_last_started(
-                &mut connection,
-                activity,
-                Some(namespace.clone()),
-            )?;
+                let entity = self.store.entity_by_entity_name_and_namespace(
+                    &mut connection,
+                    &name,
+                    &namespace,
+                );
 
-            let entity =
-                self.store
-                    .entity_by_entity_name_and_namespace(&mut connection, &name, &namespace);
+                let name = {
+                    if let Ok(existing) = entity {
+                        debug!(?existing, "Use existing entity");
+                        existing.name
+                    } else {
+                        debug!(?name, "Need new entity");
+                        self.store
+                            .disambiguate_entity_name(&mut connection, &name)?
+                    }
+                };
 
-            let name = {
-                if let Ok(existing) = entity {
-                    debug!(?existing, "Use existing entity");
-                    existing.name
-                } else {
-                    debug!(?name, "Need new entity");
-                    self.store
-                        .disambiguate_entity_name(&mut connection, &name)?
-                }
-            };
+                let id = ChronicleVocab::entity(&name);
 
-            let id = ChronicleVocab::entity(&name);
-
-            let create = ChronicleTransaction::ActivityUses(ActivityUses {
-                namespace: ns.clone(),
-                id: id.clone().into(),
-                activity: ChronicleVocab::activity(&activity.name).into(),
-            });
-
-            let mut to_apply = vec![create];
-
-            if let Some(domaintype) = domaintype {
-                let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                let create = ChronicleTransaction::ActivityUses(ActivityUses {
+                    namespace: namespace.clone(),
                     id: id.clone().into(),
-                    namespace: ns,
-                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                    activity: ChronicleVocab::activity(&activity.name).into(),
                 });
 
-                to_apply.push(set_type)
-            }
-            (id, to_apply)
-        };
+                to_apply.push(create);
 
-        self.ledger_writer.submit(to_apply.iter().collect()).await?;
+                if let Some(domaintype) = domaintype {
+                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                        id: id.clone().into(),
+                        namespace,
+                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                    });
 
-        Ok(ApiResponse::Prov(
-            id,
-            vec![self.store.apply_tx(to_apply.iter().collect())?],
-        ))
+                    to_apply.push(set_type)
+                }
+                (id, to_apply)
+            };
+
+            self.ledger_writer.submit_blocking(&to_apply)?;
+
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
-    pub fn as_ledger(self) -> W {
-        self.ledger_writer
-    }
-
+    /// Creates and submits a (ChronicleTransaction::CreateActivity), and possibly (ChronicleTransaction::Domaintype) if specified
+    ///
+    /// We use our local store to see if the activity already exists, disambiguating the URI if so
     #[instrument]
     async fn create_activity(
         &mut self,
@@ -312,40 +413,45 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         namespace: String,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-
         let mut connection = self.store.connection()?;
-        let name = self
-            .store
-            .disambiguate_activity_name(&mut connection, &name)?;
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
-        let id = ChronicleVocab::activity(&name);
-        let create = ChronicleTransaction::CreateActivity(CreateActivity {
-            namespace: namespace.clone(),
-            id: id.clone().into(),
-            name,
-        });
 
-        let mut to_apply = vec![create];
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
 
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+            let name = self
+                .store
+                .disambiguate_activity_name(&mut connection, &name)?;
+            let id = ChronicleVocab::activity(&name);
+            let create = ChronicleTransaction::CreateActivity(CreateActivity {
+                namespace: namespace.clone(),
                 id: id.clone().into(),
-                namespace,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                name,
             });
 
-            to_apply.push(set_type)
-        }
+            to_apply.push(create);
 
-        self.ledger_writer.submit(to_apply.iter().collect()).await?;
+            if let Some(domaintype) = domaintype {
+                let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                    id: id.clone().into(),
+                    namespace,
+                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                });
 
-        Ok(ApiResponse::Prov(
-            id,
-            vec![self.store.apply_tx(to_apply.iter().collect())?],
-        ))
+                to_apply.push(set_type)
+            }
+
+            self.ledger_writer.submit_blocking(&to_apply)?;
+
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
+    /// Creates and submits a (ChronicleTransaction::CreateAgent), and possibly (ChronicleTransaction::Domaintype) if specified
+    ///
+    /// We use our local store to see if the agent already exists, disambiguating the URI if so
     #[instrument]
     async fn create_agent(
         &mut self,
@@ -353,56 +459,62 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         namespace: String,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-
         let mut connection = self.store.connection()?;
-        let name = self.store.disambiguate_agent_name(&mut connection, &name)?;
 
-        let iri = ChronicleVocab::agent(&name);
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
 
-        let create = ChronicleTransaction::CreateAgent(CreateAgent {
-            name: name.to_owned(),
-            id: iri.clone().into(),
-            namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
-        });
+            let mut connection = self.store.connection()?;
+            let name = self.store.disambiguate_agent_name(&mut connection, &name)?;
 
-        let mut to_apply = vec![create];
+            let iri = ChronicleVocab::agent(&name);
 
-        if let Some(domaintype) = domaintype {
-            let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
-                id: ChronicleVocab::agent(&name).into(),
+            let create = ChronicleTransaction::CreateAgent(CreateAgent {
+                name: name.to_owned(),
+                id: iri.clone().into(),
                 namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
-                domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
             });
 
-            to_apply.push(set_type)
-        }
+            to_apply.push(create);
 
-        self.ledger_writer.submit(to_apply.iter().collect()).await?;
+            if let Some(domaintype) = domaintype {
+                let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
+                    id: ChronicleVocab::agent(&name).into(),
+                    namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
+                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                });
 
-        Ok(ApiResponse::Prov(
-            iri,
-            vec![self.store.apply_tx(to_apply.iter().collect())?],
-        ))
+                to_apply.push(set_type)
+            }
+
+            self.ledger_writer.submit_blocking(&to_apply)?;
+
+            Ok(ApiResponse::Prov(
+                iri,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
-    #[instrument]
+    /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
     async fn create_namespace(&mut self, name: &str) -> Result<ApiResponse, ApiError> {
-        let uuid = (self.uuidsource)();
-        let iri = ChronicleVocab::namespace(name, &uuid);
+        let mut api = self.clone();
+        let name = name.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, to_apply) = api.ensure_namespace(&mut connection, &name)?;
 
-        let tx = ChronicleTransaction::CreateNamespace(CreateNamespace {
-            id: iri.clone().into(),
-            name: name.to_owned(),
-            uuid,
-        });
+                api.ledger_writer.submit_blocking(&to_apply)?;
 
-        self.ledger_writer.submit(vec![&tx]).await?;
-
-        Ok(ApiResponse::Prov(
-            iri,
-            vec![self.store.apply_tx(vec![&tx])?],
-        ))
+                Ok(ApiResponse::Prov(
+                    IriBuf::new(&*namespace).unwrap(),
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
+        })
+        .await
+        .unwrap()
     }
 
     #[instrument]
@@ -474,20 +586,10 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         }
     }
 
-    /// Our resources all assume a namespace, or the default namspace, so automatically create it by name if it doesn't exist
-    #[instrument]
-    async fn ensure_namespace(&mut self, namespace: &str) -> Result<(), ApiError> {
-        let mut connection = self.store.connection()?;
-        let ns = self.store.namespace_by_name(&mut connection, namespace);
-
-        if ns.is_err() {
-            debug!(namespace, "Namespace does not exist, creating");
-            self.create_namespace(namespace).await?;
-        }
-
-        Ok(())
-    }
-
+    /// Creates and submits a (ChronicleTransaction::EntityAttach), reading input files and using the agent's private keys as required
+    ///
+    /// # Notes
+    /// Slighty messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
     #[instrument]
     async fn entity_attach(
         &mut self,
@@ -497,55 +599,67 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         locator: Option<String>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        self.ensure_namespace(&namespace).await?;
-
         let mut connection = self.store.connection()?;
-        let agent = agent
-            .map(|agent| {
-                self.store
-                    .agent_by_agent_name_and_namespace(&mut connection, &agent, &namespace)
-            })
-            .unwrap_or_else(|| self.store.get_current_agent(&mut connection))?;
 
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
-        let id = ChronicleVocab::entity(&name);
-        let agentid = ChronicleVocab::agent(&agent.name).into();
-
-        let signature: Signature = {
-            let signer = self.keystore.agent_signing(&agentid)?;
-
-            match file {
-                PathOrFile::Path(ref path) => signer
-                    .sign(&std::fs::read(path).map_err(|_| ApiError::CannotFindAttachment {})?),
-                PathOrFile::File(mut file) => {
-                    let mut buf = vec![];
-                    Arc::get_mut(&mut file)
-                        .unwrap()
-                        .read_to_end(&mut buf)
-                        .await
-                        .map_err(|e| ApiError::FileUpload { source: e })?;
-
-                    signer.sign(&*buf)
-                }
+        // Do our file io in async context at least
+        let buf = match file {
+            PathOrFile::Path(ref path) => {
+                std::fs::read(path).map_err(|_| ApiError::CannotFindAttachment {})
             }
-        };
+            PathOrFile::File(mut file) => {
+                let mut buf = vec![];
+                Arc::get_mut(&mut file)
+                    .unwrap()
+                    .read_to_end(&mut buf)
+                    .await
+                    .map_err(|e| ApiError::FileUpload { source: e })?;
 
-        let tx = ChronicleTransaction::EntityAttach(EntityAttach {
-            namespace,
-            id: id.clone().into(),
-            agent: agentid,
-            signature: hex::encode_upper(signature),
-            locator,
-            signature_time: Utc::now(),
-        });
+                Ok(buf)
+            }
+        }?;
 
-        self.ledger_writer.submit(vec![&tx]).await?;
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
+            let mut connection = self.store.connection()?;
+            let agent = agent
+                .map(|agent| {
+                    self.store.agent_by_agent_name_and_namespace(
+                        &mut connection,
+                        &agent,
+                        &namespace,
+                    )
+                })
+                .unwrap_or_else(|| self.store.get_current_agent(&mut connection))?;
+
+            let id = ChronicleVocab::entity(&name);
+            let agentid = ChronicleVocab::agent(&agent.name).into();
+
+            let signature: Signature = self.keystore.agent_signing(&agentid)?.sign(&*buf);
+
+            let tx = ChronicleTransaction::EntityAttach(EntityAttach {
+                namespace,
+                id: id.clone().into(),
+                agent: agentid,
+                signature: hex::encode_upper(signature),
+                locator,
+                signature_time: Utc::now(),
+            });
+
+            to_apply.push(tx);
+
+            self.ledger_writer.submit_blocking(&to_apply);
+
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
+
         let id = self
             .store
             .namespace_by_name(&mut connection, &query.namespace)?;
@@ -563,6 +677,7 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         Ok(ApiResponse::Unit)
     }
 
+    /// Creates and submits a (ChronicleTransaction::RegisterKey), implicitly verifying the input keys and saving to the local key store as required
     #[instrument]
     async fn register_key(
         &mut self,
@@ -571,43 +686,49 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
-        self.ensure_namespace(&namespace).await?;
-        let namespaceid = self.store.namespace_by_name(&mut connection, &namespace)?;
-        let id = ChronicleVocab::agent(&name);
-        match registration {
-            KeyRegistration::Generate => {
-                self.keystore.generate_agent(&id.clone().into())?;
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+
+            let id = ChronicleVocab::agent(&name);
+            match registration {
+                KeyRegistration::Generate => {
+                    self.keystore.generate_agent(&id.clone().into())?;
+                }
+                KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => self
+                    .keystore
+                    .import_agent(&id.clone().into(), Some(&path), None)?,
+                KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => self
+                    .keystore
+                    .store_agent(&id.clone().into(), Some(&buffer), None)?,
+                KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => self
+                    .keystore
+                    .import_agent(&id.clone().into(), None, Some(&path))?,
+                KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => self
+                    .keystore
+                    .store_agent(&id.clone().into(), None, Some(&buffer))?,
             }
-            KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => self
-                .keystore
-                .import_agent(&id.clone().into(), Some(&path), None)?,
-            KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => self
-                .keystore
-                .store_agent(&id.clone().into(), Some(&buffer), None)?,
-            KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => self
-                .keystore
-                .import_agent(&id.clone().into(), None, Some(&path))?,
-            KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => self
-                .keystore
-                .store_agent(&id.clone().into(), None, Some(&buffer))?,
-        }
 
-        let tx = ChronicleTransaction::RegisterKey(RegisterKey {
-            id: id.clone().into(),
-            name,
-            namespace: namespaceid,
-            publickey: hex::encode(
-                self.keystore
-                    .agent_verifying(&id.clone().into())?
-                    .to_bytes(),
-            ),
-        });
+            to_apply.push(ChronicleTransaction::RegisterKey(RegisterKey {
+                id: id.clone().into(),
+                name,
+                namespace,
+                publickey: hex::encode(
+                    self.keystore
+                        .agent_verifying(&id.clone().into())?
+                        .to_bytes(),
+                ),
+            }));
 
-        self.ledger_writer.submit(vec![&tx]).await?;
+            self.ledger_writer.submit_blocking(&to_apply)?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
+    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
     #[instrument]
     async fn start_activity(
         &mut self,
@@ -617,48 +738,57 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
-        let namespace = self.store.namespace_by_name(&mut connection, &namespace)?;
-        let agent = {
-            if let Some(agent) = agent {
-                self.store
-                    .agent_by_agent_name_and_namespace(&mut connection, &agent, &namespace)?
-            } else {
-                self.store
-                    .get_current_agent(&mut connection)
-                    .map_err(|_| ApiError::NoCurrentAgent {})?
-            }
-        };
+        connection.immediate_transaction(|mut connection| {
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+            let agent = {
+                if let Some(agent) = agent {
+                    self.store.agent_by_agent_name_and_namespace(
+                        &mut connection,
+                        &agent,
+                        &namespace,
+                    )?
+                } else {
+                    self.store
+                        .get_current_agent(&mut connection)
+                        .map_err(|_| ApiError::NoCurrentAgent {})?
+                }
+            };
 
-        let activity = self.store.activity_by_activity_name_and_namespace(
-            &mut connection,
-            &name,
-            &namespace.decompose().0,
-        );
+            let activity = self.store.activity_by_activity_name_and_namespace(
+                &mut connection,
+                &name,
+                &namespace.decompose().0,
+            );
 
-        let name = {
-            if let Ok(existing) = activity {
-                debug!(?existing, "Use existing activity");
-                existing.name
-            } else {
-                debug!(?name, "Need new activity");
-                self.store
-                    .disambiguate_activity_name(&mut connection, &name)?
-            }
-        };
+            let name = {
+                if let Ok(existing) = activity {
+                    debug!(?existing, "Use existing activity");
+                    existing.name
+                } else {
+                    debug!(?name, "Need new activity");
+                    self.store
+                        .disambiguate_activity_name(&mut connection, &name)?
+                }
+            };
 
-        let id = ChronicleVocab::activity(&name);
-        let tx = ChronicleTransaction::StartActivity(StartActivity {
-            namespace,
-            id: id.clone().into(),
-            agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or_else(Utc::now),
-        });
+            let id = ChronicleVocab::activity(&name);
+            to_apply.push(ChronicleTransaction::StartActivity(StartActivity {
+                namespace,
+                id: id.clone().into(),
+                agent: ChronicleVocab::agent(&agent.name).into(),
+                time: time.unwrap_or_else(Utc::now),
+            }));
 
-        self.ledger_writer.submit(vec![&tx]).await?;
+            self.ledger_writer.submit_blocking(&to_apply)?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
+    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name, or via [use_agent] context
     #[instrument]
     async fn end_activity(
         &mut self,
@@ -668,44 +798,56 @@ impl<W: LedgerWriter + 'static + Send, R: LedgerReader + 'static + Send> Api<W, 
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
-        let activity =
-            self.store
-                .get_activity_by_name_or_last_started(&mut connection, name, namespace)?;
-        let namespace = self
-            .store
-            .namespace_by_name(&mut connection, &activity.namespace)?;
+        connection.immediate_transaction(|mut connection| {
+            let name = name.unwrap_or_else(|| "default".to_owned());
+            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &name)?;
+            let activity = self.store.get_activity_by_name_or_last_started(
+                &mut connection,
+                Some(name),
+                Some(namespace.name_part().to_owned()),
+            )?;
+            let namespace = self
+                .store
+                .namespace_by_name(&mut connection, &activity.namespace)?;
 
-        let agent = {
-            if let Some(agent) = agent {
-                self.store.agent_by_agent_name_and_namespace(
-                    &mut connection,
-                    &agent,
-                    namespace.decompose().0,
-                )?
-            } else {
-                self.store
-                    .get_current_agent(&mut connection)
-                    .map_err(|_| ApiError::NoCurrentAgent {})?
-            }
-        };
+            let agent = {
+                if let Some(agent) = agent {
+                    self.store.agent_by_agent_name_and_namespace(
+                        &mut connection,
+                        &agent,
+                        namespace.decompose().0,
+                    )?
+                } else {
+                    self.store
+                        .get_current_agent(&mut connection)
+                        .map_err(|_| ApiError::NoCurrentAgent {})?
+                }
+            };
 
-        let id = ChronicleVocab::activity(&activity.name);
-        let tx = ChronicleTransaction::EndActivity(EndActivity {
-            namespace,
-            id: id.clone().into(),
-            agent: ChronicleVocab::agent(&agent.name).into(),
-            time: time.unwrap_or_else(Utc::now),
-        });
+            let id = ChronicleVocab::activity(&activity.name);
+            to_apply.push(ChronicleTransaction::EndActivity(EndActivity {
+                namespace,
+                id: id.clone().into(),
+                agent: ChronicleVocab::agent(&agent.name).into(),
+                time: time.unwrap_or_else(Utc::now),
+            }));
 
-        self.ledger_writer.submit(vec![&tx]).await?;
+            self.ledger_writer.submit_blocking(&to_apply)?;
 
-        Ok(ApiResponse::Prov(id, vec![self.store.apply_tx(vec![&tx])?]))
+            Ok(ApiResponse::Prov(
+                id,
+                vec![self.store.apply_tx(&mut connection, &to_apply)?],
+            ))
+        })
     }
 
     #[instrument]
     async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
         let mut connection = self.store.connection()?;
-        self.store.use_agent(&mut connection, name, namespace)?;
+
+        connection.immediate_transaction(|mut connection| {
+            self.store.use_agent(&mut connection, name, namespace)
+        })?;
 
         Ok(ApiResponse::Unit)
     }
@@ -744,7 +886,7 @@ mod test {
     }
 
     fn test_api() -> TestDispatch {
-        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).unwrap();
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Debug).ok();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)

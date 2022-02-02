@@ -1,5 +1,6 @@
 ---
 source: api/src/lib.rs
+assertion_line: 882
 expression: api.1
 
 ---

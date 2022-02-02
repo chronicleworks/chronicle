@@ -16,7 +16,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::debug;
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use uuid::Uuid;
 
 use crate::QueryCommand;
@@ -29,8 +29,8 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 custom_error! {pub StoreError
     Db{source: diesel::result::Error}                           = "Database operation failed",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
-    DbMigration{source: diesel_migrations::MigrationError}      = "Database migration failed",
-    DbPool{source: r2d2::Error}                         = "Connection pool error",
+    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {:?}",
+    DbPool{source: r2d2::Error}                                 = "Connection pool error",
     Uuid{source: uuid::Error}                                   = "Invalid UUID string",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
@@ -46,13 +46,25 @@ pub struct ConnectionOptions {
     pub busy_timeout: Option<Duration>,
 }
 
+#[instrument]
+fn sleeper(attempts: i32) -> bool {
+    warn!(attempts, "SQLITE_BUSY, retrying");
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    true
+}
+
 impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
     for ConnectionOptions
 {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
         (|| {
             if self.enable_wal {
-                conn.batch_execute("PRAGMA journal_mode = WAL2; PRAGMA synchronous = NORMAL;")?;
+                conn.batch_execute(
+                    r#"PRAGMA journal_mode = WAL2;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA wal_autocheckpoint = 1000;
+                PRAGMA wal_checkpoint(TRUNCATE);"#,
+                )?;
             }
             if self.enable_foreign_keys {
                 conn.batch_execute("PRAGMA foreign_keys = ON;")?;
@@ -60,6 +72,7 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
             if let Some(d) = self.busy_timeout {
                 conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
             }
+
             Ok(())
         })()
         .map_err(diesel::r2d2::Error::QueryError)
@@ -67,7 +80,7 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
 }
 
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Debug, Clone)]
 pub struct Store {
     #[derivative(Debug = "ignore")]
     pool: Pool<ConnectionManager<SqliteConnection>>,
@@ -82,9 +95,11 @@ impl Store {
 
     #[instrument]
     pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
-        for migration in pool.get()?.run_pending_migrations(MIGRATIONS).unwrap() {
-            debug!(%migration, "Applied migration");
-        }
+        pool.get()?
+            .exclusive_transaction(|connection| {
+                connection.run_pending_migrations(MIGRATIONS).map(|_| ())
+            })
+            .map_err(|migration| StoreError::DbMigration { migration })?;
 
         Ok(Store { pool })
     }
@@ -234,31 +249,27 @@ impl Store {
     pub fn set_last_offset(&self, offset: Offset) -> Result<(), StoreError> {
         use schema::ledgersync::{self as dsl};
 
-        self.connection()?.immediate_transaction(|connection| {
+        Ok(self.connection()?.immediate_transaction(|connection| {
             diesel::insert_into(dsl::table)
                 .values(&query::NewOffset {
                     offset: &*offset.to_string(),
                     sync_time: Some(Utc::now().naive_utc()),
                 })
                 .execute(connection)
-        });
-
-        Ok(())
+                .map(|_| ())
+        })?)
     }
 
     /// Apply a chronicle transaction to the store and return a prov model relevant to the transaction
-    #[instrument]
-    pub fn apply_tx(&self, tx: Vec<&ChronicleTransaction>) -> Result<ProvModel, StoreError> {
+    #[instrument(skip(connection))]
+    pub fn apply_tx(
+        &self,
+        connection: &mut SqliteConnection,
+        tx: &Vec<ChronicleTransaction>,
+    ) -> Result<ProvModel, StoreError> {
         let model = ProvModel::from_tx(tx);
 
-        debug!(?model, "Apply model");
-
-        debug!("Enter transaction");
-        self.connection()?.immediate_transaction(|connection| {
-            debug!("Entered transaction");
-            self.apply_model(connection, &model)
-        })?;
-        debug!("Completed transaction");
+        self.apply_model(connection, &model)?;
 
         Ok(model)
     }
