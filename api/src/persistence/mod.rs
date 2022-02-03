@@ -498,12 +498,16 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
-        namespace: &str,
+        namespace: &NamespaceId,
     ) -> Result<String, StoreError> {
         use schema::entity::dsl;
 
         let collision = schema::entity::table
-            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .count()
             .first::<i64>(connection)?;
 
@@ -529,11 +533,16 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
+        namespace: &NamespaceId,
     ) -> Result<String, StoreError> {
         use schema::agent::dsl;
 
         let collision = schema::agent::table
-            .filter(dsl::name.eq(name))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .count()
             .first::<i64>(connection)?;
 
@@ -553,11 +562,16 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
+        namespace: &NamespaceId,
     ) -> Result<String, StoreError> {
         use schema::activity::dsl;
 
         let collision = schema::activity::table
-            .filter(dsl::name.eq(name))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .count()
             .first::<i64>(connection)?;
 
@@ -577,12 +591,16 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
-        namespace: &str,
+        namespace: &NamespaceId,
     ) -> Result<query::Activity, StoreError> {
         use schema::activity::dsl;
 
         Ok(schema::activity::table
-            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .first::<query::Activity>(connection)?)
     }
 
@@ -591,12 +609,16 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
-        namespace: &str,
+        namespace: &NamespaceId,
     ) -> Result<query::Agent, StoreError> {
         use schema::agent::dsl;
 
         Ok(schema::agent::table
-            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .first::<query::Agent>(connection)?)
     }
 
@@ -623,21 +645,18 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: Option<String>,
-        namespace: Option<String>,
+        namespace: &NamespaceId,
     ) -> Result<query::Activity, StoreError> {
         use schema::activity::dsl;
 
-        match (name, namespace) {
-            (Some(name), Some(namespace)) => {
-                trace!(%name, "Use existing");
-                Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
-            }
-            _ => {
-                trace!("Use last started");
-                Ok(schema::activity::table
-                    .order(dsl::started)
-                    .first::<query::Activity>(connection)?)
-            }
+        if let Some(name) = name {
+            trace!(%name, "Use existing");
+            Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
+        } else {
+            trace!("Use last started");
+            Ok(schema::activity::table
+                .order(dsl::started)
+                .first::<query::Activity>(connection)?)
         }
     }
 
@@ -710,13 +729,13 @@ impl Store {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
             &provactivity.name,
-            provactivity.namespaceid.decompose().0,
+            &provactivity.namespaceid,
         )?;
 
         let storedagent = self.agent_by_agent_name_and_namespace(
             connection,
             &provagent.name,
-            provagent.namespaceid.decompose().0,
+            &provagent.namespaceid,
         )?;
 
         use schema::wasassociatedwith::dsl as link;
@@ -755,7 +774,7 @@ impl Store {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
             &provactivity.name,
-            provactivity.namespaceid.decompose().0,
+            &provactivity.namespaceid,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
@@ -800,7 +819,7 @@ impl Store {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
             &provactivity.name,
-            provactivity.namespaceid.decompose().0,
+            &provactivity.namespaceid,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(

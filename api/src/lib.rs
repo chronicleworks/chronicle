@@ -313,7 +313,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let activity = api.store.get_activity_by_name_or_last_started(
                     &mut connection,
                     activity,
-                    Some(namespace.name_part().to_string()),
+                    &namespace,
                 )?;
 
                 let entity = api.store.entity_by_entity_name_and_namespace(
@@ -385,7 +385,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     let activity = api.store.get_activity_by_name_or_last_started(
                         &mut connection,
                         activity,
-                        Some(namespace.name_part().to_string()),
+                        &namespace,
                     )?;
 
                     let entity = api.store.entity_by_entity_name_and_namespace(
@@ -459,9 +459,9 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let (namespace, mut to_apply) =
                     api.ensure_namespace(&mut connection, &namespace)?;
 
-                let name = api
-                    .store
-                    .disambiguate_activity_name(&mut connection, &name)?;
+                let name =
+                    api.store
+                        .disambiguate_activity_name(&mut connection, &name, &namespace)?;
                 let id = ChronicleVocab::activity(&name);
                 let create = ChronicleTransaction::CreateActivity(CreateActivity {
                     namespace: namespace.clone(),
@@ -510,7 +510,9 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let (namespace, mut to_apply) =
                     api.ensure_namespace(&mut connection, &namespace)?;
 
-                let name = api.store.disambiguate_agent_name(&mut connection, &name)?;
+                let name = api
+                    .store
+                    .disambiguate_agent_name(&mut connection, &name, &namespace)?;
 
                 let iri = ChronicleVocab::agent(&name);
 
@@ -820,7 +822,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let activity = api.store.activity_by_activity_name_and_namespace(
                     &mut connection,
                     &name,
-                    &namespace.decompose().0,
+                    &namespace,
                 );
 
                 let name = {
@@ -830,7 +832,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     } else {
                         debug!(?name, "Need new activity");
                         api.store
-                            .disambiguate_activity_name(&mut connection, &name)?
+                            .disambiguate_activity_name(&mut connection, &name, &namespace)?
                     }
                 };
 
@@ -871,7 +873,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let activity = api.store.get_activity_by_name_or_last_started(
                     &mut connection,
                     name,
-                    Some(namespace.name_part().to_owned()),
+                    &namespace,
                 )?;
 
                 let agent = {
@@ -879,7 +881,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                         api.store.agent_by_agent_name_and_namespace(
                             &mut connection,
                             &agent,
-                            namespace.name_part(),
+                            &namespace,
                         )?
                     } else {
                         api.store
