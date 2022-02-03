@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1014
+assertion_line: 1223
 expression: api.1
 
 ---
@@ -41,17 +41,17 @@ expression: api.1
       ended: ~
   entities:
     ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#entity:testactivity"
+      - "http://blockchaintp.com/chronicle/ns#entity:testentity"
     : Unsigned:
-        id: "http://blockchaintp.com/chronicle/ns#entity:testactivity"
+        id: "http://blockchaintp.com/chronicle/ns#entity:testentity"
         namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-        name: testactivity
+        name: testentity
         domaintypeid: "http://blockchaintp.com/chronicle/ns#domaintype:testtype"
   was_associated_with: {}
   was_attributed_to: {}
   was_generated_by:
     ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#entity:testactivity"
+      - "http://blockchaintp.com/chronicle/ns#entity:testentity"
     : - - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
         - "http://blockchaintp.com/chronicle/ns#activity:testactivity"
   used: {}
@@ -72,17 +72,17 @@ expression: api.1
       ended: ~
   entities:
     ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#entity:testactivity-1"
+      - "http://blockchaintp.com/chronicle/ns#entity:testentity"
     : Unsigned:
-        id: "http://blockchaintp.com/chronicle/ns#entity:testactivity-1"
+        id: "http://blockchaintp.com/chronicle/ns#entity:testentity"
         namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-        name: testactivity-1
+        name: testentity
         domaintypeid: "http://blockchaintp.com/chronicle/ns#domaintype:testtype"
   was_associated_with: {}
   was_attributed_to: {}
   was_generated_by:
     ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-      - "http://blockchaintp.com/chronicle/ns#entity:testactivity-1"
+      - "http://blockchaintp.com/chronicle/ns#entity:testentity"
     : - - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
         - "http://blockchaintp.com/chronicle/ns#activity:testactivity"
   used: {}

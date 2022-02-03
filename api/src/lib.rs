@@ -1202,19 +1202,19 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            name: "testactivity".to_owned(),
+            name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
             domaintype: Some("testtype".to_owned()),
-            activity: None,
+            activity: Some("testactivity".to_owned()),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            name: "testactivity".to_owned(),
+            name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
             domaintype: Some("testtype".to_owned()),
-            activity: None,
+            activity: Some("testactivity".to_owned()),
         }))
         .await
         .unwrap();
