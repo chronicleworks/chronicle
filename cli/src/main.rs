@@ -169,7 +169,7 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
                 m.subcommand_matches("end").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::End {
                         name: m.value_of("activity_name").map(|x| x.to_owned()),
-                        namespace: m.value_of("namespace").map(|x| x.to_owned()),
+                        namespace: m.value_of("namespace").unwrap().to_owned(),
                         time: None,
                         agent: None,
                     }))

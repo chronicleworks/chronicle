@@ -95,12 +95,6 @@ impl Store {
 
     #[instrument]
     pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
-        pool.get()?
-            .exclusive_transaction(|connection| {
-                connection.run_pending_migrations(MIGRATIONS).map(|_| ())
-            })
-            .map_err(|migration| StoreError::DbMigration { migration })?;
-
         Ok(Store { pool })
     }
 
@@ -499,25 +493,33 @@ impl Store {
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
+    #[instrument(skip(connection))]
     pub(crate) fn disambiguate_entity_name(
         &self,
         connection: &mut SqliteConnection,
         name: &str,
+        namespace: &str,
     ) -> Result<String, StoreError> {
         use schema::entity::dsl;
 
         let collision = schema::entity::table
-            .filter(dsl::name.eq(name))
+            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
             .count()
             .first::<i64>(connection)?;
 
         if collision == 0 {
+            trace!(
+                ?name,
+                "Entity name is unique within namespace, so use directly"
+            );
             return Ok(name.to_owned());
         }
 
         let ambiguous = schema::entity::table
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
+
+        trace!(?name, "Is not unique, postfix with last rowid");
 
         Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
     }
@@ -602,16 +604,21 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         name: &str,
-        namespace: &str,
+        namespace: &NamespaceId,
     ) -> Result<query::Entity, StoreError> {
         use schema::entity::dsl;
 
         Ok(schema::entity::table
-            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
+            .filter(
+                dsl::name
+                    .eq(name)
+                    .and(dsl::namespace.eq(namespace.name_part())),
+            )
             .first::<query::Entity>(connection)?)
     }
 
     /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
+    #[instrument(skip(connection))]
     pub(crate) fn get_activity_by_name_or_last_started(
         &self,
         connection: &mut SqliteConnection,
@@ -622,11 +629,15 @@ impl Store {
 
         match (name, namespace) {
             (Some(name), Some(namespace)) => {
+                trace!(%name, "Use existing");
                 Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
             }
-            _ => Ok(schema::activity::table
-                .order(dsl::started)
-                .first::<query::Activity>(connection)?),
+            _ => {
+                trace!("Use last started");
+                Ok(schema::activity::table
+                    .order(dsl::started)
+                    .first::<query::Activity>(connection)?)
+            }
         }
     }
 
@@ -750,7 +761,7 @@ impl Store {
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
             proventity.name(),
-            proventity.namespaceid().decompose().0,
+            proventity.namespaceid(),
         )?;
 
         use schema::wasgeneratedby::dsl as link;
@@ -795,7 +806,7 @@ impl Store {
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
             proventity.name(),
-            proventity.namespaceid().decompose().0,
+            proventity.namespaceid(),
         )?;
 
         use schema::used::dsl as link;

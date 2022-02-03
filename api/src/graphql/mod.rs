@@ -473,7 +473,7 @@ impl Mutation {
         let res = api
             .dispatch(ApiCommand::Activity(ActivityCommand::End {
                 name: Some(name),
-                namespace: Some(namespace.clone()),
+                namespace: namespace.clone(),
                 time,
                 agent: Some(agent),
             }))

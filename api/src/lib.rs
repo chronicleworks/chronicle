@@ -4,12 +4,12 @@ mod persistence;
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
-
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
+use diesel_migrations::MigrationHarness;
 use futures::{AsyncReadExt, Future};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
-use persistence::{ConnectionOptions, Store};
+use persistence::{ConnectionOptions, Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     convert::Infallible,
@@ -18,7 +18,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::mpsc::{self, error::SendError, Sender};
+use tokio::{
+    sync::mpsc::{self, error::SendError, Sender},
+    task::JoinError,
+};
 
 use common::{
     commands::*,
@@ -53,6 +56,7 @@ custom_error! {pub ApiError
     AddressParse{source: AddrParseError}                        = "Invalid socket address",
     ConnectionPool{source: r2d2::Error}                         = "Connection pool",
     FileUpload{source: std::io::Error}                          = "File upload",
+    Join{source: JoinError}                                     = "Blocking thread pool"
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -95,6 +99,7 @@ impl BlockingLedgerWriter {
 
                         let result = ledger_writer.submit(submission.iter().collect()).await;
 
+                        trace!(?result, "Reply with");
                         reply
                             .send(result)
                             .await
@@ -201,6 +206,12 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
         let store = Store::new(pool.clone())?;
 
+        pool.get()?
+            .immediate_transaction(|connection| {
+                connection.run_pending_migrations(MIGRATIONS).map(|_| ())
+            })
+            .map_err(|migration| StoreError::DbMigration { migration })?;
+
         let ql_pool = pool;
 
         // Get last committed offset from the store before we attach it to ledger state updates and the api
@@ -286,76 +297,26 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
     #[instrument]
     async fn activity_generate(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         activity: Option<String>,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
-            let activity = self.store.get_activity_by_name_or_last_started(
-                &mut connection,
-                activity,
-                Some(namespace.name_part().to_string()),
-            )?;
-
-            let name = self
-                .store
-                .disambiguate_entity_name(&mut connection, &name)?;
-            let id = ChronicleVocab::entity(&name);
-            let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
-                namespace: namespace.clone(),
-                id: id.clone().into(),
-                activity: ChronicleVocab::activity(&activity.name).into(),
-            });
-
-            to_apply.push(create);
-
-            if let Some(domaintype) = domaintype {
-                let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
-                    id: id.clone().into(),
-                    namespace,
-                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-                });
-
-                to_apply.push(set_type)
-            }
-
-            self.ledger_writer.submit_blocking(&to_apply)?;
-
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
-        })
-    }
-
-    /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
-    ///
-    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
-    #[instrument]
-    async fn activity_use(
-        &mut self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-        domaintype: Option<String>,
-    ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
-            let (id, to_apply) = {
-                let activity = self.store.get_activity_by_name_or_last_started(
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
+                let activity = api.store.get_activity_by_name_or_last_started(
                     &mut connection,
                     activity,
                     Some(namespace.name_part().to_string()),
                 )?;
 
-                let entity = self.store.entity_by_entity_name_and_namespace(
+                let entity = api.store.entity_by_entity_name_and_namespace(
                     &mut connection,
                     &name,
                     &namespace,
@@ -367,14 +328,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                         existing.name
                     } else {
                         debug!(?name, "Need new entity");
-                        self.store
-                            .disambiguate_entity_name(&mut connection, &name)?
+                        api.store
+                            .disambiguate_entity_name(&mut connection, &name, &namespace)?
                     }
                 };
 
                 let id = ChronicleVocab::entity(&name);
-
-                let create = ChronicleTransaction::ActivityUses(ActivityUses {
+                let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
                     namespace: namespace.clone(),
                     id: id.clone().into(),
                     activity: ChronicleVocab::activity(&activity.name).into(),
@@ -391,16 +351,94 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                     to_apply.push(set_type)
                 }
-                (id, to_apply)
-            };
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer.submit_blocking(&to_apply)?;
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
+    }
+
+    /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
+    ///
+    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
+    #[instrument]
+    async fn activity_use(
+        &self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+        domaintype: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
+                let (id, to_apply) = {
+                    let activity = api.store.get_activity_by_name_or_last_started(
+                        &mut connection,
+                        activity,
+                        Some(namespace.name_part().to_string()),
+                    )?;
+
+                    let entity = api.store.entity_by_entity_name_and_namespace(
+                        &mut connection,
+                        &name,
+                        &namespace,
+                    );
+
+                    let name = {
+                        if let Ok(existing) = entity {
+                            debug!(?existing, "Use existing entity");
+                            existing.name
+                        } else {
+                            debug!(?name, "Need new entity");
+                            api.store.disambiguate_entity_name(
+                                &mut connection,
+                                &name,
+                                &namespace,
+                            )?
+                        }
+                    };
+
+                    let id = ChronicleVocab::entity(&name);
+
+                    let create = ChronicleTransaction::ActivityUses(ActivityUses {
+                        namespace: namespace.clone(),
+                        id: id.clone().into(),
+                        activity: ChronicleVocab::activity(&activity.name).into(),
+                    });
+
+                    to_apply.push(create);
+
+                    if let Some(domaintype) = domaintype {
+                        let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                            id: id.clone().into(),
+                            namespace,
+                            domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                        });
+
+                        to_apply.push(set_type)
+                    }
+                    (id, to_apply)
+                };
+
+                api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
+        })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateActivity), and possibly (ChronicleTransaction::Domaintype) if specified
@@ -408,45 +446,50 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     /// We use our local store to see if the activity already exists, disambiguating the URI if so
     #[instrument]
     async fn create_activity(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
 
-            let name = self
-                .store
-                .disambiguate_activity_name(&mut connection, &name)?;
-            let id = ChronicleVocab::activity(&name);
-            let create = ChronicleTransaction::CreateActivity(CreateActivity {
-                namespace: namespace.clone(),
-                id: id.clone().into(),
-                name,
-            });
-
-            to_apply.push(create);
-
-            if let Some(domaintype) = domaintype {
-                let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                let name = api
+                    .store
+                    .disambiguate_activity_name(&mut connection, &name)?;
+                let id = ChronicleVocab::activity(&name);
+                let create = ChronicleTransaction::CreateActivity(CreateActivity {
+                    namespace: namespace.clone(),
                     id: id.clone().into(),
-                    namespace,
-                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                    name,
                 });
 
-                to_apply.push(set_type)
-            }
+                to_apply.push(create);
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                if let Some(domaintype) = domaintype {
+                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                        id: id.clone().into(),
+                        namespace,
+                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                    });
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                    to_apply.push(set_type)
+                }
+
+                api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateAgent), and possibly (ChronicleTransaction::Domaintype) if specified
@@ -454,50 +497,54 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     /// We use our local store to see if the agent already exists, disambiguating the URI if so
     #[instrument]
     async fn create_agent(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
 
-            let mut connection = self.store.connection()?;
-            let name = self.store.disambiguate_agent_name(&mut connection, &name)?;
+                let name = api.store.disambiguate_agent_name(&mut connection, &name)?;
 
-            let iri = ChronicleVocab::agent(&name);
+                let iri = ChronicleVocab::agent(&name);
 
-            let create = ChronicleTransaction::CreateAgent(CreateAgent {
-                name: name.to_owned(),
-                id: iri.clone().into(),
-                namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
-            });
-
-            to_apply.push(create);
-
-            if let Some(domaintype) = domaintype {
-                let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
-                    id: ChronicleVocab::agent(&name).into(),
-                    namespace: self.store.namespace_by_name(&mut connection, &namespace)?,
-                    domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                let create = ChronicleTransaction::CreateAgent(CreateAgent {
+                    name: name.to_owned(),
+                    id: iri.clone().into(),
+                    namespace: namespace.clone(),
                 });
 
-                to_apply.push(set_type)
-            }
+                to_apply.push(create);
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                if let Some(domaintype) = domaintype {
+                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
+                        id: ChronicleVocab::agent(&name).into(),
+                        namespace,
+                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                    });
 
-            Ok(ApiResponse::Prov(
-                iri,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                    to_apply.push(set_type)
+                }
+
+                api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::Prov(
+                    iri,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
-    async fn create_namespace(&mut self, name: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let name = name.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -513,8 +560,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 ))
             })
         })
-        .await
-        .unwrap()
+        .await?
     }
 
     #[instrument]
@@ -592,15 +638,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     /// Slighty messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
     #[instrument]
     async fn entity_attach(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         file: PathOrFile,
         locator: Option<String>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-
         // Do our file io in async context at least
         let buf = match file {
             PathOrFile::Path(ref path) => {
@@ -618,238 +662,264 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             }
         }?;
 
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-            let mut connection = self.store.connection()?;
-            let agent = agent
-                .map(|agent| {
-                    self.store.agent_by_agent_name_and_namespace(
-                        &mut connection,
-                        &agent,
-                        &namespace,
-                    )
-                })
-                .unwrap_or_else(|| self.store.get_current_agent(&mut connection))?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
 
-            let id = ChronicleVocab::entity(&name);
-            let agentid = ChronicleVocab::agent(&agent.name).into();
+                let mut connection = api.store.connection()?;
+                let agent = agent
+                    .map(|agent| {
+                        api.store.agent_by_agent_name_and_namespace(
+                            &mut connection,
+                            &agent,
+                            &namespace,
+                        )
+                    })
+                    .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
 
-            let signature: Signature = self.keystore.agent_signing(&agentid)?.sign(&*buf);
+                let id = ChronicleVocab::entity(&name);
+                let agentid = ChronicleVocab::agent(&agent.name).into();
 
-            let tx = ChronicleTransaction::EntityAttach(EntityAttach {
-                namespace,
-                id: id.clone().into(),
-                agent: agentid,
-                signature: hex::encode_upper(signature),
-                locator,
-                signature_time: Utc::now(),
-            });
+                let signature: Signature = api.keystore.agent_signing(&agentid)?.sign(&*buf);
 
-            to_apply.push(tx);
+                let tx = ChronicleTransaction::EntityAttach(EntityAttach {
+                    namespace,
+                    id: id.clone().into(),
+                    agent: agentid,
+                    signature: hex::encode_upper(signature),
+                    locator,
+                    signature_time: Utc::now(),
+                });
 
-            self.ledger_writer.submit_blocking(&to_apply);
+                to_apply.push(tx);
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     async fn query(&self, query: QueryCommand) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
+        let api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-        let id = self
-            .store
-            .namespace_by_name(&mut connection, &query.namespace)?;
-        Ok(ApiResponse::Prov(
-            IriBuf::new(id.as_str()).unwrap(),
-            vec![self
+            let id = api
                 .store
-                .prov_model_for_namespace(&mut connection, query)?],
-        ))
+                .namespace_by_name(&mut connection, &query.namespace)?;
+            Ok(ApiResponse::Prov(
+                IriBuf::new(id.as_str()).unwrap(),
+                vec![api.store.prov_model_for_namespace(&mut connection, query)?],
+            ))
+        })
+        .await?
     }
 
     async fn sync(&self, prov: ProvModel) -> Result<ApiResponse, ApiError> {
-        self.store.apply_prov(&prov)?;
+        let api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            api.store.apply_prov(&prov)?;
 
-        Ok(ApiResponse::Unit)
+            Ok(ApiResponse::Unit)
+        })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::RegisterKey), implicitly verifying the input keys and saving to the local key store as required
     #[instrument]
     async fn register_key(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
 
-            let id = ChronicleVocab::agent(&name);
-            match registration {
-                KeyRegistration::Generate => {
-                    self.keystore.generate_agent(&id.clone().into())?;
+                let id = ChronicleVocab::agent(&name);
+                match registration {
+                    KeyRegistration::Generate => {
+                        api.keystore.generate_agent(&id.clone().into())?;
+                    }
+                    KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => api
+                        .keystore
+                        .import_agent(&id.clone().into(), Some(&path), None)?,
+                    KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => api
+                        .keystore
+                        .store_agent(&id.clone().into(), Some(&buffer), None)?,
+                    KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => api
+                        .keystore
+                        .import_agent(&id.clone().into(), None, Some(&path))?,
+                    KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => api
+                        .keystore
+                        .store_agent(&id.clone().into(), None, Some(&buffer))?,
                 }
-                KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => self
-                    .keystore
-                    .import_agent(&id.clone().into(), Some(&path), None)?,
-                KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => self
-                    .keystore
-                    .store_agent(&id.clone().into(), Some(&buffer), None)?,
-                KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => self
-                    .keystore
-                    .import_agent(&id.clone().into(), None, Some(&path))?,
-                KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => self
-                    .keystore
-                    .store_agent(&id.clone().into(), None, Some(&buffer))?,
-            }
 
-            to_apply.push(ChronicleTransaction::RegisterKey(RegisterKey {
-                id: id.clone().into(),
-                name,
-                namespace,
-                publickey: hex::encode(
-                    self.keystore
-                        .agent_verifying(&id.clone().into())?
-                        .to_bytes(),
-                ),
-            }));
+                to_apply.push(ChronicleTransaction::RegisterKey(RegisterKey {
+                    id: id.clone().into(),
+                    name,
+                    namespace,
+                    publickey: hex::encode(
+                        api.keystore.agent_verifying(&id.clone().into())?.to_bytes(),
+                    ),
+                }));
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer.submit_blocking(&to_apply)?;
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
     #[instrument]
     async fn start_activity(
-        &mut self,
+        &self,
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-        connection.immediate_transaction(|mut connection| {
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &namespace)?;
-            let agent = {
-                if let Some(agent) = agent {
-                    self.store.agent_by_agent_name_and_namespace(
-                        &mut connection,
-                        &agent,
-                        &namespace,
-                    )?
-                } else {
-                    self.store
-                        .get_current_agent(&mut connection)
-                        .map_err(|_| ApiError::NoCurrentAgent {})?
-                }
-            };
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
+                let agent = {
+                    if let Some(agent) = agent {
+                        api.store.agent_by_agent_name_and_namespace(
+                            &mut connection,
+                            &agent,
+                            &namespace,
+                        )?
+                    } else {
+                        api.store
+                            .get_current_agent(&mut connection)
+                            .map_err(|_| ApiError::NoCurrentAgent {})?
+                    }
+                };
 
-            let activity = self.store.activity_by_activity_name_and_namespace(
-                &mut connection,
-                &name,
-                &namespace.decompose().0,
-            );
+                let activity = api.store.activity_by_activity_name_and_namespace(
+                    &mut connection,
+                    &name,
+                    &namespace.decompose().0,
+                );
 
-            let name = {
-                if let Ok(existing) = activity {
-                    debug!(?existing, "Use existing activity");
-                    existing.name
-                } else {
-                    debug!(?name, "Need new activity");
-                    self.store
-                        .disambiguate_activity_name(&mut connection, &name)?
-                }
-            };
+                let name = {
+                    if let Ok(existing) = activity {
+                        debug!(?existing, "Use existing activity");
+                        existing.name
+                    } else {
+                        debug!(?name, "Need new activity");
+                        api.store
+                            .disambiguate_activity_name(&mut connection, &name)?
+                    }
+                };
 
-            let id = ChronicleVocab::activity(&name);
-            to_apply.push(ChronicleTransaction::StartActivity(StartActivity {
-                namespace,
-                id: id.clone().into(),
-                agent: ChronicleVocab::agent(&agent.name).into(),
-                time: time.unwrap_or_else(Utc::now),
-            }));
+                let id = ChronicleVocab::activity(&name);
+                to_apply.push(ChronicleTransaction::StartActivity(StartActivity {
+                    namespace,
+                    id: id.clone().into(),
+                    agent: ChronicleVocab::agent(&agent.name).into(),
+                    time: time.unwrap_or_else(Utc::now),
+                }));
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer.submit_blocking(&to_apply)?;
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name, or via [use_agent] context
     #[instrument]
     async fn end_activity(
-        &mut self,
+        &self,
         name: Option<String>,
-        namespace: Option<String>,
+        namespace: String,
         time: Option<DateTime<Utc>>,
         agent: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
-        connection.immediate_transaction(|mut connection| {
-            let name = name.unwrap_or_else(|| "default".to_owned());
-            let (namespace, mut to_apply) = self.ensure_namespace(&mut connection, &name)?;
-            let activity = self.store.get_activity_by_name_or_last_started(
-                &mut connection,
-                Some(name),
-                Some(namespace.name_part().to_owned()),
-            )?;
-            let namespace = self
-                .store
-                .namespace_by_name(&mut connection, &activity.namespace)?;
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.immediate_transaction(|mut connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(&mut connection, &namespace)?;
+                let activity = api.store.get_activity_by_name_or_last_started(
+                    &mut connection,
+                    name,
+                    Some(namespace.name_part().to_owned()),
+                )?;
 
-            let agent = {
-                if let Some(agent) = agent {
-                    self.store.agent_by_agent_name_and_namespace(
-                        &mut connection,
-                        &agent,
-                        namespace.decompose().0,
-                    )?
-                } else {
-                    self.store
-                        .get_current_agent(&mut connection)
-                        .map_err(|_| ApiError::NoCurrentAgent {})?
-                }
-            };
+                let agent = {
+                    if let Some(agent) = agent {
+                        api.store.agent_by_agent_name_and_namespace(
+                            &mut connection,
+                            &agent,
+                            namespace.name_part(),
+                        )?
+                    } else {
+                        api.store
+                            .get_current_agent(&mut connection)
+                            .map_err(|_| ApiError::NoCurrentAgent {})?
+                    }
+                };
 
-            let id = ChronicleVocab::activity(&activity.name);
-            to_apply.push(ChronicleTransaction::EndActivity(EndActivity {
-                namespace,
-                id: id.clone().into(),
-                agent: ChronicleVocab::agent(&agent.name).into(),
-                time: time.unwrap_or_else(Utc::now),
-            }));
+                let id = ChronicleVocab::activity(&activity.name);
+                to_apply.push(ChronicleTransaction::EndActivity(EndActivity {
+                    namespace,
+                    id: id.clone().into(),
+                    agent: ChronicleVocab::agent(&agent.name).into(),
+                    time: time.unwrap_or_else(Utc::now),
+                }));
 
-            self.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer.submit_blocking(&to_apply)?;
 
-            Ok(ApiResponse::Prov(
-                id,
-                vec![self.store.apply_tx(&mut connection, &to_apply)?],
-            ))
+                Ok(ApiResponse::Prov(
+                    id,
+                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                ))
+            })
         })
+        .await?
     }
 
     #[instrument]
     async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
-        let mut connection = self.store.connection()?;
+        let api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
 
-        connection.immediate_transaction(|mut connection| {
-            self.store.use_agent(&mut connection, name, namespace)
-        })?;
+            connection.immediate_transaction(|mut connection| {
+                api.store.use_agent(&mut connection, name, namespace)
+            })?;
 
-        Ok(ApiResponse::Unit)
+            Ok(ApiResponse::Unit)
+        })
+        .await?
     }
 }
 
@@ -927,12 +997,6 @@ mod test {
     #[tokio::test]
     async fn create_agent() {
         let mut api = test_api();
-
-        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".to_owned(),
-        }))
-        .await
-        .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -1052,9 +1116,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        // Should end the last opened activity
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
-            namespace: None,
+            namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
@@ -1092,26 +1157,26 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            name: "testactivity".to_owned(),
+            name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
             domaintype: Some("testtype".to_owned()),
-            activity: None,
+            activity: Some("testactivity".to_owned()),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            name: "testactivity".to_owned(),
+            name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
             domaintype: Some("testtype".to_owned()),
-            activity: None,
+            activity: Some("testactivity".to_owned()),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
-            namespace: None,
+            namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
