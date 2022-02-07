@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1099
+assertion_line: 1020
 expression: api.1
 
 ---
@@ -15,17 +15,9 @@ agents:
   : id: "http://blockchaintp.com/chronicle/ns#agent:testagent"
     namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
     name: testagent
-    domaintypeid: ~
+    domaintypeid: "http://blockchaintp.com/chronicle/ns#domaintype:testtype"
     publickey: ~
-activities:
-  ? - "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-    - "http://blockchaintp.com/chronicle/ns#activity:testactivity"
-  : id: "http://blockchaintp.com/chronicle/ns#activity:testactivity"
-    namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
-    name: testactivity
-    domaintypeid: ~
-    started: "2014-07-08T09:10:11Z"
-    ended: ~
+activities: {}
 entities: {}
 was_associated_with: {}
 was_attributed_to: {}

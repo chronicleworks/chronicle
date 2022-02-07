@@ -32,14 +32,9 @@ RUN cargo chef cook --release --recipe-path recipe.json
 FROM builder AS application
 # Build application
 COPY . .
-RUN cargo build --release 
+RUN cargo build --release
 
 FROM debian:buster-slim AS chronicle
 WORKDIR /app
 COPY --from=application /app/target/release/chronicle /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/chronicle"]
-
-FROM debian:buster-slim AS chronicle_sawtooth_tp
-WORKDIR /app
 COPY --from=application /app/target/release/chronicle_sawtooth_tp /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/chronicle_sawtooth_tp"]

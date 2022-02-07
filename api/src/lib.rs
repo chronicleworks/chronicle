@@ -927,7 +927,11 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
 #[cfg(test)]
 mod test {
-    use std::{net::SocketAddr, str::FromStr};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        net::SocketAddr,
+        str::FromStr,
+    };
 
     use chrono::{TimeZone, Utc};
     use common::{
@@ -935,6 +939,7 @@ mod test {
         ledger::InMemLedger,
         prov::ProvModel,
     };
+    use iref::IriBuf;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
@@ -945,12 +950,16 @@ mod test {
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
     };
 
-    struct TestDispatch(ApiDispatch, Vec<ProvModel>);
+    #[derive(Clone)]
+    struct TestDispatch(ApiDispatch, ProvModel);
 
     impl TestDispatch {
         pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
-            if let ApiResponse::Prov(_, mut prov) = self.0.dispatch(command).await? {
-                self.1.append(&mut prov);
+            // We can sort of get final on chain state here by using a map of subject to model
+            if let ApiResponse::Prov(subject, prov) = self.0.dispatch(command).await? {
+                for prov in prov {
+                    self.1.merge(prov);
+                }
             }
 
             Ok(())
@@ -980,7 +989,7 @@ mod test {
         )
         .unwrap();
 
-        TestDispatch(dispatch, vec![])
+        TestDispatch(dispatch, ProvModel::default())
     }
 
     #[tokio::test]
@@ -1087,7 +1096,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1);
+        let v: serde_json::Value =
+            serde_json::from_str(&*api.1.to_json().compact().await.unwrap().to_string()).unwrap();
+
+        insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
     }
 
     #[tokio::test]
@@ -1236,6 +1248,30 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             .await
             .unwrap();
         }
+
+        insta::assert_yaml_snapshot!(api.1);
+    }
+
+    #[tokio::test]
+    async fn many_concurrent_activities() {
+        let api = test_api();
+
+        let mut join = vec![];
+
+        for _ in 0..100 {
+            let mut api = api.clone();
+            join.push(tokio::task::spawn(async move {
+                api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                    name: "testactivity".to_owned(),
+                    namespace: "testns".to_owned(),
+                    domaintype: Some("testtype".to_owned()),
+                }))
+                .await
+                .unwrap();
+            }));
+        }
+
+        futures::future::join_all(join).await;
 
         insta::assert_yaml_snapshot!(api.1);
     }

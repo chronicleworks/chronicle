@@ -28,9 +28,17 @@ use tracing::{error, instrument, Level};
 use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
-fn submitter(config: &Config) -> Result<sawtooth_protocol::SawtoothSubmitter, SignerError> {
+fn submitter(
+    config: &Config,
+    options: &ArgMatches,
+) -> Result<sawtooth_protocol::SawtoothSubmitter, SignerError> {
+    use url::Url;
+
     Ok(sawtooth_protocol::SawtoothSubmitter::new(
-        &config.validator.address,
+        &options
+            .value_of("sawtooth")
+            .map(|x| Url::parse(x))
+            .unwrap_or(Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
@@ -58,7 +66,7 @@ fn api(
 ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError> {
     #[cfg(not(feature = "inmem"))]
     {
-        let submitter = submitter(config)?;
+        let submitter = submitter(config, &options)?;
         let state = state_delta(config)?;
 
         Ok(Api::new(

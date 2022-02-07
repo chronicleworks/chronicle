@@ -2,7 +2,7 @@ use clap::*;
 use clap_generate::Shell;
 
 pub fn cli() -> App<'static> {
-    App::new("chronicle")
+    let mut app = App::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
         .about("Write and query provenance data to distributed ledgers")
@@ -319,5 +319,20 @@ pub fn cli() -> App<'static> {
                             .required(false)
                             .takes_value(true),
                     )
-            )
+            );
+
+    #[cfg(not(feature = "inmem"))]
+    {
+        app = app.arg(
+            Arg::new("sawtooth")
+                .long("sawtooth")
+                .value_name("sawtooth")
+                .value_hint(ValueHint::Url)
+                .default_value("localhost:4004")
+                .help("Sets sawtooth validator address")
+                .takes_value(true),
+        );
+    }
+
+    app
 }

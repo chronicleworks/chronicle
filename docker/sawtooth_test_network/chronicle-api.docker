@@ -1,3 +1,0 @@
-FROM chronicle:${ISOLATION_ID}
-
-COPY config /root/config

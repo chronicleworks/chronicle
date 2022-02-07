@@ -318,6 +318,7 @@ pub struct ProvModel {
 }
 
 impl ProvModel {
+    /// Apply a sequence of `ChronicleTransaction` to an empty model, then return it
     pub fn from_tx<'a, I>(tx: I) -> Self
     where
         I: IntoIterator<Item = &'a ChronicleTransaction>,
@@ -328,6 +329,65 @@ impl ProvModel {
         }
 
         model
+    }
+
+    /// Merge 2 prov models, consuming the other
+    pub fn merge(&mut self, other: ProvModel) {
+        for (id, ns) in other.namespaces {
+            self.namespaces.insert(id, ns);
+        }
+
+        for (id, agent) in other.agents {
+            self.agents.insert(id, agent);
+        }
+
+        for (id, acitvity) in other.activities {
+            self.activities.insert(id, acitvity);
+        }
+
+        for (id, entity) in other.entities {
+            self.entities.insert(id, entity);
+        }
+
+        for (id, links) in other.was_associated_with {
+            self.was_associated_with
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links {
+                        map.insert(link);
+                    }
+                });
+        }
+        for (id, links) in other.was_attributed_to {
+            self.was_attributed_to
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links.clone() {
+                        map.insert(link);
+                    }
+                })
+                .or_insert(links);
+        }
+        for (id, links) in other.was_generated_by {
+            self.was_generated_by
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links.clone() {
+                        map.insert(link);
+                    }
+                })
+                .or_insert(links);
+        }
+        for (id, links) in other.used {
+            self.used
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links.clone() {
+                        map.insert(link);
+                    }
+                })
+                .or_insert(links);
+        }
     }
 
     pub fn associate_with(

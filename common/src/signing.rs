@@ -16,6 +16,7 @@ use std::{
 use crate::prov::AgentId;
 
 custom_error! {pub SignerError
+    InvalidValidatorAddress{source: url::ParseError}        = "Invalid validator address",
     Io{source: std::io::Error}                              = "Invalid key store directory",
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
