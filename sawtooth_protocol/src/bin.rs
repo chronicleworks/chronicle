@@ -7,7 +7,7 @@ mod sawtooth {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
-use clap::{clap_app, App, Arg, ValueHint};
+use clap::{App, Arg, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
 use tracing::Level;

@@ -940,7 +940,7 @@ mod test {
         prov::ProvModel,
     };
     use iref::IriBuf;
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir, TempPath};
     use tracing::Level;
     use uuid::Uuid;
 
@@ -967,7 +967,7 @@ mod test {
     }
 
     fn test_api() -> TestDispatch {
-        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Debug).ok();
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
@@ -975,13 +975,16 @@ mod test {
             .ok();
 
         let secretpath = TempDir::new().unwrap();
-
+        // We need to use a real file for sqlite, as in mem either re-creates between
+        // macos temp dir permissions don't work with sqlite
+        std::fs::create_dir("./sqlite_test").ok();
+        let dbid = Uuid::new_v4();
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
         let (dispatch, _ui) = Api::new(
             SocketAddr::from_str("0.0.0.0:8080").unwrap(),
-            "file::memory:?cache=shared",
+            &*format!("./sqlite_test/db{}.sqlite", dbid),
             ledger,
             reader,
             &secretpath.into_path(),
@@ -990,6 +993,29 @@ mod test {
         .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
+    }
+
+    macro_rules! assert_json_ld {
+        ($x:expr) => {
+            let mut v: serde_json::Value =
+                serde_json::from_str(&*$x.1.to_json().compact().await.unwrap().to_string())
+                    .unwrap();
+
+            // Sort @graph by //@id, as objects are unordered
+            if let Some(v) = v.pointer_mut("/@graph") {
+                v.as_array_mut().unwrap().sort_by(|l, r| {
+                    l.as_object()
+                        .unwrap()
+                        .get("@id")
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+                });
+            }
+
+            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
+        };
     }
 
     #[tokio::test]
@@ -1002,7 +1028,7 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1017,7 +1043,7 @@ mod test {
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1065,7 +1091,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1096,10 +1122,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        let v: serde_json::Value =
-            serde_json::from_str(&*api.1.to_json().compact().await.unwrap().to_string()).unwrap();
-
-        insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1140,7 +1163,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1197,8 +1220,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        // Note that use should be idempotent as the name will be unique
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1231,8 +1253,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        // Note that generate should be idempotent as the name will be unique
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 
     #[tokio::test]
@@ -1249,30 +1270,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             .unwrap();
         }
 
-        insta::assert_yaml_snapshot!(api.1);
-    }
-
-    #[tokio::test]
-    async fn many_concurrent_activities() {
-        let api = test_api();
-
-        let mut join = vec![];
-
-        for _ in 0..100 {
-            let mut api = api.clone();
-            join.push(tokio::task::spawn(async move {
-                api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                    name: "testactivity".to_owned(),
-                    namespace: "testns".to_owned(),
-                    domaintype: Some("testtype".to_owned()),
-                }))
-                .await
-                .unwrap();
-            }));
-        }
-
-        futures::future::join_all(join).await;
-
-        insta::assert_yaml_snapshot!(api.1);
+        assert_json_ld!(&api);
     }
 }

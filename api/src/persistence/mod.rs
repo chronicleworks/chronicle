@@ -14,7 +14,7 @@ use derivative::*;
 use diesel::connection::SimpleConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use tracing::debug;
 use tracing::{instrument, trace, warn};
 use uuid::Uuid;
