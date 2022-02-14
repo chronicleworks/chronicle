@@ -5,7 +5,6 @@ use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
 };
-use async_graphql_extension_apollo_tracing::{ApolloTracing, ApolloTracingDataExt, HTTPMethod};
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
@@ -17,7 +16,7 @@ use common::{
 };
 use custom_error::custom_error;
 use derivative::*;
-use diesel::{prelude::*, r2d2::Pool};
+use diesel::{prelude::*, r2d2::Pool, sql_types::ops::Sub};
 use diesel::{r2d2::ConnectionManager, Queryable, SqliteConnection};
 use futures::Stream;
 use tracing::{debug, instrument};
@@ -583,48 +582,18 @@ pub async fn serve_graphql(
     open: bool,
 ) {
     let schema = Schema::build(Query, Mutation, Subscription)
-        .extension(ApolloTracing::new(
-            "authorization_token".into(),
-            "https://yourdomain.ltd".into(),
-            "your_graph@variant".into(),
-            "v1.0.0".into(),
-            10,
-        ))
         .extension(Tracing)
         .data(Store::new(pool.clone()))
         .data(api)
         .finish();
-
-    async_graphql_extension_apollo_tracing::register::register(
-        "authorization_token",
-        &schema,
-        "my-allocation-id",
-        "variant",
-        "1.0.0",
-        "staging",
-    )
-    .await
-    .ok();
 
     let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
         |(schema, request): (
             Schema<Query, Mutation, Subscription>,
             async_graphql::Request,
         )| async move {
-            Ok::<_, Infallible>(GraphQLResponse::from(
-                schema
-                    .execute(request.data(ApolloTracingDataExt {
-                        userid: None,
-                        path: Some("/".to_string()),
-                        host: None,
-                        method: Some(HTTPMethod::POST),
-                        secure: Some(false),
-                        protocol: Some("HTTP/1.1".to_string()),
-                        status_code: Some(200),
-                        client_name: None,
-                        client_version: None,
-                    }))
-                    .await,
+            Ok::<_, Infallible>(async_graphql_warp::GraphQLResponse::from(
+                schema.execute(request).await,
             ))
         },
     );

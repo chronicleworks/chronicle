@@ -37,7 +37,6 @@ async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","d
 warp = "0.3.2"
 async-graphql-warp = "3.0.25"
 r2d2 = "0.8.9"
-async-graphql-extension-apollo-tracing = { version = "2.1.0", features = ["tokio-comp"] }
 async-stream = "0.3.2"
 tracing-log = "0.1.2"
 ordered-map = "0.4.2"
