@@ -116,3 +116,52 @@ impl MessageBuilder {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use common::prov::{vocab::Chronicle, ChronicleTransaction, CreateNamespace};
+    use k256::{ecdsa::SigningKey, SecretKey};
+    use prost::Message;
+    use rand::prelude::StdRng;
+    use rand_core::SeedableRng;
+    use uuid::Uuid;
+
+    use super::MessageBuilder;
+
+    #[test]
+    fn sawtooth_batch_roundtrip() {
+        let secret = SecretKey::random(StdRng::from_entropy());
+        let mut builder = MessageBuilder::new(SigningKey::from(secret), "name", "version");
+
+        let uuid = Uuid::new_v4();
+
+        let batch = vec![ChronicleTransaction::CreateNamespace(CreateNamespace {
+            id: Chronicle::namespace("t", &uuid).into(),
+            name: "t".to_owned(),
+            uuid,
+        })];
+
+        let input_addresses = vec!["inone".to_owned(), "intwo".to_owned()];
+        let output_addresses = vec!["outtwo".to_owned(), "outtwo".to_owned()];
+        let dependencies = vec!["dependency".to_owned()];
+
+        let proto_tx = batch
+            .iter()
+            .map(|tx| {
+                builder.make_sawtooth_transaction(
+                    input_addresses.clone(),
+                    output_addresses.clone(),
+                    dependencies.clone(),
+                    tx,
+                )
+            })
+            .collect();
+
+        let batch = builder.make_sawtooth_batch(proto_tx);
+
+        let batch_sdk_parsed = protobuf::parse_from_bytes::<sawtooth_sdk::messages::batch::Batch>(
+            &*batch.encode_to_vec(),
+        )
+        .unwrap();
+    }
+}

@@ -1,4 +1,5 @@
 use crate::messages::MessageBuilder;
+use crate::sawtooth::ClientBatchSubmitRequest;
 
 use common::ledger::{LedgerWriter, SubmissionError};
 use common::prov::ChronicleTransaction;
@@ -72,10 +73,14 @@ impl SawtoothSubmitter {
 
         trace!(?batch, "Validator request");
 
+        let mut request = ClientBatchSubmitRequest::default();
+
+        request.batches = vec![batch];
+
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
             &uuid::Uuid::new_v4().to_string(),
-            &*batch.encode_to_vec(),
+            &*request.encode_to_vec(),
         )?;
 
         let result = future.get_timeout(std::time::Duration::from_secs(10))?;
