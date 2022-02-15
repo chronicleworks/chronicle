@@ -1,3 +1,4 @@
+use crate::address::SawtoothAddress;
 use crate::messages::MessageBuilder;
 use crate::sawtooth::ClientBatchSubmitRequest;
 
@@ -62,8 +63,20 @@ impl SawtoothSubmitter {
         let transactions = transactions
             .iter()
             .map(|payload| {
-                self.builder
-                    .make_sawtooth_transaction(vec![], vec![], vec![], payload)
+                // Symetric input / output addresses for now, this can be optimised if needed
+                let addresses = payload
+                    .dependencies()
+                    .iter()
+                    .map(SawtoothAddress::from)
+                    .map(|addr| addr.to_string())
+                    .collect::<Vec<_>>();
+
+                self.builder.make_sawtooth_transaction(
+                    addresses.clone(),
+                    addresses,
+                    vec![],
+                    payload,
+                )
             })
             .collect();
 

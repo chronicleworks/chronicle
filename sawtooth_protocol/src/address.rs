@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use common::ledger::LedgerAddress;
 use crypto::digest::Digest;
 use lazy_static::lazy_static;
@@ -23,8 +25,8 @@ impl From<&LedgerAddress> for SawtoothAddress {
     }
 }
 
-impl Into<String> for SawtoothAddress {
-    fn into(self) -> String {
-        self.0
+impl Display for SawtoothAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
