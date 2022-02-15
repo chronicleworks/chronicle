@@ -11,7 +11,6 @@ use std::fmt::Display;
 use std::pin::Pin;
 use std::str::from_utf8;
 
-
 #[derive(Debug)]
 pub enum SubmissionError {
     Implementation {
@@ -278,10 +277,18 @@ impl ChronicleTransaction {
                     .iter()
                     .map(|((_, id), o)| (id.to_string(), &o.namespaceid)),
             )
+            .chain(
+                model
+                    .namespaces
+                    .iter()
+                    .map(|(id, _)| (id.clone().to_string(), id)),
+            )
             .map(|(resource, namespace)| LedgerAddress {
                 resource,
                 namespace: namespace.to_string(),
             })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
             .collect()
     }
     /// Take input states and apply them to the prov model, then apply transaction,

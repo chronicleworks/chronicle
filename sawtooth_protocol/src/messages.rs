@@ -7,6 +7,7 @@ use k256::{
 };
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
+use tracing::{debug, instrument};
 
 use crate::{address::PREFIX, sawtooth::event_filter::FilterType};
 
@@ -80,6 +81,7 @@ impl MessageBuilder {
         batch
     }
 
+    #[instrument]
     pub fn make_sawtooth_transaction(
         &mut self,
         input_addresses: Vec<String>,
@@ -105,6 +107,8 @@ impl MessageBuilder {
             inputs: input_addresses,
             outputs: output_addresses,
         };
+
+        debug!(?header);
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);

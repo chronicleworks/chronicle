@@ -80,8 +80,6 @@ impl SawtoothSubmitter {
             })
             .collect();
 
-        debug!(?transactions, "Create batch");
-
         let batch = self.builder.make_sawtooth_batch(transactions);
 
         trace!(?batch, "Validator request");

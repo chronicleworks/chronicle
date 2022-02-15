@@ -73,7 +73,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .get_state_entries(
                 &deps
                     .iter()
-                    .map(|x| SawtoothAddress::from(x).into())
+                    .map(|x| SawtoothAddress::from(x).to_string())
                     .collect::<Vec<_>>(),
             )?
             .into_iter()
@@ -100,7 +100,12 @@ impl TransactionHandler for ChronicleTransactionHandler {
         context.set_state_entries(
             output
                 .into_iter()
-                .map(|output| (SawtoothAddress::from(&output.address).into(), output.data))
+                .map(|output| {
+                    (
+                        SawtoothAddress::from(&output.address).to_string(),
+                        output.data,
+                    )
+                })
                 .collect(),
         )?;
 

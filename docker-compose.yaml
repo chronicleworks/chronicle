@@ -51,7 +51,7 @@ services:
       - RUST_BACKTRACE=full
     platform: linux/arm64
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 -v 4"
+    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 -vvvv"
     depends_on:
       - validator
     volumes:

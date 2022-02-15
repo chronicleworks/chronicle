@@ -10,7 +10,7 @@ mod sawtooth {
 use clap::{App, Arg, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
-use tracing::Level;
+use tracing::{log::LevelFilter, Level};
 
 #[tokio::main]
 async fn main() {
@@ -50,17 +50,26 @@ async fn main() {
         .value_of("connect")
         .unwrap_or("tcp://localhost:4004");
 
-    let console_log_level = match matches.occurrences_of("verbose") {
+    let console_trace_level = match matches.occurrences_of("verbose") {
         0 => Level::WARN,
         1 => Level::INFO,
         2 => Level::DEBUG,
         _ => Level::TRACE,
     };
 
+    let console_log_level = match matches.occurrences_of("verbose") {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        2 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+
+    tracing_log::LogTracer::init_with_filter(console_log_level).ok();
     tracing_subscriber::fmt()
         .pretty()
-        .with_max_level(console_log_level)
-        .init();
+        .with_max_level(console_trace_level)
+        .try_init()
+        .ok();
 
     let mut processor = TransactionProcessor::new(endpoint);
 
