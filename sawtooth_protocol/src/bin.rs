@@ -10,12 +10,10 @@ mod sawtooth {
 use clap::{App, Arg, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
-use tracing::{log::LevelFilter, Level};
+use tracing::{info, log::LevelFilter, Level};
 
 #[tokio::main]
 async fn main() {
-    let handler = crate::tp::ChronicleTransactionHandler::new();
-
     let matches = App::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
@@ -46,10 +44,6 @@ async fn main() {
         )
         .get_matches();
 
-    let endpoint = matches
-        .value_of("connect")
-        .unwrap_or("tcp://localhost:4004");
-
     let console_trace_level = match matches.occurrences_of("verbose") {
         0 => Level::WARN,
         1 => Level::INFO,
@@ -64,13 +58,20 @@ async fn main() {
         _ => LevelFilter::Trace,
     };
 
-    tracing_log::LogTracer::init_with_filter(console_log_level).ok();
     tracing_subscriber::fmt()
         .pretty()
         .with_max_level(console_trace_level)
         .try_init()
         .ok();
+    tracing_log::LogTracer::init_with_filter(console_log_level).ok();
 
+    info!(?console_log_level);
+
+    let endpoint = matches
+        .value_of("connect")
+        .unwrap_or("tcp://localhost:4004");
+
+    let handler = crate::tp::ChronicleTransactionHandler::new();
     let mut processor = TransactionProcessor::new(endpoint);
 
     processor.add_handler(&handler);

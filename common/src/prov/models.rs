@@ -1168,6 +1168,7 @@ fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
 custom_error::custom_error! {pub CompactionError
     JsonLd{inner: String}                  = "JsonLd", //TODO: contribute Send to the upstream JsonLD error type
     Join{source : JoinError}               = "Tokio",
+    Serde{source: serde_json::Error }      = "Serde conversion",
 }
 
 pub struct ExpandedJson(pub JsonValue);
@@ -1190,6 +1191,26 @@ impl ExpandedJson {
             })?;
 
         Ok(CompactedJson(output))
+    }
+
+    pub async fn compact_stable_order(self) -> Result<CompactedJson, CompactionError> {
+        let mut v: serde_json::Value = serde_json::from_str(&*self.compact().await?.0.to_string())?;
+
+        // Sort @graph by //@id, as objects are unordered
+        /*
+        if let Some(v) = v.pointer_mut("/@graph") {
+            v.as_array_mut().unwrap().sort_by(|l, r| {
+                l.as_object()
+                    .unwrap()
+                    .get("@id")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+            });
+        }
+        */
+        unimplemented!()
     }
 }
 

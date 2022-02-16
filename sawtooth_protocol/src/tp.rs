@@ -7,7 +7,7 @@ use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
-use tokio::runtime::{Handle};
+use tokio::runtime::Handle;
 use tracing::{debug, instrument};
 
 #[derive(Debug)]
@@ -67,6 +67,8 @@ impl TransactionHandler for ChronicleTransactionHandler {
         let tx: ChronicleTransaction = serde_cbor::from_slice(request.get_payload())
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
+        debug!(?tx, "Processing");
+
         // Set up our call to get dependencies
         let deps = tx.clone();
         let (send, recv) = crossbeam::channel::bounded(1);
@@ -76,6 +78,8 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .recv()
             .map_err(|e| ApplyError::InternalError(e.to_string()))?
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        debug!(?deps, "Input addresses");
 
         let input = context
             .get_state_entries(

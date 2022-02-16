@@ -43,6 +43,6 @@ ordered-map = "0.4.2"
 
 [dev-dependencies]
 insta = { version = "1.11.0", features = ["redactions"] }
-serde_json = {version="1.0.78"}
+serde_json = {version="1.0.78", features = ["preserve_order"] }
 tempfile = "3.3.0"
 tracing-subscriber = "0.3.6"
