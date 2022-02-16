@@ -3,7 +3,7 @@ use crate::messages::MessageBuilder;
 use crate::sawtooth::ClientBatchSubmitRequest;
 
 use common::ledger::{LedgerWriter, SubmissionError};
-use common::prov::ChronicleTransaction;
+use common::prov::{ChronicleTransaction, ProcessorError};
 use custom_error::*;
 use derivative::Derivative;
 use k256::ecdsa::SigningKey;
@@ -37,6 +37,7 @@ custom_error! {pub SawtoothSubmissionError
     Recv{source: ReceiveError}                              = "Submission failed to send to validator",
     UnexpectedReply{}                                       = "Validator reply unexpected",
     Join{source: JoinError}                                 = "Submission blocking thread pool",
+    Ld{source: ProcessorError}                              = "Json LD processing",
 }
 
 impl Into<SubmissionError> for SawtoothSubmissionError {
@@ -56,31 +57,30 @@ impl SawtoothSubmitter {
     }
 
     #[instrument]
-    fn submit(
+    async fn submit(
         &mut self,
         transactions: Vec<&ChronicleTransaction>,
     ) -> Result<(), SawtoothSubmissionError> {
-        let transactions = transactions
-            .iter()
-            .map(|payload| {
-                // Symetric input / output addresses for now, this can be optimised if needed
-                let addresses = payload
-                    .dependencies()
-                    .iter()
-                    .map(SawtoothAddress::from)
-                    .map(|addr| addr.to_string())
-                    .collect::<Vec<_>>();
+        let mut transaction_batch = vec![];
 
-                self.builder.make_sawtooth_transaction(
-                    addresses.clone(),
-                    addresses,
-                    vec![],
-                    payload,
-                )
-            })
-            .collect();
+        for transaction in transactions {
+            let addresses = transaction
+                .dependencies()
+                .await?
+                .iter()
+                .map(SawtoothAddress::from)
+                .map(|addr| addr.to_string())
+                .collect::<Vec<_>>();
 
-        let batch = self.builder.make_sawtooth_batch(transactions);
+            transaction_batch.push(self.builder.make_sawtooth_transaction(
+                addresses.clone(),
+                addresses,
+                vec![],
+                transaction,
+            ));
+        }
+
+        let batch = self.builder.make_sawtooth_batch(transaction_batch);
 
         trace!(?batch, "Validator request");
 
@@ -111,6 +111,6 @@ impl LedgerWriter for SawtoothSubmitter {
     /// TODO: This blocks on a bunch of non tokio / futures 'futures' in the sawtooth rust SDK,
     /// which also exposes a buch of non clonable types so we probably need another dispatch / join mpsc here
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
-        self.submit(tx).map_err(SawtoothSubmissionError::into)
+        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
     }
 }

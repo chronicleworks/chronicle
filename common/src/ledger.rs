@@ -187,6 +187,7 @@ impl LedgerWriter for InMemLedger {
             let output = tx
                 .process(
                     tx.dependencies()
+                        .await?
                         .iter()
                         .filter_map(|dep| {
                             self.kv
@@ -257,39 +258,19 @@ impl ProvModel {}
 
 impl ChronicleTransaction {
     /// Compute dependencies for a chronicle transaction, input and output addresses are always symmetric
-    pub fn dependencies(&self) -> Vec<LedgerAddress> {
+    pub async fn dependencies(&self) -> Result<Vec<LedgerAddress>, ProcessorError> {
         let mut model = ProvModel::default();
         model.apply(self);
 
-        model
-            .entities
-            .iter()
-            .map(|((_, id), o)| (id.to_string(), o.namespaceid()))
-            .chain(
-                model
-                    .activities
-                    .iter()
-                    .map(|((_, id), o)| (id.to_string(), &o.namespaceid)),
-            )
-            .chain(
-                model
-                    .agents
-                    .iter()
-                    .map(|((_, id), o)| (id.to_string(), &o.namespaceid)),
-            )
-            .chain(
-                model
-                    .namespaces
-                    .iter()
-                    .map(|(id, _)| (id.clone().to_string(), id)),
-            )
-            .map(|(resource, namespace)| LedgerAddress {
-                resource,
-                namespace: namespace.to_string(),
+        let graph = &model.to_json().compact().await?.0["@graph"];
+
+        Ok(graph
+            .members()
+            .map(|resource| LedgerAddress {
+                namespace: resource["namespace"].to_string(),
+                resource: resource["@id"].to_string(),
             })
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect()
+            .collect())
     }
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state

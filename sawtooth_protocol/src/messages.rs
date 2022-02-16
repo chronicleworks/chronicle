@@ -163,7 +163,7 @@ mod test {
 
         let batch = builder.make_sawtooth_batch(proto_tx);
 
-        let batch_sdk_parsed = protobuf::parse_from_bytes::<sawtooth_sdk::messages::batch::Batch>(
+        let _batch_sdk_parsed = protobuf::parse_from_bytes::<sawtooth_sdk::messages::batch::Batch>(
             &*batch.encode_to_vec(),
         )
         .unwrap();
