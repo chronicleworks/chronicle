@@ -295,24 +295,36 @@ impl ChronicleTransaction {
 
         model.apply(self);
 
-        let graph = model.to_json().compact_stable_order().await?;
+        let mut graph = model.to_json().compact_stable_order().await?;
 
         debug!(%graph, "Result model");
 
-        Ok(graph
-            .get("@graph")
-            .ok_or(ProcessorError::NotANode {})?
-            .as_array()
-            .ok_or(ProcessorError::NotANode {})?
-            .into_iter()
-            .map(|resource| StateOutput {
-                address: LedgerAddress {
-                    namespace: resource["namespace"].to_string(),
-                    resource: resource["@id"].to_string(),
-                },
-                data: serde_json::to_string(resource).unwrap().into_bytes(),
-            })
-            .collect::<Vec<_>>())
+        Ok(
+            if let Some(graph) = graph.get("@graph").and_then(|g| g.as_array()) {
+                // Separate graph into descrete outpute
+                graph
+                    .into_iter()
+                    .map(|resource| StateOutput {
+                        address: LedgerAddress {
+                            namespace: resource["namespace"].to_string(),
+                            resource: resource["@id"].to_string(),
+                        },
+                        data: serde_json::to_string(resource).unwrap().into_bytes(),
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                // Remove context and return resource
+                graph.as_object_mut().map(|graph| graph.remove("@context"));
+
+                vec![StateOutput {
+                    address: LedgerAddress {
+                        namespace: graph["namespace"].to_string(),
+                        resource: graph["@id"].to_string(),
+                    },
+                    data: serde_json::to_string(&graph).unwrap().into_bytes(),
+                }]
+            },
+        )
     }
 }
 
