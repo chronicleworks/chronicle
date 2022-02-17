@@ -7,6 +7,7 @@ use json_ld::{
     context::Local, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
 };
 use serde::Serialize;
+use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
@@ -28,6 +29,7 @@ custom_error! {pub ProcessorError
     NotANode{} = "Json LD object is not a node",
     Time{source: chrono::ParseError} = "Unparsable date/time",
     Json{source: json::JsonError} = "Malformed JSON",
+    SerdeJson{source: serde_json::Error } = "Malformed JSON",
     Utf8{source: std::str::Utf8Error} = "State is not valid utf8",
 }
 
@@ -1193,24 +1195,20 @@ impl ExpandedJson {
         Ok(CompactedJson(output))
     }
 
-    pub async fn compact_stable_order(self) -> Result<CompactedJson, CompactionError> {
+    pub async fn compact_stable_order(self) -> Result<Value, CompactionError> {
         let mut v: serde_json::Value = serde_json::from_str(&*self.compact().await?.0.to_string())?;
 
         // Sort @graph by //@id, as objects are unordered
-        /*
-        if let Some(v) = v.pointer_mut("/@graph") {
-            v.as_array_mut().unwrap().sort_by(|l, r| {
-                l.as_object()
-                    .unwrap()
-                    .get("@id")
-                    .unwrap()
-                    .as_str()
-                    .unwrap()
-                    .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+        if let Some(v) = v.pointer_mut("/@graph").and_then(|p| p.as_array_mut()) {
+            v.sort_by(|l, r| {
+                let lid = l.get("@id").and_then(|o| o.as_str());
+
+                let rid = r.get("@id").and_then(|o| o.as_str());
+                lid.cmp(&rid)
             });
         }
-        */
-        unimplemented!()
+
+        Ok(v)
     }
 }
 

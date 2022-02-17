@@ -3,6 +3,7 @@ use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
 
+use crate::context::PROV;
 use crate::prov::{ChronicleTransaction, ProcessorError, ProvModel};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::cell::RefCell;
@@ -274,32 +275,44 @@ impl ChronicleTransaction {
     }
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
+    #[instrument]
     pub async fn process(
         &self,
         input: Vec<StateInput>,
     ) -> Result<Vec<StateOutput>, ProcessorError> {
         let mut model = ProvModel::default();
 
+        debug!(?input, "Transforming state input");
+
         for input in input {
-            model = model
-                .apply_json_ld(json::parse(std::str::from_utf8(&input.data)?)?)
-                .await?;
+            let resource = json::object! {
+                "@context":  PROV.clone(),
+                "@graph": [json::parse(std::str::from_utf8(&input.data)?)?]
+            };
+            debug!(%resource, "Restore graph / context");
+            model = model.apply_json_ld(resource).await?;
         }
 
         model.apply(self);
 
-        let graph = &model.to_json().compact().await?.0["@graph"];
+        let graph = model.to_json().compact_stable_order().await?;
+
+        debug!(%graph, "Result model");
 
         Ok(graph
-            .members()
+            .get("@graph")
+            .ok_or(ProcessorError::NotANode {})?
+            .as_array()
+            .ok_or(ProcessorError::NotANode {})?
+            .into_iter()
             .map(|resource| StateOutput {
                 address: LedgerAddress {
                     namespace: resource["namespace"].to_string(),
                     resource: resource["@id"].to_string(),
                 },
-                data: resource.to_string().into_bytes(),
+                data: serde_json::to_string(resource).unwrap().into_bytes(),
             })
-            .collect())
+            .collect::<Vec<_>>())
     }
 }
 

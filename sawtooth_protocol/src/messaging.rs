@@ -17,7 +17,7 @@ use sawtooth_sdk::messaging::{
 };
 use tokio::task::JoinError;
 use tracing::instrument;
-use tracing::{debug, trace};
+use tracing::{debug};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -82,7 +82,7 @@ impl SawtoothSubmitter {
 
         let batch = self.builder.make_sawtooth_batch(transaction_batch);
 
-        trace!(?batch, "Validator request");
+        debug!(?batch, "Validator request");
 
         let mut request = ClientBatchSubmitRequest::default();
 
