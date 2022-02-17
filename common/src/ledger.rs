@@ -184,6 +184,8 @@ impl LedgerWriter for InMemLedger {
     async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
         for tx in tx {
             debug!(?tx, "Process transaction");
+            let dependencies = tx.dependencies().await.unwrap();
+            debug!(?dependencies, "Dependencies");
 
             let output = tx
                 .process(
@@ -227,7 +229,8 @@ impl LedgerWriter for InMemLedger {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 pub struct LedgerAddress {
-    pub namespace: String,
+    // Namespaces do not have a namespace
+    pub namespace: Option<String>,
     pub resource: String,
 }
 
@@ -263,22 +266,41 @@ impl ChronicleTransaction {
         let mut model = ProvModel::default();
         model.apply(self);
 
+        let json_ld = model.to_json().compact_stable_order().await?;
         let graph = &model.to_json().compact().await?.0["@graph"];
 
-        Ok(if !graph.members().len() > 0 {
-            graph
-                .members()
-                .map(|resource| LedgerAddress {
-                    namespace: resource["namespace"].to_string(),
-                    resource: resource["@id"].to_string(),
-                })
-                .collect()
-        } else {
-            vec![LedgerAddress {
-                namespace: graph["namespace"].to_string(),
-                resource: graph["@id"].to_string(),
-            }]
-        })
+        Ok(
+            if let Some(graph) = json_ld.get("@graph").and_then(|graph| graph.as_array()) {
+                graph
+                    .into_iter()
+                    .map(|resource| {
+                        Ok(LedgerAddress {
+                            namespace: resource
+                                .get("namespace")
+                                .and_then(|ns| ns.as_str())
+                                .map(|ns| ns.to_owned()),
+                            resource: resource
+                                .get("@id")
+                                .and_then(|id| id.as_str())
+                                .ok_or_else(|| ProcessorError::NotANode {})?
+                                .to_owned(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, ProcessorError>>()?
+            } else {
+                vec![LedgerAddress {
+                    namespace: json_ld
+                        .get("namespace")
+                        .and_then(|ns| ns.as_str())
+                        .map(|ns| ns.to_owned()),
+                    resource: json_ld
+                        .get("@id")
+                        .and_then(|id| id.as_str())
+                        .ok_or_else(|| ProcessorError::NotANode {})?
+                        .to_owned(),
+                }]
+            },
+        )
     }
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
@@ -302,33 +324,51 @@ impl ChronicleTransaction {
 
         model.apply(self);
 
-        let mut graph = model.to_json().compact_stable_order().await?;
+        let mut json_ld = model.to_json().compact_stable_order().await?;
 
-        debug!(%graph, "Result model");
+        debug!(%json_ld, "Result model");
 
         Ok(
-            if let Some(graph) = graph.get("@graph").and_then(|g| g.as_array()) {
+            if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
                 // Separate graph into descrete outpute
                 graph
                     .into_iter()
-                    .map(|resource| StateOutput {
-                        address: LedgerAddress {
-                            namespace: resource["namespace"].to_string(),
-                            resource: resource["@id"].to_string(),
-                        },
-                        data: serde_json::to_string(resource).unwrap().into_bytes(),
+                    .map(|resource| {
+                        Ok(StateOutput {
+                            address: LedgerAddress {
+                                namespace: resource
+                                    .get("namespace")
+                                    .and_then(|resource| resource.as_str())
+                                    .map(|resource| resource.to_owned()),
+                                resource: resource
+                                    .get("@id")
+                                    .and_then(|id| id.as_str())
+                                    .ok_or_else(|| ProcessorError::NotANode {})?
+                                    .to_owned(),
+                            },
+                            data: serde_json::to_string(resource).unwrap().into_bytes(),
+                        })
                     })
-                    .collect::<Vec<_>>()
+                    .collect::<Result<Vec<_>, ProcessorError>>()?
             } else {
                 // Remove context and return resource
-                graph.as_object_mut().map(|graph| graph.remove("@context"));
+                json_ld
+                    .as_object_mut()
+                    .map(|graph| graph.remove("@context"));
 
                 vec![StateOutput {
                     address: LedgerAddress {
-                        namespace: graph["namespace"].to_string(),
-                        resource: graph["@id"].to_string(),
+                        namespace: json_ld
+                            .get("namespace")
+                            .and_then(|resource| resource.as_str())
+                            .map(|resource| resource.to_owned()),
+                        resource: json_ld
+                            .get("@id")
+                            .and_then(|id| id.as_str())
+                            .ok_or_else(|| ProcessorError::NotANode {})?
+                            .to_owned(),
                     },
-                    data: serde_json::to_string(&graph).unwrap().into_bytes(),
+                    data: serde_json::to_string(&json_ld).unwrap().into_bytes(),
                 }]
             },
         )

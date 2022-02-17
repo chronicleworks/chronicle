@@ -27,7 +27,7 @@ json-ld = "0.4.0"
 tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
 futures = "0.3.19"
 tracing = "0.1.29"
-serde_json = {version="1.0.78", features = ["preserve_order"] }
+serde_json = {version="1.0.78" }
 async-trait = "0.1.52"
 url = { version = "2.2.2", features = ["serde"] }
 
