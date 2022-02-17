@@ -265,13 +265,20 @@ impl ChronicleTransaction {
 
         let graph = &model.to_json().compact().await?.0["@graph"];
 
-        Ok(graph
-            .members()
-            .map(|resource| LedgerAddress {
-                namespace: resource["namespace"].to_string(),
-                resource: resource["@id"].to_string(),
-            })
-            .collect())
+        Ok(if !graph.members().len() > 0 {
+            graph
+                .members()
+                .map(|resource| LedgerAddress {
+                    namespace: resource["namespace"].to_string(),
+                    resource: resource["@id"].to_string(),
+                })
+                .collect()
+        } else {
+            vec![LedgerAddress {
+                namespace: graph["namespace"].to_string(),
+                resource: graph["@id"].to_string(),
+            }]
+        })
     }
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state
