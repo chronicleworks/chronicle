@@ -6,7 +6,7 @@ use custom_error::*;
 use derivative::*;
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
-use futures::{AsyncReadExt, Future};
+use futures::{select, AsyncReadExt, Future, FutureExt, StreamExt};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::{ConnectionOptions, Store, StoreError, MIGRATIONS};
@@ -25,7 +25,7 @@ use tokio::{
 
 use common::{
     commands::*,
-    ledger::{LedgerReader, LedgerWriter, SubmissionError},
+    ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{vocab::Chronicle as ChronicleVocab, Domaintype, NamespaceId, ProvModel},
     prov::{
         ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
@@ -34,7 +34,7 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use user_error::UFE;
 use uuid::Uuid;
@@ -56,7 +56,8 @@ custom_error! {pub ApiError
     AddressParse{source: AddrParseError}                        = "Invalid socket address",
     ConnectionPool{source: r2d2::Error}                         = "Connection pool",
     FileUpload{source: std::io::Error}                          = "File upload",
-    Join{source: JoinError}                                     = "Blocking thread pool"
+    Join{source: JoinError}                                     = "Blocking thread pool",
+    Subscription{source: SubscriptionError}                     = "State update subscription",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -214,7 +215,6 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
         let ql_pool = pool;
 
-        // Get last committed offset from the store before we attach it to ledger state updates and the api
         std::thread::spawn(move || {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
@@ -228,23 +228,37 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     uuidsource: Box::new(uuidgen),
                 };
 
+                // Get last committed offset from the store before we attach it to ledger state updates and the api
+                let mut state_updates = ledger_reader.state_updates(Offset::Genesis).await.unwrap();
+
                 debug!(?api, "Api running on localset");
-
                 loop {
-                    if let Some((command, reply)) = rx.recv().await {
-                        trace!(?rx, "Recv api command from channel");
+                    select! {
+                            state = state_updates.next().fuse() =>{
+                                if let Some((offset,prov)) = state {
+                                    debug!(?offset, "Incoming confirmation");
+                                    api.sync(prov).await
+                                        .map_err(|e| {
+                                            error!(?e, "Api sync to confirmed commit");
+                                        }).ok();
+                                }
+                            },
+                            cmd = rx.recv().fuse() => {
+                                if let Some((command, reply)) = cmd {
+                                trace!(?rx, "Recv api command from channel");
 
-                        let result = api.dispatch(command).await;
+                                let result = api.dispatch(command).await;
 
-                        reply
-                            .send(result)
-                            .await
-                            .map_err(|e| {
-                                error!(?e);
-                            })
-                            .ok();
-                    } else {
-                        return;
+                                reply
+                                    .send(result)
+                                    .await
+                                    .map_err(|e| {
+                                        warn!(?e, "Send reply to Api consumer failed");
+                                    })
+                                    .ok();
+                                }
+                        }
+                        complete => break
                     }
                 }
             });
@@ -928,7 +942,6 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 #[cfg(test)]
 mod test {
     use std::{
-        collections::{BTreeMap, HashMap},
         net::SocketAddr,
         str::FromStr,
     };
@@ -939,8 +952,8 @@ mod test {
         ledger::InMemLedger,
         prov::ProvModel,
     };
-    use iref::IriBuf;
-    use tempfile::{NamedTempFile, TempDir, TempPath};
+    
+    use tempfile::{TempDir};
     use tracing::Level;
     use uuid::Uuid;
 
@@ -956,7 +969,7 @@ mod test {
     impl TestDispatch {
         pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Prov(subject, prov) = self.0.dispatch(command).await? {
+            if let ApiResponse::Prov(_subject, prov) = self.0.dispatch(command).await? {
                 for prov in prov {
                     self.1.merge(prov);
                 }

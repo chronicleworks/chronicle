@@ -103,9 +103,11 @@ impl TransactionHandler for ChronicleTransactionHandler {
             )
         });
 
-        let output = recv
+        let mut output = recv
             .recv()
             .map_err(|e| ApplyError::InternalError(e.to_string()))??;
+
+        output.sort_by(|l, r| l.address.cmp(&r.address));
 
         debug!(?output, "Storing output state");
 

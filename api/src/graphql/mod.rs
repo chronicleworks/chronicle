@@ -5,7 +5,7 @@ use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
 };
-use async_graphql_warp::{graphql_subscription, GraphQLBadRequest, GraphQLResponse};
+use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     commands::{
@@ -16,7 +16,7 @@ use common::{
 };
 use custom_error::custom_error;
 use derivative::*;
-use diesel::{prelude::*, r2d2::Pool, sql_types::ops::Sub};
+use diesel::{prelude::*, r2d2::Pool};
 use diesel::{r2d2::ConnectionManager, Queryable, SqliteConnection};
 use futures::Stream;
 use tracing::{debug, instrument};

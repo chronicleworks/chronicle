@@ -29,6 +29,22 @@ pub enum SubscriptionError {
     },
 }
 
+impl Display for SubscriptionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Implementation { .. } => write!(f, "Subecription rror"),
+        }
+    }
+}
+
+impl std::error::Error for SubscriptionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Implementation { source } => Some(source.as_ref()),
+        }
+    }
+}
+
 impl From<ProcessorError> for SubmissionError {
     fn from(source: ProcessorError) -> Self {
         SubmissionError::Processor { source }
@@ -267,7 +283,7 @@ impl ChronicleTransaction {
         model.apply(self);
 
         let json_ld = model.to_json().compact_stable_order().await?;
-        let graph = &model.to_json().compact().await?.0["@graph"];
+        let _graph = &model.to_json().compact().await?.0["@graph"];
 
         Ok(
             if let Some(graph) = json_ld.get("@graph").and_then(|graph| graph.as_array()) {
