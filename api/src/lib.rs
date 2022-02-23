@@ -26,10 +26,10 @@ use tokio::{
 use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
-    prov::{vocab::Chronicle as ChronicleVocab, Domaintype, NamespaceId, ProvModel},
     prov::{
-        ActivityUses, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-        EndActivity, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
+        vocab::Chronicle as ChronicleVocab, ActivityUses, ChronicleTransaction, CreateActivity,
+        CreateAgent, CreateNamespace, Domaintype, EndActivity, EntityAttach, GenerateEntity,
+        NamespaceId, ProvModel, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -321,17 +321,17 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
                 let activity = api.store.get_activity_by_name_or_last_started(
-                    &mut connection,
+                    connection,
                     activity,
                     &namespace,
                 )?;
 
                 let entity = api.store.entity_by_entity_name_and_namespace(
-                    &mut connection,
+                    connection,
                     &name,
                     &namespace,
                 );
@@ -343,7 +343,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     } else {
                         debug!(?name, "Need new entity");
                         api.store
-                            .disambiguate_entity_name(&mut connection, &name, &namespace)?
+                            .disambiguate_entity_name(connection, &name, &namespace)?
                     }
                 };
 
@@ -370,7 +370,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -392,18 +392,18 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
                     let activity = api.store.get_activity_by_name_or_last_started(
-                        &mut connection,
+                        connection,
                         activity,
                         &namespace,
                     )?;
 
                     let entity = api.store.entity_by_entity_name_and_namespace(
-                        &mut connection,
+                        connection,
                         &name,
                         &namespace,
                     );
@@ -415,7 +415,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                         } else {
                             debug!(?name, "Need new entity");
                             api.store.disambiguate_entity_name(
-                                &mut connection,
+                                connection,
                                 &name,
                                 &namespace,
                             )?
@@ -448,7 +448,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -469,13 +469,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
 
                 let name =
                     api.store
-                        .disambiguate_activity_name(&mut connection, &name, &namespace)?;
+                        .disambiguate_activity_name(connection, &name, &namespace)?;
                 let id = ChronicleVocab::activity(&name);
                 let create = ChronicleTransaction::CreateActivity(CreateActivity {
                     namespace: namespace.clone(),
@@ -499,7 +499,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -520,13 +520,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
 
                 let name = api
                     .store
-                    .disambiguate_agent_name(&mut connection, &name, &namespace)?;
+                    .disambiguate_agent_name(connection, &name, &namespace)?;
 
                 let iri = ChronicleVocab::agent(&name);
 
@@ -552,7 +552,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     iri,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -565,14 +565,14 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         let name = name.to_owned();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|mut connection| {
-                let (namespace, to_apply) = api.ensure_namespace(&mut connection, &name)?;
+            connection.immediate_transaction(|connection| {
+                let (namespace, to_apply) = api.ensure_namespace(connection, &name)?;
 
                 api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     IriBuf::new(&*namespace).unwrap(),
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -682,9 +682,9 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
 
                 let mut connection = api.store.connection()?;
                 let agent = agent
@@ -761,9 +761,9 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
 
                 let id = ChronicleVocab::agent(&name);
                 match registration {
@@ -797,7 +797,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -816,25 +816,25 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
                 let agent = {
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
-                            &mut connection,
+                            connection,
                             &agent,
                             &namespace,
                         )?
                     } else {
                         api.store
-                            .get_current_agent(&mut connection)
+                            .get_current_agent(connection)
                             .map_err(|_| ApiError::NoCurrentAgent {})?
                     }
                 };
 
                 let activity = api.store.activity_by_activity_name_and_namespace(
-                    &mut connection,
+                    connection,
                     &name,
                     &namespace,
                 );
@@ -846,7 +846,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     } else {
                         debug!(?name, "Need new activity");
                         api.store
-                            .disambiguate_activity_name(&mut connection, &name, &namespace)?
+                            .disambiguate_activity_name(connection, &name, &namespace)?
                     }
                 };
 
@@ -862,7 +862,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -881,11 +881,11 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|mut connection| {
+            connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(&mut connection, &namespace)?;
+                    api.ensure_namespace(connection, &namespace)?;
                 let activity = api.store.get_activity_by_name_or_last_started(
-                    &mut connection,
+                    connection,
                     name,
                     &namespace,
                 )?;
@@ -893,13 +893,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let agent = {
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
-                            &mut connection,
+                            connection,
                             &agent,
                             &namespace,
                         )?
                     } else {
                         api.store
-                            .get_current_agent(&mut connection)
+                            .get_current_agent(connection)
                             .map_err(|_| ApiError::NoCurrentAgent {})?
                     }
                 };
@@ -916,7 +916,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![api.store.apply_tx(connection, &to_apply)?],
                 ))
             })
         })
@@ -929,8 +929,8 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|mut connection| {
-                api.store.use_agent(&mut connection, name, namespace)
+            connection.immediate_transaction(|connection| {
+                api.store.use_agent(connection, name, namespace)
             })?;
 
             Ok(ApiResponse::Unit)
@@ -941,10 +941,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        net::SocketAddr,
-        str::FromStr,
-    };
+    use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
     use common::{
@@ -952,8 +949,8 @@ mod test {
         ledger::InMemLedger,
         prov::ProvModel,
     };
-    
-    use tempfile::{TempDir};
+
+    use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
@@ -1041,7 +1038,7 @@ mod test {
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1056,7 +1053,7 @@ mod test {
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1104,7 +1101,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1135,7 +1132,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1176,7 +1173,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1233,7 +1230,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1266,7 +1263,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 
     #[tokio::test]
@@ -1283,6 +1280,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             .unwrap();
         }
 
-        assert_json_ld!(&api);
+        assert_json_ld!(api);
     }
 }

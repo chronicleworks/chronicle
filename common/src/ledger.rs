@@ -3,14 +3,12 @@ use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
 
-use crate::context::PROV;
-use crate::prov::{ChronicleTransaction, ProcessorError, ProvModel};
+use crate::{
+    context::PROV,
+    prov::{ChronicleTransaction, ProcessorError, ProvModel},
+};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt::Display;
-use std::pin::Pin;
-use std::str::from_utf8;
+use std::{cell::RefCell, collections::HashMap, fmt::Display, pin::Pin, str::from_utf8};
 
 #[derive(Debug)]
 pub enum SubmissionError {
@@ -160,11 +158,7 @@ impl LedgerReader for InMemLedgerReader {
         _offset: Offset,
     ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>, SubscriptionError> {
         let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
-            if let Some(prov) = chan.next().await {
-                Some((prov, chan))
-            } else {
-                None
-            }
+            chan.next().await.map(|prov| (prov, chan))
         });
 
         Ok(stream.boxed())
@@ -218,7 +212,7 @@ impl LedgerWriter for InMemLedger {
                 )
                 .await?;
 
-            for output in output {
+            for output in output.0 {
                 let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
                 debug!(?output.address, "Address");
                 debug!(%state, "New state");
@@ -288,7 +282,7 @@ impl ChronicleTransaction {
         Ok(
             if let Some(graph) = json_ld.get("@graph").and_then(|graph| graph.as_array()) {
                 graph
-                    .into_iter()
+                    .iter()
                     .map(|resource| {
                         Ok(LedgerAddress {
                             namespace: resource
@@ -298,7 +292,7 @@ impl ChronicleTransaction {
                             resource: resource
                                 .get("@id")
                                 .and_then(|id| id.as_str())
-                                .ok_or_else(|| ProcessorError::NotANode {})?
+                                .ok_or(ProcessorError::NotANode {})?
                                 .to_owned(),
                         })
                     })
@@ -312,19 +306,21 @@ impl ChronicleTransaction {
                     resource: json_ld
                         .get("@id")
                         .and_then(|id| id.as_str())
-                        .ok_or_else(|| ProcessorError::NotANode {})?
+                        .ok_or(ProcessorError::NotANode {})?
                         .to_owned(),
                 }]
             },
         )
     }
+
     /// Take input states and apply them to the prov model, then apply transaction,
-    /// then transform to the compact representation and write each resource to the output state
+    /// then transform to the compact representation and write each resource to the output state,
+    /// also return the aggregate model so we can emit it as an event
     #[instrument]
     pub async fn process(
         &self,
         input: Vec<StateInput>,
-    ) -> Result<Vec<StateOutput>, ProcessorError> {
+    ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
         let mut model = ProvModel::default();
 
         debug!(?input, "Transforming state input");
@@ -339,16 +335,15 @@ impl ChronicleTransaction {
         }
 
         model.apply(self);
-
         let mut json_ld = model.to_json().compact_stable_order().await?;
 
         debug!(%json_ld, "Result model");
 
-        Ok(
+        Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
                 // Separate graph into descrete outpute
                 graph
-                    .into_iter()
+                    .iter()
                     .map(|resource| {
                         Ok(StateOutput {
                             address: LedgerAddress {
@@ -359,7 +354,7 @@ impl ChronicleTransaction {
                                 resource: resource
                                     .get("@id")
                                     .and_then(|id| id.as_str())
-                                    .ok_or_else(|| ProcessorError::NotANode {})?
+                                    .ok_or(ProcessorError::NotANode {})?
                                     .to_owned(),
                             },
                             data: serde_json::to_string(resource).unwrap().into_bytes(),
@@ -381,13 +376,14 @@ impl ChronicleTransaction {
                         resource: json_ld
                             .get("@id")
                             .and_then(|id| id.as_str())
-                            .ok_or_else(|| ProcessorError::NotANode {})?
+                            .ok_or(ProcessorError::NotANode {})?
                             .to_owned(),
                     },
                     data: serde_json::to_string(&json_ld).unwrap().into_bytes(),
                 }]
             },
-        )
+            model,
+        ))
     }
 }
 

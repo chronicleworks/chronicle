@@ -1,22 +1,26 @@
-use std::time::Duration;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::DateTime;
 
 use chrono::Utc;
-use common::ledger::Offset;
-use common::prov::{
-    vocab::Chronicle, Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity, EntityId,
-    Namespace, NamespaceId, ProvModel,
+use common::{
+    ledger::Offset,
+    prov::{
+        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, ChronicleTransaction, Entity,
+        EntityId, Namespace, NamespaceId, ProvModel,
+    },
 };
 use custom_error::custom_error;
 use derivative::*;
-use diesel::connection::SimpleConnection;
-use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
-use diesel::{dsl::max, prelude::*, sqlite::SqliteConnection};
+use diesel::{
+    connection::SimpleConnection,
+    dsl::max,
+    prelude::*,
+    r2d2::{ConnectionManager, Pool, PooledConnection},
+    sqlite::SqliteConnection,
+};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-use tracing::debug;
-use tracing::{instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 use uuid::Uuid;
 
 use crate::QueryCommand;
@@ -651,7 +655,7 @@ impl Store {
 
         if let Some(name) = name {
             trace!(%name, "Use existing");
-            Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
+            Ok(self.activity_by_activity_name_and_namespace(connection, &name, namespace)?)
         } else {
             trace!("Use last started");
             Ok(schema::activity::table

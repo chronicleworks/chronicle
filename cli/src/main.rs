@@ -9,12 +9,14 @@ use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
 
-use common::commands::{
-    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
-    KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
+use common::{
+    commands::{
+        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
+        KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
+    },
+    prov::CompactionError,
+    signing::SignerError,
 };
-use common::prov::CompactionError;
-use common::signing::SignerError;
 use config::*;
 use custom_error::custom_error;
 use futures::Future;
@@ -37,16 +39,24 @@ fn submitter(
     Ok(sawtooth_protocol::SawtoothSubmitter::new(
         &options
             .value_of("sawtooth")
-            .map(|x| Url::parse(x))
+            .map(Url::parse)
             .unwrap_or(Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
 
 #[cfg(not(feature = "inmem"))]
-fn state_delta(config: &Config) -> Result<sawtooth_protocol::StateDelta, SignerError> {
+fn state_delta(
+    config: &Config,
+    options: &ArgMatches,
+) -> Result<sawtooth_protocol::StateDelta, SignerError> {
+    use url::Url;
+
     Ok(sawtooth_protocol::StateDelta::new(
-        &config.validator.address,
+        &options
+            .value_of("sawtooth")
+            .map(Url::parse)
+            .unwrap_or(Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
@@ -66,17 +76,17 @@ fn api(
 ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError> {
     #[cfg(not(feature = "inmem"))]
     {
-        let submitter = submitter(config, &options)?;
-        let state = state_delta(config)?;
+        let submitter = submitter(config, options)?;
+        let state = state_delta(config, options)?;
 
-        Ok(Api::new(
+        Api::new(
             options.value_of("ui-interface").unwrap().parse()?,
             &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
             submitter,
             state,
             &config.secrets.path,
             uuid::Uuid::new_v4,
-        )?)
+        )
     }
     #[cfg(feature = "inmem")]
     {
@@ -106,7 +116,7 @@ fn domain_type(args: &ArgMatches) -> Option<String> {
 async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     dotenv::dotenv().ok();
 
-    let (api, ui) = api(&options, &config)?;
+    let (api, ui) = api(options, &config)?;
 
     let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {
@@ -291,7 +301,7 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
 
     match response {
         ApiResponse::Prov(context, delta) => {
-            if let Some(_) = matches.subcommand_matches("export") {
+            if matches.subcommand_matches("export").is_some() {
                 for delta in delta {
                     println!(
                         "{}",

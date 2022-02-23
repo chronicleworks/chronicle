@@ -1,10 +1,7 @@
 use common::{ledger::Offset, prov::ChronicleTransaction};
 use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
-use k256::{
-    ecdsa::signature::Signer,
-    ecdsa::{Signature, SigningKey},
-};
+use k256::ecdsa::{signature::Signer, Signature, SigningKey};
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use tracing::{debug, instrument};
@@ -17,7 +14,7 @@ custom_error! {pub MessageBuilderError
     Serialize{source: serde_cbor::Error}                              = "Could not serialize as CBOR",
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageBuilder {
     signer: SigningKey,
     family_name: String,
@@ -45,19 +42,22 @@ impl MessageBuilder {
         let mut request = ClientEventsSubscribeRequest::default();
 
         request.last_known_block_ids = vec![offset.to_string()];
-        let mut subscription = EventSubscription::default();
+        let mut delta_subscription = EventSubscription::default();
         let mut filter_address = EventFilter::default();
 
         filter_address.key = "address".to_string();
-        filter_address.match_string = format!("{}", *PREFIX);
+        filter_address.match_string = (*PREFIX).to_string();
         filter_address.filter_type = FilterType::RegexAll as _;
 
-        let mut filter_type = EventFilter::default();
-        filter_type.match_string = "sawtooth/state-delta".to_owned();
-        filter_type.filter_type = FilterType::RegexAll as _;
+        delta_subscription.filters = vec![filter_address];
+        delta_subscription.event_type = "chronicle/prov-update".to_owned();
 
-        subscription.filters = vec![filter_address, filter_type];
-        request.subscriptions = vec![subscription];
+        let mut block_subscription = EventSubscription::default();
+        block_subscription.event_type = "sawtooth/block-commit".to_owned();
+        block_subscription.filters = vec![];
+
+        request.last_known_block_ids = vec![];
+        request.subscriptions = vec![delta_subscription, block_subscription];
 
         request
     }

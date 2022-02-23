@@ -1,23 +1,25 @@
-use crate::address::SawtoothAddress;
-use crate::messages::MessageBuilder;
-use crate::sawtooth::ClientBatchSubmitRequest;
+use crate::{
+    address::SawtoothAddress, messages::MessageBuilder, sawtooth::ClientBatchSubmitRequest,
+};
 
-use common::ledger::{LedgerWriter, SubmissionError};
-use common::prov::{ChronicleTransaction, ProcessorError};
+use common::{
+    ledger::{LedgerWriter, SubmissionError},
+    prov::{ChronicleTransaction, ProcessorError},
+};
 use custom_error::*;
 use derivative::Derivative;
 use k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
 
-use sawtooth_sdk::messages::validator::Message_MessageType;
-use sawtooth_sdk::messaging::stream::{MessageSender, ReceiveError, SendError};
-use sawtooth_sdk::messaging::{
-    stream::{MessageConnection, MessageReceiver},
-    zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
+use sawtooth_sdk::{
+    messages::validator::Message_MessageType,
+    messaging::{
+        stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
+        zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
+    },
 };
 use tokio::task::JoinError;
-use tracing::instrument;
-use tracing::{debug};
+use tracing::{debug, instrument};
 
 #[derive(Derivative)]
 #[derivative(Debug)]

@@ -5,10 +5,7 @@ include!("./src/context.rs");
 fn main() {
     let out_str = env::var("OUT_DIR").unwrap();
     let out_path = PathBuf::from(&out_str);
-    let mut out_path = out_path
-        .ancestors().nth(3)
-        .unwrap()
-        .to_owned();
+    let mut out_path = out_path.ancestors().nth(3).unwrap().to_owned();
     out_path.push("assets");
 
     if !out_path.exists() {

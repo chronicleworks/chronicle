@@ -2,9 +2,7 @@ use super::CliError;
 use clap::ArgMatches;
 use common::signing::DirectoryStoredKeys;
 
-
 use question::{Answer, Question};
-
 
 use std::path::{Path, PathBuf};
 use url::Url;

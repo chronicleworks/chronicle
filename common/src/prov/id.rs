@@ -19,6 +19,7 @@ impl DomaintypeId {
     {
         DomaintypeId(s.as_ref().to_owned())
     }
+
     /// Decompose a domain type id into its constituent parts, we need to preserve the type better to justify this implementation
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -62,6 +63,7 @@ impl NamespaceId {
     {
         NamespaceId(s.as_ref().to_owned())
     }
+
     /// Decompose a namespace id into its constituent parts, we need to preserve the type better to justify this implementation
     pub fn decompose(&self) -> (&str, Uuid) {
         if let &[_, _, name, uuid, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -128,6 +130,7 @@ impl EntityId {
     {
         Self(s.as_ref().to_owned())
     }
+
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -162,6 +165,7 @@ impl AgentId {
     {
         Self(s.as_ref().to_owned())
     }
+
     /// Extract the agent name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
@@ -205,6 +209,7 @@ impl ActivityId {
     {
         Self(s.as_ref().to_owned())
     }
+
     /// Extract the activity name from an id
     pub fn decompose(&self) -> &str {
         if let &[_, _, name, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {

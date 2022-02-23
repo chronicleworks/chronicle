@@ -16,8 +16,11 @@ use common::{
 };
 use custom_error::custom_error;
 use derivative::*;
-use diesel::{prelude::*, r2d2::Pool};
-use diesel::{r2d2::ConnectionManager, Queryable, SqliteConnection};
+use diesel::{
+    prelude::*,
+    r2d2::{ConnectionManager, Pool},
+    Queryable, SqliteConnection,
+};
 use futures::Stream;
 use tracing::{debug, instrument};
 use warp::{

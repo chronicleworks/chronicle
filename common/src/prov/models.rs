@@ -254,6 +254,7 @@ impl Entity {
             Self::Unsigned { id, .. } | Self::Signed { id, .. } => id,
         }
     }
+
     pub fn namespaceid(&self) -> &NamespaceId {
         match self {
             Self::Unsigned { namespaceid, .. } | Self::Signed { namespaceid, .. } => namespaceid,
@@ -963,6 +964,7 @@ impl ProvModel {
 
         Ok(())
     }
+
     fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
         let id = AgentId::new(
             agent
@@ -1254,7 +1256,7 @@ pub mod test {
     // Choose from a limited selection of domain types
     prop_compose! {
         fn domain_type_id()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> DomaintypeId {
-            Chronicle::domaintype(&names.get(index).unwrap().to_owned()).into()
+            Chronicle::domaintype(names.get(index).unwrap()).into()
         }
     }
 

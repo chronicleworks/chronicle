@@ -103,13 +103,20 @@ impl TransactionHandler for ChronicleTransactionHandler {
             )
         });
 
-        let mut output = recv
+        let (mut output, model) = recv
             .recv()
             .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
         output.sort_by(|l, r| l.address.cmp(&r.address));
 
         debug!(?output, "Storing output state");
+
+        context.add_event(
+            "chronicle/prov-update".to_string(),
+            vec![],
+            &*serde_cbor::to_vec(&model)
+                .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
+        )?;
 
         context.set_state_entries(
             output

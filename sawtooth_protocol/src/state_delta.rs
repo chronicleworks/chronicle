@@ -1,34 +1,51 @@
-use std::pin::Pin;
-use std::time::Duration;
+use std::{
+    pin::Pin,
+    sync::{
+        mpsc::{Receiver, RecvTimeoutError},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
 
-use common::ledger::{LedgerReader, Offset, SubscriptionError};
-use common::prov::ProvModel;
+use backoff::ExponentialBackoff;
+use common::{
+    ledger::{LedgerReader, Offset, SubscriptionError},
+    prov::{ProcessorError, ProvModel},
+};
 use custom_error::custom_error;
 use derivative::*;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt, TryFutureExt};
 
-use futures::future::join_all;
 use k256::ecdsa::SigningKey;
 use prost::{DecodeError, EncodeError, Message};
-use sawtooth_sdk::messages::validator::Message_MessageType;
-use sawtooth_sdk::messaging::stream::{
-    MessageConnection, MessageFuture, MessageResult, ReceiveError, SendError,
-};
-use sawtooth_sdk::messaging::zmq_stream::ZmqMessageConnection;
-use sawtooth_sdk::messaging::{
-    stream::MessageReceiver, stream::MessageSender, zmq_stream::ZmqMessageSender,
+use sawtooth_sdk::{
+    messages::validator::Message_MessageType,
+    messaging::{
+        stream::{
+            MessageConnection, MessageFuture, MessageReceiver, MessageResult, MessageSender,
+            ReceiveError, SendError,
+        },
+        zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
+    },
 };
 use tokio::task::JoinError;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument};
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
     Runtime{source: JoinError}                      = "Failed to return from blocking operation",
     ZmqRx{source: ReceiveError}                     = "No response from validator",
+    ZmqRxx{source: RecvTimeoutError}                = "No response from validator",
     ZmqTx{source: SendError}                        = "No response from validator",
     ProtobufEncode{source: EncodeError}             = "Protobuf encoding",
     ProtobufDecode{source: DecodeError}             = "Protobuf decoding",
     SubscribeError{msg: String}                     = "Subscription failed",
+    RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator",
+    MissingBlockNum{}                               = "Missing block_num in block commit",
+    MissingData{}                                   = "Missing block_num in block commit",
+    UnparsableBlockNum {}                           = "Unparsable block_num in block commit",
+    UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data",
+    Processor { source: ProcessorError }            = "Json LD processing",
 }
 
 impl From<StateError> for SubscriptionError {
@@ -39,37 +56,58 @@ impl From<StateError> for SubscriptionError {
     }
 }
 
-use crate::messages::MessageBuilder;
-use crate::sawtooth::client_events_subscribe_response::Status;
-use crate::sawtooth::{ClientEventsSubscribeResponse, EventList};
+use crate::{
+    messages::MessageBuilder,
+    sawtooth::{
+        client_events_subscribe_response::Status, ClientEventsSubscribeResponse, EventList,
+    },
+};
 
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Debug, Clone)]
 pub struct StateDelta {
     #[derivative(Debug = "ignore")]
     tx: ZmqMessageSender,
-    rx: MessageReceiver,
+    rx: Arc<Mutex<MessageReceiver>>,
     builder: MessageBuilder,
 }
 
 impl StateDelta {
+    #[instrument]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
-        StateDelta { tx, rx, builder }
+        info!(?address, "Subscribing to state updates");
+        StateDelta {
+            tx,
+            rx: Arc::new(rx.into()),
+            builder,
+        }
     }
 
-    async fn recv_from(
+    async fn recv_from_messagefuture(
         mut fut: MessageFuture,
     ) -> Result<(MessageFuture, MessageResult), StateError> {
         let (fut, response) = tokio::task::spawn_blocking(move || {
-            let response = fut.get_timeout(Duration::from_millis(500));
-
+            let response = fut.get_timeout(Duration::from_secs(30));
+            info!(?response, "Subscription response");
             (fut, response)
         })
         .await?;
 
         Ok((fut, Ok(response?)))
+    }
+
+    async fn recv_from_channel(
+        fut: Arc<Mutex<Receiver<MessageResult>>>,
+    ) -> Result<MessageResult, StateError> {
+        let response = tokio::task::spawn_blocking(move || {
+            let response = fut.lock().unwrap().recv_timeout(Duration::from_secs(2));
+            response
+        })
+        .await??;
+
+        Ok(response)
     }
 
     #[instrument]
@@ -90,49 +128,92 @@ impl StateDelta {
             &*buf,
         )?;
 
-        let (fut, response) = StateDelta::recv_from(fut).await?;
+        let (_, response) = StateDelta::recv_from_messagefuture(fut).await.unwrap();
 
         let response = ClientEventsSubscribeResponse::decode(response?.get_content())?;
 
-        debug!(?request, "Subscription response");
+        debug!(?response, "Subscription response");
 
         if response.status() != Status::Ok {
             return Err(StateError::SubscribeError {
-                msg: response.response_message,
+                msg: format!(
+                    "status {:?} - '{}'",
+                    response.status, response.response_message
+                ),
             });
         }
 
-        let stream = stream::unfold(fut, |fut| async move {
-            let mut futs = vec![fut];
+        Ok(Self::event_stream(self.rx.clone(), offset))
+    }
 
+    fn event_stream(
+        rx: Arc<Mutex<MessageReceiver>>,
+        block: Offset,
+    ) -> impl futures::Stream<Item = Vec<(Offset, ProvModel)>> {
+        #[derive(Debug)]
+        enum ParsedEvent {
+            Block(u64),
+            State(ProvModel),
+        }
+
+        stream::unfold((rx, block), |(rx, block)| async move {
             loop {
-                let (fut, events) = StateDelta::recv_from(futs.pop().unwrap()).await.unwrap();
-
-                futs.push(fut);
+                let events = StateDelta::recv_from_channel(rx.clone()).await;
 
                 match events {
-                    Err(ReceiveError::TimeoutError) => {
+                    Err(StateError::ZmqRxx { .. }) => {
                         debug!("No events in time window");
                     }
-                    Ok(events) => match EventList::decode(events.get_content()) {
+                    Ok(events) => match EventList::decode(events.unwrap().get_content()) {
                         Ok(events) => {
-                            let prov =
-                                join_all(events.events.into_iter().map(|event| async move {
-                                    let prov = ProvModel::default();
-                                    prov.apply_json_ld_bytes(&*event.data)
-                                        .await
-                                        .map(|prov| (Offset::Genesis, prov))
-                                }))
-                                .await
-                                .into_iter()
-                                .collect::<Result<Vec<_>, _>>();
-
-                            match prov {
-                                Ok(prov) => return Some((prov, futs.pop().unwrap())),
-                                Err(e) => {
-                                    error!(?e, "Decoding state");
-                                }
+                            debug!(?events, "Received events");
+                            let mut updates = vec![];
+                            for event in events.events {
+                                updates.push(match &*event.event_type {
+                                    "sawtooth/block-commit" => event
+                                        .attributes
+                                        .iter()
+                                        .find(|attr| attr.key == "block_num")
+                                        .ok_or(StateError::MissingBlockNum {})
+                                        .and_then(|attr| {
+                                            attr.value
+                                                .parse::<u64>()
+                                                .map_err(|_| StateError::UnparsableBlockNum {})
+                                        })
+                                        .map(|num| Some(ParsedEvent::Block(num))),
+                                    "chronicle/prov-update" => {
+                                        serde_cbor::from_slice::<ProvModel>(&*event.data)
+                                            .map_err(StateError::from)
+                                            .map(|prov| Some(ParsedEvent::State(prov)))
+                                    }
+                                    _ => Ok(None),
+                                });
                             }
+
+                            debug!(?updates, "Parsed events");
+
+                            let events = updates.into_iter().fold(
+                                (vec![], block),
+                                |(mut prov, block), event| {
+                                    match event {
+                                        // Next block num
+                                        Ok(Some(ParsedEvent::Block(next))) => {
+                                            (prov, Offset::from(next))
+                                        }
+                                        Ok(Some(ParsedEvent::State(next_prov))) => {
+                                            prov.push((block, next_prov));
+                                            (prov, block)
+                                        }
+                                        Err(e) => {
+                                            error!(?e, "Parsing state update");
+                                            (prov, block)
+                                        }
+                                        _ => (prov, block),
+                                    }
+                                },
+                            );
+
+                            return Some((events.0, (rx, events.1)));
                         }
                         Err(e) => {
                             error!(?e, "Decoding protobuf");
@@ -145,14 +226,14 @@ impl StateDelta {
                     }
                 }
             }
-        });
-
-        Ok(stream)
+        })
     }
 }
 
 #[async_trait::async_trait(?Send)]
 impl LedgerReader for StateDelta {
+    #[instrument]
+    #[instrument]
     async fn state_updates(
         &self,
         offset: Offset,
@@ -160,10 +241,15 @@ impl LedgerReader for StateDelta {
         Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>,
         common::ledger::SubscriptionError,
     > {
-        Ok(self
-            .get_state_from(offset)
-            .await?
-            .flat_map(|x| stream::iter(x))
-            .boxed())
+        let self_clone = self.clone();
+
+        let subscribe = backoff::future::retry(ExponentialBackoff::default(), || {
+            self_clone.get_state_from(offset).map_err(|e| {
+                error!(?e, "Error subscribing");
+                backoff::Error::transient(e)
+            })
+        });
+
+        Ok(subscribe.await?.flat_map(stream::iter).boxed())
     }
 }
