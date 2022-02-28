@@ -35,7 +35,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    ledgersync (offset) {
+    ledgersync (offset, sync_time) {
         offset -> Text,
         sync_time -> Nullable<Timestamp>,
     }

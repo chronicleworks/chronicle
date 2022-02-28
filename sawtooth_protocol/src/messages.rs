@@ -38,10 +38,9 @@ impl MessageBuilder {
         hex::encode_upper(bytes)
     }
 
-    pub fn make_subcription_request(&self, offset: Offset) -> ClientEventsSubscribeRequest {
+    pub fn make_subcription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
 
-        request.last_known_block_ids = vec![offset.to_string()];
         let mut delta_subscription = EventSubscription::default();
         let mut filter_address = EventFilter::default();
 
@@ -56,7 +55,10 @@ impl MessageBuilder {
         block_subscription.event_type = "sawtooth/block-commit".to_owned();
         block_subscription.filters = vec![];
 
-        request.last_known_block_ids = vec![];
+        offset.map(|offset| {
+            request.last_known_block_ids = vec![offset.to_string()];
+        });
+
         request.subscriptions = vec![delta_subscription, block_subscription];
 
         request

@@ -29,7 +29,8 @@ use sawtooth_sdk::{
     },
 };
 use tokio::task::JoinError;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
+use uuid::Uuid;
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
@@ -113,8 +114,8 @@ impl StateDelta {
     #[instrument]
     async fn get_state_from(
         &self,
-        offset: Offset,
-    ) -> Result<impl futures::Stream<Item = Vec<(Offset, ProvModel)>>, StateError> {
+        offset: &Offset,
+    ) -> Result<impl futures::Stream<Item = Vec<(Offset, ProvModel, Uuid)>>, StateError> {
         let request = self.builder.make_subcription_request(offset);
 
         debug!(?request, "Subscription request");
@@ -143,16 +144,16 @@ impl StateDelta {
             });
         }
 
-        Ok(Self::event_stream(self.rx.clone(), offset))
+        Ok(Self::event_stream(self.rx.clone(), offset.clone()))
     }
 
     fn event_stream(
         rx: Arc<Mutex<MessageReceiver>>,
         block: Offset,
-    ) -> impl futures::Stream<Item = Vec<(Offset, ProvModel)>> {
+    ) -> impl futures::Stream<Item = Vec<(Offset, ProvModel, Uuid)>> {
         #[derive(Debug)]
         enum ParsedEvent {
-            Block(u64),
+            Block(String),
             State(ProvModel),
         }
 
@@ -164,61 +165,65 @@ impl StateDelta {
                     Err(StateError::ZmqRxx { .. }) => {
                         debug!("No events in time window");
                     }
-                    Ok(events) => match EventList::decode(events.unwrap().get_content()) {
-                        Ok(events) => {
-                            debug!(?events, "Received events");
-                            let mut updates = vec![];
-                            for event in events.events {
-                                updates.push(match &*event.event_type {
-                                    "sawtooth/block-commit" => event
-                                        .attributes
-                                        .iter()
-                                        .find(|attr| attr.key == "block_num")
-                                        .ok_or(StateError::MissingBlockNum {})
-                                        .and_then(|attr| {
-                                            attr.value
-                                                .parse::<u64>()
-                                                .map_err(|_| StateError::UnparsableBlockNum {})
-                                        })
-                                        .map(|num| Some(ParsedEvent::Block(num))),
-                                    "chronicle/prov-update" => {
-                                        serde_cbor::from_slice::<ProvModel>(&*event.data)
-                                            .map_err(StateError::from)
-                                            .map(|prov| Some(ParsedEvent::State(prov)))
-                                    }
-                                    _ => Ok(None),
-                                });
+                    Ok(Ok(events)) => {
+                        let correlation = events.correlation_id.parse::<Uuid>().unwrap_or_default();
+                        match EventList::decode(events.get_content()) {
+                            Ok(events) => {
+                                debug!(?events, "Received events");
+                                let mut updates = vec![];
+                                for event in events.events {
+                                    updates.push(match &*event.event_type {
+                                        "sawtooth/block-commit" => event
+                                            .attributes
+                                            .iter()
+                                            .find(|attr| attr.key == "block_id")
+                                            .ok_or(StateError::MissingBlockNum {})
+                                            .map(|attr| {
+                                                Some(ParsedEvent::Block(attr.value.clone()))
+                                            }),
+                                        "chronicle/prov-update" => {
+                                            serde_cbor::from_slice::<ProvModel>(&*event.data)
+                                                .map_err(StateError::from)
+                                                .map(|prov| Some(ParsedEvent::State(prov)))
+                                        }
+                                        _ => Ok(None),
+                                    });
+                                }
+
+                                debug!(?updates, "Parsed events");
+
+                                let events = updates.into_iter().fold(
+                                    (vec![], block),
+                                    |(mut prov, block), event| {
+                                        match event {
+                                            // Next block num
+                                            Ok(Some(ParsedEvent::Block(next))) => {
+                                                (prov, Offset::from(&*next))
+                                            }
+                                            Ok(Some(ParsedEvent::State(next_prov))) => {
+                                                prov.push((block.clone(), next_prov, correlation));
+                                                (prov, block)
+                                            }
+                                            Err(e) => {
+                                                error!(?e, "Parsing state update");
+                                                (prov, block)
+                                            }
+                                            _ => (prov, block),
+                                        }
+                                    },
+                                );
+
+                                return Some((events.0, (rx, events.1)));
                             }
-
-                            debug!(?updates, "Parsed events");
-
-                            let events = updates.into_iter().fold(
-                                (vec![], block),
-                                |(mut prov, block), event| {
-                                    match event {
-                                        // Next block num
-                                        Ok(Some(ParsedEvent::Block(next))) => {
-                                            (prov, Offset::from(next))
-                                        }
-                                        Ok(Some(ParsedEvent::State(next_prov))) => {
-                                            prov.push((block, next_prov));
-                                            (prov, block)
-                                        }
-                                        Err(e) => {
-                                            error!(?e, "Parsing state update");
-                                            (prov, block)
-                                        }
-                                        _ => (prov, block),
-                                    }
-                                },
-                            );
-
-                            return Some((events.0, (rx, events.1)));
+                            Err(e) => {
+                                error!(?e, "Decoding protobuf");
+                            }
                         }
-                        Err(e) => {
-                            error!(?e, "Decoding protobuf");
-                        }
-                    },
+                    }
+                    Ok(Err(e)) => {
+                        // recoverable error
+                        warn!(?e, "Zmq recv error");
+                    }
                     Err(e) => {
                         // Non recoverable channel error, end stream
                         error!(?e, "Zmq recv error");
@@ -233,18 +238,17 @@ impl StateDelta {
 #[async_trait::async_trait(?Send)]
 impl LedgerReader for StateDelta {
     #[instrument]
-    #[instrument]
     async fn state_updates(
         &self,
         offset: Offset,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>,
+        Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>,
         common::ledger::SubscriptionError,
     > {
         let self_clone = self.clone();
 
         let subscribe = backoff::future::retry(ExponentialBackoff::default(), || {
-            self_clone.get_state_from(offset).map_err(|e| {
+            self_clone.get_state_from(&offset).map_err(|e| {
                 error!(?e, "Error subscribing");
                 backoff::Error::transient(e)
             })

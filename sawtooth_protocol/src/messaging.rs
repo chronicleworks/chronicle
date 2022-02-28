@@ -20,6 +20,7 @@ use sawtooth_sdk::{
 };
 use tokio::task::JoinError;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -28,10 +29,6 @@ pub struct SawtoothSubmitter {
     tx: ZmqMessageSender,
     rx: MessageReceiver,
     builder: MessageBuilder,
-}
-
-pub enum SubmissionResult {
-    Accepted,
 }
 
 custom_error! {pub SawtoothSubmissionError
@@ -61,6 +58,7 @@ impl SawtoothSubmitter {
     #[instrument]
     async fn submit(
         &mut self,
+        correlation_id: Uuid,
         transactions: Vec<&ChronicleTransaction>,
     ) -> Result<(), SawtoothSubmissionError> {
         let mut transaction_batch = vec![];
@@ -92,7 +90,7 @@ impl SawtoothSubmitter {
 
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
-            &uuid::Uuid::new_v4().to_string(),
+            &*correlation_id.to_string(),
             &*request.encode_to_vec(),
         )?;
 
@@ -112,7 +110,13 @@ impl SawtoothSubmitter {
 impl LedgerWriter for SawtoothSubmitter {
     /// TODO: This blocks on a bunch of non tokio / futures 'futures' in the sawtooth rust SDK,
     /// which also exposes a buch of non clonable types so we probably need another dispatch / join mpsc here
-    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
-        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
+    async fn submit(
+        &mut self,
+        correlation_id: Uuid,
+        tx: Vec<&ChronicleTransaction>,
+    ) -> Result<(), SubmissionError> {
+        self.submit(correlation_id, tx)
+            .await
+            .map_err(SawtoothSubmissionError::into)
     }
 }

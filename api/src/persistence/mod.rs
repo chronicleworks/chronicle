@@ -247,29 +247,19 @@ impl Store {
     pub fn set_last_offset(&self, offset: Offset) -> Result<(), StoreError> {
         use schema::ledgersync::{self as dsl};
 
-        Ok(self.connection()?.immediate_transaction(|connection| {
-            diesel::insert_into(dsl::table)
-                .values(&query::NewOffset {
-                    offset: &*offset.to_string(),
-                    sync_time: Some(Utc::now().naive_utc()),
-                })
-                .execute(connection)
-                .map(|_| ())
-        })?)
-    }
-
-    /// Apply a chronicle transaction to the store and return a prov model relevant to the transaction
-    #[instrument(skip(connection))]
-    pub fn apply_tx(
-        &self,
-        connection: &mut SqliteConnection,
-        tx: &Vec<ChronicleTransaction>,
-    ) -> Result<ProvModel, StoreError> {
-        let model = ProvModel::from_tx(tx);
-
-        self.apply_model(connection, &model)?;
-
-        Ok(model)
+        if let Offset::Identity(offset) = offset {
+            Ok(self.connection()?.immediate_transaction(|connection| {
+                diesel::insert_into(dsl::table)
+                    .values(&query::NewOffset {
+                        offset: &*offset.to_string(),
+                        sync_time: Some(Utc::now().naive_utc()),
+                    })
+                    .execute(connection)
+                    .map(|_| ())
+            })?)
+        } else {
+            Ok(())
+        }
     }
 
     #[instrument]

@@ -3,6 +3,7 @@ extern crate serde_derive;
 
 mod cli;
 mod config;
+mod telemetry;
 
 use api::{Api, ApiDispatch, ApiError};
 use clap::{App, ArgMatches};
@@ -270,18 +271,9 @@ async fn main() {
         std::process::exit(0);
     }
 
-    let _tracer = {
-        if matches.is_present("debug") {
-            tracing_subscriber::fmt()
-                .pretty()
-                .with_max_level(Level::TRACE)
-                .init();
-            Some(())
-        } else {
-            None
-        }
-    };
-
+    if matches.is_present("debug") {
+        telemetry::tracing();
+    }
     config_and_exec(&matches)
         .await
         .map_err(|e| {
@@ -300,7 +292,7 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     let response = api_exec(config, matches).await?;
 
     match response {
-        ApiResponse::Prov(context, delta) => {
+        ApiResponse::Prov(context, delta, _correlation_id) => {
             if matches.subcommand_matches("export").is_some() {
                 for delta in delta {
                     println!(

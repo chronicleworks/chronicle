@@ -3,16 +3,13 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
+    Context, Error, ErrorExtensions, Object, OutputType, Schema, Subscription, Upload,
 };
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use common::{
-    commands::{
-        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
-        PathOrFile,
-    },
-    prov::{ActivityId, AgentId, EntityId},
+use common::commands::{
+    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
+    PathOrFile,
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -22,7 +19,9 @@ use diesel::{
     Queryable, SqliteConnection,
 };
 use futures::Stream;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
@@ -59,6 +58,23 @@ pub struct Entity {
     signature_time: Option<NaiveDateTime>,
     signature: Option<String>,
     locator: Option<String>,
+}
+
+#[derive(Default, Queryable)]
+pub struct Submission {
+    context: String,
+    correlation_id: Uuid,
+}
+
+#[Object]
+impl Submission {
+    async fn context(&self) -> &str {
+        &self.context
+    }
+
+    async fn correlation_id(&self) -> &Uuid {
+        &self.correlation_id
+    }
 }
 
 #[Object]
@@ -294,77 +310,15 @@ impl Query {
 
 struct Mutation;
 
-async fn agent_context<'a>(
-    namespace: &str,
+async fn transaction_context<'a>(
     res: ApiResponse,
-    ctx: &Context<'a>,
-) -> async_graphql::Result<Agent> {
+    _ctx: &Context<'a>,
+) -> async_graphql::Result<Submission> {
     match res {
-        ApiResponse::Prov(id, _) => {
-            use crate::persistence::schema::agent::{self, dsl};
-
-            let store = ctx.data_unchecked::<Store>();
-
-            let mut connection = store.pool.get()?;
-
-            Ok(agent::table
-                .filter(
-                    dsl::name
-                        .eq(AgentId::from(id).decompose())
-                        .and(dsl::namespace.eq(namespace)),
-                )
-                .first::<Agent>(&mut connection)?)
-        }
-        _ => unreachable!(),
-    }
-}
-
-async fn activity_context<'a>(
-    namespace: &str,
-    res: ApiResponse,
-    ctx: &Context<'a>,
-) -> async_graphql::Result<Activity> {
-    match res {
-        ApiResponse::Prov(id, _) => {
-            use crate::persistence::schema::activity::{self, dsl};
-
-            let store = ctx.data_unchecked::<Store>();
-
-            let mut connection = store.pool.get()?;
-
-            Ok(activity::table
-                .filter(
-                    dsl::name
-                        .eq(ActivityId::from(id).decompose())
-                        .and(dsl::namespace.eq(namespace)),
-                )
-                .first::<Activity>(&mut connection)?)
-        }
-        _ => unreachable!(),
-    }
-}
-
-async fn entity_context<'a>(
-    namespace: &str,
-    res: ApiResponse,
-    ctx: &Context<'a>,
-) -> async_graphql::Result<Entity> {
-    match res {
-        ApiResponse::Prov(id, _) => {
-            use crate::persistence::schema::entity::{self, dsl};
-
-            let store = ctx.data_unchecked::<Store>();
-
-            let mut connection = store.pool.get()?;
-
-            Ok(entity::table
-                .filter(
-                    dsl::name
-                        .eq(EntityId::from(id).decompose())
-                        .and(dsl::namespace.eq(namespace)),
-                )
-                .first::<Entity>(&mut connection)?)
-        }
+        ApiResponse::Prov(id, _, correlation_id) => Ok(Submission {
+            context: id.to_string(),
+            correlation_id,
+        }),
         _ => unreachable!(),
     }
 }
@@ -377,7 +331,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<Agent> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -390,7 +344,7 @@ impl Mutation {
             }))
             .await?;
 
-        agent_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn create_activity<'a>(
@@ -399,7 +353,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<Activity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -412,7 +366,7 @@ impl Mutation {
             }))
             .await?;
 
-        activity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn generate_key<'a>(
@@ -420,7 +374,7 @@ impl Mutation {
         ctx: &Context<'a>,
         name: String,
         namespace: Option<String>,
-    ) -> async_graphql::Result<Agent> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -433,7 +387,7 @@ impl Mutation {
             }))
             .await?;
 
-        agent_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn start_activity<'a>(
@@ -443,7 +397,7 @@ impl Mutation {
         namespace: Option<String>,
         agent: String,
         time: Option<DateTime<Utc>>,
-    ) -> async_graphql::Result<Activity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -457,7 +411,7 @@ impl Mutation {
             }))
             .await?;
 
-        activity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn end_activity<'a>(
@@ -467,7 +421,7 @@ impl Mutation {
         namespace: Option<String>,
         agent: String,
         time: Option<DateTime<Utc>>,
-    ) -> async_graphql::Result<Activity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -481,7 +435,7 @@ impl Mutation {
             }))
             .await?;
 
-        activity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn activity_use<'a>(
@@ -491,7 +445,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<Entity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -505,7 +459,7 @@ impl Mutation {
             }))
             .await?;
 
-        entity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn activity_generate<'a>(
@@ -515,7 +469,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
         typ: Option<String>,
-    ) -> async_graphql::Result<Entity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -529,7 +483,7 @@ impl Mutation {
             }))
             .await?;
 
-        entity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 
     pub async fn entity_attach<'a>(
@@ -540,7 +494,7 @@ impl Mutation {
         attachment: Upload,
         on_behalf_of_agent: String,
         locator: String,
-    ) -> async_graphql::Result<Entity> {
+    ) -> async_graphql::Result<Submission> {
         let api = ctx.data_unchecked::<ApiDispatch>();
 
         let namespace = namespace.unwrap_or_else(|| "default".to_owned());
@@ -557,21 +511,41 @@ impl Mutation {
             }))
             .await?;
 
-        entity_context(&namespace, res, ctx).await
+        transaction_context(res, ctx).await
     }
 }
 
 pub struct Subscription;
 
+#[derive(Default, Queryable)]
+pub struct CommitNotification {
+    correlation_id: Uuid,
+}
+
+#[Object]
+impl CommitNotification {
+    pub async fn correlation_id(&self) -> &Uuid {
+        &self.correlation_id
+    }
+}
+
 #[Subscription]
 impl Subscription {
-    async fn interval(&self, #[graphql(default = 1)] n: i32) -> impl Stream<Item = i32> {
-        let mut value = 0;
+    async fn commit_notifications<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> impl Stream<Item = CommitNotification> {
+        let api = ctx.data_unchecked::<ApiDispatch>().clone();
+        let mut rx = api.notify_commit.subscribe();
         async_stream::stream! {
             loop {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                value += n;
-                yield value;
+                match rx.recv().await {
+                    Ok((_prov, correlation_id)) =>
+                    yield CommitNotification {correlation_id},
+                    Err(RecvError::Lagged(_)) => {
+                    }
+                    Err(_) => break
+                }
             }
         }
     }

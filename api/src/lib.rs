@@ -34,7 +34,7 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
 use user_error::UFE;
 use uuid::Uuid;
@@ -70,6 +70,7 @@ impl From<Infallible> for ApiError {
 impl UFE for ApiError {}
 
 type LedgerSendWithReply = (
+    Uuid,
     Vec<ChronicleTransaction>,
     Sender<Result<(), SubmissionError>>,
 );
@@ -95,12 +96,11 @@ impl BlockingLedgerWriter {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
                 loop {
-                    if let Some((submission, reply)) = rx.recv().await {
-                        trace!(?rx, "Recv submittion from channel");
+                    if let Some((correlation_id, submission, reply)) = rx.recv().await {
+                        let result = ledger_writer
+                            .submit(correlation_id, submission.iter().collect())
+                            .await;
 
-                        let result = ledger_writer.submit(submission.iter().collect()).await;
-
-                        trace!(?result, "Reply with");
                         reply
                             .send(result)
                             .await
@@ -120,10 +120,16 @@ impl BlockingLedgerWriter {
         Self { tx }
     }
 
-    fn submit_blocking(&mut self, tx: &Vec<ChronicleTransaction>) -> Result<(), ApiError> {
+    fn submit_blocking(
+        &mut self,
+        correlation_id: Uuid,
+        tx: &Vec<ChronicleTransaction>,
+    ) -> Result<(), ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
         trace!(?tx, "Dispatch submission to ledger");
-        self.tx.clone().blocking_send((tx.clone(), reply_tx))?;
+        self.tx
+            .clone()
+            .blocking_send((correlation_id, tx.clone(), reply_tx))?;
 
         let reply = reply_rx.blocking_recv();
 
@@ -154,6 +160,7 @@ pub struct Api<U: Fn() -> Uuid> {
 /// A clonable api handle
 pub struct ApiDispatch {
     tx: Sender<ApiSendWithReply>,
+    notify_commit: tokio::sync::broadcast::Sender<(ProvModel, Uuid)>,
 }
 
 impl ApiDispatch {
@@ -197,7 +204,12 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             }))
             .build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
 
-        let dispatch = ApiDispatch { tx: tx.clone() };
+        let (commit_notify_tx, _) = tokio::sync::broadcast::channel(20);
+        let dispatch = ApiDispatch {
+            tx: tx.clone(),
+            notify_commit: commit_notify_tx.clone(),
+        };
+
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -220,6 +232,12 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             local.spawn_local(async move {
                 let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
 
+                // Get last committed offset from the store before we attach it to ledger state updates and the api
+               let mut state_updates = ledger_reader.state_updates(
+                    store.get_last_offset().unwrap_or(Some(Offset::Genesis))
+                        .unwrap_or(Offset::Genesis)
+                ).await.unwrap();
+
                 let mut api = Api {
                     tx: tx.clone(),
                     keystore,
@@ -228,19 +246,18 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     uuidsource: Box::new(uuidgen),
                 };
 
-                // Get last committed offset from the store before we attach it to ledger state updates and the api
-                let mut state_updates = ledger_reader.state_updates(Offset::Genesis).await.unwrap();
-
                 debug!(?api, "Api running on localset");
                 loop {
                     select! {
                             state = state_updates.next().fuse() =>{
-                                if let Some((offset,prov)) = state {
-                                    debug!(?offset, "Incoming confirmation");
-                                    api.sync(prov).await
+                                if let Some((offset, prov, correlation_id)) = state {
+
+                                    api.sync(&prov, offset.clone())
+                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = ?correlation_id))
+                                        .await
                                         .map_err(|e| {
                                             error!(?e, "Api sync to confirmed commit");
-                                        }).ok();
+                                        }).and_then(|_| Ok(commit_notify_tx.send((prov,correlation_id)))).ok();
                                 }
                             },
                             cmd = rx.recv().fuse() => {
@@ -312,6 +329,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn activity_generate(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -322,19 +340,14 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
-                let activity = api.store.get_activity_by_name_or_last_started(
-                    connection,
-                    activity,
-                    &namespace,
-                )?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+                let activity = api
+                    .store
+                    .get_activity_by_name_or_last_started(connection, activity, &namespace)?;
 
-                let entity = api.store.entity_by_entity_name_and_namespace(
-                    connection,
-                    &name,
-                    &namespace,
-                );
+                let entity = api
+                    .store
+                    .entity_by_entity_name_and_namespace(connection, &name, &namespace);
 
                 let name = {
                     if let Ok(existing) = entity {
@@ -366,11 +379,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -383,6 +398,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn activity_use(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -393,20 +409,15 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api.store.get_activity_by_name_or_last_started(
-                        connection,
-                        activity,
-                        &namespace,
-                    )?;
+                    let activity = api
+                        .store
+                        .get_activity_by_name_or_last_started(connection, activity, &namespace)?;
 
-                    let entity = api.store.entity_by_entity_name_and_namespace(
-                        connection,
-                        &name,
-                        &namespace,
-                    );
+                    let entity = api
+                        .store
+                        .entity_by_entity_name_and_namespace(connection, &name, &namespace);
 
                     let name = {
                         if let Ok(existing) = entity {
@@ -414,11 +425,8 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                             existing.name
                         } else {
                             debug!(?name, "Need new entity");
-                            api.store.disambiguate_entity_name(
-                                connection,
-                                &name,
-                                &namespace,
-                            )?
+                            api.store
+                                .disambiguate_entity_name(connection, &name, &namespace)?
                         }
                     };
 
@@ -444,11 +452,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     (id, to_apply)
                 };
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -461,6 +471,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn create_activity(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -470,12 +481,11 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name =
-                    api.store
-                        .disambiguate_activity_name(connection, &name, &namespace)?;
+                let name = api
+                    .store
+                    .disambiguate_activity_name(connection, &name, &namespace)?;
                 let id = ChronicleVocab::activity(&name);
                 let create = ChronicleTransaction::CreateActivity(CreateActivity {
                     namespace: namespace.clone(),
@@ -495,11 +505,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -512,6 +524,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn create_agent(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -521,8 +534,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let name = api
                     .store
@@ -548,11 +560,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     iri,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -560,7 +574,11 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
-    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(
+        &self,
+        correlation_id: Uuid,
+        name: &str,
+    ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let name = name.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -568,11 +586,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             connection.immediate_transaction(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &name)?;
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     IriBuf::new(&*namespace).unwrap(),
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -581,48 +601,107 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
     #[instrument]
     async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
-        match command {
+        let correlation_id = Uuid::new_v4();
+        match &command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(&name).await
+                self.create_namespace(correlation_id, &name)
+                    .instrument(info_span!("Api", %correlation_id, ?command))
+                    .await
             }
             ApiCommand::Agent(AgentCommand::Create {
                 name,
                 namespace,
                 domaintype,
-            }) => self.create_agent(name, namespace, domaintype).await,
+            }) => {
+                self.create_agent(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    domaintype.clone(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
+            }
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
                 namespace,
                 registration,
-            }) => self.register_key(name, namespace, registration).await,
+            }) => {
+                self.register_key(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    registration.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
+            }
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
-                self.use_agent(name, namespace).await
+                self.use_agent(name.to_owned(), namespace.to_owned())
+                    .instrument(info_span!("Api", %correlation_id, ?command))
+                    .await
             }
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
                 namespace,
                 domaintype,
-            }) => self.create_activity(name, namespace, domaintype).await,
+            }) => {
+                self.create_activity(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    domaintype.clone(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
+            }
             ApiCommand::Activity(ActivityCommand::Start {
                 name,
                 namespace,
                 time,
                 agent,
-            }) => self.start_activity(name, namespace, time, agent).await,
+            }) => {
+                self.start_activity(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    time.to_owned(),
+                    agent.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
+            }
             ApiCommand::Activity(ActivityCommand::End {
                 name,
                 namespace,
                 time,
                 agent,
-            }) => self.end_activity(name, namespace, time, agent).await,
+            }) => {
+                self.end_activity(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    time.to_owned(),
+                    agent.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
+            }
             ApiCommand::Activity(ActivityCommand::Use {
                 name,
                 namespace,
                 activity,
                 domaintype,
             }) => {
-                self.activity_use(name, namespace, activity, domaintype)
-                    .await
+                self.activity_use(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    activity.to_owned(),
+                    domaintype.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
             }
             ApiCommand::Activity(ActivityCommand::Generate {
                 name,
@@ -630,8 +709,15 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 activity,
                 domaintype,
             }) => {
-                self.activity_generate(name, namespace, activity, domaintype)
-                    .await
+                self.activity_generate(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    activity.to_owned(),
+                    domaintype.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
             }
             ApiCommand::Entity(EntityCommand::Attach {
                 name,
@@ -640,11 +726,18 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 locator,
                 agent,
             }) => {
-                self.entity_attach(name, namespace, file, locator, agent)
-                    .await
+                self.entity_attach(
+                    correlation_id,
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    file.clone(),
+                    locator.to_owned(),
+                    agent.to_owned(),
+                )
+                .instrument(info_span!("Api", %correlation_id, ?command))
+                .await
             }
-            ApiCommand::Query(query) => self.query(query).await,
-            ApiCommand::Sync(SyncCommand { offset: _, prov }) => self.sync(prov).await,
+            ApiCommand::Query(query) => self.query(query.to_owned()).await,
         }
     }
 
@@ -655,6 +748,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn entity_attach(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         file: PathOrFile,
@@ -683,8 +777,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let mut connection = api.store.connection()?;
                 let agent = agent
@@ -713,11 +806,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
                 to_apply.push(tx);
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(&mut connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -735,15 +830,20 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             Ok(ApiResponse::Prov(
                 IriBuf::new(id.as_str()).unwrap(),
                 vec![api.store.prov_model_for_namespace(&mut connection, query)?],
+                Uuid::default(),
             ))
         })
         .await?
     }
 
-    async fn sync(&self, prov: ProvModel) -> Result<ApiResponse, ApiError> {
+    #[instrument]
+    async fn sync(&self, prov: &ProvModel, offset: Offset) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
+        let prov = prov.clone();
+
         tokio::task::spawn_blocking(move || {
             api.store.apply_prov(&prov)?;
+            api.store.set_last_offset(offset)?;
 
             Ok(ApiResponse::Unit)
         })
@@ -754,6 +854,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn register_key(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         registration: KeyRegistration,
@@ -762,8 +863,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let id = ChronicleVocab::agent(&name);
                 match registration {
@@ -793,11 +893,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     ),
                 }));
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -808,6 +910,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn start_activity(
         &self,
+        correlation_id: Uuid,
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
@@ -817,15 +920,11 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store.agent_by_agent_name_and_namespace(
-                            connection,
-                            &agent,
-                            &namespace,
-                        )?
+                        api.store
+                            .agent_by_agent_name_and_namespace(connection, &agent, &namespace)?
                     } else {
                         api.store
                             .get_current_agent(connection)
@@ -833,11 +932,9 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     }
                 };
 
-                let activity = api.store.activity_by_activity_name_and_namespace(
-                    connection,
-                    &name,
-                    &namespace,
-                );
+                let activity = api
+                    .store
+                    .activity_by_activity_name_and_namespace(connection, &name, &namespace);
 
                 let name = {
                     if let Ok(existing) = activity {
@@ -858,11 +955,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -873,6 +972,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
     #[instrument]
     async fn end_activity(
         &self,
+        correlation_id: Uuid,
         name: Option<String>,
         namespace: String,
         time: Option<DateTime<Utc>>,
@@ -882,21 +982,15 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
-                let activity = api.store.get_activity_by_name_or_last_started(
-                    connection,
-                    name,
-                    &namespace,
-                )?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+                let activity = api
+                    .store
+                    .get_activity_by_name_or_last_started(connection, name, &namespace)?;
 
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store.agent_by_agent_name_and_namespace(
-                            connection,
-                            &agent,
-                            &namespace,
-                        )?
+                        api.store
+                            .agent_by_agent_name_and_namespace(connection, &agent, &namespace)?
                     } else {
                         api.store
                             .get_current_agent(connection)
@@ -912,11 +1006,13 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                api.ledger_writer.submit_blocking(&to_apply)?;
+                api.ledger_writer
+                    .submit_blocking(correlation_id, &to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
-                    vec![api.store.apply_tx(connection, &to_apply)?],
+                    vec![ProvModel::from_tx(&to_apply)],
+                    correlation_id,
                 ))
             })
         })
@@ -966,7 +1062,9 @@ mod test {
     impl TestDispatch {
         pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Prov(_subject, prov) = self.0.dispatch(command).await? {
+            if let ApiResponse::Prov(_subject, prov, _correlation_id) =
+                self.0.dispatch(command).await?
+            {
                 for prov in prov {
                     self.1.merge(prov);
                 }

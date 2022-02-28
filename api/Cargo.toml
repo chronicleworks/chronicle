@@ -33,16 +33,17 @@ serde_derive = "1.0.135"
 futures = "0.3.19"
 async-trait = "0.1.52"
 open = "2.0.2"
-async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","default"], version = "3.0.25" }
+async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","default", "uuid"], version = "3.0.25" }
 warp = "0.3.2"
 async-graphql-warp = "3.0.25"
 r2d2 = "0.8.9"
 async-stream = "0.3.2"
 tracing-log = "0.1.2"
-ordered-map = "0.4.2"
 
 [dev-dependencies]
 insta = { version = "1.11.0", features = ["redactions"] }
 serde_json = {version="1.0.78"}
 tempfile = "3.3.0"
 tracing-subscriber = "0.3.6"
+
+[build-dependencies]

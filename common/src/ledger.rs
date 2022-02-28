@@ -2,6 +2,7 @@ use futures::{stream, FutureExt, SinkExt, Stream, StreamExt};
 use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 
 use crate::{
     context::PROV,
@@ -69,42 +70,36 @@ impl std::error::Error for SubmissionError {
 
 #[async_trait::async_trait(?Send)]
 pub trait LedgerWriter {
-    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError>;
+    async fn submit(
+        &mut self,
+        correlation_id: Uuid,
+        tx: Vec<&ChronicleTransaction>,
+    ) -> Result<(), SubmissionError>;
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Offset {
     Genesis,
-    From(u64),
+    Identity(String),
 }
 
-impl std::fmt::Display for Offset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Offset::Genesis => f.write_str(""),
-            Offset::From(x) => f.write_fmt(format_args!("{}", x)),
+impl Offset {
+    pub fn map<T, F>(&self, f: F) -> Option<T>
+    where
+        F: FnOnce(&str) -> T,
+    {
+        if let Offset::Identity(x) = self {
+            Some(f(x))
+        } else {
+            None
         }
     }
 }
 
-impl From<u64> for Offset {
-    fn from(offset: u64) -> Self {
-        match offset {
-            0 => Offset::Genesis,
-            x => Offset::From(x),
-        }
-    }
-}
-
-/// Infallible string conversion for offset, fall back to genesis if we cannot parse
 impl From<&str> for Offset {
     fn from(offset: &str) -> Self {
         match offset {
-            "" => Offset::Genesis,
-            x => x
-                .parse::<u64>()
-                .map(Offset::From)
-                .unwrap_or(Offset::Genesis),
+            x => Offset::Identity(x.to_owned()),
         }
     }
 }
@@ -115,14 +110,14 @@ pub trait LedgerReader {
     async fn state_updates(
         &self,
         offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>, SubscriptionError>;
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>;
 }
 
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
-    chan: UnboundedSender<(Offset, ProvModel)>,
+    chan: UnboundedSender<(Offset, ProvModel, Uuid)>,
     reader: Option<InMemLedgerReader>,
     head: u64,
 }
@@ -148,7 +143,7 @@ impl InMemLedger {
 
 #[derive(Debug)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel)>>>,
+    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, Uuid)>>>,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -156,7 +151,8 @@ impl LedgerReader for InMemLedgerReader {
     async fn state_updates(
         &self,
         _offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel)> + Send>>, SubscriptionError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>
+    {
         let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
             chan.next().await.map(|prov| (prov, chan))
         });
@@ -191,7 +187,11 @@ impl serde::Serialize for InMemLedger {
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for InMemLedger {
     #[instrument]
-    async fn submit(&mut self, tx: Vec<&ChronicleTransaction>) -> Result<(), SubmissionError> {
+    async fn submit(
+        &mut self,
+        correlationid: Uuid,
+        tx: Vec<&ChronicleTransaction>,
+    ) -> Result<(), SubmissionError> {
         for tx in tx {
             debug!(?tx, "Process transaction");
             let dependencies = tx.dependencies().await.unwrap();
@@ -220,11 +220,12 @@ impl LedgerWriter for InMemLedger {
 
                 self.chan
                     .send((
-                        Offset::from(self.head),
+                        Offset::from(&*self.head.to_string()),
                         ProvModel::default()
                             .apply_json_ld_bytes(&output.data)
                             .await
                             .unwrap(),
+                        correlationid,
                     ))
                     .await
                     .ok();
