@@ -19,29 +19,21 @@ use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, EnvFilter,
 
 pub fn tracing() {
     LogTracer::init().expect("Failed to set logger");
-
     // Fall back to printing all spans at info-level or above
     // if the RUST_LOG environment variable has not been set.
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer = BunyanFormattingLayer::new(
-        "zero2prod".into(),
-        // Output the formatted spans to stdout.
-        std::io::stdout,
-    );
-    // The `with` method is provided by `SubscriberExt`, an extension
-    // trait for `Subscriber` exposed by `tracing_subscriber`
+    let formatting_layer =
+        BunyanFormattingLayer::new("chronicle-sawtooth-tp".into(), std::io::stdout);
     let subscriber = Registry::default()
         .with(env_filter)
         .with(JsonStorageLayer)
         .with(formatting_layer);
-    // `set_global_default` can be used by applications to specify
-    // what subscriber should be used to process spans.
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
 #[tokio::main]
 async fn main() {
-    let matches = App::new("chronicle")
+    let matches = App::new("chronicle-sawtooth-tp")
         .version("1.0")
         .author("Blockchain technology partners")
         .about("Write and query provenance data to distributed ledgers")
@@ -61,17 +53,16 @@ async fn main() {
                 .help("Generate shell completions and exit"),
         )
         .arg(
-            Arg::new("verbose")
-                .short('v')
-                .long("verbose")
-                .takes_value(true)
-                .value_hint(ValueHint::Unknown)
-                .value_name("verbose")
-                .help("Increase outeput verbosity"),
+            Arg::new("instrument")
+                .short('i')
+                .long("instrument")
+                .help("Insutrment using RUST_LOG environment"),
         )
         .get_matches();
 
-    tracing();
+    if matches.is_present("instrument") {
+        tracing();
+    }
 
     let endpoint = matches
         .value_of("connect")

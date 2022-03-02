@@ -49,9 +49,9 @@ services:
     build: .
     environment:
       - RUST_BACKTRACE=full
-    platform: linux/arm64
+      - RUST_LOG=debug
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 -vvvv"
+    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 --instrument"
     depends_on:
       - validator
     volumes:
@@ -62,13 +62,30 @@ services:
     build: .
     environment:
       - RUST_BACKTRACE=full
-    platform: linux/arm64
+      - RUST_LOG=debug
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:9982 --debug"
+    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:9982 -v"
     expose:
       - 9982
     ports:
       - "9982:9982"
+    depends_on:
+      - devmode-engine
+      - validator
+    volumes:
+      - /dev/urandom:/dev/random
+      - /dev/urandom:/dev/urandom
+
+  # A chronicle container to exec into for CLI operations
+  chronicle-sawtooth-cli:
+    build: .
+    environment:
+      - RUST_BACKTRACE=full
+      - RUST_LOG=debug
+    image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
+    command: "/bin/sh"
+    stdin_open: true
+    tty: true
     depends_on:
       - devmode-engine
       - validator

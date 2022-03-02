@@ -24,10 +24,10 @@ pub fn cli() -> App<'static> {
                 .help("Generate shell completions and exit"),
         )
         .arg(
-            Arg::new("debug")
-                .short('d')
-                .long("debug")
-                .help("Print debugging information"),
+            Arg::new("instrument")
+                .short('i')
+                .long("instrument")
+                .help("Insutrment using RUST_LOG environment"),
         )
         .arg(
             Arg::new("ui")

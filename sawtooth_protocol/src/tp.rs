@@ -40,7 +40,13 @@ impl TransactionHandler for ChronicleTransactionHandler {
         self.namespaces.clone()
     }
 
-    #[instrument(skip(request, context))]
+    #[instrument(
+        name = "Process transaction",
+        skip(request,context),
+        fields(
+            correlation_id = %request.context_id,
+        )
+    )]
     fn apply(
         &self,
         request: &TpProcessRequest,

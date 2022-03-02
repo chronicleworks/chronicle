@@ -271,9 +271,10 @@ async fn main() {
         std::process::exit(0);
     }
 
-    if matches.is_present("debug") {
+    if matches.is_present("instrument") {
         telemetry::tracing();
     }
+
     config_and_exec(&matches)
         .await
         .map_err(|e| {
