@@ -2,6 +2,94 @@ use iref::AsIri;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct AttachmentId(String);
+
+impl std::ops::Deref for AttachmentId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AttachmentId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        AttachmentId(s.as_ref().to_owned())
+    }
+
+    /// Decompose into entity name / signature
+    pub fn decompose(&self) -> (&str, &str) {
+        if let &[_, _, name, signature, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
+            return (name, signature);
+        }
+
+        unreachable!();
+    }
+}
+
+impl<S> From<S> for AttachmentId
+where
+    S: AsIri,
+{
+    fn from(iri: S) -> Self {
+        Self(iri.as_iri().to_string())
+    }
+}
+
+impl Into<String> for AttachmentId {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct IdentityId(String);
+
+impl std::ops::Deref for IdentityId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl IdentityId {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        IdentityId(s.as_ref().to_owned())
+    }
+
+    /// Decompose into agent name / public key
+    pub fn decompose(&self) -> (&str, &str) {
+        if let &[_, _, name, public_key, ..] = &self.0.split(':').collect::<Vec<_>>()[..] {
+            return (name, public_key);
+        }
+
+        unreachable!();
+    }
+}
+
+impl<S> From<S> for IdentityId
+where
+    S: AsIri,
+{
+    fn from(iri: S) -> Self {
+        Self(iri.as_iri().to_string())
+    }
+}
+
+impl Into<String> for IdentityId {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct DomaintypeId(String);
 
 impl std::ops::Deref for DomaintypeId {

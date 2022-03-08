@@ -1,5 +1,8 @@
+
 use iref::IriBuf;
 use uuid::Uuid;
+
+use super::{AgentId, EntityId};
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("prov" = "http://www.w3.org/ns/prov#")]
@@ -34,12 +37,24 @@ pub enum Rdfs {
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("chronicle" = "http://blockchaintp.com/chronicle/ns#")]
 pub enum Chronicle {
-    #[iri("chronicle:hasPublicKey")]
-    HasPublicKey,
+    #[iri("chronicle:Identity")]
+    Identity,
+    #[iri("chronicle:hasIdentity")]
+    HasIdentity,
+    #[iri("chronicle:hadIdentity")]
+    HadIdentity,
     #[iri("chronicle:Namespace")]
-    NamespaceType,
+    Namespace,
     #[iri("chronicle:hasNamespace")]
     HasNamespace,
+    #[iri("chronicle:Attachment")]
+    Attachment,
+    #[iri("chronicle:hasAttachment")]
+    HasAttachment,
+    #[iri("chronicle:hadAttachment")]
+    HadAttachment,
+    #[iri("chronicle:publicKey")]
+    PublicKey,
     #[iri("chronicle:entitySignature")]
     Signature,
     #[iri("chronicle:entityLocator")]
@@ -70,7 +85,26 @@ impl Chronicle {
     }
 
     pub fn domaintype(name: &str) -> IriBuf {
-        IriBuf::new(&format!("{}domaintype:{}", Self::PREFIX, name))
-            .unwrap_or_else(|_| panic!("{}domaintype:{}", Self::PREFIX, name))
+        IriBuf::new(&format!("{}domaintype:{}", Self::PREFIX, name)).unwrap()
+    }
+
+    pub fn attachment(entity: &EntityId, signature: &str) -> IriBuf {
+        IriBuf::new(&format!(
+            "{}attachment:{}:{}",
+            Self::PREFIX,
+            entity.decompose(),
+            signature
+        ))
+        .unwrap()
+    }
+
+    pub fn identity(agent: &AgentId, public_key: &str) -> IriBuf {
+        IriBuf::new(&format!(
+            "{}identity:{}:{}",
+            Self::PREFIX,
+            agent.decompose(),
+            public_key
+        ))
+        .unwrap()
     }
 }

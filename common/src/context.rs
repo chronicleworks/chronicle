@@ -38,7 +38,6 @@ lazy_static! {
             "@id": "chronicle:hasPublicKey",
         },
 
-
         "source": {
             "@id": "chronicle:entityLocator",
         },
@@ -51,6 +50,29 @@ lazy_static! {
             "@id": "chronicle:signedAtTime",
         },
 
+
+        "identity": {
+            "@id": "chronicle:hasIdentity",
+            "@type" : "@id",
+        },
+
+        "previousIdentities": {
+            "@id": "chronicle:hadIdentity",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+
+        "attachment": {
+            "@id": "chronicle:hasAttachment",
+            "@type" : "@id",
+        },
+
+        "previousAttachments": {
+            "@id": "chronicle:hadAttachment",
+            "@type" : "@id",
+            "@container": "@set"
+        },
 
         "associated": {
             "@id": "prov:wasAssociatedWith",

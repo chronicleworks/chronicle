@@ -5,7 +5,7 @@ mod cli;
 mod config;
 mod telemetry;
 
-use api::{Api, ApiDispatch, ApiError};
+use api::{Api, ApiDispatch, ApiError, UuidGen};
 use clap::{App, ArgMatches};
 use clap_generate::{generate, Generator, Shell};
 use cli::cli;
@@ -27,7 +27,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tracing::{error, instrument, Level};
+use tracing::{error, instrument};
 use user_error::UFE;
 
 #[cfg(not(feature = "inmem"))]
@@ -71,7 +71,12 @@ fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
     Ok(common::ledger::InMemLedger::new())
 }
 
-fn api(
+#[derive(Debug, Clone)]
+struct UniqueUuid;
+
+impl UuidGen for UniqueUuid {}
+
+async fn api(
     options: &ArgMatches,
     config: &Config,
 ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError> {
@@ -86,8 +91,9 @@ fn api(
             submitter,
             state,
             &config.secrets.path,
-            uuid::Uuid::new_v4,
+            UniqueUuid,
         )
+        .await
     }
     #[cfg(feature = "inmem")]
     {
@@ -101,7 +107,8 @@ fn api(
             state,
             &config.secrets.path,
             uuid::Uuid::new_v4,
-        )?)
+        )
+        .await?)
     }
 }
 
@@ -117,7 +124,7 @@ fn domain_type(args: &ArgMatches) -> Option<String> {
 async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
     dotenv::dotenv().ok();
 
-    let (api, ui) = api(options, &config)?;
+    let (api, ui) = api(options, &config).await?;
 
     let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {

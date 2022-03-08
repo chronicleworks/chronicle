@@ -13,6 +13,7 @@ use persistence::{ConnectionOptions, Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     convert::Infallible,
+    marker::PhantomData,
     net::{AddrParseError, SocketAddr},
     path::Path,
     sync::Arc,
@@ -58,6 +59,7 @@ custom_error! {pub ApiError
     FileUpload{source: std::io::Error}                          = "File upload",
     Join{source: JoinError}                                     = "Blocking thread pool",
     Subscription{source: SubscriptionError}                     = "State update subscription",
+    NotCurrentActivity{}                                        = "No appropriate activity to end",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -123,13 +125,13 @@ impl BlockingLedgerWriter {
     fn submit_blocking(
         &mut self,
         correlation_id: Uuid,
-        tx: &Vec<ChronicleTransaction>,
+        tx: &[ChronicleTransaction],
     ) -> Result<(), ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
         trace!(?tx, "Dispatch submission to ledger");
         self.tx
             .clone()
-            .blocking_send((correlation_id, tx.clone(), reply_tx))?;
+            .blocking_send((correlation_id, tx.to_vec(), reply_tx))?;
 
         let reply = reply_rx.blocking_recv();
 
@@ -143,9 +145,18 @@ impl BlockingLedgerWriter {
 
 type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
 
+pub trait UuidGen {
+    fn uuid() -> Uuid {
+        Uuid::new_v4()
+    }
+}
+
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
-pub struct Api<U: Fn() -> Uuid> {
+pub struct Api<U>
+where
+    U: UuidGen + Send + Sync + Clone,
+{
     tx: Sender<ApiSendWithReply>,
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
@@ -153,7 +164,7 @@ pub struct Api<U: Fn() -> Uuid> {
     #[derivative(Debug = "ignore")]
     store: persistence::Store,
     #[derivative(Debug = "ignore")]
-    uuidsource: U,
+    uuidsource: PhantomData<U>,
 }
 
 #[derive(Debug, Clone)]
@@ -180,9 +191,12 @@ impl ApiDispatch {
     }
 }
 
-impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
-    #[instrument(skip(ledger_writer, ledger_reader, uuidgen))]
-    pub fn new<R, W>(
+impl<U> Api<U>
+where
+    U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
+{
+    #[instrument(skip(ledger_writer, ledger_reader))]
+    pub async fn new<R, W>(
         addr: SocketAddr,
         dbpath: &str,
         ledger_writer: W,
@@ -210,11 +224,6 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
             notify_commit: commit_notify_tx.clone(),
         };
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
         let secret_path = secret_path.to_owned();
 
         let store = Store::new(pool.clone())?;
@@ -227,60 +236,59 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
         let ql_pool = pool;
 
-        std::thread::spawn(move || {
-            let local = tokio::task::LocalSet::new();
-            local.spawn_local(async move {
-                let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
+        tokio::task::spawn(async move {
+            let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
 
-                // Get last committed offset from the store before we attach it to ledger state updates and the api
-               let mut state_updates = ledger_reader.state_updates(
-                    store.get_last_offset().unwrap_or(Some(Offset::Genesis))
-                        .unwrap_or(Offset::Genesis)
-                ).await.unwrap();
+            // Get last committed offset from the store before we attach it to ledger state updates and the api
+            let mut state_updates = ledger_reader
+                .state_updates(
+                    store
+                        .get_last_offset()
+                        .unwrap_or(Some(Offset::Genesis))
+                        .unwrap_or(Offset::Genesis),
+                )
+                .await
+                .unwrap();
 
-                let mut api = Api {
-                    tx: tx.clone(),
-                    keystore,
-                    ledger_writer: BlockingLedgerWriter::new(ledger_writer),
-                    store,
-                    uuidsource: Box::new(uuidgen),
-                };
+            let mut api = Api::<U> {
+                tx: tx.clone(),
+                keystore,
+                ledger_writer: BlockingLedgerWriter::new(ledger_writer),
+                store,
+                uuidsource: PhantomData::default(),
+            };
 
-                debug!(?api, "Api running on localset");
-                loop {
-                    select! {
-                            state = state_updates.next().fuse() =>{
-                                if let Some((offset, prov, correlation_id)) = state {
-
+            debug!(?api, "Api running on localset");
+            loop {
+                select! {
+                        state = state_updates.next().fuse() =>{
+                            if let Some((offset, prov, correlation_id)) = state {
                                     api.sync(&prov, offset.clone())
                                         .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = ?correlation_id))
                                         .await
                                         .map_err(|e| {
                                             error!(?e, "Api sync to confirmed commit");
-                                        }).and_then(|_| Ok(commit_notify_tx.send((prov,correlation_id)))).ok();
-                                }
-                            },
-                            cmd = rx.recv().fuse() => {
-                                if let Some((command, reply)) = cmd {
-                                trace!(?rx, "Recv api command from channel");
+                                        }).map(|_| commit_notify_tx.send((prov,correlation_id))).ok();
+                            }
+                        },
+                        cmd = rx.recv().fuse() => {
+                            if let Some((command, reply)) = cmd {
+                            trace!(?rx, "Recv api command from channel");
 
-                                let result = api.dispatch(command).await;
+                            let result = api.dispatch(command).await;
 
-                                reply
-                                    .send(result)
-                                    .await
-                                    .map_err(|e| {
-                                        warn!(?e, "Send reply to Api consumer failed");
-                                    })
-                                    .ok();
-                                }
-                        }
-                        complete => break
+                            reply
+                                .send(result)
+                                .await
+                                .map_err(|e| {
+                                    warn!(?e, "Send reply to Api consumer failed");
+                                })
+                                .ok();
+                            }
                     }
+                    complete => break
                 }
-            });
-
-            rt.block_on(local)
+            }
         });
 
         Ok((
@@ -307,7 +315,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         if ns.is_err() {
             debug!(?ns, "Namespace does not exist, creating");
 
-            let uuid = (self.uuidsource)();
+            let uuid = U::uuid();
             let iri = ChronicleVocab::namespace(name, &uuid);
             let id: NamespaceId = iri.into();
             Ok((
@@ -319,7 +327,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 })],
             ))
         } else {
-            Ok((ns?, vec![]))
+            Ok((ns?.0, vec![]))
         }
     }
 
@@ -604,7 +612,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         let correlation_id = Uuid::new_v4();
         match &command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(correlation_id, &name)
+                self.create_namespace(correlation_id, name)
                     .instrument(info_span!("Api", %correlation_id, ?command))
                     .await
             }
@@ -793,12 +801,19 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let id = ChronicleVocab::entity(&name);
                 let agentid = ChronicleVocab::agent(&agent.name).into();
 
-                let signature: Signature = api.keystore.agent_signing(&agentid)?.sign(&*buf);
+                let signer = api.keystore.agent_signing(&agentid)?;
+
+                let signature: Signature = signer.sign(&*buf);
 
                 let tx = ChronicleTransaction::EntityAttach(EntityAttach {
                     namespace,
                     id: id.clone().into(),
-                    agent: agentid,
+                    agent: agentid.clone(),
+                    identityid: ChronicleVocab::identity(
+                        &agentid,
+                        &*hex::encode_upper(signer.to_bytes()),
+                    )
+                    .into(),
                     signature: hex::encode_upper(signature),
                     locator,
                     signature_time: Utc::now(),
@@ -824,7 +839,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            let id = api
+            let (id, _) = api
                 .store
                 .namespace_by_name(&mut connection, &query.namespace)?;
             Ok(ApiResponse::Prov(
@@ -985,7 +1000,8 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let activity = api
                     .store
-                    .get_activity_by_name_or_last_started(connection, name, &namespace)?;
+                    .get_activity_by_name_or_last_started(connection, name, &namespace)
+                    .map_err(|_| ApiError::NotCurrentActivity {})?;
 
                 let agent = {
                     if let Some(agent) = agent {
@@ -1037,6 +1053,7 @@ impl<U: Fn() -> Uuid + Clone + Send + 'static> Api<U> {
 
 #[cfg(test)]
 mod test {
+
     use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
@@ -1050,7 +1067,7 @@ mod test {
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{Api, ApiDispatch, ApiError};
+    use crate::{Api, ApiDispatch, ApiError, UuidGen};
 
     use common::commands::{
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
@@ -1074,7 +1091,16 @@ mod test {
         }
     }
 
-    fn test_api() -> TestDispatch {
+    #[derive(Debug, Clone)]
+    struct SameUuid;
+
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    async fn test_api() -> TestDispatch {
         tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
         tracing_subscriber::fmt()
             .pretty()
@@ -1096,8 +1122,9 @@ mod test {
             ledger,
             reader,
             &secretpath.into_path(),
-            || Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap(),
+            SameUuid,
         )
+        .await
         .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
@@ -1128,7 +1155,7 @@ mod test {
 
     #[tokio::test]
     async fn create_namespace() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
             name: "testns".to_owned(),
@@ -1141,7 +1168,7 @@ mod test {
 
     #[tokio::test]
     async fn create_agent() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -1156,7 +1183,7 @@ mod test {
 
     #[tokio::test]
     async fn agent_public_key() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         let pk = r#"
 -----BEGIN PRIVATE KEY-----
@@ -1189,7 +1216,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn create_activity() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
@@ -1204,7 +1231,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn start_activity() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -1235,7 +1262,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn end_activity() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -1276,7 +1303,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn activity_use() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
@@ -1333,7 +1360,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn activity_generate() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
@@ -1366,11 +1393,11 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
     #[tokio::test]
     async fn many_activities() {
-        let mut api = test_api();
+        let mut api = test_api().await;
 
-        for _ in 0..100 {
+        for i in 0..100 {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                name: "testactivity".to_owned(),
+                name: format!("testactivity{}", i),
                 namespace: "testns".to_owned(),
                 domaintype: Some("testtype".to_owned()),
             }))
