@@ -3,7 +3,7 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, OutputType, Schema, Subscription, Upload,
+    Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
 };
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -21,6 +21,7 @@ use diesel::{
 use futures::Stream;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
+use user_error::UFE;
 use uuid::Uuid;
 use warp::{
     hyper::{Response, StatusCode},
@@ -33,17 +34,31 @@ use crate::ApiDispatch;
 pub struct Agent {
     pub id: i32,
     pub name: String,
-    pub namespace: String,
+    pub namespace_id: i32,
     pub domaintype: Option<String>,
-    pub publickey: Option<String>,
     pub current: i32,
+    pub identity_id: Option<i32>,
+}
+
+#[derive(Default, Queryable)]
+pub struct Identity {
+    pub id: i32,
+    pub namespace_id: i32,
+    pub public_key: String,
+}
+
+#[Object]
+impl Identity {
+    async fn public_key(&self) -> &str {
+        &self.public_key
+    }
 }
 
 #[derive(Default, Queryable)]
 pub struct Activity {
     pub id: i32,
     pub name: String,
-    pub namespace: String,
+    pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
@@ -53,11 +68,52 @@ pub struct Activity {
 pub struct Entity {
     id: i32,
     name: String,
-    namespace: String,
+    namespace_id: i32,
     domaintype: Option<String>,
-    signature_time: Option<NaiveDateTime>,
-    signature: Option<String>,
+    attachment_id: Option<i32>,
+}
+
+#[derive(Queryable)]
+pub struct Attachment {
+    _id: i32,
+    _namespace_id: i32,
+    signature_time: NaiveDateTime,
+    signature: String,
+    _signer_id: i32,
     locator: Option<String>,
+}
+
+#[Object]
+impl Attachment {
+    async fn signature_time(&self) -> DateTime<Utc> {
+        DateTime::from_utc(self.signature_time, Utc)
+    }
+
+    async fn signature(&self) -> &str {
+        &self.signature
+    }
+
+    async fn locator(&self) -> Option<&str> {
+        self.locator.as_deref()
+    }
+}
+
+#[derive(Default, Queryable)]
+pub struct Namespace {
+    _id: i32,
+    uuid: String,
+    name: String,
+}
+
+#[Object]
+impl Namespace {
+    async fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn uuid(&self) -> &str {
+        &self.uuid
+    }
 }
 
 #[derive(Default, Queryable)]
@@ -79,16 +135,35 @@ impl Submission {
 
 #[Object]
 impl Agent {
-    async fn namespace(&self) -> &str {
-        &self.namespace
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        use crate::persistence::schema::namespace::{self, dsl};
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        Ok(namespace::table
+            .filter(dsl::id.eq(self.namespace_id))
+            .first::<Namespace>(&mut connection)?)
     }
 
     async fn name(&self) -> &str {
         &self.name
     }
 
-    async fn public_key(&self) -> Option<&str> {
-        self.publickey.as_deref()
+    async fn identity<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Identity>> {
+        use crate::persistence::schema::identity::{self, dsl};
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        if let Some(identity_id) = self.identity_id {
+            Ok(identity::table
+                .filter(dsl::id.eq(identity_id))
+                .first::<Identity>(&mut connection)
+                .optional()?)
+        } else {
+            Ok(None)
+        }
     }
 
     #[graphql(name = "type")]
@@ -103,8 +178,15 @@ impl Agent {
 
 #[Object]
 impl Activity {
-    async fn namespace(&self) -> &str {
-        &self.namespace
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        use crate::persistence::schema::namespace::{self, dsl};
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        Ok(namespace::table
+            .filter(dsl::id.eq(self.namespace_id))
+            .first::<Namespace>(&mut connection)?)
     }
 
     async fn name(&self) -> &str {
@@ -139,7 +221,7 @@ impl Activity {
         let mut connection = store.pool.get()?;
 
         let res = wasassociatedwith::table
-            .filter(dsl::activity.eq(self.id))
+            .filter(dsl::activity_id.eq(self.id))
             .inner_join(crate::persistence::schema::agent::table)
             .load::<((i32, i32), Agent)>(&mut connection)?;
 
@@ -154,7 +236,7 @@ impl Activity {
         let mut connection = store.pool.get()?;
 
         let res = used::table
-            .filter(dsl::activity.eq(self.id))
+            .filter(dsl::activity_id.eq(self.id))
             .inner_join(crate::persistence::schema::entity::table)
             .load::<((i32, i32), Entity)>(&mut connection)?;
 
@@ -164,8 +246,15 @@ impl Activity {
 
 #[Object]
 impl Entity {
-    async fn namespace(&self) -> &str {
-        &self.namespace
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        use crate::persistence::schema::namespace::{self, dsl};
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        Ok(namespace::table
+            .filter(dsl::id.eq(self.namespace_id))
+            .first::<Namespace>(&mut connection)?)
     }
 
     async fn name(&self) -> &str {
@@ -181,16 +270,20 @@ impl Entity {
         }
     }
 
-    async fn signature_time(&self) -> Option<DateTime<Utc>> {
-        self.signature_time.map(|x| DateTime::from_utc(x, Utc))
-    }
+    async fn attachment<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Attachment>> {
+        use crate::persistence::schema::attachment::{self, dsl};
+        let store = ctx.data_unchecked::<Store>();
 
-    async fn signature(&self) -> Option<&str> {
-        self.signature.as_deref()
-    }
+        let mut connection = store.pool.get()?;
 
-    async fn locator(&self) -> Option<&str> {
-        self.locator.as_deref()
+        if let Some(attachment_id) = self.attachment_id {
+            Ok(attachment::table
+                .filter(dsl::id.eq(attachment_id))
+                .first::<Attachment>(&mut connection)
+                .optional()?)
+        } else {
+            Ok(None)
+        }
     }
 
     async fn was_attributed_to<'a>(
@@ -204,7 +297,7 @@ impl Entity {
         let mut connection = store.pool.get()?;
 
         let res = wasgeneratedby::table
-            .filter(dsl::entity.eq(self.id))
+            .filter(dsl::entity_id.eq(self.id))
             .inner_join(crate::persistence::schema::activity::table)
             .load::<((i32, i32), Activity)>(&mut connection)?;
 
@@ -222,7 +315,7 @@ impl Entity {
         let mut connection = store.pool.get()?;
 
         let res = wasgeneratedby::table
-            .filter(dsl::entity.eq(self.id))
+            .filter(dsl::entity_id.eq(self.id))
             .inner_join(crate::persistence::schema::activity::table)
             .load::<((i32, i32), Activity)>(&mut connection)?;
 
@@ -236,10 +329,20 @@ custom_error! {pub GraphQlError
     Api{source: crate::ApiError}                                = "API",
 }
 
+impl UFE for GraphQlError {}
+
 impl ErrorExtensions for GraphQlError {
     // lets define our base extensions
     fn extend(&self) -> Error {
-        Error::new(format!("{}", self)).extend_with(|_err, _e| ())
+        Error::new(self.summary()).extend_with(|_err, e| {
+            if let Some(reasons) = self.reasons() {
+                let mut i = 1;
+                for reason in reasons {
+                    e.set(format!("reason {}", i), reason);
+                    i += 1;
+                }
+            }
+        })
     }
 }
 
@@ -268,15 +371,18 @@ impl Query {
         namespace: String,
     ) -> async_graphql::Result<Option<Agent>> {
         use crate::persistence::schema::agent::{self, dsl};
+        use crate::persistence::schema::namespace::dsl as nsdsl;
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
         Ok(agent::table
-            .filter(dsl::name.eq(name).and(dsl::namespace.eq(namespace)))
-            .first::<Agent>(&mut connection)
-            .optional()?)
+            .inner_join(nsdsl::namespace)
+            .filter(dsl::name.eq(name).and(nsdsl::name.eq(namespace)))
+            .first::<(Agent, Namespace)>(&mut connection)
+            .optional()?
+            .map(|x| x.0))
     }
 
     async fn activities_by_time<'a>(

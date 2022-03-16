@@ -235,11 +235,11 @@ impl StateDelta {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl LedgerReader for StateDelta {
     #[instrument]
     async fn state_updates(
-        &self,
+        self,
         offset: Offset,
     ) -> Result<
         Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>,

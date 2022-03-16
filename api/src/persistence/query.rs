@@ -32,7 +32,7 @@ pub struct NewOffset<'a> {
 #[diesel(table_name = activity)]
 pub struct NewActivity<'a> {
     pub name: &'a str,
-    pub namespace: &'a str,
+    pub namespace_id: i32,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
     pub domaintype: Option<&'a str>,
@@ -42,39 +42,53 @@ pub struct NewActivity<'a> {
 pub struct Agent {
     pub id: i32,
     pub name: String,
-    pub namespace: String,
+    pub namespace_id: i32,
     pub domaintype: Option<String>,
-    pub publickey: Option<String>,
     pub current: i32,
+    pub identity_id: Option<i32>,
+}
+
+#[derive(Debug, Queryable)]
+pub struct Identity {
+    pub id: i32,
+    pub namespace_id: i32,
+    pub public_key: String,
 }
 
 #[derive(Debug, Queryable)]
 pub struct Activity {
     pub id: i32,
     pub name: String,
-    pub namespace: String,
+    pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Queryable)]
+pub struct Attachment {
+    pub id: i32,
+    pub namespace_id: i32,
+    pub signature_time: NaiveDateTime,
+    pub signature: String,
+    pub signer_id: i32,
+    pub locator: Option<String>,
+}
+
+#[derive(Debug, Queryable)]
 pub struct Entity {
     pub id: i32,
     pub name: String,
-    pub namespace: String,
+    pub namespace_id: i32,
     pub domaintype: Option<String>,
-    pub signature_time: Option<NaiveDateTime>,
-    pub signature: Option<String>,
-    pub locator: Option<String>,
+    pub attachment_id: Option<i32>,
 }
 
 #[derive(Insertable, AsChangeset, Default)]
 #[diesel(table_name = agent)]
 pub struct NewAgent<'a> {
     pub name: &'a str,
-    pub namespace: &'a str,
+    pub namespace_id: i32,
     pub current: i32,
-    pub publickey: Option<&'a str>,
     pub domaintype: Option<&'a str>,
 }

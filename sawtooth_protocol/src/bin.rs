@@ -10,7 +10,6 @@ mod sawtooth {
 use clap::{App, Arg, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
-use tracing::{info, log::LevelFilter, Level};
 
 use tracing::subscriber::set_global_default;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -56,7 +55,7 @@ async fn main() {
             Arg::new("instrument")
                 .short('i')
                 .long("instrument")
-                .help("Insutrment using RUST_LOG environment"),
+                .help("Instrument using RUST_LOG environment"),
         )
         .get_matches();
 
@@ -64,9 +63,7 @@ async fn main() {
         tracing();
     }
 
-    let endpoint = matches
-        .value_of("connect")
-        .unwrap_or("tcp://localhost:4004");
+    let endpoint = matches.value_of("connect").unwrap_or("localhost:4004");
 
     let handler = crate::tp::ChronicleTransactionHandler::new();
     let mut processor = TransactionProcessor::new(endpoint);

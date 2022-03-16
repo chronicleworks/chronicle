@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1248
+assertion_line: 1217
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 
 ---
@@ -87,18 +87,11 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
   "@graph": [
     {
       "@id": "chronicle:activity:testactivity",
-      "@type": "prov:Activity",
-      "associated": [
-        "chronicle:agent:testagent"
+      "@type": [
+        "prov:Activity",
+        "chronicle:domaintype:testtype"
       ],
       "label": "testactivity",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "startTime": "2014-07-08T09:10:11+00:00"
-    },
-    {
-      "@id": "chronicle:agent:testagent",
-      "@type": "prov:Agent",
-      "label": "testagent",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
     },
     {

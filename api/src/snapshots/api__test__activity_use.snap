@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1223
+assertion_line: 1346
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 
 ---
@@ -20,6 +20,10 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "prov:wasAssociatedWith",
       "@type": "@id"
     },
+    "attachment": {
+      "@id": "chronicle:hasAttachment",
+      "@type": "@id"
+    },
     "chronicle": "http://blockchaintp.com/chronicle/ns#",
     "endTime": {
       "@id": "prov:endedAtTime"
@@ -33,11 +37,25 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "prov:wasGeneratedBy",
       "@type": "@id"
     },
+    "identity": {
+      "@id": "chronicle:hasIdentity",
+      "@type": "@id"
+    },
     "label": {
       "@id": "rdfs:label"
     },
     "namespace": {
       "@id": "chronicle:hasNamespace",
+      "@type": "@id"
+    },
+    "previousAttachments": {
+      "@container": "@set",
+      "@id": "chronicle:hadAttachment",
+      "@type": "@id"
+    },
+    "previousIdentities": {
+      "@container": "@set",
+      "@id": "chronicle:hadIdentity",
       "@type": "@id"
     },
     "prov": "http://www.w3.org/ns/prov#",
@@ -70,6 +88,9 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
     {
       "@id": "chronicle:activity:testactivity",
       "@type": "prov:Activity",
+      "associated": [
+        "chronicle:agent:testagent"
+      ],
       "endTime": "2014-07-08T09:10:11+00:00",
       "label": "testactivity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

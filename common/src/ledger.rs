@@ -104,11 +104,11 @@ impl From<&str> for Offset {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 pub trait LedgerReader {
     /// Subscribe to state updates from this ledger, starting at [offset]
     async fn state_updates(
-        &self,
+        self,
         offset: Offset,
     ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>;
 }
@@ -146,10 +146,10 @@ pub struct InMemLedgerReader {
     chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, Uuid)>>>,
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl LedgerReader for InMemLedgerReader {
     async fn state_updates(
-        &self,
+        self,
         _offset: Offset,
     ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>
     {
@@ -197,7 +197,7 @@ impl LedgerWriter for InMemLedger {
             let dependencies = tx.dependencies().await.unwrap();
             debug!(?dependencies, "Dependencies");
 
-            let output = tx
+            let (output, state) = tx
                 .process(
                     tx.dependencies()
                         .await?
@@ -212,24 +212,17 @@ impl LedgerWriter for InMemLedger {
                 )
                 .await?;
 
-            for output in output.0 {
+            for output in output {
                 let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
                 debug!(?output.address, "Address");
                 debug!(%state, "New state");
                 self.kv.borrow_mut().insert(output.address, state);
-
-                self.chan
-                    .send((
-                        Offset::from(&*self.head.to_string()),
-                        ProvModel::default()
-                            .apply_json_ld_bytes(&output.data)
-                            .await
-                            .unwrap(),
-                        correlationid,
-                    ))
-                    .await
-                    .ok();
             }
+
+            self.chan
+                .send((Offset::from(&*self.head.to_string()), state, correlationid))
+                .await
+                .ok();
 
             self.head += 1;
         }

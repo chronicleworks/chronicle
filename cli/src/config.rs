@@ -83,7 +83,7 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
 
     let validatorurl =
         Question::new("What is the address of the sawtooth validator zeromq service?")
-            .default(Answer::RESPONSE("tcp://localhost:4004".to_owned()))
+            .default(Answer::RESPONSE("localhost:4004".to_owned()))
             .show_defaults()
             .confirm();
 

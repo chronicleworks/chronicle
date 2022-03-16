@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use super::{
     vocab::{Chronicle, Prov},
-    ActivityId, AgentId, DomaintypeId, EntityId, NamespaceId,
+    ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
 };
 
 custom_error! {pub ProcessorError
@@ -103,6 +103,7 @@ pub struct EntityAttach {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub agent: AgentId,
+    pub identityid: IdentityId,
     pub signature: String,
     pub locator: Option<String>,
     pub signature_time: DateTime<Utc>,
@@ -160,7 +161,23 @@ pub struct Agent {
     pub namespaceid: NamespaceId,
     pub name: String,
     pub domaintypeid: Option<DomaintypeId>,
-    pub publickey: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Identity {
+    pub id: IdentityId,
+    pub namespaceid: NamespaceId,
+    pub public_key: String,
+}
+
+impl Identity {
+    pub fn new(namespace: &NamespaceId, agent: &AgentId, public_key: &str) -> Self {
+        Self {
+            id: Chronicle::identity(agent, public_key).into(),
+            namespaceid: namespace.clone(),
+            public_key: public_key.to_owned(),
+        }
+    }
 }
 
 impl Agent {
@@ -168,14 +185,12 @@ impl Agent {
         id: AgentId,
         namespaceid: NamespaceId,
         name: String,
-        publickey: Option<String>,
         domaintypeid: Option<DomaintypeId>,
     ) -> Self {
         Self {
             id,
             namespaceid,
             name,
-            publickey,
             domaintypeid,
         }
     }
@@ -210,100 +225,55 @@ impl Activity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Entity {
-    Unsigned {
-        id: EntityId,
-        namespaceid: NamespaceId,
-        name: String,
-        domaintypeid: Option<DomaintypeId>,
-    },
-    Signed {
-        id: EntityId,
-        namespaceid: NamespaceId,
-        name: String,
-        domaintypeid: Option<DomaintypeId>,
-        signature: String,
+pub struct Attachment {
+    pub id: AttachmentId,
+    pub namespaceid: NamespaceId,
+    pub signature: String,
+    pub signer: IdentityId,
+    pub locator: Option<String>,
+    pub signature_time: DateTime<Utc>,
+}
+
+impl Attachment {
+    fn new(
+        namespace: NamespaceId,
+        entity: &EntityId,
+        signer: &IdentityId,
+        signature: &str,
         locator: Option<String>,
         signature_time: DateTime<Utc>,
-    },
+    ) -> Attachment {
+        Self {
+            id: Chronicle::attachment(entity, signature).into(),
+            namespaceid: namespace,
+            signature: signature.to_owned(),
+            signer: signer.clone(),
+            locator,
+            signature_time,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entity {
+    pub id: EntityId,
+    pub namespaceid: NamespaceId,
+    pub name: String,
+    pub domaintypeid: Option<DomaintypeId>,
 }
 
 impl Entity {
-    pub fn unsigned(
+    pub fn new(
         id: EntityId,
         namespaceid: &NamespaceId,
         name: &str,
         domaintypeid: Option<DomaintypeId>,
     ) -> Self {
-        Self::Unsigned {
+        Self {
             id,
             namespaceid: namespaceid.to_owned(),
             name: name.to_owned(),
             domaintypeid,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Unsigned { name, .. } | Self::Signed { name, .. } => name,
-        }
-    }
-
-    pub fn id(&self) -> &EntityId {
-        match self {
-            Self::Unsigned { id, .. } | Self::Signed { id, .. } => id,
-        }
-    }
-
-    pub fn namespaceid(&self) -> &NamespaceId {
-        match self {
-            Self::Unsigned { namespaceid, .. } | Self::Signed { namespaceid, .. } => namespaceid,
-        }
-    }
-
-    pub fn domaintypeid(&self) -> &Option<DomaintypeId> {
-        match self {
-            Self::Unsigned { domaintypeid, .. } | Self::Signed { domaintypeid, .. } => domaintypeid,
-        }
-    }
-
-    pub fn set_domaintypeid(&mut self, newtypeid: Option<DomaintypeId>) {
-        match self {
-            Self::Unsigned { domaintypeid, .. } | Self::Signed { domaintypeid, .. } => {
-                *domaintypeid = newtypeid
-            }
-        }
-    }
-
-    pub fn sign(
-        self,
-        signature: String,
-        locator: Option<String>,
-        signature_time: DateTime<Utc>,
-    ) -> Self {
-        match self {
-            Self::Unsigned {
-                id,
-                namespaceid,
-                name,
-                domaintypeid,
-                ..
-            }
-            | Self::Signed {
-                id,
-                namespaceid,
-                name,
-                domaintypeid,
-                ..
-            } => Self::Signed {
-                id,
-                namespaceid,
-                name,
-                signature,
-                locator,
-                signature_time,
-                domaintypeid,
-            },
         }
     }
 }
@@ -314,6 +284,12 @@ pub struct ProvModel {
     pub agents: HashMap<(NamespaceId, AgentId), Agent>,
     pub activities: HashMap<(NamespaceId, ActivityId), Activity>,
     pub entities: HashMap<(NamespaceId, EntityId), Entity>,
+    pub identities: HashMap<(NamespaceId, IdentityId), Identity>,
+    pub attachments: HashMap<(NamespaceId, AttachmentId), Attachment>,
+    pub has_identity: HashMap<(NamespaceId, AgentId), (NamespaceId, IdentityId)>,
+    pub had_identity: HashMap<(NamespaceId, AgentId), HashSet<(NamespaceId, IdentityId)>>,
+    pub has_attachment: HashMap<(NamespaceId, EntityId), (NamespaceId, AttachmentId)>,
+    pub had_attachment: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AttachmentId)>>,
     pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
     pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
     pub was_generated_by: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
@@ -352,14 +328,51 @@ impl ProvModel {
             self.entities.insert(id, entity);
         }
 
+        for (id, identity) in other.identities {
+            self.identities.insert(id, identity);
+        }
+
+        for (id, attachment) in other.attachments {
+            self.attachments.insert(id, attachment);
+        }
+
+        for (id, other_link) in other.has_identity {
+            self.has_identity.insert(id, other_link);
+        }
+
+        for (id, other_link) in other.has_attachment {
+            self.has_attachment.insert(id, other_link);
+        }
+
+        for (id, links) in other.had_identity {
+            self.had_identity
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links.clone() {
+                        map.insert(link);
+                    }
+                })
+                .or_insert(links);
+        }
+        for (id, links) in other.had_attachment {
+            self.had_attachment
+                .entry(id.clone())
+                .and_modify(|map| {
+                    for link in links.clone() {
+                        map.insert(link);
+                    }
+                })
+                .or_insert(links);
+        }
         for (id, links) in other.was_associated_with {
             self.was_associated_with
                 .entry(id.clone())
                 .and_modify(|map| {
-                    for link in links {
+                    for link in links.clone() {
                         map.insert(link);
                     }
-                });
+                })
+                .or_insert(links);
         }
         for (id, links) in other.was_attributed_to {
             self.was_attributed_to
@@ -405,18 +418,102 @@ impl ProvModel {
             .insert((namespace.to_owned(), agent.clone()));
     }
 
-    pub fn generate_by(&mut self, namespace: NamespaceId, entity: EntityId, activity: &ActivityId) {
+    pub fn generate_by(
+        &mut self,
+        namespace: NamespaceId,
+        entity: &EntityId,
+        activity: &ActivityId,
+    ) {
         self.was_generated_by
-            .entry((namespace.clone(), entity))
+            .entry((namespace.clone(), entity.clone()))
             .or_insert_with(HashSet::new)
             .insert((namespace, activity.clone()));
     }
 
-    pub fn used(&mut self, namespace: NamespaceId, activity: ActivityId, entity: &EntityId) {
+    pub fn used(&mut self, namespace: NamespaceId, activity: &ActivityId, entity: &EntityId) {
         self.used
-            .entry((namespace.clone(), activity))
+            .entry((namespace.clone(), activity.clone()))
             .or_insert_with(HashSet::new)
             .insert((namespace, entity.clone()));
+    }
+
+    pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
+        self.had_identity
+            .entry((namespace.clone(), agent.clone()))
+            .or_insert_with(HashSet::new)
+            .insert((namespace, identity.clone()));
+    }
+
+    pub fn has_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
+        self.has_identity.insert(
+            (namespace.clone(), agent.clone()),
+            (namespace, identity.clone()),
+        );
+    }
+
+    pub fn had_attachment(
+        &mut self,
+        namespace: NamespaceId,
+        entity: EntityId,
+        attachment: &AttachmentId,
+    ) {
+        self.had_attachment
+            .entry((namespace.clone(), entity))
+            .or_insert_with(HashSet::new)
+            .insert((namespace, attachment.clone()));
+    }
+
+    pub fn has_attachment(
+        &mut self,
+        namespace: NamespaceId,
+        entity: EntityId,
+        attachment: &AttachmentId,
+    ) {
+        self.has_attachment
+            .insert((namespace.clone(), entity), (namespace, attachment.clone()));
+    }
+
+    fn sign(
+        &mut self,
+        namespace: NamespaceId,
+        signer: &IdentityId,
+        entity: &EntityId,
+        signature: &str,
+        locator: Option<String>,
+        signature_time: DateTime<Utc>,
+    ) {
+        let new_attachment = Attachment::new(
+            namespace.clone(),
+            entity,
+            signer,
+            signature,
+            locator,
+            signature_time,
+        );
+
+        if let Some((_, old_attachment)) = self
+            .has_attachment
+            .remove(&(namespace.clone(), entity.clone()))
+        {
+            self.had_attachment(namespace.clone(), entity.clone(), &old_attachment);
+        }
+
+        self.has_attachment(namespace, entity.clone(), &new_attachment.id);
+        self.add_attachment(new_attachment);
+    }
+
+    fn new_identity(&mut self, namespace: &NamespaceId, agent: &AgentId, signature: &str) {
+        let new_identity = Identity::new(namespace, agent, signature);
+
+        if let Some((_, old_identity)) = self
+            .has_identity
+            .remove(&(namespace.clone(), agent.clone()))
+        {
+            self.had_identity(namespace.clone(), agent, &old_identity);
+        }
+
+        self.has_identity(namespace.clone(), agent, &new_identity.id);
+        self.add_identity(new_identity);
     }
 
     pub fn namespace_context(&mut self, ns: &NamespaceId) {
@@ -452,7 +549,7 @@ impl ProvModel {
                 self.namespace_context(&namespace);
                 self.agents.insert(
                     (namespace.clone(), id.clone()),
-                    Agent::new(id, namespace, name, None, None),
+                    Agent::new(id, namespace, name, None),
                 );
             }
             ChronicleTransaction::RegisterKey(RegisterKey {
@@ -465,10 +562,8 @@ impl ProvModel {
 
                 self.agents
                     .entry((namespace.clone(), id.clone()))
-                    .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None, None));
-                self.agents
-                    .get_mut(&(namespace.clone(), id))
-                    .map(|x| x.publickey = Some(publickey));
+                    .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None));
+                self.new_identity(&namespace, &id, &publickey);
             }
             ChronicleTransaction::CreateActivity(CreateActivity {
                 namespace,
@@ -491,13 +586,14 @@ impl ProvModel {
 
                 self.agents
                     .entry((namespace.clone(), agent.clone()))
-                    .or_insert(Agent::new(
-                        agent.clone(),
-                        namespace.clone(),
-                        agent.decompose().to_owned(),
-                        None,
-                        None,
-                    ));
+                    .or_insert_with(|| {
+                        Agent::new(
+                            agent.clone(),
+                            namespace.clone(),
+                            agent.decompose().to_owned(),
+                            None,
+                        )
+                    });
 
                 // Ensure started <= ended
                 self.activities
@@ -534,11 +630,10 @@ impl ProvModel {
                             namespace.clone(),
                             agent.decompose().to_owned(),
                             None,
-                            None,
                         )
                     });
 
-                // Set our end data, and also the start date if this is a new resource, or the existing resource does not specify a start time
+                // Set our end time, and also the start date if this is a new resource, or the existing resource does not specify a start time
                 // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
                 // or is greater than the end time
                 self.activities
@@ -583,10 +678,10 @@ impl ProvModel {
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
 
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
+                    self.add_entity(Entity::new(id.clone(), &namespace, name, None));
                 }
 
-                self.used(namespace, activity, &id);
+                self.used(namespace, &activity, &id);
             }
             ChronicleTransaction::GenerateEntity(GenerateEntity {
                 namespace,
@@ -608,15 +703,16 @@ impl ProvModel {
                 }
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
+                    self.add_entity(Entity::new(id.clone(), &namespace, name, None));
                 }
 
-                self.generate_by(namespace, id, &activity)
+                self.generate_by(namespace, &id, &activity)
             }
             ChronicleTransaction::EntityAttach(EntityAttach {
                 namespace,
                 id,
                 agent,
+                identityid,
                 signature,
                 locator,
                 signature_time,
@@ -625,26 +721,44 @@ impl ProvModel {
 
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     let name = id.decompose();
-                    self.add_entity(Entity::unsigned(id.clone(), &namespace, name, None));
+                    self.add_entity(Entity::new(id.clone(), &namespace, name, None));
                 }
 
-                if !self
-                    .agents
-                    .contains_key(&(namespace.clone(), agent.clone()))
-                {
+                let agent_key = (namespace.clone(), agent.clone());
+                if !self.agents.contains_key(&agent_key) {
                     let agent_name = agent.decompose();
                     self.add_agent(Agent::new(
                         agent.clone(),
                         namespace.clone(),
                         agent_name.to_owned(),
                         None,
-                        None,
                     ));
                 }
 
-                let unsigned = self.entities.remove(&(namespace.clone(), id)).unwrap();
+                let identity_key = (namespace.clone(), identityid.clone());
 
-                self.add_entity(unsigned.sign(signature, locator, signature_time));
+                if !self.identities.contains_key(&identity_key) {
+                    let agent = self.agents.get(&agent_key).unwrap().id.clone();
+                    let (_, public_key) = identityid.decompose();
+                    self.add_identity(Identity::new(&namespace, &agent, public_key));
+                    self.has_identity(namespace.clone(), &agent, &identityid);
+                }
+
+                let entity = self
+                    .entities
+                    .get(&(namespace.clone(), id))
+                    .unwrap()
+                    .id
+                    .clone();
+
+                self.sign(
+                    namespace,
+                    &identityid,
+                    &entity,
+                    &*signature,
+                    locator,
+                    signature_time,
+                );
             }
             ChronicleTransaction::Domaintype(Domaintype::Entity {
                 namespace,
@@ -655,8 +769,8 @@ impl ProvModel {
 
                 self.entities
                     .entry((namespace.clone(), id.clone()))
-                    .and_modify(|entity| entity.set_domaintypeid(domaintype.clone()))
-                    .or_insert(Entity::unsigned(
+                    .and_modify(|entity| entity.domaintypeid = domaintype.clone())
+                    .or_insert(Entity::new(
                         id.clone(),
                         &namespace,
                         id.decompose(),
@@ -698,7 +812,6 @@ impl ProvModel {
                         id.clone(),
                         namespace,
                         id.decompose().to_string(),
-                        None,
                         domaintype,
                     ));
             }
@@ -712,11 +825,53 @@ impl ProvModel {
         for (id, ns) in self.namespaces.iter() {
             doc.push(object! {
                 "@id": (*id.as_str()),
-                "@type": Iri::from(Chronicle::NamespaceType).as_str(),
+                "@type": Iri::from(Chronicle::Namespace).as_str(),
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                     "@value": ns.name.as_str(),
                 }]
             })
+        }
+
+        for ((ns, id), identity) in self.identities.iter() {
+            doc.push(object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Chronicle::Identity).as_str(),
+                "http://blockchaintp.com/chronicle/ns#publicKey": [{
+                    "@value": identity.public_key.to_string(),
+                }],
+                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                    "@id": ns.to_string()
+                }],
+            })
+        }
+
+        for ((ns, id), attachment) in self.attachments.iter() {
+            let mut attachmentdoc = object! {
+                "@id": (*id.as_str()),
+                "@type": Iri::from(Chronicle::HasAttachment).as_str(),
+                "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
+                "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
+                "http://blockchaintp.com/chronicle/ns#signedBy": {
+                    "@id": attachment.signer.to_string()
+                },
+                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                    "@id": ns.to_string()
+                }],
+            };
+
+            if let Some(locator) = attachment.locator.as_ref() {
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@value": JsonValue::String(locator.to_owned()),
+                });
+
+                attachmentdoc
+                    .insert(Iri::from(Chronicle::Locator).as_str(), values)
+                    .ok();
+            }
+
+            doc.push(attachmentdoc);
         }
 
         for ((_, id), agent) in self.agents.iter() {
@@ -733,17 +888,28 @@ impl ProvModel {
                    "@value": agent.name.as_str(),
                 }]
             };
-            agent.publickey.as_ref().map(|publickey| {
+
+            let agent_key = (agent.namespaceid.clone(), agent.id.clone());
+
+            if let Some((_, identity)) = self.has_identity.get(&agent_key) {
+                agentdoc
+                    .insert(
+                        Iri::from(Chronicle::HasIdentity).as_str(),
+                        object! {"@id": identity.to_string()},
+                    )
+                    .ok();
+            }
+
+            if let Some(identities) = self.had_identity.get(&agent_key) {
                 let mut values = json::Array::new();
 
-                values.push(object! {
-                    "@value": JsonValue::String(publickey.to_owned()),
-                });
-
+                for (_, id) in identities {
+                    values.push(object! { "@id": id.to_string()});
+                }
                 agentdoc
-                    .insert(Iri::from(Chronicle::HasPublicKey).as_str(), values)
+                    .insert(Iri::from(Chronicle::HadIdentity).as_str(), values)
                     .ok();
-            });
+            }
 
             let mut values = json::Array::new();
 
@@ -834,7 +1000,7 @@ impl ProvModel {
 
         for ((namespace, id), entity) in self.entities.iter() {
             let mut typ = vec![Iri::from(Prov::Entity).to_string()];
-            if let Some(x) = entity.domaintypeid().as_ref() {
+            if let Some(x) = entity.domaintypeid.as_ref() {
                 typ.push(x.to_string())
             }
 
@@ -842,7 +1008,7 @@ impl ProvModel {
                 "@id": (*id.as_str()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": entity.name()
+                   "@value": entity.name.clone()
                 }]
             };
 
@@ -860,38 +1026,32 @@ impl ProvModel {
                         .ok();
                 });
 
-            if let Entity::Signed {
-                signature,
-                signature_time,
-                locator,
-                ..
-            } = entity
-            {
+            let entity_key = (entity.namespaceid.clone(), entity.id.clone());
+
+            if let Some((_, identity)) = self.has_attachment.get(&entity_key) {
                 entitydoc
                     .insert(
-                        Iri::from(Chronicle::Signature).as_str(),
-                        signature.to_owned(),
+                        Iri::from(Chronicle::HasAttachment).as_str(),
+                        object! {"@id": identity.to_string()},
                     )
                     .ok();
+            }
 
-                entitydoc
-                    .insert(
-                        Iri::from(Chronicle::SignedAtTime).as_str(),
-                        signature_time.to_rfc3339(),
-                    )
-                    .ok();
+            if let Some(identities) = self.had_attachment.get(&entity_key) {
+                let mut values = json::Array::new();
 
-                if let Some(locator) = locator.as_ref() {
-                    entitydoc
-                        .insert(Iri::from(Chronicle::Locator).as_str(), locator.to_owned())
-                        .ok();
+                for (_, id) in identities {
+                    values.push(object! { "@id": id.to_string()});
                 }
+                entitydoc
+                    .insert(Iri::from(Chronicle::HadAttachment).as_str(), values)
+                    .ok();
             }
 
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(entity.namespaceid().to_string()),
+                "@id": JsonValue::String(entity.namespaceid.to_string()),
             });
 
             entitydoc
@@ -928,7 +1088,7 @@ impl ProvModel {
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
-            if o.has_type(&Reference::Id(Chronicle::NamespaceType.as_iri().into())) {
+            if o.has_type(&Reference::Id(Chronicle::Namespace.as_iri().into())) {
                 self.apply_node_as_namespace(&o)?;
             }
             if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
@@ -937,6 +1097,10 @@ impl ProvModel {
                 self.apply_node_as_activity(&o)?;
             } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
                 self.apply_node_as_entity(&o)?;
+            } else if o.has_type(&Reference::Id(Chronicle::Identity.as_iri().into())) {
+                self.apply_node_as_identity(&o)?;
+            } else if o.has_type(&Reference::Id(Chronicle::HasAttachment.as_iri().into())) {
+                self.apply_node_as_attachment(&o)?;
             }
         }
 
@@ -979,13 +1143,23 @@ impl ProvModel {
         self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
-        let publickey = extract_scalar_prop(&Chronicle::HasPublicKey, agent)
-            .ok()
-            .and_then(|x| x.as_str().map(|x| x.to_string()));
-
         let domaintypeid = Self::extract_domain_type(agent)?;
 
-        let agent = Agent::new(id, namespaceid, name, publickey, domaintypeid);
+        for identity in extract_reference_ids(&Chronicle::HasIdentity, agent)?
+            .into_iter()
+            .map(|id| IdentityId::new(id.as_str()))
+        {
+            self.has_identity(namespaceid.clone(), &id, &identity);
+        }
+
+        for identity in extract_reference_ids(&Chronicle::HadIdentity, agent)?
+            .into_iter()
+            .map(|id| IdentityId::new(id.as_str()))
+        {
+            self.had_identity(namespaceid.clone(), &id, &identity);
+        }
+
+        let agent = Agent::new(id, namespaceid, name, domaintypeid);
 
         self.add_agent(agent);
 
@@ -1035,7 +1209,7 @@ impl ProvModel {
         }
 
         for entity in used {
-            self.used(namespaceid.clone(), activity.id.to_owned(), &entity);
+            self.used(namespaceid.clone(), &activity.id, &entity);
         }
 
         for agent in wasassociatedwith {
@@ -1043,6 +1217,87 @@ impl ProvModel {
         }
 
         self.add_activity(activity);
+
+        Ok(())
+    }
+
+    fn apply_node_as_identity(&mut self, identity: &Node) -> Result<(), ProcessorError> {
+        let namespaceid = extract_namespace(identity)?;
+
+        let id = IdentityId::new(
+            identity
+                .id()
+                .ok_or_else(|| ProcessorError::MissingId {
+                    object: identity.as_json(),
+                })?
+                .to_string(),
+        );
+
+        let public_key = extract_scalar_prop(&Chronicle::PublicKey, identity)
+            .ok()
+            .and_then(|x| x.as_str().map(|x| x.to_string()))
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                iri: Chronicle::PublicKey.as_iri().to_string(),
+                object: identity.as_json(),
+            })?;
+
+        self.add_identity(Identity {
+            id,
+            namespaceid,
+            public_key,
+        });
+
+        Ok(())
+    }
+
+    fn apply_node_as_attachment(&mut self, attachment: &Node) -> Result<(), ProcessorError> {
+        let namespaceid = extract_namespace(attachment)?;
+        let id = AttachmentId::new(
+            attachment
+                .id()
+                .ok_or_else(|| ProcessorError::MissingId {
+                    object: attachment.as_json(),
+                })?
+                .to_string(),
+        );
+
+        let signer = extract_reference_ids(&Chronicle::SignedBy, attachment)?
+            .into_iter()
+            .map(|id| IdentityId::new(id.as_str()))
+            .next()
+            .ok_or_else(|| ProcessorError::MissingId {
+                object: attachment.as_json(),
+            })?;
+
+        let signature = extract_scalar_prop(&Chronicle::Signature, attachment)
+            .ok()
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                iri: Chronicle::Signature.as_iri().to_string(),
+                object: attachment.as_json(),
+            })?
+            .to_owned();
+
+        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, attachment)
+            .ok()
+            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339))
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                iri: Chronicle::SignedAtTime.as_iri().to_string(),
+                object: attachment.as_json(),
+            })??;
+
+        let locator = extract_scalar_prop(&Chronicle::Locator, attachment)
+            .ok()
+            .and_then(|x| x.as_str());
+
+        self.add_attachment(Attachment {
+            namespaceid,
+            id,
+            signature,
+            signer,
+            locator: locator.map(|x| x.to_owned()),
+            signature_time: signature_time.into(),
+        });
 
         Ok(())
     }
@@ -1061,51 +1316,47 @@ impl ProvModel {
         self.namespace_context(&namespaceid);
         let name = id.decompose().to_owned();
 
-        let signature = extract_scalar_prop(&Chronicle::Signature, entity)
-            .ok()
-            .and_then(|x| x.as_str());
-
-        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, entity)
-            .ok()
-            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339));
-
-        let locator = extract_scalar_prop(&Chronicle::Locator, entity)
-            .ok()
-            .and_then(|x| x.as_str());
-
         let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
             .into_iter()
             .map(|id| ActivityId::new(id.as_str()));
 
         let domaintypeid = Self::extract_domain_type(entity)?;
 
-        let entity = {
-            if let (Some(signature), Some(signature_time)) = (signature, signature_time) {
-                Entity::Signed {
-                    name,
-                    namespaceid: namespaceid.clone(),
-                    id,
-                    signature: signature.to_owned(),
-                    locator: locator.map(|x| x.to_owned()),
-                    signature_time: DateTime::<Utc>::from(signature_time?),
-                    domaintypeid,
-                }
-            } else {
-                Entity::Unsigned {
-                    name,
-                    namespaceid: namespaceid.clone(),
-                    id,
-                    domaintypeid,
-                }
-            }
-        };
-        for activity in generatedby {
-            self.generate_by(namespaceid.clone(), entity.id().clone(), &activity);
+        for attachment in extract_reference_ids(&Chronicle::HasAttachment, entity)?
+            .into_iter()
+            .map(|id| AttachmentId::new(id.as_str()))
+        {
+            self.has_attachment(namespaceid.clone(), id.clone(), &attachment);
         }
 
-        self.add_entity(entity);
+        for attachment in extract_reference_ids(&Chronicle::HadAttachment, entity)?
+            .into_iter()
+            .map(|id| AttachmentId::new(id.as_str()))
+        {
+            self.had_attachment(namespaceid.clone(), id.clone(), &attachment);
+        }
+
+        for activity in generatedby {
+            self.generate_by(namespaceid.clone(), &id, &activity);
+        }
+
+        self.add_entity(Entity::new(id, &namespaceid, &name, domaintypeid));
 
         Ok(())
+    }
+
+    pub(crate) fn add_attachment(&mut self, attachment: Attachment) {
+        self.attachments.insert(
+            (attachment.namespaceid.clone(), attachment.id.clone()),
+            attachment,
+        );
+    }
+
+    pub(crate) fn add_identity(&mut self, identity: Identity) {
+        self.identities.insert(
+            (identity.namespaceid.clone(), identity.id.clone()),
+            identity,
+        );
     }
 
     pub(crate) fn add_agent(&mut self, agent: Agent) {
@@ -1122,7 +1373,7 @@ impl ProvModel {
 
     pub(crate) fn add_entity(&mut self, entity: Entity) {
         self.entities
-            .insert((entity.namespaceid().clone(), entity.id().clone()), entity);
+            .insert((entity.namespaceid.clone(), entity.id.clone()), entity);
     }
 }
 
@@ -1234,8 +1485,9 @@ pub mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        vocab::Chronicle, ChronicleTransaction, CreateActivity, CreateAgent, CreateNamespace,
-        Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel, RegisterKey,
+        vocab::Chronicle, AgentId, ChronicleTransaction, CreateActivity, CreateAgent,
+        CreateNamespace, Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel,
+        RegisterKey,
     };
 
     use super::{ActivityUses, CompactedJson, EntityAttach, NamespaceId, StartActivity};
@@ -1387,9 +1639,12 @@ pub mod test {
             locator in proptest::option::of(any::<String>()),
             agent_name in name(),
             name in name(),
-            namespace in namespace()) -> EntityAttach {
+            namespace in namespace(),
+            public_key in "[0-9a-f]{64}",
+        ) -> EntityAttach {
             let id = Chronicle::entity(&name).into();
-            let agent = Chronicle::agent(&agent_name).into();
+            let agent: AgentId = Chronicle::agent(&agent_name).into();
+            let identityid = Chronicle::identity(&agent , &*public_key).into();
 
             let signature_time = Utc::today().and_hms_micro(offset, 0,0,0);
 
@@ -1399,6 +1654,7 @@ pub mod test {
                 locator,
                 agent,
                 signature,
+                identityid,
                 signature_time
             }
         }
@@ -1516,10 +1772,16 @@ pub mod test {
                                 let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
                                 prop_assert!(agent.is_some());
                                 let agent = agent.unwrap();
+                                let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
+                                prop_assert!(identity.is_some());
+                                let identity = identity.unwrap();
+                                let identity = prov.identities.get(identity);
+                                prop_assert!(identity.is_some());
+                                let identity = identity.unwrap();
+
                                 prop_assert_eq!(&agent.name, &name.clone());
                                 prop_assert_eq!(&agent.namespaceid, &namespace.clone());
-                                prop_assert!(agent.publickey.is_some());
-                                prop_assert_eq!(&agent.publickey.clone().unwrap(), &publickey.clone());
+                                prop_assert_eq!(&identity.public_key, &publickey.clone());
                                 Ok(())
                             })
                         },
@@ -1569,8 +1831,8 @@ pub mod test {
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(entity.is_some());
                         let entity = entity.unwrap();
-                        prop_assert_eq!(&entity.name(), &id.decompose());
-                        prop_assert_eq!(&entity.namespaceid(), &namespace);
+                        prop_assert_eq!(&entity.name, &id.decompose());
+                        prop_assert_eq!(&entity.namespaceid, namespace);
 
                         let activity = &prov.activities.get(&(namespace.to_owned(),activity_id.to_owned()));
                         prop_assert!(activity.is_some());
@@ -1589,8 +1851,8 @@ pub mod test {
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(entity.is_some());
                         let entity = entity.unwrap();
-                        prop_assert_eq!(&entity.name(), &id.decompose());
-                        prop_assert_eq!(&entity.namespaceid(), &namespace);
+                        prop_assert_eq!(&entity.name, &id.decompose());
+                        prop_assert_eq!(&entity.namespaceid, namespace);
 
                         let activity = &prov.activities.get(&(namespace.to_owned(),activity.to_owned()));
                         prop_assert!(activity.is_some());
@@ -1606,6 +1868,7 @@ pub mod test {
                     ChronicleTransaction::EntityAttach(
                         EntityAttach{
                         namespace,
+                        identityid: _,
                         id,
                         locator: _,
                         agent,
@@ -1616,8 +1879,8 @@ pub mod test {
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(entity.is_some());
                         let entity = entity.unwrap();
-                        prop_assert_eq!(&entity.name(), &id.decompose());
-                        prop_assert_eq!(&entity.namespaceid(), &namespace);
+                        prop_assert_eq!(&entity.name, &id.decompose());
+                        prop_assert_eq!(&entity.namespaceid, namespace);
 
                         let agent = &prov.agents.get(&(namespace.to_owned(),agent.to_owned()));
                         prop_assert!(agent.is_some());
@@ -1632,7 +1895,7 @@ pub mod test {
                         prop_assert!(entity.is_some());
                         let entity = entity.unwrap();
 
-                        prop_assert_eq!(entity.domaintypeid(), domaintype);
+                        prop_assert_eq!(&entity.domaintypeid, domaintype);
                     },
                     ChronicleTransaction::Domaintype(Domaintype::Activity { namespace, id, domaintype }) => {
                         let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
