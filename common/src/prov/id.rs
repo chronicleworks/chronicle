@@ -39,9 +39,9 @@ where
     }
 }
 
-impl Into<String> for AttachmentId {
-    fn into(self) -> String {
-        self.0
+impl From<AttachmentId> for String {
+    fn from(val: AttachmentId) -> Self {
+        val.0
     }
 }
 
@@ -83,9 +83,9 @@ where
     }
 }
 
-impl Into<String> for IdentityId {
-    fn into(self) -> String {
-        self.0
+impl From<IdentityId> for String {
+    fn from(val: IdentityId) -> Self {
+        val.0
     }
 }
 
@@ -127,9 +127,9 @@ where
     }
 }
 
-impl Into<String> for DomaintypeId {
-    fn into(self) -> String {
-        self.0
+impl From<DomaintypeId> for String {
+    fn from(val: DomaintypeId) -> Self {
+        val.0
     }
 }
 
@@ -179,9 +179,9 @@ where
     }
 }
 
-impl Into<String> for NamespaceId {
-    fn into(self) -> String {
-        self.0
+impl From<NamespaceId> for String {
+    fn from(val: NamespaceId) -> Self {
+        val.0
     }
 }
 
@@ -205,9 +205,9 @@ where
     }
 }
 
-impl Into<String> for EntityId {
-    fn into(self) -> String {
-        self.0
+impl From<EntityId> for String {
+    fn from(val: EntityId) -> Self {
+        val.0
     }
 }
 
@@ -232,9 +232,9 @@ impl EntityId {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AgentId(String);
 
-impl Into<String> for AgentId {
-    fn into(self) -> String {
-        self.0
+impl From<AgentId> for String {
+    fn from(val: AgentId) -> Self {
+        val.0
     }
 }
 
@@ -276,9 +276,9 @@ where
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ActivityId(String);
 
-impl Into<String> for ActivityId {
-    fn into(self) -> String {
-        self.0
+impl From<ActivityId> for String {
+    fn from(val: ActivityId) -> Self {
+        val.0
     }
 }
 

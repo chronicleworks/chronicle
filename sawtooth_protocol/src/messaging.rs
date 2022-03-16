@@ -39,10 +39,10 @@ custom_error! {pub SawtoothSubmissionError
     Ld{source: ProcessorError}                              = "Json LD processing",
 }
 
-impl Into<SubmissionError> for SawtoothSubmissionError {
-    fn into(self) -> SubmissionError {
+impl From<SawtoothSubmissionError> for SubmissionError {
+    fn from(val: SawtoothSubmissionError) -> Self {
         SubmissionError::Implementation {
-            source: Box::new(self),
+            source: Box::new(val),
         }
     }
 }
@@ -84,9 +84,9 @@ impl SawtoothSubmitter {
 
         debug!(?batch, "Validator request");
 
-        let mut request = ClientBatchSubmitRequest::default();
-
-        request.batches = vec![batch];
+        let request = ClientBatchSubmitRequest {
+            batches: vec![batch],
+        };
 
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,

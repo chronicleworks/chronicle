@@ -3,15 +3,11 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use chrono::DateTime;
 
 use chrono::Utc;
-use common::prov::Attachment;
-use common::prov::AttachmentId;
-use common::prov::Identity;
-use common::prov::IdentityId;
 use common::{
     ledger::Offset,
     prov::{
-        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, Entity, EntityId, Namespace,
-        NamespaceId, ProvModel,
+        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, Attachment, AttachmentId, Entity,
+        EntityId, Identity, IdentityId, Namespace, NamespaceId, ProvModel,
     },
 };
 use custom_error::custom_error;
@@ -211,8 +207,7 @@ impl Store {
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
         let (agent_name, public_key) = signer.decompose();
 
-        use schema::agent::dsl as agentdsl;
-        use schema::identity::dsl as identitydsl;
+        use schema::{agent::dsl as agentdsl, identity::dsl as identitydsl};
         let signer_id = agentdsl::agent
             .inner_join(identitydsl::identity)
             .filter(
@@ -677,8 +672,7 @@ impl Store {
         name: &str,
         namespaceid: &NamespaceId,
     ) -> Result<String, StoreError> {
-        use schema::activity::dsl;
-        use schema::namespace::dsl as nsdsl;
+        use schema::{activity::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::activity::table
             .inner_join(schema::namespace::table)
@@ -708,8 +702,7 @@ impl Store {
         name: &str,
         namespaceid: &NamespaceId,
     ) -> Result<String, StoreError> {
-        use schema::agent::dsl;
-        use schema::namespace::dsl as nsdsl;
+        use schema::{agent::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::agent::table
             .inner_join(schema::namespace::table)
@@ -740,8 +733,7 @@ impl Store {
         name: &str,
         namespaceid: &NamespaceId,
     ) -> Result<String, StoreError> {
-        use schema::entity::dsl;
-        use schema::namespace::dsl as nsdsl;
+        use schema::{entity::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::entity::table
             .inner_join(schema::namespace::table)

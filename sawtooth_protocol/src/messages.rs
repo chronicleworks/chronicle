@@ -42,18 +42,19 @@ impl MessageBuilder {
         let mut request = ClientEventsSubscribeRequest::default();
 
         let mut delta_subscription = EventSubscription::default();
-        let mut filter_address = EventFilter::default();
-
-        filter_address.key = "address".to_string();
-        filter_address.match_string = (*PREFIX).to_string();
-        filter_address.filter_type = FilterType::RegexAll as _;
+        let filter_address = EventFilter {
+            key: "address".to_string(),
+            match_string: (*PREFIX).to_string(),
+            filter_type: FilterType::RegexAll as _,
+        };
 
         delta_subscription.filters = vec![filter_address];
         delta_subscription.event_type = "chronicle/prov-update".to_owned();
 
-        let mut block_subscription = EventSubscription::default();
-        block_subscription.event_type = "sawtooth/block-commit".to_owned();
-        block_subscription.filters = vec![];
+        let block_subscription = EventSubscription {
+            event_type: "sawtooth/block-commit".to_owned(),
+            filters: vec![],
+        };
 
         offset.map(|offset| {
             request.last_known_block_ids = vec![offset.to_string()];
@@ -130,6 +131,7 @@ mod test {
     use prost::Message;
     use rand::prelude::StdRng;
     use rand_core::SeedableRng;
+    use sawtooth_sdk::messages::batch::Batch;
     use uuid::Uuid;
 
     use super::MessageBuilder;
@@ -165,9 +167,7 @@ mod test {
 
         let batch = builder.make_sawtooth_batch(proto_tx);
 
-        let _batch_sdk_parsed = protobuf::parse_from_bytes::<sawtooth_sdk::messages::batch::Batch>(
-            &*batch.encode_to_vec(),
-        )
-        .unwrap();
+        let _batch_sdk_parsed: Batch =
+            protobuf::Message::parse_from_bytes(&*batch.encode_to_vec()).unwrap();
     }
 }

@@ -115,7 +115,7 @@ impl StateDelta {
     async fn get_state_from(
         &self,
         offset: &Offset,
-    ) -> Result<impl futures::Stream<Item = Vec<(Offset, ProvModel, Uuid)>>, StateError> {
+    ) -> Result<impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, Uuid)>>, StateError> {
         let request = self.builder.make_subcription_request(offset);
 
         debug!(?request, "Subscription request");
@@ -150,11 +150,11 @@ impl StateDelta {
     fn event_stream(
         rx: Arc<Mutex<MessageReceiver>>,
         block: Offset,
-    ) -> impl futures::Stream<Item = Vec<(Offset, ProvModel, Uuid)>> {
+    ) -> impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, Uuid)>> {
         #[derive(Debug)]
         enum ParsedEvent {
             Block(String),
-            State(ProvModel),
+            State(Box<ProvModel>),
         }
 
         stream::unfold((rx, block), |(rx, block)| async move {
@@ -184,7 +184,9 @@ impl StateDelta {
                                         "chronicle/prov-update" => {
                                             serde_cbor::from_slice::<ProvModel>(&*event.data)
                                                 .map_err(StateError::from)
-                                                .map(|prov| Some(ParsedEvent::State(prov)))
+                                                .map(|prov| {
+                                                    Some(ParsedEvent::State(Box::new(prov)))
+                                                })
                                         }
                                         _ => Ok(None),
                                     });
@@ -242,7 +244,7 @@ impl LedgerReader for StateDelta {
         self,
         offset: Offset,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>,
+        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>,
         common::ledger::SubscriptionError,
     > {
         let self_clone = self.clone();

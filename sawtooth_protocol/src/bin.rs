@@ -7,7 +7,7 @@ mod sawtooth {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
-use clap::{App, Arg, ValueHint};
+use clap::{Arg, Command, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
 
@@ -32,7 +32,7 @@ pub fn tracing() {
 
 #[tokio::main]
 async fn main() {
-    let matches = App::new("chronicle-sawtooth-tp")
+    let matches = Command::new("chronicle-sawtooth-tp")
         .version("1.0")
         .author("Blockchain technology partners")
         .about("Write and query provenance data to distributed ledgers")

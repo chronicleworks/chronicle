@@ -6,8 +6,8 @@ mod config;
 mod telemetry;
 
 use api::{Api, ApiDispatch, ApiError, UuidGen};
-use clap::{App, ArgMatches};
-use clap_generate::{generate, Generator, Shell};
+use clap::{ArgMatches, Command};
+use clap_complete::{generate, Generator, Shell};
 use cli::cli;
 
 use common::{
@@ -64,10 +64,6 @@ fn state_delta(
 
 #[cfg(feature = "inmem")]
 fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
-    use std::convert::Infallible;
-
-    use common::ledger::InMemLedger;
-
     Ok(common::ledger::InMemLedger::new())
 }
 
@@ -106,7 +102,7 @@ async fn api(
             ledger,
             state,
             &config.secrets.path,
-            uuid::Uuid::new_v4,
+            UniqueUuid,
         )
         .await?)
     }
@@ -323,6 +319,6 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     Ok(())
 }
 
-fn print_completions<G: Generator>(gen: G, app: &mut App) {
+fn print_completions<G: Generator>(gen: G, app: &mut Command) {
     generate(gen, app, app.get_name().to_string(), &mut io::stdout());
 }

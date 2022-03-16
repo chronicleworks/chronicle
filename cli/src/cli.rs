@@ -1,8 +1,8 @@
 use clap::*;
-use clap_generate::Shell;
+use clap_complete::Shell;
 
-pub fn cli() -> App<'static> {
-    let mut app = App::new("chronicle")
+pub fn cli() -> Command<'static> {
+    let mut app = Command::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
         .about("Write and query provenance data to distributed ledgers")
@@ -52,19 +52,19 @@ pub fn cli() -> App<'static> {
                 .help("The user interface address"),
         )
         .subcommand(
-            App::new("namespace")
+            Command::new("namespace")
                 .about("controls namespace features")
                 .subcommand(
-                    App::new("create")
+                    Command::new("create")
                         .about("Create a new namespace")
                         .arg(Arg::new("namespace").required(true).takes_value(true)),
                 ),
         )
         .subcommand(
-            App::new("agent")
+            Command::new("agent")
                 .about("controls agents")
                 .subcommand(
-                    App::new("create")
+                    Command::new("create")
                         .about("Create a new agent, if required")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
@@ -89,7 +89,7 @@ pub fn cli() -> App<'static> {
                                     .required(true)),
                 )
                 .subcommand(
-                    App::new("register-key")
+                    Command::new("register-key")
                         .about("Register a key pair, or a public key with an agent")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
@@ -128,7 +128,7 @@ pub fn cli() -> App<'static> {
                         ),
                 )
                 .subcommand(
-                    App::new("use")
+                    Command::new("use")
                         .about("Make the specified agent the context for activities and entities")
                         .arg(Arg::new("agent_name").required(true).takes_value(true))
                         .arg(
@@ -142,9 +142,9 @@ pub fn cli() -> App<'static> {
                 ),
         )
         .subcommand(
-            App::new("activity")
+            Command::new("activity")
                 .subcommand(
-                    App::new("create")
+                    Command::new("create")
                         .about("Create a new activity, if required")
                         .arg(Arg::new("activity_name").required(true).takes_value(true))
                         .arg(
@@ -169,7 +169,7 @@ pub fn cli() -> App<'static> {
                                     .required(true)),
                 )
                 .subcommand(
-                    App::new("start")
+                    Command::new("start")
                         .about("Record this activity as started at the current time")
                         .arg(Arg::new("activity_name").required(true).takes_value(true))
                         .arg(
@@ -182,7 +182,7 @@ pub fn cli() -> App<'static> {
                         ),
                 )
                 .subcommand(
-                    App::new("end")
+                    Command::new("end")
                         .about("Record this activity as ended at the current time")
                         .arg(Arg::new("activity_name").required(false).takes_value(true))
                         .arg(
@@ -195,7 +195,7 @@ pub fn cli() -> App<'static> {
                         ),
                 )
                 .subcommand(
-                    App::new("use")
+                    Command::new("use")
                         .about("Record this activity as having used the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
@@ -227,7 +227,7 @@ pub fn cli() -> App<'static> {
                                     .required(true)),
                 )
                 .subcommand(
-                    App::new("generate")
+                    Command::new("generate")
                         .about("Records this activity as having generated the specified entity, creating it if required")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
@@ -260,10 +260,10 @@ pub fn cli() -> App<'static> {
                 ),
         )
         .subcommand(
-            App::new("entity")
+            Command::new("entity")
                 .about("Operations on entities")
                 .subcommand(
-                    App::new("attach")
+                    Command::new("attach")
                         .about("Sign the input file and record it against the entity")
                         .arg(Arg::new("entity_name").required(true).takes_value(true))
                         .arg(
@@ -309,7 +309,7 @@ pub fn cli() -> App<'static> {
                 ),
         )
         .subcommand(
-            App::new("export")
+            Command::new("export")
                 .about("Query prov data")
                 .arg(
                         Arg::new("namespace")
