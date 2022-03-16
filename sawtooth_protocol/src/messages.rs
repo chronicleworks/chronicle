@@ -23,6 +23,7 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
+    #[allow(dead_code)]
     pub fn new(signer: SigningKey, family_name: &str, family_version: &str) -> Self {
         let rng = StdRng::from_entropy();
         Self {
@@ -38,6 +39,7 @@ impl MessageBuilder {
         hex::encode_upper(bytes)
     }
 
+    #[allow(dead_code)]
     pub fn make_subcription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
 

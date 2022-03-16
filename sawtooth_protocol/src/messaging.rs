@@ -49,6 +49,7 @@ impl From<SawtoothSubmissionError> for SubmissionError {
 
 /// The sawtooth futures and their sockets are not controlled by a compatible reactor
 impl SawtoothSubmitter {
+    #[allow(dead_code)]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();

@@ -2,7 +2,7 @@ use clap::*;
 use clap_complete::Shell;
 
 pub fn cli() -> Command<'static> {
-    let mut app = Command::new("chronicle")
+    let app = Command::new("chronicle")
         .version("1.0")
         .author("Blockchain technology partners")
         .about("Write and query provenance data to distributed ledgers")
@@ -323,7 +323,7 @@ pub fn cli() -> Command<'static> {
 
     #[cfg(not(feature = "inmem"))]
     {
-        app = app.arg(
+        app.arg(
             Arg::new("sawtooth")
                 .long("sawtooth")
                 .value_name("sawtooth")
@@ -331,8 +331,10 @@ pub fn cli() -> Command<'static> {
                 .default_value("localhost:4004")
                 .help("Sets sawtooth validator address")
                 .takes_value(true),
-        );
+        )
     }
-
-    app
+    #[cfg(feature = "inmem")]
+    {
+        app
+    }
 }

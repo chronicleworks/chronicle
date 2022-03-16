@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
 mod graphql;
 mod persistence;
 
@@ -1352,11 +1353,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        tokio::time::sleep(Duration::from_secs(4)).await;
+
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            agent: None,
+            agent: Some("testagent".to_string()),
         }))
         .await
         .unwrap();

@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
 #[macro_use]
 extern crate serde_derive;
 
@@ -21,6 +22,7 @@ use common::{
 use config::*;
 use custom_error::custom_error;
 use futures::Future;
+use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 
 use std::{
     io,
@@ -30,34 +32,28 @@ use std::{
 use tracing::{error, instrument};
 use user_error::UFE;
 
-#[cfg(not(feature = "inmem"))]
-fn submitter(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<sawtooth_protocol::SawtoothSubmitter, SignerError> {
+#[allow(dead_code)]
+fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     use url::Url;
 
-    Ok(sawtooth_protocol::SawtoothSubmitter::new(
+    Ok(SawtoothSubmitter::new(
         &options
             .value_of("sawtooth")
             .map(Url::parse)
-            .unwrap_or(Ok(config.validator.address.clone()))?,
+            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
 
-#[cfg(not(feature = "inmem"))]
-fn state_delta(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<sawtooth_protocol::StateDelta, SignerError> {
+#[allow(dead_code)]
+fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
     use url::Url;
 
-    Ok(sawtooth_protocol::StateDelta::new(
+    Ok(StateDelta::new(
         &options
             .value_of("sawtooth")
             .map(Url::parse)
-            .unwrap_or(Ok(config.validator.address.clone()))?,
+            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }

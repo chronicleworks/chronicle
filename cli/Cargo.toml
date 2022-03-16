@@ -41,6 +41,7 @@ open = "2.0.2"
 
 
 [features]
+strict = []
 # Use an in memory stub ledger
 inmem = []
 
