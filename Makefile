@@ -8,7 +8,7 @@ export AWS_ACCESS_KEY_ID ?=
 export AWS_SECRET_ACCESS_KEY ?=
 export OPENSSL_STATIC=1
 
-CLEAN_DIRS := $(CLEAN_DIRS) 
+CLEAN_DIRS := $(CLEAN_DIRS)
 
 clean: clean_containers
 
@@ -16,9 +16,9 @@ distclean: clean_docker clean_markers
 
 build: $(MARKERS)/build
 
-package: $(MARKERS)/package_cargo $(MARKERS)/package_docker
+package: $(MARKERS)/package
 
-test: $(MARKERS)/test_cargo 
+test: $(MARKERS)/test
 
 analyze: analyze_fossa analyze_sonar_cargo
 
@@ -29,13 +29,9 @@ run: $(MARKERS)/run
 $(MARKERS)/run:
 	docker compose -f ./docker-compose.yaml up --force-recreate
 
+$(MARKERS)/test:
+	docker buildx build --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --target test .
+
 $(MARKERS)/build:
-	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle -t $(REGISTRY)/chronicle:$(ISOLATION_ID) .
-	docker buildx build --platform linux/arm64,linux/amd64 --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle_sawtooth_tp -t $(REGISTRY)/chronicle-sawtooth-tp:$(ISOLATION_ID) .
+	docker buildx build --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle -t $(REGISTRY)/chronicle:$(ISOLATION_ID) .
 
-$(MARKERS)/build_cargo: $(MARKERS)/x86_64 # $(MARKERS)/aarch64
-
-.PHONY: clean_containers
-clean_containers:
-	docker rm $(ISOLATION_ID)_chronicle_musl_aarch64
-	docker rm $(ISOLATION_ID)_chronicle_musl_x86_64
