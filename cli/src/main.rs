@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
 #[macro_use]
 extern crate serde_derive;
 
@@ -6,8 +7,8 @@ mod config;
 mod telemetry;
 
 use api::{Api, ApiDispatch, ApiError, UuidGen};
-use clap::{App, ArgMatches};
-use clap_generate::{generate, Generator, Shell};
+use clap::{ArgMatches, Command};
+use clap_complete::{generate, Generator, Shell};
 use cli::cli;
 
 use common::{
@@ -21,6 +22,7 @@ use common::{
 use config::*;
 use custom_error::custom_error;
 use futures::Future;
+use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 
 use std::{
     io,
@@ -30,44 +32,34 @@ use std::{
 use tracing::{error, instrument};
 use user_error::UFE;
 
-#[cfg(not(feature = "inmem"))]
-fn submitter(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<sawtooth_protocol::SawtoothSubmitter, SignerError> {
+#[allow(dead_code)]
+fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     use url::Url;
 
-    Ok(sawtooth_protocol::SawtoothSubmitter::new(
+    Ok(SawtoothSubmitter::new(
         &options
             .value_of("sawtooth")
             .map(Url::parse)
-            .unwrap_or(Ok(config.validator.address.clone()))?,
+            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
 
-#[cfg(not(feature = "inmem"))]
-fn state_delta(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<sawtooth_protocol::StateDelta, SignerError> {
+#[allow(dead_code)]
+fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
     use url::Url;
 
-    Ok(sawtooth_protocol::StateDelta::new(
+    Ok(StateDelta::new(
         &options
             .value_of("sawtooth")
             .map(Url::parse)
-            .unwrap_or(Ok(config.validator.address.clone()))?,
+            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
 }
 
 #[cfg(feature = "inmem")]
 fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
-    use std::convert::Infallible;
-
-    use common::ledger::InMemLedger;
-
     Ok(common::ledger::InMemLedger::new())
 }
 
@@ -106,7 +98,7 @@ async fn api(
             ledger,
             state,
             &config.secrets.path,
-            uuid::Uuid::new_v4,
+            UniqueUuid,
         )
         .await?)
     }
@@ -323,6 +315,6 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     Ok(())
 }
 
-fn print_completions<G: Generator>(gen: G, app: &mut App) {
+fn print_completions<G: Generator>(gen: G, app: &mut Command) {
     generate(gen, app, app.get_name().to_string(), &mut io::stdout());
 }

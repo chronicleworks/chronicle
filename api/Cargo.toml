@@ -33,7 +33,7 @@ serde_derive = "1.0.135"
 futures = "0.3.19"
 async-trait = "0.1.52"
 open = "2.0.2"
-async-graphql = { vesion = "3.0.12", features = ["tracing","chrono","unblock","default", "uuid"], version = "3.0.25" }
+async-graphql = { features = ["tracing","chrono","unblock","default", "uuid"], version = "3.0.25" }
 warp = "0.3.2"
 async-graphql-warp = "3.0.25"
 r2d2 = "0.8.9"
@@ -50,3 +50,6 @@ tracing-bunyan-formatter = "0.3"
 
 
 [build-dependencies]
+
+[features]
+strict = []

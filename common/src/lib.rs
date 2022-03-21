@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]

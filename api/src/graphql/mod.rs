@@ -370,8 +370,10 @@ impl Query {
         name: String,
         namespace: String,
     ) -> async_graphql::Result<Option<Agent>> {
-        use crate::persistence::schema::agent::{self, dsl};
-        use crate::persistence::schema::namespace::dsl as nsdsl;
+        use crate::persistence::schema::{
+            agent::{self, dsl},
+            namespace::dsl as nsdsl,
+        };
 
         let store = ctx.data_unchecked::<Store>();
 

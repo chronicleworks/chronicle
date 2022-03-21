@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
 mod graphql;
 mod persistence;
 
@@ -268,7 +269,7 @@ where
                                         .await
                                         .map_err(|e| {
                                             error!(?e, "Api sync to confirmed commit");
-                                        }).map(|_| commit_notify_tx.send((prov,correlation_id))).ok();
+                                        }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
                             }
                         },
                         cmd = rx.recv().fuse() => {
@@ -1054,7 +1055,7 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::{net::SocketAddr, str::FromStr};
+    use std::{net::SocketAddr, str::FromStr, time::Duration};
 
     use chrono::{TimeZone, Utc};
     use common::{
@@ -1248,6 +1249,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1278,6 +1281,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
@@ -1328,6 +1333,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1345,12 +1352,14 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
+
+        tokio::time::sleep(Duration::from_secs(4)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
             namespace: "testns".to_owned(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            agent: None,
+            agent: Some("testagent".to_string()),
         }))
         .await
         .unwrap();

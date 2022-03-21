@@ -770,12 +770,9 @@ impl ProvModel {
                 self.entities
                     .entry((namespace.clone(), id.clone()))
                     .and_modify(|entity| entity.domaintypeid = domaintype.clone())
-                    .or_insert(Entity::new(
-                        id.clone(),
-                        &namespace,
-                        id.decompose(),
-                        domaintype,
-                    ));
+                    .or_insert_with(|| {
+                        Entity::new(id.clone(), &namespace, id.decompose(), domaintype)
+                    });
             }
             ChronicleTransaction::Domaintype(Domaintype::Activity {
                 namespace,
@@ -789,12 +786,9 @@ impl ProvModel {
                     .and_modify(|mut acitvity| {
                         acitvity.domaintypeid = domaintype.clone();
                     })
-                    .or_insert(Activity::new(
-                        id.clone(),
-                        namespace,
-                        id.decompose(),
-                        domaintype,
-                    ));
+                    .or_insert_with(|| {
+                        Activity::new(id.clone(), namespace, id.decompose(), domaintype)
+                    });
             }
             ChronicleTransaction::Domaintype(Domaintype::Agent {
                 namespace,
@@ -808,12 +802,14 @@ impl ProvModel {
                     .and_modify(|mut agent| {
                         agent.domaintypeid = domaintype.clone();
                     })
-                    .or_insert(Agent::new(
-                        id.clone(),
-                        namespace,
-                        id.decompose().to_string(),
-                        domaintype,
-                    ));
+                    .or_insert_with(|| {
+                        Agent::new(
+                            id.clone(),
+                            namespace,
+                            id.decompose().to_string(),
+                            domaintype,
+                        )
+                    });
             }
         };
     }
@@ -875,8 +871,7 @@ impl ProvModel {
         }
 
         for ((_, id), agent) in self.agents.iter() {
-            let mut typ = vec![];
-            typ.push(Iri::from(Prov::Agent).to_string());
+            let mut typ = vec![Iri::from(Prov::Agent).to_string()];
             if let Some(x) = agent.domaintypeid.as_ref() {
                 typ.push(x.to_string())
             }
@@ -925,8 +920,7 @@ impl ProvModel {
         }
 
         for ((namespace, id), activity) in self.activities.iter() {
-            let mut typ = vec![];
-            typ.push(Iri::from(Prov::Activity).to_string());
+            let mut typ = vec![Iri::from(Prov::Activity).to_string()];
             if let Some(x) = activity.domaintypeid.as_ref() {
                 typ.push(x.to_string())
             }
@@ -939,51 +933,50 @@ impl ProvModel {
                 }]
             };
 
-            activity.started.map(|time| {
+            if let Some(time) = activity.started {
                 let mut values = json::Array::new();
                 values.push(object! {"@value": time.to_rfc3339()});
 
                 activitydoc
                     .insert("http://www.w3.org/ns/prov#startedAtTime", values)
                     .ok();
-            });
+            }
 
-            activity.ended.map(|time| {
+            if let Some(time) = activity.ended {
                 let mut values = json::Array::new();
                 values.push(object! {"@value": time.to_rfc3339()});
 
                 activitydoc
                     .insert("http://www.w3.org/ns/prov#endedAtTime", values)
                     .ok();
-            });
+            }
 
-            self.was_associated_with
+            if let Some(asoc) = self
+                .was_associated_with
                 .get(&(namespace.to_owned(), id.to_owned()))
-                .map(|asoc| {
-                    let mut ids = json::Array::new();
+            {
+                let mut ids = json::Array::new();
 
-                    for (_, id) in asoc.iter() {
-                        ids.push(object! {"@id": id.as_str()});
-                    }
+                for (_, id) in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
 
-                    activitydoc
-                        .insert(&Iri::from(Prov::WasAssociatedWith).to_string(), ids)
-                        .ok();
-                });
+                activitydoc
+                    .insert(&Iri::from(Prov::WasAssociatedWith).to_string(), ids)
+                    .ok();
+            }
 
-            self.used
-                .get(&(namespace.to_owned(), id.to_owned()))
-                .map(|asoc| {
-                    let mut ids = json::Array::new();
+            if let Some(asoc) = self.used.get(&(namespace.to_owned(), id.to_owned())) {
+                let mut ids = json::Array::new();
 
-                    for (_, id) in asoc.iter() {
-                        ids.push(object! {"@id": id.as_str()});
-                    }
+                for (_, id) in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
 
-                    activitydoc
-                        .insert(&Iri::from(Prov::Used).to_string(), ids)
-                        .ok();
-                });
+                activitydoc
+                    .insert(&Iri::from(Prov::Used).to_string(), ids)
+                    .ok();
+            }
 
             let mut values = json::Array::new();
 
@@ -1012,19 +1005,20 @@ impl ProvModel {
                 }]
             };
 
-            self.was_generated_by
+            if let Some(asoc) = self
+                .was_generated_by
                 .get(&(namespace.to_owned(), id.to_owned()))
-                .map(|asoc| {
-                    let mut ids = json::Array::new();
+            {
+                let mut ids = json::Array::new();
 
-                    for (_, id) in asoc.iter() {
-                        ids.push(object! {"@id": id.as_str()});
-                    }
+                for (_, id) in asoc.iter() {
+                    ids.push(object! {"@id": id.as_str()});
+                }
 
-                    entitydoc
-                        .insert(Iri::from(Prov::WasGeneratedBy).as_str(), ids)
-                        .ok();
-                });
+                entitydoc
+                    .insert(Iri::from(Prov::WasGeneratedBy).as_str(), ids)
+                    .ok();
+            }
 
             let entity_key = (entity.namespaceid.clone(), entity.id.clone());
 

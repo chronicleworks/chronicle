@@ -19,7 +19,9 @@ pub struct SawtoothAddress(String);
 impl From<&LedgerAddress> for SawtoothAddress {
     fn from(addr: &LedgerAddress) -> Self {
         let mut sha = crypto::sha2::Sha256::new();
-        if let Some(ns) = addr.namespace.as_ref() { sha.input_str(ns) }
+        if let Some(ns) = addr.namespace.as_ref() {
+            sha.input_str(ns)
+        }
         sha.input_str(&addr.resource);
         SawtoothAddress(format!("{}{}", &*PREFIX, sha.result_str()))
     }

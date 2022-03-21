@@ -1,4 +1,4 @@
-use futures::{stream, FutureExt, SinkExt, Stream, StreamExt};
+use futures::{stream, SinkExt, Stream, StreamExt};
 use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
@@ -98,9 +98,8 @@ impl Offset {
 
 impl From<&str> for Offset {
     fn from(offset: &str) -> Self {
-        match offset {
-            x => Offset::Identity(x.to_owned()),
-        }
+        let x = offset;
+        Offset::Identity(x.to_owned())
     }
 }
 
@@ -110,7 +109,7 @@ pub trait LedgerReader {
     async fn state_updates(
         self,
         offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>;
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>, SubscriptionError>;
 }
 
 /// An in memory ledger implementation for development and testing purposes
@@ -141,6 +140,12 @@ impl InMemLedger {
     }
 }
 
+impl Default for InMemLedger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct InMemLedgerReader {
     chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, Uuid)>>>,
@@ -151,10 +156,12 @@ impl LedgerReader for InMemLedgerReader {
     async fn state_updates(
         self,
         _offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, ProvModel, Uuid)> + Send>>, SubscriptionError>
+    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>, SubscriptionError>
     {
         let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
-            chan.next().await.map(|prov| (prov, chan))
+            chan.next()
+                .await
+                .map(|(offset, prov, uuid)| ((offset, prov.into(), uuid), chan))
         });
 
         Ok(stream.boxed())

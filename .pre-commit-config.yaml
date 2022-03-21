@@ -1,0 +1,24 @@
+repos:
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: Rust fmt
+        description: Run nightly cargo fmt on files included in the commit.
+        entry: cargo +nightly fmt --all --
+        pass_filenames: true
+        types: [file, rust]
+        language: system
+      - id: clippy
+        name: Clippy
+        description: Run cargo clippy on files included in the commit, nightly not viable with --no-deps for whatever reason currently.
+        entry: cargo clippy --all-targets --all-features -- --no-deps -Dclippy::all
+        pass_filenames: false
+        types: [file, rust]
+        language: system
+      - id: test
+        name: Cargo test
+        description: Run rust embedded tests
+        entry: cargo test --all-targets --all-features
+        pass_filenames: false
+        types: [file, rust]
+        language: system
