@@ -6,11 +6,13 @@ use json::{object, JsonValue};
 use json_ld::{
     context::Local, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
 };
+use k256::ecdsa::Signature;
 use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
+    fmt::Display,
 };
 use tokio::task::JoinError;
 use uuid::Uuid;
@@ -129,7 +131,39 @@ pub enum Domaintype {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum ChronicleTransaction {
+pub struct ChronicleTransactionId(String);
+
+impl Display for ChronicleTransactionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&*self.0)
+    }
+}
+
+impl From<Uuid> for ChronicleTransactionId {
+    fn from(u: Uuid) -> Self {
+        Self(u.to_string())
+    }
+}
+
+impl From<Signature> for ChronicleTransactionId {
+    fn from(s: Signature) -> Self {
+        Self(hex::encode_upper(s.as_ref()))
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct ChronicleTransaction {
+    pub tx: Vec<ChronicleOperation>,
+}
+
+impl ChronicleTransaction {
+    pub fn new(tx: Vec<ChronicleOperation>) -> Self {
+        Self { tx }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
     CreateAgent(CreateAgent),
     RegisterKey(RegisterKey),
@@ -300,7 +334,7 @@ impl ProvModel {
     /// Apply a sequence of `ChronicleTransaction` to an empty model, then return it
     pub fn from_tx<'a, I>(tx: I) -> Self
     where
-        I: IntoIterator<Item = &'a ChronicleTransaction>,
+        I: IntoIterator<Item = &'a ChronicleOperation>,
     {
         let mut model = Self::default();
         for tx in tx {
@@ -531,17 +565,17 @@ impl ProvModel {
 
     /// Transform a sequence of ChronicleTransaction events into a provenance model,
     /// If a statement requires a subject or object that does not currently exist in the model, then we create it
-    pub fn apply(&mut self, tx: &ChronicleTransaction) {
+    pub fn apply(&mut self, tx: &ChronicleOperation) {
         let tx = tx.to_owned();
         match tx {
-            ChronicleTransaction::CreateNamespace(CreateNamespace {
+            ChronicleOperation::CreateNamespace(CreateNamespace {
                 id,
                 name: _,
                 uuid: _,
             }) => {
                 self.namespace_context(&id);
             }
-            ChronicleTransaction::CreateAgent(CreateAgent {
+            ChronicleOperation::CreateAgent(CreateAgent {
                 namespace,
                 id,
                 name,
@@ -552,7 +586,7 @@ impl ProvModel {
                     Agent::new(id, namespace, name, None),
                 );
             }
-            ChronicleTransaction::RegisterKey(RegisterKey {
+            ChronicleOperation::RegisterKey(RegisterKey {
                 namespace,
                 id,
                 publickey,
@@ -565,7 +599,7 @@ impl ProvModel {
                     .or_insert_with(|| Agent::new(id.clone(), namespace.clone(), name, None));
                 self.new_identity(&namespace, &id, &publickey);
             }
-            ChronicleTransaction::CreateActivity(CreateActivity {
+            ChronicleOperation::CreateActivity(CreateActivity {
                 namespace,
                 id,
                 name,
@@ -576,7 +610,7 @@ impl ProvModel {
                     .entry((namespace.clone(), id.clone()))
                     .or_insert_with(|| Activity::new(id, namespace, &name, None));
             }
-            ChronicleTransaction::StartActivity(StartActivity {
+            ChronicleOperation::StartActivity(StartActivity {
                 namespace,
                 id,
                 agent,
@@ -614,7 +648,7 @@ impl ProvModel {
 
                 self.associate_with(&namespace, &id, &agent);
             }
-            ChronicleTransaction::EndActivity(EndActivity {
+            ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,
                 agent,
@@ -656,7 +690,7 @@ impl ProvModel {
 
                 self.associate_with(&namespace, &id, &agent);
             }
-            ChronicleTransaction::ActivityUses(ActivityUses {
+            ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
                 id,
                 activity,
@@ -683,7 +717,7 @@ impl ProvModel {
 
                 self.used(namespace, &activity, &id);
             }
-            ChronicleTransaction::GenerateEntity(GenerateEntity {
+            ChronicleOperation::GenerateEntity(GenerateEntity {
                 namespace,
                 id,
                 activity,
@@ -708,7 +742,7 @@ impl ProvModel {
 
                 self.generate_by(namespace, &id, &activity)
             }
-            ChronicleTransaction::EntityAttach(EntityAttach {
+            ChronicleOperation::EntityAttach(EntityAttach {
                 namespace,
                 id,
                 agent,
@@ -760,7 +794,7 @@ impl ProvModel {
                     signature_time,
                 );
             }
-            ChronicleTransaction::Domaintype(Domaintype::Entity {
+            ChronicleOperation::Domaintype(Domaintype::Entity {
                 namespace,
                 id,
                 domaintype,
@@ -774,7 +808,7 @@ impl ProvModel {
                         Entity::new(id.clone(), &namespace, id.decompose(), domaintype)
                     });
             }
-            ChronicleTransaction::Domaintype(Domaintype::Activity {
+            ChronicleOperation::Domaintype(Domaintype::Activity {
                 namespace,
                 id,
                 domaintype,
@@ -790,7 +824,7 @@ impl ProvModel {
                         Activity::new(id.clone(), namespace, id.decompose(), domaintype)
                     });
             }
-            ChronicleTransaction::Domaintype(Domaintype::Agent {
+            ChronicleOperation::Domaintype(Domaintype::Agent {
                 namespace,
                 id,
                 domaintype,
@@ -1479,7 +1513,7 @@ pub mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        vocab::Chronicle, AgentId, ChronicleTransaction, CreateActivity, CreateAgent,
+        vocab::Chronicle, AgentId, ChronicleOperation, CreateActivity, CreateAgent,
         CreateNamespace, Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel,
         RegisterKey,
     };
@@ -1685,22 +1719,22 @@ pub mod test {
         }
     }
 
-    fn transaction() -> impl Strategy<Value = ChronicleTransaction> {
+    fn transaction() -> impl Strategy<Value = ChronicleOperation> {
         prop_oneof![
-            1 => create_namespace().prop_map(ChronicleTransaction::CreateNamespace),
-            2 => create_agent().prop_map(ChronicleTransaction::CreateAgent),
-            2 => register_key().prop_map(ChronicleTransaction::RegisterKey),
-            4 => create_activity().prop_map(ChronicleTransaction::CreateActivity),
-            4 => start_activity().prop_map(ChronicleTransaction::StartActivity),
-            4 => end_activity().prop_map(ChronicleTransaction::EndActivity),
-            4 => activity_uses().prop_map(ChronicleTransaction::ActivityUses),
-            4 => generate_entity().prop_map(ChronicleTransaction::GenerateEntity),
-            2 => entity_attach().prop_map(ChronicleTransaction::EntityAttach),
-            2 => set_domain_type().prop_flat_map(|x| x.prop_map(ChronicleTransaction::Domaintype)),
+            1 => create_namespace().prop_map(ChronicleOperation::CreateNamespace),
+            2 => create_agent().prop_map(ChronicleOperation::CreateAgent),
+            2 => register_key().prop_map(ChronicleOperation::RegisterKey),
+            4 => create_activity().prop_map(ChronicleOperation::CreateActivity),
+            4 => start_activity().prop_map(ChronicleOperation::StartActivity),
+            4 => end_activity().prop_map(ChronicleOperation::EndActivity),
+            4 => activity_uses().prop_map(ChronicleOperation::ActivityUses),
+            4 => generate_entity().prop_map(ChronicleOperation::GenerateEntity),
+            2 => entity_attach().prop_map(ChronicleOperation::EntityAttach),
+            2 => set_domain_type().prop_flat_map(|x| x.prop_map(ChronicleOperation::Domaintype)),
         ]
     }
 
-    fn transaction_seq() -> impl Strategy<Value = Vec<ChronicleTransaction>> {
+    fn transaction_seq() -> impl Strategy<Value = Vec<ChronicleOperation>> {
         proptest::collection::vec(transaction(), 1..50)
     }
 
@@ -1745,14 +1779,14 @@ pub mod test {
             // Now assert the final prov object matches what we would expect from the input transactions
             for tx in tx.iter() {
                 match tx {
-                    ChronicleTransaction::CreateNamespace(CreateNamespace{id,name,uuid}) => {
+                    ChronicleOperation::CreateNamespace(CreateNamespace{id,name,uuid}) => {
                         prop_assert!(prov.namespaces.contains_key(id));
                         let ns = prov.namespaces.get(id).unwrap();
                         prop_assert_eq!(&ns.id, id);
                         prop_assert_eq!(&ns.name, name);
                         prop_assert_eq!(&ns.uuid, uuid);
                     },
-                    ChronicleTransaction::CreateAgent(
+                    ChronicleOperation::CreateAgent(
                         CreateAgent { namespace, name, id }) => {
                         let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(agent.is_some());
@@ -1760,7 +1794,7 @@ pub mod test {
                         prop_assert_eq!(&agent.name, name);
                         prop_assert_eq!(&agent.namespaceid, namespace);
                     },
-                    ChronicleTransaction::RegisterKey(
+                    ChronicleOperation::RegisterKey(
                         RegisterKey { namespace, name, id, publickey}) => {
                             regkey_assertion = Box::new(|| {
                                 let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
@@ -1779,7 +1813,7 @@ pub mod test {
                                 Ok(())
                             })
                         },
-                    ChronicleTransaction::CreateActivity(
+                    ChronicleOperation::CreateActivity(
                         CreateActivity { namespace, id, name }) => {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                         prop_assert!(activity.is_some());
@@ -1787,7 +1821,7 @@ pub mod test {
                         prop_assert_eq!(&activity.name, name);
                         prop_assert_eq!(&activity.namespaceid, namespace);
                     },
-                    ChronicleTransaction::StartActivity(
+                    ChronicleOperation::StartActivity(
                         StartActivity { namespace, id, agent, time }) =>  {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                         prop_assert!(activity.is_some());
@@ -1803,7 +1837,7 @@ pub mod test {
                             .unwrap()
                             .contains(&(namespace.to_owned(),agent.to_owned())));
                     },
-                    ChronicleTransaction::EndActivity(
+                    ChronicleOperation::EndActivity(
                         EndActivity { namespace, id, agent, time }) => {
                         let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(activity.is_some());
@@ -1819,7 +1853,7 @@ pub mod test {
                             .unwrap()
                             .contains(&(namespace.to_owned(),agent.to_owned())));
                     }
-                    ChronicleTransaction::ActivityUses(
+                    ChronicleOperation::ActivityUses(
                         ActivityUses { namespace, id, activity }) => {
                         let activity_id = activity;
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
@@ -1840,7 +1874,7 @@ pub mod test {
                             .contains(&(namespace.to_owned(),id.to_owned())));
 
                     },
-                    ChronicleTransaction::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
+                    ChronicleOperation::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
                         let activity_id = activity;
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(entity.is_some());
@@ -1859,7 +1893,7 @@ pub mod test {
                             .unwrap()
                             .contains(&(namespace.to_owned(),activity.id.to_owned())));
                     }
-                    ChronicleTransaction::EntityAttach(
+                    ChronicleOperation::EntityAttach(
                         EntityAttach{
                         namespace,
                         identityid: _,
@@ -1883,7 +1917,7 @@ pub mod test {
                         prop_assert_eq!(&agent.namespaceid, namespace);
 
                     },
-                    ChronicleTransaction::Domaintype(
+                    ChronicleOperation::Domaintype(
                         Domaintype::Entity  { namespace, id, domaintype }) => {
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(entity.is_some());
@@ -1891,14 +1925,14 @@ pub mod test {
 
                         prop_assert_eq!(&entity.domaintypeid, domaintype);
                     },
-                    ChronicleTransaction::Domaintype(Domaintype::Activity { namespace, id, domaintype }) => {
+                    ChronicleOperation::Domaintype(Domaintype::Activity { namespace, id, domaintype }) => {
                         let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(activity.is_some());
                         let activity = activity.unwrap();
 
                         prop_assert_eq!(&activity.domaintypeid, domaintype);
                     },
-                    ChronicleTransaction::Domaintype(Domaintype::Agent { namespace, id, domaintype }) => {
+                    ChronicleOperation::Domaintype(Domaintype::Agent { namespace, id, domaintype }) => {
                         let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
                         prop_assert!(agent.is_some());
                         let agent = agent.unwrap();

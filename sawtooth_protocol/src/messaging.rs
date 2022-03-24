@@ -4,7 +4,7 @@ use crate::{
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
-    prov::{ChronicleTransaction, ProcessorError},
+    prov::{ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
 use derivative::Derivative;
@@ -20,7 +20,6 @@ use sawtooth_sdk::{
 };
 use tokio::task::JoinError;
 use tracing::{debug, instrument};
-use uuid::Uuid;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -59,29 +58,30 @@ impl SawtoothSubmitter {
     #[instrument]
     async fn submit(
         &mut self,
-        correlation_id: Uuid,
-        transactions: Vec<&ChronicleTransaction>,
-    ) -> Result<(), SawtoothSubmissionError> {
-        let mut transaction_batch = vec![];
+        transactions: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
+        let mut addresses = vec![];
 
         for transaction in transactions {
-            let addresses = transaction
-                .dependencies()
-                .await?
-                .iter()
-                .map(SawtoothAddress::from)
-                .map(|addr| addr.to_string())
-                .collect::<Vec<_>>();
-
-            transaction_batch.push(self.builder.make_sawtooth_transaction(
-                addresses.clone(),
-                addresses,
-                vec![],
-                transaction,
-            ));
+            addresses.append(
+                &mut transaction
+                    .dependencies()
+                    .await?
+                    .iter()
+                    .map(SawtoothAddress::from)
+                    .map(|addr| addr.to_string())
+                    .collect::<Vec<_>>(),
+            );
         }
 
-        let batch = self.builder.make_sawtooth_batch(transaction_batch);
+        let (sawtooth_transaction, tx_id) = self.builder.make_sawtooth_transaction(
+            addresses.clone(),
+            addresses,
+            vec![],
+            transactions,
+        );
+
+        let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
         debug!(?batch, "Validator request");
 
@@ -91,7 +91,7 @@ impl SawtoothSubmitter {
 
         let mut future = self.tx.send(
             Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
-            &*correlation_id.to_string(),
+            &*tx_id.to_string(),
             &*request.encode_to_vec(),
         )?;
 
@@ -100,7 +100,7 @@ impl SawtoothSubmitter {
         debug!(?result, "Validator response");
 
         if result.message_type == Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE {
-            Ok(())
+            Ok(tx_id)
         } else {
             Err(SawtoothSubmissionError::UnexpectedReply {})
         }
@@ -113,11 +113,8 @@ impl LedgerWriter for SawtoothSubmitter {
     /// which also exposes a buch of non clonable types so we probably need another dispatch / join mpsc here
     async fn submit(
         &mut self,
-        correlation_id: Uuid,
-        tx: Vec<&ChronicleTransaction>,
-    ) -> Result<(), SubmissionError> {
-        self.submit(correlation_id, tx)
-            .await
-            .map_err(SawtoothSubmissionError::into)
+        tx: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, SubmissionError> {
+        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
     }
 }

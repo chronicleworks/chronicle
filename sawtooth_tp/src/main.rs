@@ -1,16 +1,10 @@
-mod address;
-mod messages;
-mod messaging;
 mod tp;
-
-mod sawtooth {
-    include!(concat!(env!("OUT_DIR"), "/_.rs"));
-}
 
 use clap::{Arg, Command, ValueHint};
 use clap_generate::Shell;
 use sawtooth_sdk::processor::TransactionProcessor;
 
+use tp::ChronicleTransactionHandler;
 use tracing::subscriber::set_global_default;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
@@ -65,7 +59,7 @@ async fn main() {
 
     let endpoint = matches.value_of("connect").unwrap_or("localhost:4004");
 
-    let handler = crate::tp::ChronicleTransactionHandler::new();
+    let handler = ChronicleTransactionHandler::new();
     let mut processor = TransactionProcessor::new(endpoint);
 
     processor.add_handler(&handler);

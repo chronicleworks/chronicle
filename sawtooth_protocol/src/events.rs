@@ -10,13 +10,13 @@ use std::{
 use backoff::ExponentialBackoff;
 use common::{
     ledger::{LedgerReader, Offset, SubscriptionError},
-    prov::{ProcessorError, ProvModel},
+    prov::{ChronicleTransactionId, ProcessorError, ProvModel},
 };
 use custom_error::custom_error;
 use derivative::*;
 use futures::{stream, Stream, StreamExt, TryFutureExt};
 
-use k256::ecdsa::SigningKey;
+use k256::ecdsa::{Signature, SigningKey};
 use prost::{DecodeError, EncodeError, Message};
 use sawtooth_sdk::{
     messages::validator::Message_MessageType,
@@ -30,7 +30,6 @@ use sawtooth_sdk::{
 };
 use tokio::task::JoinError;
 use tracing::{debug, error, info, instrument, warn};
-use uuid::Uuid;
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
@@ -43,6 +42,9 @@ custom_error! {pub StateError
     SubscribeError{msg: String}                     = "Subscription failed",
     RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator",
     MissingBlockNum{}                               = "Missing block_num in block commit",
+    MissingTransactionId{}                          = "Missing transaction_id in prov-update",
+    InvalidTransactionId{source: k256::ecdsa::Error}
+                                                    = "Invalid transaction id (not a signature)",
     MissingData{}                                   = "Missing block_num in block commit",
     UnparsableBlockNum {}                           = "Unparsable block_num in block commit",
     UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data",
@@ -115,7 +117,10 @@ impl StateDelta {
     async fn get_state_from(
         &self,
         offset: &Offset,
-    ) -> Result<impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, Uuid)>>, StateError> {
+    ) -> Result<
+        impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, ChronicleTransactionId)>>,
+        StateError,
+    > {
         let request = self.builder.make_subcription_request(offset);
 
         debug!(?request, "Subscription request");
@@ -150,11 +155,11 @@ impl StateDelta {
     fn event_stream(
         rx: Arc<Mutex<MessageReceiver>>,
         block: Offset,
-    ) -> impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, Uuid)>> {
+    ) -> impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, ChronicleTransactionId)>> {
         #[derive(Debug)]
         enum ParsedEvent {
             Block(String),
-            State(Box<ProvModel>),
+            State(Box<ProvModel>, ChronicleTransactionId),
         }
 
         stream::unfold((rx, block), |(rx, block)| async move {
@@ -166,7 +171,6 @@ impl StateDelta {
                         debug!("No events in time window");
                     }
                     Ok(Ok(events)) => {
-                        let correlation = events.correlation_id.parse::<Uuid>().unwrap_or_default();
                         match EventList::decode(events.get_content()) {
                             Ok(events) => {
                                 debug!(?events, "Received events");
@@ -182,11 +186,31 @@ impl StateDelta {
                                                 Some(ParsedEvent::Block(attr.value.clone()))
                                             }),
                                         "chronicle/prov-update" => {
-                                            serde_cbor::from_slice::<ProvModel>(&*event.data)
-                                                .map_err(StateError::from)
-                                                .map(|prov| {
-                                                    Some(ParsedEvent::State(Box::new(prov)))
+                                            let transaction_id = event
+                                                .attributes
+                                                .iter()
+                                                .find(|attr| attr.key == "transaction_id")
+                                                .ok_or(StateError::MissingTransactionId {})
+                                                .and_then(|transaction_id| {
+                                                    Signature::try_from(
+                                                        transaction_id.value.as_bytes(),
+                                                    )
+                                                    .map_err(StateError::from)
                                                 })
+                                                .map(|transaction_id| {
+                                                    ChronicleTransactionId::from(transaction_id)
+                                                });
+
+                                            transaction_id.and_then(|transaction_id| {
+                                                serde_cbor::from_slice::<ProvModel>(&*event.data)
+                                                    .map_err(StateError::from)
+                                                    .map(|prov| {
+                                                        Some(ParsedEvent::State(
+                                                            Box::new(prov),
+                                                            transaction_id,
+                                                        ))
+                                                    })
+                                            })
                                         }
                                         _ => Ok(None),
                                     });
@@ -202,8 +226,15 @@ impl StateDelta {
                                             Ok(Some(ParsedEvent::Block(next))) => {
                                                 (prov, Offset::from(&*next))
                                             }
-                                            Ok(Some(ParsedEvent::State(next_prov))) => {
-                                                prov.push((block.clone(), next_prov, correlation));
+                                            Ok(Some(ParsedEvent::State(
+                                                next_prov,
+                                                transaction_id,
+                                            ))) => {
+                                                prov.push((
+                                                    block.clone(),
+                                                    next_prov,
+                                                    transaction_id,
+                                                ));
                                                 (prov, block)
                                             }
                                             Err(e) => {
@@ -244,7 +275,7 @@ impl LedgerReader for StateDelta {
         self,
         offset: Offset,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>,
+        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
         common::ledger::SubscriptionError,
     > {
         let self_clone = self.clone();

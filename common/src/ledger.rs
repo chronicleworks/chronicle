@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     context::PROV,
-    prov::{ChronicleTransaction, ProcessorError, ProvModel},
+    prov::{ChronicleOperation, ChronicleTransactionId, ProcessorError, ProvModel},
 };
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, pin::Pin, str::from_utf8};
@@ -72,9 +72,8 @@ impl std::error::Error for SubmissionError {
 pub trait LedgerWriter {
     async fn submit(
         &mut self,
-        correlation_id: Uuid,
-        tx: Vec<&ChronicleTransaction>,
-    ) -> Result<(), SubmissionError>;
+        tx: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, SubmissionError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,14 +108,17 @@ pub trait LedgerReader {
     async fn state_updates(
         self,
         offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>, SubscriptionError>;
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
+        SubscriptionError,
+    >;
 }
 
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
-    chan: UnboundedSender<(Offset, ProvModel, Uuid)>,
+    chan: UnboundedSender<(Offset, ProvModel, ChronicleTransactionId)>,
     reader: Option<InMemLedgerReader>,
     head: u64,
 }
@@ -148,7 +150,7 @@ impl Default for InMemLedger {
 
 #[derive(Debug)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, Uuid)>>>,
+    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>>,
 }
 
 #[async_trait::async_trait]
@@ -156,8 +158,10 @@ impl LedgerReader for InMemLedgerReader {
     async fn state_updates(
         self,
         _offset: Offset,
-    ) -> Result<Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, Uuid)> + Send>>, SubscriptionError>
-    {
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
+        SubscriptionError,
+    > {
         let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
             chan.next()
                 .await
@@ -196,9 +200,10 @@ impl LedgerWriter for InMemLedger {
     #[instrument]
     async fn submit(
         &mut self,
-        correlationid: Uuid,
-        tx: Vec<&ChronicleTransaction>,
-    ) -> Result<(), SubmissionError> {
+        tx: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, SubmissionError> {
+        let id = ChronicleTransactionId::from(Uuid::new_v4());
+
         for tx in tx {
             debug!(?tx, "Process transaction");
             let dependencies = tx.dependencies().await.unwrap();
@@ -206,6 +211,7 @@ impl LedgerWriter for InMemLedger {
 
             let (output, state) = tx
                 .process(
+                    ProvModel::default(),
                     tx.dependencies()
                         .await?
                         .iter()
@@ -227,14 +233,14 @@ impl LedgerWriter for InMemLedger {
             }
 
             self.chan
-                .send((Offset::from(&*self.head.to_string()), state, correlationid))
+                .send((Offset::from(&*self.head.to_string()), state, id.clone()))
                 .await
                 .ok();
 
             self.head += 1;
         }
 
-        Ok(())
+        Ok(id)
     }
 }
 
@@ -271,7 +277,7 @@ impl StateOutput {
 /// A prov model represented as one or more JSON-LD documents
 impl ProvModel {}
 
-impl ChronicleTransaction {
+impl ChronicleOperation {
     /// Compute dependencies for a chronicle transaction, input and output addresses are always symmetric
     pub async fn dependencies(&self) -> Result<Vec<LedgerAddress>, ProcessorError> {
         let mut model = ProvModel::default();
@@ -320,10 +326,9 @@ impl ChronicleTransaction {
     #[instrument]
     pub async fn process(
         &self,
+        mut model: ProvModel,
         input: Vec<StateInput>,
     ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
-        let mut model = ProvModel::default();
-
         debug!(?input, "Transforming state input");
 
         for input in input {

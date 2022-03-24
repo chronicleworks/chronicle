@@ -5,9 +5,11 @@ use derivative::*;
 use futures::AsyncRead;
 use iref::IriBuf;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use crate::{ledger::Offset, prov::ProvModel};
+use crate::{
+    ledger::Offset,
+    prov::{ChronicleTransactionId, ProvModel},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -126,7 +128,7 @@ pub struct QueryCommand {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncCommand {
-    pub correlation_id: Uuid,
+    pub correlation_id: String,
     pub offset: Offset,
     pub prov: ProvModel,
 }
@@ -144,5 +146,5 @@ pub enum ApiCommand {
 pub enum ApiResponse {
     Unit,
     /// Context iri (i.e the subject resource) and delta
-    Prov(IriBuf, Vec<ProvModel>, Uuid),
+    Prov(IriBuf, Vec<ProvModel>, ChronicleTransactionId),
 }

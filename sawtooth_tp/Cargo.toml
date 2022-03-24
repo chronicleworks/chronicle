@@ -1,22 +1,22 @@
+[[bin]]
+name = "chronicle_sawtooth_tp"
+path = "src/main.rs"
+
 [package]
-name = "proto"
+name = "sawtooth_tp"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
-
-[lib]
-name = "sawtooth_protocol"
-path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common = { path = "../common" }
+proto = { path = "../sawtooth_protocol" }
 clap = { version = "3.0.12" }
 clap_generate = "3.0.2"
 bytes = "1.1.0"
 prost = "0.9.0"
 prost-types = "0.9.0"
-common = { path = "../common" }
 custom_error = "1.9.2"
 serde = "1.0.135"
 serde_derive = "1.0.135"

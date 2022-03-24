@@ -1,4 +1,7 @@
-use common::{ledger::Offset, prov::ChronicleTransaction};
+use common::{
+    ledger::Offset,
+    prov::{ChronicleOperation, ChronicleTransactionId},
+};
 use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
 use k256::ecdsa::{signature::Signer, Signature, SigningKey};
@@ -67,19 +70,19 @@ impl MessageBuilder {
         request
     }
 
-    pub fn make_sawtooth_batch(&self, tx: Vec<Transaction>) -> Batch {
+    pub fn wrap_tx_as_sawtooth_batch(&self, tx: Transaction) -> Batch {
         let mut batch = Batch::default();
 
         let mut header = BatchHeader::default();
 
         let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
-        header.transaction_ids = tx.iter().map(|tx| tx.header_signature.to_owned()).collect();
+        header.transaction_ids = vec![tx.header_signature.clone()];
         header.signer_public_key = pubkey;
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);
 
-        batch.transactions = tx;
+        batch.transactions = vec![tx];
         batch.header = encoded_header;
         batch.header_signature = hex::encode_upper(s.as_ref());
 
@@ -92,9 +95,9 @@ impl MessageBuilder {
         input_addresses: Vec<String>,
         output_addresses: Vec<String>,
         dependencies: Vec<String>,
-        payload: &ChronicleTransaction,
-    ) -> Transaction {
-        let bytes = serde_cbor::to_vec(payload).unwrap();
+        payload: &[ChronicleOperation],
+    ) -> (Transaction, ChronicleTransactionId) {
+        let bytes = serde_cbor::to_vec(&payload).unwrap();
 
         let mut hasher = Sha512::new();
         hasher.input(&*bytes);
@@ -118,17 +121,20 @@ impl MessageBuilder {
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);
 
-        Transaction {
-            header: encoded_header,
-            header_signature: hex::encode_upper(s.as_ref()),
-            payload: bytes,
-        }
+        (
+            Transaction {
+                header: encoded_header,
+                header_signature: hex::encode_upper(s.as_ref()),
+                payload: bytes,
+            },
+            ChronicleTransactionId::from(s),
+        )
     }
 }
 
 #[cfg(test)]
 mod test {
-    use common::prov::{vocab::Chronicle, ChronicleTransaction, CreateNamespace};
+    use common::prov::{vocab::Chronicle, ChronicleOperation, CreateNamespace};
     use k256::{ecdsa::SigningKey, SecretKey};
     use prost::Message;
     use rand::prelude::StdRng;
@@ -145,7 +151,7 @@ mod test {
 
         let uuid = Uuid::new_v4();
 
-        let batch = vec![ChronicleTransaction::CreateNamespace(CreateNamespace {
+        let batch = vec![ChronicleOperation::CreateNamespace(CreateNamespace {
             id: Chronicle::namespace("t", &uuid).into(),
             name: "t".to_owned(),
             uuid,
@@ -155,19 +161,14 @@ mod test {
         let output_addresses = vec!["outtwo".to_owned(), "outtwo".to_owned()];
         let dependencies = vec!["dependency".to_owned()];
 
-        let proto_tx = batch
-            .iter()
-            .map(|tx| {
-                builder.make_sawtooth_transaction(
-                    input_addresses.clone(),
-                    output_addresses.clone(),
-                    dependencies.clone(),
-                    tx,
-                )
-            })
-            .collect();
+        let (proto_tx, _id) = builder.make_sawtooth_transaction(
+            input_addresses,
+            output_addresses,
+            dependencies,
+            batch.as_slice(),
+        );
 
-        let batch = builder.make_sawtooth_batch(proto_tx);
+        let batch = builder.wrap_tx_as_sawtooth_batch(proto_tx);
 
         let _batch_sdk_parsed: Batch =
             protobuf::Message::parse_from_bytes(&*batch.encode_to_vec()).unwrap();

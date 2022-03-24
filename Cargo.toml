@@ -1,11 +1,6 @@
 [workspace]
 
-members = [
-    "common",
-    "api",
-    "cli",
-    "sawtooth_protocol",
-]
+members = ["common", "api", "cli", "sawtooth_protocol", "sawtooth_tp"]
 
 
 [profile.release]

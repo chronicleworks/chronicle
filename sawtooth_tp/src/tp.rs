@@ -1,5 +1,10 @@
-use crate::address::{SawtoothAddress, PREFIX};
-use common::{ledger::StateInput, prov::ChronicleTransaction};
+use std::collections::BTreeMap;
+
+use common::{
+    ledger::StateInput,
+    prov::{ChronicleOperation, ProvModel},
+};
+use sawtooth_protocol::address::{SawtoothAddress, PREFIX};
 
 use k256::ecdsa::VerifyingKey;
 
@@ -70,50 +75,65 @@ impl TransactionHandler for ChronicleTransactionHandler {
             })?
             .ok();
 
-        let tx: ChronicleTransaction = serde_cbor::from_slice(request.get_payload())
+        let tx: Vec<ChronicleOperation> = serde_cbor::from_slice(request.get_payload())
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
-        debug!(?tx, "Processing");
+        let mut model = ProvModel::default();
+        let mut output = vec![];
 
-        // Set up our call to get dependencies
-        let deps = tx.clone();
-        let (send, recv) = crossbeam::channel::bounded(1);
-        Handle::current().spawn(async move { send.send(deps.dependencies().await) });
+        for tx in tx {
+            debug!(?tx, "Processing");
 
-        let deps = recv
-            .recv()
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+            // Set up our call to get dependencies
+            let deps = tx.clone();
+            let (send, recv) = crossbeam::channel::bounded(1);
+            Handle::current().spawn(async move { send.send(deps.dependencies().await) });
 
-        debug!(?deps, "Input addresses");
+            let deps = recv
+                .recv()
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
-        let input = context
-            .get_state_entries(
-                &deps
-                    .iter()
-                    .map(|x| SawtoothAddress::from(x).to_string())
-                    .collect::<Vec<_>>(),
-            )?
+            debug!(?deps, "Input addresses");
+
+            let input = context
+                .get_state_entries(
+                    &deps
+                        .iter()
+                        .map(|x| SawtoothAddress::from(x).to_string())
+                        .collect::<Vec<_>>(),
+                )?
+                .into_iter()
+                .map(|(_, data)| StateInput::new(data))
+                .collect();
+
+            debug!(?input, "Processing input state");
+
+            let (send, recv) = crossbeam::channel::bounded(1);
+            Handle::current().spawn(async move {
+                send.send(
+                    tx.process(model, input)
+                        .await
+                        .map_err(|e| ApplyError::InternalError(e.to_string())),
+                )
+            });
+
+            let (mut tx_output, updated_model) = recv
+                .recv()
+                .map_err(|e| ApplyError::InternalError(e.to_string()))??;
+
+            output.append(&mut tx_output);
+            model = updated_model;
+        }
+
+        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
+        let output = output
             .into_iter()
-            .map(|(_, data)| StateInput::new(data))
-            .collect();
-
-        debug!(?input, "Processing input state");
-
-        let (send, recv) = crossbeam::channel::bounded(1);
-        Handle::current().spawn(async move {
-            send.send(
-                tx.process(input)
-                    .await
-                    .map_err(|e| ApplyError::InternalError(e.to_string())),
-            )
-        });
-
-        let (mut output, model) = recv
-            .recv()
-            .map_err(|e| ApplyError::InternalError(e.to_string()))??;
-
-        output.sort_by(|l, r| l.address.cmp(&r.address));
+            .map(|state| (state.address.clone(), state))
+            .collect::<BTreeMap<_, _>>()
+            .into_iter()
+            .map(|x| x.1)
+            .collect::<Vec<_>>();
 
         debug!(?output, "Storing output state");
 
