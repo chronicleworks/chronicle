@@ -22,7 +22,6 @@ use futures::Stream;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
 use user_error::UFE;
-use uuid::Uuid;
 use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
@@ -119,7 +118,7 @@ impl Namespace {
 #[derive(Default, Queryable)]
 pub struct Submission {
     context: String,
-    correlation_id: Uuid,
+    correlation_id: String,
 }
 
 #[Object]
@@ -128,7 +127,7 @@ impl Submission {
         &self.context
     }
 
-    async fn correlation_id(&self) -> &Uuid {
+    async fn correlation_id(&self) -> &str {
         &self.correlation_id
     }
 }
@@ -425,7 +424,7 @@ async fn transaction_context<'a>(
     match res {
         ApiResponse::Prov(id, _, correlation_id) => Ok(Submission {
             context: id.to_string(),
-            correlation_id,
+            correlation_id: correlation_id.to_string(),
         }),
         _ => unreachable!(),
     }
@@ -625,14 +624,14 @@ impl Mutation {
 
 pub struct Subscription;
 
-#[derive(Default, Queryable)]
+#[derive(Queryable)]
 pub struct CommitNotification {
-    correlation_id: Uuid,
+    correlation_id: String,
 }
 
 #[Object]
 impl CommitNotification {
-    pub async fn correlation_id(&self) -> &Uuid {
+    pub async fn correlation_id(&self) -> &String {
         &self.correlation_id
     }
 }
@@ -649,7 +648,7 @@ impl Subscription {
             loop {
                 match rx.recv().await {
                     Ok((_prov, correlation_id)) =>
-                    yield CommitNotification {correlation_id},
+                    yield CommitNotification {correlation_id: correlation_id.to_string()},
                     Err(RecvError::Lagged(_)) => {
                     }
                     Err(_) => break

@@ -29,9 +29,10 @@ use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
-        vocab::Chronicle as ChronicleVocab, ActivityUses, ChronicleTransaction, CreateActivity,
-        CreateAgent, CreateNamespace, Domaintype, EndActivity, EntityAttach, GenerateEntity,
-        NamespaceId, ProvModel, RegisterKey, StartActivity,
+        vocab::Chronicle as ChronicleVocab, ActivityUses, ChronicleOperation,
+        ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, Domaintype,
+        EndActivity, EntityAttach, GenerateEntity, NamespaceId, ProvModel, RegisterKey,
+        StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -73,9 +74,8 @@ impl From<Infallible> for ApiError {
 impl UFE for ApiError {}
 
 type LedgerSendWithReply = (
-    Uuid,
-    Vec<ChronicleTransaction>,
-    Sender<Result<(), SubmissionError>>,
+    Vec<ChronicleOperation>,
+    Sender<Result<ChronicleTransactionId, SubmissionError>>,
 );
 
 /// Blocking ledger writer, as we need to execute this within diesel transaction scope
@@ -99,10 +99,8 @@ impl BlockingLedgerWriter {
             let local = tokio::task::LocalSet::new();
             local.spawn_local(async move {
                 loop {
-                    if let Some((correlation_id, submission, reply)) = rx.recv().await {
-                        let result = ledger_writer
-                            .submit(correlation_id, submission.iter().collect())
-                            .await;
+                    if let Some((submission, reply)) = rx.recv().await {
+                        let result = ledger_writer.submit(submission.as_slice()).await;
 
                         reply
                             .send(result)
@@ -125,14 +123,11 @@ impl BlockingLedgerWriter {
 
     fn submit_blocking(
         &mut self,
-        correlation_id: Uuid,
-        tx: &[ChronicleTransaction],
-    ) -> Result<(), ApiError> {
+        tx: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
         trace!(?tx, "Dispatch submission to ledger");
-        self.tx
-            .clone()
-            .blocking_send((correlation_id, tx.to_vec(), reply_tx))?;
+        self.tx.clone().blocking_send((tx.to_vec(), reply_tx))?;
 
         let reply = reply_rx.blocking_recv();
 
@@ -172,7 +167,7 @@ where
 /// A clonable api handle
 pub struct ApiDispatch {
     tx: Sender<ApiSendWithReply>,
-    notify_commit: tokio::sync::broadcast::Sender<(ProvModel, Uuid)>,
+    notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
 }
 
 impl ApiDispatch {
@@ -310,7 +305,7 @@ where
         &mut self,
         connection: &mut SqliteConnection,
         name: &str,
-    ) -> Result<(NamespaceId, Vec<ChronicleTransaction>), ApiError> {
+    ) -> Result<(NamespaceId, Vec<ChronicleOperation>), ApiError> {
         let ns = self.store.namespace_by_name(connection, name);
 
         if ns.is_err() {
@@ -321,7 +316,7 @@ where
             let id: NamespaceId = iri.into();
             Ok((
                 id.clone(),
-                vec![ChronicleTransaction::CreateNamespace(CreateNamespace {
+                vec![ChronicleOperation::CreateNamespace(CreateNamespace {
                     id,
                     name: name.to_owned(),
                     uuid,
@@ -338,7 +333,7 @@ where
     #[instrument]
     async fn activity_generate(
         &self,
-        correlation_id: Uuid,
+
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -370,7 +365,7 @@ where
                 };
 
                 let id = ChronicleVocab::entity(&name);
-                let create = ChronicleTransaction::GenerateEntity(GenerateEntity {
+                let create = ChronicleOperation::GenerateEntity(GenerateEntity {
                     namespace: namespace.clone(),
                     id: id.clone().into(),
                     activity: ChronicleVocab::activity(&activity.name).into(),
@@ -379,7 +374,7 @@ where
                 to_apply.push(create);
 
                 if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                    let set_type = ChronicleOperation::Domaintype(Domaintype::Entity {
                         id: id.clone().into(),
                         namespace,
                         domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
@@ -388,8 +383,7 @@ where
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -407,7 +401,7 @@ where
     #[instrument]
     async fn activity_use(
         &self,
-        correlation_id: Uuid,
+
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -441,7 +435,7 @@ where
 
                     let id = ChronicleVocab::entity(&name);
 
-                    let create = ChronicleTransaction::ActivityUses(ActivityUses {
+                    let create = ChronicleOperation::ActivityUses(ActivityUses {
                         namespace: namespace.clone(),
                         id: id.clone().into(),
                         activity: ChronicleVocab::activity(&activity.name).into(),
@@ -450,7 +444,7 @@ where
                     to_apply.push(create);
 
                     if let Some(domaintype) = domaintype {
-                        let set_type = ChronicleTransaction::Domaintype(Domaintype::Entity {
+                        let set_type = ChronicleOperation::Domaintype(Domaintype::Entity {
                             id: id.clone().into(),
                             namespace,
                             domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
@@ -461,8 +455,7 @@ where
                     (id, to_apply)
                 };
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -480,7 +473,7 @@ where
     #[instrument]
     async fn create_activity(
         &self,
-        correlation_id: Uuid,
+
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -496,7 +489,7 @@ where
                     .store
                     .disambiguate_activity_name(connection, &name, &namespace)?;
                 let id = ChronicleVocab::activity(&name);
-                let create = ChronicleTransaction::CreateActivity(CreateActivity {
+                let create = ChronicleOperation::CreateActivity(CreateActivity {
                     namespace: namespace.clone(),
                     id: id.clone().into(),
                     name,
@@ -505,7 +498,7 @@ where
                 to_apply.push(create);
 
                 if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Activity {
+                    let set_type = ChronicleOperation::Domaintype(Domaintype::Activity {
                         id: id.clone().into(),
                         namespace,
                         domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
@@ -514,8 +507,7 @@ where
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -533,7 +525,6 @@ where
     #[instrument]
     async fn create_agent(
         &self,
-        correlation_id: Uuid,
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -551,7 +542,7 @@ where
 
                 let iri = ChronicleVocab::agent(&name);
 
-                let create = ChronicleTransaction::CreateAgent(CreateAgent {
+                let create = ChronicleOperation::CreateAgent(CreateAgent {
                     name: name.to_owned(),
                     id: iri.clone().into(),
                     namespace: namespace.clone(),
@@ -560,7 +551,7 @@ where
                 to_apply.push(create);
 
                 if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleTransaction::Domaintype(Domaintype::Agent {
+                    let set_type = ChronicleOperation::Domaintype(Domaintype::Agent {
                         id: ChronicleVocab::agent(&name).into(),
                         namespace,
                         domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
@@ -569,8 +560,7 @@ where
                     to_apply.push(set_type)
                 }
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     iri,
@@ -583,11 +573,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
-    async fn create_namespace(
-        &self,
-        correlation_id: Uuid,
-        name: &str,
-    ) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let name = name.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -595,8 +581,7 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &name)?;
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     IriBuf::new(&*namespace).unwrap(),
@@ -610,26 +595,17 @@ where
 
     #[instrument]
     async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
-        let correlation_id = Uuid::new_v4();
         match &command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(correlation_id, name)
-                    .instrument(info_span!("Api", %correlation_id, ?command))
-                    .await
+                self.create_namespace(name).await
             }
             ApiCommand::Agent(AgentCommand::Create {
                 name,
                 namespace,
                 domaintype,
             }) => {
-                self.create_agent(
-                    correlation_id,
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    domaintype.clone(),
-                )
-                .instrument(info_span!("Api", %correlation_id, ?command))
-                .await
+                self.create_agent(name.to_owned(), namespace.to_owned(), domaintype.clone())
+                    .await
             }
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
@@ -637,32 +613,22 @@ where
                 registration,
             }) => {
                 self.register_key(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     registration.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
-                self.use_agent(name.to_owned(), namespace.to_owned())
-                    .instrument(info_span!("Api", %correlation_id, ?command))
-                    .await
+                self.use_agent(name.to_owned(), namespace.to_owned()).await
             }
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
                 namespace,
                 domaintype,
             }) => {
-                self.create_activity(
-                    correlation_id,
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    domaintype.clone(),
-                )
-                .instrument(info_span!("Api", %correlation_id, ?command))
-                .await
+                self.create_activity(name.to_owned(), namespace.to_owned(), domaintype.clone())
+                    .await
             }
             ApiCommand::Activity(ActivityCommand::Start {
                 name,
@@ -671,13 +637,11 @@ where
                 agent,
             }) => {
                 self.start_activity(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     time.to_owned(),
                     agent.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Activity(ActivityCommand::End {
@@ -687,13 +651,11 @@ where
                 agent,
             }) => {
                 self.end_activity(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     time.to_owned(),
                     agent.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Activity(ActivityCommand::Use {
@@ -703,13 +665,11 @@ where
                 domaintype,
             }) => {
                 self.activity_use(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     activity.to_owned(),
                     domaintype.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Activity(ActivityCommand::Generate {
@@ -719,13 +679,11 @@ where
                 domaintype,
             }) => {
                 self.activity_generate(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     activity.to_owned(),
                     domaintype.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Entity(EntityCommand::Attach {
@@ -736,14 +694,12 @@ where
                 agent,
             }) => {
                 self.entity_attach(
-                    correlation_id,
                     name.to_owned(),
                     namespace.to_owned(),
                     file.clone(),
                     locator.to_owned(),
                     agent.to_owned(),
                 )
-                .instrument(info_span!("Api", %correlation_id, ?command))
                 .await
             }
             ApiCommand::Query(query) => self.query(query.to_owned()).await,
@@ -757,7 +713,6 @@ where
     #[instrument]
     async fn entity_attach(
         &self,
-        correlation_id: Uuid,
         name: String,
         namespace: String,
         file: PathOrFile,
@@ -806,7 +761,7 @@ where
 
                 let signature: Signature = signer.sign(&*buf);
 
-                let tx = ChronicleTransaction::EntityAttach(EntityAttach {
+                let tx = ChronicleOperation::EntityAttach(EntityAttach {
                     namespace,
                     id: id.clone().into(),
                     agent: agentid.clone(),
@@ -822,8 +777,7 @@ where
 
                 to_apply.push(tx);
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -846,7 +800,7 @@ where
             Ok(ApiResponse::Prov(
                 IriBuf::new(id.as_str()).unwrap(),
                 vec![api.store.prov_model_for_namespace(&mut connection, query)?],
-                Uuid::default(),
+                ChronicleTransactionId::from(Uuid::default()),
             ))
         })
         .await?
@@ -870,7 +824,7 @@ where
     #[instrument]
     async fn register_key(
         &self,
-        correlation_id: Uuid,
+
         name: String,
         namespace: String,
         registration: KeyRegistration,
@@ -900,7 +854,7 @@ where
                         .store_agent(&id.clone().into(), None, Some(&buffer))?,
                 }
 
-                to_apply.push(ChronicleTransaction::RegisterKey(RegisterKey {
+                to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
                     id: id.clone().into(),
                     name,
                     namespace,
@@ -909,8 +863,7 @@ where
                     ),
                 }));
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -926,7 +879,6 @@ where
     #[instrument]
     async fn start_activity(
         &self,
-        correlation_id: Uuid,
         name: String,
         namespace: String,
         time: Option<DateTime<Utc>>,
@@ -964,15 +916,14 @@ where
                 };
 
                 let id = ChronicleVocab::activity(&name);
-                to_apply.push(ChronicleTransaction::StartActivity(StartActivity {
+                to_apply.push(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
                     id: id.clone().into(),
                     agent: ChronicleVocab::agent(&agent.name).into(),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
@@ -988,7 +939,7 @@ where
     #[instrument]
     async fn end_activity(
         &self,
-        correlation_id: Uuid,
+
         name: Option<String>,
         namespace: String,
         time: Option<DateTime<Utc>>,
@@ -1016,15 +967,14 @@ where
                 };
 
                 let id = ChronicleVocab::activity(&activity.name);
-                to_apply.push(ChronicleTransaction::EndActivity(EndActivity {
+                to_apply.push(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
                     id: id.clone().into(),
                     agent: ChronicleVocab::agent(&agent.name).into(),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                api.ledger_writer
-                    .submit_blocking(correlation_id, &to_apply)?;
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::Prov(
                     id,
