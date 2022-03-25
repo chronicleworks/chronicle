@@ -201,8 +201,8 @@ where
         uuidgen: U,
     ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
     where
-        R: LedgerReader + 'static + Send,
-        W: LedgerWriter + 'static + Send,
+        R: LedgerReader + Send + 'static,
+        W: LedgerWriter + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -240,7 +240,7 @@ where
                 .state_updates(
                     store
                         .get_last_offset()
-                        .unwrap_or(Some(Offset::Genesis))
+                        .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
                         .unwrap_or(Offset::Genesis),
                 )
                 .await
@@ -259,8 +259,8 @@ where
                 select! {
                         state = state_updates.next().fuse() =>{
                             if let Some((offset, prov, correlation_id)) = state {
-                                    api.sync(&prov, offset.clone())
-                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = ?correlation_id))
+                                    api.sync(&prov, offset.clone(),correlation_id.clone())
+                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
                                         .await
                                         .map_err(|e| {
                                             error!(?e, "Api sync to confirmed commit");
@@ -333,7 +333,6 @@ where
     #[instrument]
     async fn activity_generate(
         &self,
-
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -401,7 +400,6 @@ where
     #[instrument]
     async fn activity_use(
         &self,
-
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -473,7 +471,6 @@ where
     #[instrument]
     async fn create_activity(
         &self,
-
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -807,13 +804,19 @@ where
     }
 
     #[instrument]
-    async fn sync(&self, prov: &ProvModel, offset: Offset) -> Result<ApiResponse, ApiError> {
+    async fn sync(
+        &self,
+        prov: &ProvModel,
+        offset: Offset,
+        correlation_id: ChronicleTransactionId,
+    ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         let prov = prov.clone();
 
         tokio::task::spawn_blocking(move || {
+            //TODO: This should be a single tx
             api.store.apply_prov(&prov)?;
-            api.store.set_last_offset(offset)?;
+            api.store.set_last_offset(offset, correlation_id)?;
 
             Ok(ApiResponse::Unit)
         })
@@ -1328,6 +1331,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
+
+        tokio::time::sleep(Duration::from_secs(4)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name: "testentity".to_owned(),

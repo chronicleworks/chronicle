@@ -328,7 +328,7 @@ pub fn cli() -> Command<'static> {
                 .long("sawtooth")
                 .value_name("sawtooth")
                 .value_hint(ValueHint::Url)
-                .default_value("localhost:4004")
+                .default_value("tcp://localhost:4004")
                 .help("Sets sawtooth validator address")
                 .takes_value(true),
         )

@@ -6,10 +6,7 @@ use futures::AsyncRead;
 use iref::IriBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    ledger::Offset,
-    prov::{ChronicleTransactionId, ProvModel},
-};
+use crate::prov::{ChronicleTransactionId, ProvModel};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -124,13 +121,6 @@ pub enum EntityCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryCommand {
     pub namespace: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncCommand {
-    pub correlation_id: String,
-    pub offset: Offset,
-    pub prov: ProvModel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

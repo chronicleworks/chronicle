@@ -3,66 +3,68 @@ name = "chronicle_sawtooth_tp"
 path = "src/main.rs"
 
 [package]
-name = "sawtooth_tp"
-version = "0.1.0"
 edition = "2021"
+name    = "sawtooth_tp"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
-proto = { path = "../sawtooth_protocol" }
+async-trait = "0.1.52"
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+bytes = "1.1.0"
 clap = { version = "3.0.12" }
 clap_generate = "3.0.2"
-bytes = "1.1.0"
+common = { path = "../common" }
+crossbeam = "0.8.1"
+custom_error = "1.9.2"
+derivative = "2.2.0"
+futures = "0.3.19"
+glob = "0.3.0"
+hex = "0.4.3"
+k256 = { version = "0.10.2", features = [
+  "arithmetic",
+  "ecdsa",
+  "pkcs8",
+  "sha256",
+  "std",
+  "pem",
+] }
+lazy_static = "1.4.0"
+openssl = "0.10.38"
+opentelemetry = "0.17.0"
+opentelemetry-jaeger = "0.16.0"
 prost = "0.9.0"
 prost-types = "0.9.0"
-custom_error = "1.9.2"
-serde = "1.0.135"
-serde_derive = "1.0.135"
-sawtooth-sdk = "0.5.0"
-url = "2.2.2"
-glob = "0.3.0"
-serde_cbor = "0.11.2"
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
+proto = { path = "../sawtooth_protocol" }
 rand = { version = "0.8.4", features = ["getrandom"] }
-k256 = { version = "0.10.2", features = [
-    "arithmetic",
-    "ecdsa",
-    "pkcs8",
-    "sha256",
-    "std",
-    "pem",
-] }
-rust-crypto = "0.2.36"
-hex = "0.4.3"
 rand_core = "0.6.3"
-tracing = "0.1.29"
-tracing-subscriber = { version = "0.3.6", features = [
-    "default",
-    "registry",
-    "env-filter",
-] }
-tracing-bunyan-formatter = "0.3"
-derivative = "2.2.0"
-async-trait = "0.1.52"
-futures = "0.3.19"
-lazy_static = "1.4.0"
+rust-crypto = "0.2.36"
+sawtooth-sdk = "0.5.0"
+serde = "1.0.135"
+serde_cbor = "0.11.2"
+serde_derive = "1.0.135"
 tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
-crossbeam = "0.8.1"
-openssl = "0.10.38"
-zmq = "0.9.2"
+tracing = "0.1.29"
 tracing-log = "0.1.2"
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+tracing-opentelemetry = "0.17.2"
+tracing-subscriber = { version = "0.3.6", features = [
+  "default",
+  "registry",
+  "env-filter",
+] }
+url = "2.2.2"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
+zmq = "0.9.2"
 
 [build-dependencies]
-glob = "0.3.0"
+glob        = "0.3.0"
 prost-build = "0.9.0"
 
 [dev-dependencies]
 protobuf = "2"
 
 [features]
-default = ["vendored-zmq", "vendored-openssl"]
-vendored-zmq = ['zmq/vendored']
+default          = ["vendored-zmq", "vendored-openssl"]
 vendored-openssl = ['openssl/vendored']
+vendored-zmq     = ['zmq/vendored']

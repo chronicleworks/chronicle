@@ -130,12 +130,34 @@ pub enum Domaintype {
     },
 }
 
+custom_error! {pub ChronicleTransactionIdError
+    InvalidTransactionId {id: String} = "Invalid transaction id",
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ChronicleTransactionId(String);
 
 impl Display for ChronicleTransactionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&*self.0)
+    }
+}
+
+impl TryFrom<&str> for ChronicleTransactionId {
+    type Error = ChronicleTransactionIdError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if let Ok(id) = Uuid::parse_str(value) {
+            return Ok(Self::from(id));
+        } else if let Ok(id) = hex::decode(value) {
+            if let Ok(id) = Signature::try_from(&*id) {
+                return Ok(Self::from(id));
+            }
+        }
+
+        Err(ChronicleTransactionIdError::InvalidTransactionId {
+            id: value.to_owned(),
+        })
     }
 }
 
