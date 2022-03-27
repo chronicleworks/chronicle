@@ -269,9 +269,10 @@ where
                         },
                         cmd = rx.recv().fuse() => {
                             if let Some((command, reply)) = cmd {
-                            trace!(?rx, "Recv api command from channel");
 
-                            let result = api.dispatch(command).await;
+                            let result = api
+                                .dispatch(command)
+                                .await;
 
                             reply
                                 .send(result)
@@ -1008,13 +1009,13 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::{net::SocketAddr, str::FromStr, time::Duration};
+    use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
     use common::{
         commands::{ApiResponse, KeyImport},
         ledger::InMemLedger,
-        prov::ProvModel,
+        prov::{ChronicleTransactionId, ProvModel},
     };
 
     use tempfile::TempDir;
@@ -1031,7 +1032,10 @@ mod test {
     struct TestDispatch(ApiDispatch, ProvModel);
 
     impl TestDispatch {
-        pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
+        pub async fn dispatch(
+            &mut self,
+            command: ApiCommand,
+        ) -> Result<Option<(ProvModel, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
             if let ApiResponse::Prov(_subject, prov, _correlation_id) =
                 self.0.dispatch(command).await?
@@ -1039,9 +1043,11 @@ mod test {
                 for prov in prov {
                     self.1.merge(prov);
                 }
-            }
 
-            Ok(())
+                Ok(Some(self.0.notify_commit.subscribe().recv().await.unwrap()))
+            } else {
+                Ok(None)
+            }
         }
     }
 
@@ -1202,8 +1208,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1234,8 +1238,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
-
-        tokio::time::sleep(Duration::from_secs(2)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
@@ -1286,8 +1288,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1305,8 +1305,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
-
-        tokio::time::sleep(Duration::from_secs(4)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,
@@ -1331,8 +1329,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
-
-        tokio::time::sleep(Duration::from_secs(4)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name: "testentity".to_owned(),

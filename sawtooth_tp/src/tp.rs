@@ -6,8 +6,6 @@ use common::{
 };
 use sawtooth_protocol::address::{SawtoothAddress, PREFIX};
 
-use k256::ecdsa::VerifyingKey;
-
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
@@ -57,24 +55,6 @@ impl TransactionHandler for ChronicleTransactionHandler {
         request: &TpProcessRequest,
         context: &mut dyn TransactionContext,
     ) -> Result<(), ApplyError> {
-        request
-            .header
-            .clone()
-            .map(|h| {
-                VerifyingKey::from_sec1_bytes(
-                    &hex::decode(h.signer_public_key)
-                        .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
-                )
-                .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))
-            })
-            .into_option()
-            .ok_or_else(|| {
-                ApplyError::InvalidTransaction(String::from(
-                    "Invalid header, missing signer public key",
-                ))
-            })?
-            .ok();
-
         let tx: Vec<ChronicleOperation> = serde_cbor::from_slice(request.get_payload())
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
@@ -84,15 +64,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
         for tx in tx {
             debug!(?tx, "Processing");
 
-            // Set up our call to get dependencies
-            let deps = tx.clone();
-            let (send, recv) = crossbeam::channel::bounded(1);
-            Handle::current().spawn(async move { send.send(deps.dependencies().await) });
-
-            let deps = recv
-                .recv()
-                .map_err(|e| ApplyError::InternalError(e.to_string()))?
-                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+            let deps = tx.dependencies();
 
             debug!(?deps, "Input addresses");
 
