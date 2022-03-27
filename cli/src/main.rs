@@ -23,6 +23,7 @@ use config::*;
 use custom_error::custom_error;
 use futures::Future;
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
+use tokio::sync::broadcast::error::RecvError;
 
 use std::{
     io,
@@ -113,10 +114,14 @@ fn domain_type(args: &ArgMatches) -> Option<String> {
 }
 
 #[instrument]
-async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, ApiError> {
+async fn api_exec(
+    config: Config,
+    options: &ArgMatches,
+) -> Result<(ApiResponse, ApiDispatch), ApiError> {
     dotenv::dotenv().ok();
 
     let (api, ui) = api(options, &config).await?;
+    let ret_api = api.clone();
 
     let execution = vec![
         options.subcommand_matches("namespace").and_then(|m| {
@@ -241,10 +246,10 @@ async fn api_exec(config: Config, options: &ArgMatches) -> Result<ApiResponse, A
     if let Some(execution) = execution {
         let exresult = execution.await;
 
-        Ok(exresult?)
+        Ok((exresult?, ret_api))
     } else {
         ui.await;
-        Ok(ApiResponse::Unit)
+        Ok((ApiResponse::Unit, ret_api))
     }
 }
 
@@ -253,8 +258,9 @@ custom_error! {pub CliError
     Keys{source: SignerError}                   = "Key storage",
     FileSystem{source: std::io::Error}          = "Cannot locate configuration file",
     ConfigInvalid{source: toml::de::Error}      = "Invalid configuration file",
-    InvalidPath                                 = "Invalid path",//TODO - the path, you know how annoying this is
+    InvalidPath                                 = "Invalid path", //TODO - the path, you know how annoying this is
     Ld{source: CompactionError}                 = "Invalid Json LD",
+    CommitNoticiationStream {source: RecvError} = "Failure in commit notification stream"
 }
 
 impl UFE for CliError {}
@@ -292,25 +298,38 @@ async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     let response = api_exec(config, matches).await?;
 
     match response {
-        ApiResponse::Prov(context, delta, _correlation_id) => {
-            if matches.subcommand_matches("export").is_some() {
-                for delta in delta {
-                    println!(
-                        "{}",
-                        delta
-                            .to_json()
-                            .compact()
-                            .await?
-                            .to_string()
-                            .to_colored_json_auto()
-                            .unwrap()
-                    )
+        (
+            ApiResponse::Submission {
+                subject,
+                prov: _,
+                correlation_id,
+            },
+            api,
+        ) => {
+            // For commands that have initiated a ledger operation, wait for the matching result
+            let mut tx_notifications = api.notify_commit.subscribe();
+
+            loop {
+                let (_prov, incoming_correlation_id) =
+                    tx_notifications.recv().await.map_err(CliError::from)?;
+                if correlation_id == incoming_correlation_id {
+                    println!("{}", subject);
+                    break;
                 }
-            } else {
-                println!("{}", context);
             }
         }
-        ApiResponse::Unit => {}
+        (ApiResponse::QueryReply { prov }, _) => {
+            println!(
+                "{}",
+                prov.to_json()
+                    .compact()
+                    .await?
+                    .to_string()
+                    .to_colored_json_auto()
+                    .unwrap()
+            );
+        }
+        (ApiResponse::Unit, _api) => {}
     };
     Ok(())
 }

@@ -167,7 +167,7 @@ where
 /// A clonable api handle
 pub struct ApiDispatch {
     tx: Sender<ApiSendWithReply>,
-    notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
+    pub notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
 }
 
 impl ApiDispatch {
@@ -385,9 +385,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -456,9 +456,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -507,9 +507,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -560,9 +560,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     iri,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -581,9 +581,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     IriBuf::new(&*namespace).unwrap(),
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -777,9 +777,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -792,13 +792,11 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            let (id, _) = api
+            let (_id, _) = api
                 .store
                 .namespace_by_name(&mut connection, &query.namespace)?;
-            Ok(ApiResponse::Prov(
-                IriBuf::new(id.as_str()).unwrap(),
-                vec![api.store.prov_model_for_namespace(&mut connection, query)?],
-                ChronicleTransactionId::from(Uuid::default()),
+            Ok(ApiResponse::query_reply(
+                api.store.prov_model_for_namespace(&mut connection, query)?,
             ))
         })
         .await?
@@ -869,9 +867,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -929,9 +927,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -980,9 +978,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -1037,12 +1035,8 @@ mod test {
             command: ApiCommand,
         ) -> Result<Option<(ProvModel, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Prov(_subject, prov, _correlation_id) =
-                self.0.dispatch(command).await?
-            {
-                for prov in prov {
-                    self.1.merge(prov);
-                }
+            if let ApiResponse::Submission { prov, .. } = self.0.dispatch(command).await? {
+                self.1.merge(*prov);
 
                 Ok(Some(self.0.notify_commit.subscribe().recv().await.unwrap()))
             } else {

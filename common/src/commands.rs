@@ -134,7 +134,38 @@ pub enum ApiCommand {
 
 #[derive(Debug)]
 pub enum ApiResponse {
+    ///! The api has successfully executed the operation, but that has no useful output
     Unit,
-    /// Context iri (i.e the subject resource) and delta
-    Prov(IriBuf, Vec<ProvModel>, ChronicleTransactionId),
+    ///! The api has validated the command and submitted a transaction to ledger
+    Submission {
+        subject: IriBuf,
+        prov: Box<ProvModel>,
+        correlation_id: ChronicleTransactionId,
+    },
+    ///! The api has successfully executed the query
+    QueryReply { prov: Box<ProvModel> },
+}
+
+impl ApiResponse {
+    pub fn submission(
+        subject: IriBuf,
+        prov: ProvModel,
+        correlation_id: ChronicleTransactionId,
+    ) -> Self {
+        ApiResponse::Submission {
+            subject,
+            prov: Box::new(prov),
+            correlation_id,
+        }
+    }
+
+    pub fn unit() -> Self {
+        ApiResponse::Unit
+    }
+
+    pub fn query_reply(prov: ProvModel) -> Self {
+        ApiResponse::QueryReply {
+            prov: Box::new(prov),
+        }
+    }
 }
