@@ -24,6 +24,7 @@ use custom_error::custom_error;
 use futures::Future;
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use tokio::sync::broadcast::error::RecvError;
+use url::Url;
 
 use std::{
     io,
@@ -277,7 +278,9 @@ async fn main() {
     }
 
     if matches.is_present("instrument") {
-        telemetry::tracing();
+        telemetry::telemetry(
+            Url::parse(&*matches.value_of_t::<String>("jaegercollector").unwrap()).unwrap(),
+        );
     }
 
     config_and_exec(&matches)

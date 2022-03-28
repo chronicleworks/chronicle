@@ -1,7 +1,7 @@
 [package]
-name = "cli"
-version = "0.1.0"
 edition = "2021"
+name    = "cli"
+version = "0.1.0"
 
 [[bin]]
 name = "chronicle"
@@ -10,46 +10,46 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.0.12" }
-question = "0.2.2"
 api = { path = "../api" }
-user-error = "1.2.8"
-url = { version = "2.2.2", features = ["serde"] }
-serde = "1.0.135"
-toml = "0.5.8"
-custom_error = "1.9.2"
-serde_derive = "1.0.135"
-rand = { version = "0.8.4", features = ["getrandom"] }
-k256 = { version = "0.10.2", features = [
-    "arithmetic",
-    "ecdsa",
-    "pkcs8",
-    "sha256",
-    "std",
-    "pem",
-] }
-hex = "0.4.3"
-rand_core = "0.6.3"
-shellexpand = "2.1.0"
-tracing = "0.1.29"
-tracing-subscriber = { version = "0.3.6", features = [
-    "default",
-    "registry",
-    "env-filter",
-] }
-tracing-log = "0.1"
-common = { path = "../common" }
-proto = { path = "../sawtooth_protocol" }
-uuid = "0.8.2"
-colored_json = "2.1.0"
+clap = { version = "3.0.12" }
 clap_complete = "3.1.1"
+colored_json = "2.1.0"
+common = { path = "../common" }
+custom_error = "1.9.2"
 dotenv = "0.15.0"
 futures = "0.3.19"
-tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
+hex = "0.4.3"
+k256 = { version = "0.10.2", features = [
+  "arithmetic",
+  "ecdsa",
+  "pkcs8",
+  "sha256",
+  "std",
+  "pem",
+] }
 open = "2.0.2"
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "*", features = ["rt-tokio"] }
+proto = { path = "../sawtooth_protocol" }
+question = "0.2.2"
+rand = { version = "0.8.4", features = ["getrandom"] }
+rand_core = "0.6.3"
+serde = "1.0.135"
+serde_derive = "1.0.135"
+shellexpand = "2.1.0"
+tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
+toml = "0.5.8"
+tracing = "0.1.29"
+tracing-log = "0.1"
 tracing-opentelemetry = "0.17.2"
-opentelemetry = "0.17.0"
-opentelemetry-jaeger = "0.16.0"
+tracing-subscriber = { version = "0.3.6", features = [
+  "default",
+  "registry",
+  "env-filter",
+] }
+url = { version = "2.2.2", features = ["serde"] }
+user-error = "1.2.8"
+uuid = "0.8.2"
 
 
 [features]

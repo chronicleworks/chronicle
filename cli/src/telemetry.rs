@@ -1,13 +1,15 @@
 use tracing::subscriber::set_global_default;
 use tracing_log::LogTracer;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, EnvFilter, Registry};
+use url::Url;
 
-pub fn tracing() {
+pub fn telemetry(collector_endpoint: Url) {
     LogTracer::init().expect("Failed to set logger");
 
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_service_name("chronicle_api")
-        .install_simple()
+        .with_collector_endpoint(collector_endpoint.as_str())
+        .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
     let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
