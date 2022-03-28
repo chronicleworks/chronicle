@@ -32,7 +32,7 @@ opentelemetry = { version = "*", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "*", features = [
   "rt-tokio",
   "collector_client",
-  "isahc_collector_client",
+  "reqwest_collector_client",
 ] }
 proto = { path = "../sawtooth_protocol" }
 question = "0.2.2"
