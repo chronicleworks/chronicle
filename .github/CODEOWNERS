@@ -1,0 +1,9 @@
+# Default owners
+* @btp-engineering
+
+# Documentation has additional team to review
+/docs/* @btp-engineering @btp-documentation
+/doc/* @btp-engineering @btp-documentation
+
+# Repository Admin only for .github
+/.github/* @repository-admin
