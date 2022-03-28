@@ -1,0 +1,20 @@
+on: [push]
+
+name: cargo-checkmate Continuous Integration
+
+jobs:
+  cargo-checkmate:
+    name: cargo-checkmate
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Install protoc"
+        run: |
+          sudo apt-get install -y protobuf-compiler
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: cargo install cargo-checkmate
+      - run: cargo-checkmate

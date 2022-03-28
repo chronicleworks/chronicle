@@ -2,9 +2,9 @@ use common::{
     ledger::Offset,
     prov::{ChronicleOperation, ChronicleTransactionId},
 };
-use crypto::{digest::Digest, sha2::Sha512};
 use custom_error::custom_error;
 use k256::ecdsa::{signature::Signer, Signature, SigningKey};
+use openssl::sha::Sha512;
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use tracing::{debug, instrument};
@@ -100,12 +100,12 @@ impl MessageBuilder {
         let bytes = serde_cbor::to_vec(&payload).unwrap();
 
         let mut hasher = Sha512::new();
-        hasher.input(&*bytes);
+        hasher.update(&*bytes);
 
         let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
 
         let header = TransactionHeader {
-            payload_sha512: hasher.result_str(),
+            payload_sha512: hex::encode_upper(hasher.finish()),
             family_name: self.family_name.clone(),
             family_version: self.family_version.clone(),
             nonce: self.generate_nonce(),

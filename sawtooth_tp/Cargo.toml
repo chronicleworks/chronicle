@@ -39,7 +39,6 @@ prost-types = "0.9.0"
 proto = { path = "../sawtooth_protocol" }
 rand = { version = "0.8.4", features = ["getrandom"] }
 rand_core = "0.6.3"
-rust-crypto = "0.2.36"
 sawtooth-sdk = "0.5.0"
 serde = "1.0.135"
 serde_cbor = "0.11.2"
