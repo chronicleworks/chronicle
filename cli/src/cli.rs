@@ -27,7 +27,7 @@ pub fn cli() -> Command<'static> {
             Arg::new("instrument")
                 .short('i')
                 .long("instrument")
-                .value_name("jea")
+                .value_name("instrument")
                 .takes_value(true)
                 .value_hint(ValueHint::Url)
                 .help("Insutrment using RUST_LOG environment"),

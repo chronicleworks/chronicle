@@ -28,8 +28,12 @@ k256 = { version = "0.10.2", features = [
   "pem",
 ] }
 open = "2.0.2"
-opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "*", features = ["rt-tokio"] }
+opentelemetry = { version = "*", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "*", features = [
+  "rt-tokio",
+  "collector_client",
+  "isahc_collector_client",
+] }
 proto = { path = "../sawtooth_protocol" }
 question = "0.2.2"
 rand = { version = "0.8.4", features = ["getrandom"] }

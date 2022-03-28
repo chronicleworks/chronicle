@@ -51,7 +51,7 @@ async fn main() {
             Arg::new("instrument")
                 .short('i')
                 .long("instrument")
-                .value_name("jaegercollector")
+                .value_name("instrument")
                 .takes_value(true)
                 .value_hint(ValueHint::Url)
                 .help("Instrument using RUST_LOG environment"),
@@ -59,7 +59,7 @@ async fn main() {
         .get_matches();
 
     if matches.is_present("instrument") {
-        telemetry(Url::parse(&*matches.value_of_t::<String>("jaegercollector").unwrap()).unwrap());
+        telemetry(Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap());
     }
 
     let endpoint = matches
