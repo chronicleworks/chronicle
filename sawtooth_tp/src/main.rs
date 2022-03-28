@@ -6,22 +6,22 @@ use sawtooth_sdk::processor::TransactionProcessor;
 
 use tp::ChronicleTransactionHandler;
 use tracing::subscriber::set_global_default;
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, EnvFilter, Registry};
 
 pub fn tracing() {
     LogTracer::init().expect("Failed to set logger");
-    // Fall back to printing all spans at info-level or above
-    // if the RUST_LOG environment variable has not been set.
+
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("chronicle_tp")
+        .install_simple()
+        .unwrap();
+
+    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer =
-        BunyanFormattingLayer::new("chronicle-sawtooth-tp".into(), std::io::stdout);
-    let subscriber = Registry::default()
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer);
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    let collector = Registry::default().with(env_filter).with(opentelemetry);
+
+    set_global_default(collector).expect("Failed to set collector");
 }
 
 #[tokio::main]
@@ -57,7 +57,9 @@ async fn main() {
         tracing();
     }
 
-    let endpoint = matches.value_of("connect").unwrap_or("localhost:4004");
+    let endpoint = matches
+        .value_of("connect")
+        .unwrap_or("tcp://localhost:4004");
 
     let handler = ChronicleTransactionHandler::new();
     let mut processor = TransactionProcessor::new(endpoint);

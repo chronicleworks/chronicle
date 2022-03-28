@@ -7,21 +7,38 @@ build = "build.rs"
 
 [dependencies]
 custom_error = "1.9.2"
-diesel_migrations = { version = "^2.0.0", features= ["sqlite"], git = "https://github.com/diesel-rs/diesel/"}
-diesel = { version = "^2.0.0", features = ["sqlite", "uuid", "chrono", "r2d2"], git = "https://github.com/diesel-rs/diesel" }
-libsqlite3-sys = { version = "0.23.2", features = ["bundled","bundled_bindings"] } #transitive via diesel, but we want it built from source
+diesel_migrations = { version = "^2.0.0", features = [
+    "sqlite",
+], git = "https://github.com/diesel-rs/diesel/" }
+diesel = { version = "^2.0.0", features = [
+    "sqlite",
+    "uuid",
+    "chrono",
+    "r2d2",
+], git = "https://github.com/diesel-rs/diesel" }
+libsqlite3-sys = { version = "0.23.2", features = [
+    "bundled",
+    "bundled_bindings",
+] } #transitive via diesel, but we want it built from source
 iref = "2.0.3"
 iref-enum = "1.2.0"
 static-iref = "1.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
-k256 = { version = "0.10.2", features = ["arithmetic","ecdsa", "pkcs8", "sha256", "std", "pem"] }
+k256 = { version = "0.10.2", features = [
+    "arithmetic",
+    "ecdsa",
+    "pkcs8",
+    "sha256",
+    "std",
+    "pem",
+] }
 user-error = "1.2.8"
 uuid = { version = "0.8.2", features = ["v4"] }
 url = "2.2.2"
 glob = "0.3.0"
-proto = {path="../sawtooth_protocol"}
-common = {path="../common"}
+proto = { path = "../sawtooth_protocol" }
+common = { path = "../common" }
 tracing = "0.1.29"
 derivative = "2.2.0"
 chrono = "0.4.19"
@@ -33,7 +50,13 @@ serde_derive = "1.0.135"
 futures = "0.3.19"
 async-trait = "0.1.52"
 open = "2.0.2"
-async-graphql = { features = ["tracing","chrono","unblock","default", "uuid"], version = "3.0.25" }
+async-graphql = { features = [
+    "tracing",
+    "chrono",
+    "unblock",
+    "default",
+    "uuid",
+], version = "3.0.25" }
 warp = "0.3.2"
 async-graphql-warp = "3.0.25"
 r2d2 = "0.8.9"
@@ -42,11 +65,13 @@ tracing-log = "0.1.2"
 
 [dev-dependencies]
 insta = { version = "1.11.0", features = ["redactions"] }
-serde_json = {version="1.0.78"}
+serde_json = { version = "1.0.78" }
 tempfile = "3.3.0"
-tracing-subscriber = {version="0.3.6", features = ["default", "registry", "env-filter"]}
-tracing-bunyan-formatter = "0.3"
-
+tracing-subscriber = { version = "0.3.6", features = [
+    "default",
+    "registry",
+    "env-filter",
+] }
 
 
 [build-dependencies]

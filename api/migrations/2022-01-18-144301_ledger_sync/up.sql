@@ -8,9 +8,12 @@ create table namespace (
 create unique index namespace_idx on namespace(name,uuid);
 
 create table ledgersync (
-    offset text primary key not null,
-    sync_time timestamp not null
+    correlation_id text primary key not null,
+    offset text,
+    sync_time timestamp
 );
+
+create index ledger_index on ledgersync(sync_time,offset);
 
 create table agent (
     id integer primary key not null,

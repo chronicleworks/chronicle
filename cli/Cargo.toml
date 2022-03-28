@@ -37,7 +37,6 @@ tracing-subscriber = { version = "0.3.6", features = [
     "registry",
     "env-filter",
 ] }
-tracing-bunyan-formatter = "0.3"
 tracing-log = "0.1"
 common = { path = "../common" }
 proto = { path = "../sawtooth_protocol" }
@@ -48,6 +47,9 @@ dotenv = "0.15.0"
 futures = "0.3.19"
 tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
 open = "2.0.2"
+tracing-opentelemetry = "0.17.2"
+opentelemetry = "0.17.0"
+opentelemetry-jaeger = "0.16.0"
 
 
 [features]

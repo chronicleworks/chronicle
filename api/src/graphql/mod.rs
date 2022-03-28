@@ -422,8 +422,12 @@ async fn transaction_context<'a>(
     _ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {
     match res {
-        ApiResponse::Prov(id, _, correlation_id) => Ok(Submission {
-            context: id.to_string(),
+        ApiResponse::Submission {
+            subject,
+            correlation_id,
+            ..
+        } => Ok(Submission {
+            context: subject.to_string(),
             correlation_id: correlation_id.to_string(),
         }),
         _ => unreachable!(),

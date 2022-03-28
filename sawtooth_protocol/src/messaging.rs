@@ -66,7 +66,6 @@ impl SawtoothSubmitter {
             addresses.append(
                 &mut transaction
                     .dependencies()
-                    .await?
                     .iter()
                     .map(SawtoothAddress::from)
                     .map(|addr| addr.to_string())

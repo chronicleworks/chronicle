@@ -6,8 +6,9 @@ use chrono::Utc;
 use common::{
     ledger::Offset,
     prov::{
-        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, Attachment, AttachmentId, Entity,
-        EntityId, Identity, IdentityId, Namespace, NamespaceId, ProvModel,
+        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, Attachment, AttachmentId,
+        ChronicleTransactionId, ChronicleTransactionIdError, Entity, EntityId, Identity,
+        IdentityId, Namespace, NamespaceId, ProvModel,
     },
 };
 use custom_error::custom_error;
@@ -35,7 +36,8 @@ custom_error! {pub StoreError
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
     DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {:?}",
     DbPool{source: r2d2::Error}                                 = "Connection pool error",
-    Uuid{source: uuid::Error}                                   = "Invalid UUID string",
+    Uuid{source: uuid::Error}                                   = "Invalid UUID",
+    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
     ModelDoesNotContainActivity{activityid: ActivityId}         = "Could not locate {} in activities",
@@ -810,16 +812,23 @@ impl Store {
 
     /// Get the last fully syncronised offset
     #[instrument]
-    pub fn get_last_offset(&self) -> Result<Option<Offset>, StoreError> {
+    pub fn get_last_offset(&self) -> Result<Option<(Offset, ChronicleTransactionId)>, StoreError> {
         use schema::ledgersync::dsl;
-        Ok(self.connection()?.immediate_transaction(|connection| {
+        self.connection()?.immediate_transaction(|connection| {
             schema::ledgersync::table
                 .order_by(dsl::sync_time)
-                .select(dsl::offset)
-                .first::<String>(connection)
-                .optional()
-                .map(|sync| sync.map(|sync| Offset::from(&*sync)))
-        })?)
+                .select((dsl::offset, dsl::correlation_id))
+                .first::<(Option<String>, String)>(connection)
+                .map_err(StoreError::from)
+                .and_then(|(offset, correlation_id)| {
+                    let correlation_id = ChronicleTransactionId::try_from(&*correlation_id)?;
+                    if let Some(offset) = offset {
+                        Ok(Some((Offset::from(&*offset), correlation_id)))
+                    } else {
+                        Ok(None)
+                    }
+                })
+        })
     }
 
     #[instrument(skip(connection))]
@@ -997,7 +1006,11 @@ impl Store {
 
     /// Set the last fully syncronised offset
     #[instrument]
-    pub fn set_last_offset(&self, offset: Offset) -> Result<(), StoreError> {
+    pub fn set_last_offset(
+        &self,
+        offset: Offset,
+        correlation_id: ChronicleTransactionId,
+    ) -> Result<(), StoreError> {
         use schema::ledgersync::{self as dsl};
 
         if let Offset::Identity(offset) = offset {
@@ -1005,9 +1018,10 @@ impl Store {
                 diesel::insert_into(dsl::table)
                     .values((
                         dsl::offset.eq(offset),
+                        dsl::correlation_id.eq(&*correlation_id.to_string()),
                         (dsl::sync_time.eq(Utc::now().naive_utc())),
                     ))
-                    .on_conflict(dsl::offset)
+                    .on_conflict(dsl::correlation_id)
                     .do_update()
                     .set(dsl::sync_time.eq(Utc::now().naive_utc()))
                     .execute(connection)

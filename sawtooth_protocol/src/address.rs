@@ -1,14 +1,14 @@
 use std::fmt::Display;
 
 use common::ledger::LedgerAddress;
-use crypto::digest::Digest;
 use lazy_static::lazy_static;
+use openssl::sha::Sha256;
 
 lazy_static! {
     pub static ref PREFIX: String = {
-        let mut sha = crypto::sha2::Sha256::new();
-        sha.input_str("chronicle");
-        sha.result_str()[..6].to_string()
+        let mut sha = Sha256::new();
+        sha.update("chronicle".as_bytes());
+        hex::encode_upper(sha.finish())[..6].to_string()
     };
 }
 
@@ -18,12 +18,12 @@ pub struct SawtoothAddress(String);
 /// followed by a 256 bit hash of the resource Iri and namespace Iri.
 impl From<&LedgerAddress> for SawtoothAddress {
     fn from(addr: &LedgerAddress) -> Self {
-        let mut sha = crypto::sha2::Sha256::new();
+        let mut sha = Sha256::new();
         if let Some(ns) = addr.namespace.as_ref() {
-            sha.input_str(ns)
+            sha.update(ns.as_bytes())
         }
-        sha.input_str(&addr.resource);
-        SawtoothAddress(format!("{}{}", &*PREFIX, sha.result_str()))
+        sha.update(&addr.resource.as_bytes());
+        SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode_upper(sha.finish())))
     }
 }
 

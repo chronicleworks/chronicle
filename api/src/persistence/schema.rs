@@ -66,9 +66,10 @@ diesel::table! {
 }
 
 diesel::table! {
-    ledgersync (offset, sync_time) {
-        offset -> Text,
-        sync_time -> Timestamp,
+    ledgersync (correlation_id) {
+        correlation_id -> Text,
+        offset -> Nullable<Text>,
+        sync_time -> Nullable<Timestamp>,
     }
 }
 

@@ -1,0 +1,10 @@
+[advisories]
+ignore = [
+  # `time` localtime_r segfault
+  # No current known workarounds as it is a libc issue
+  "RUSTSEC-2020-0071",
+
+  # `chrono` localtime_r segfault
+  # No current known workarounds as it is a libc issue
+  "RUSTSEC-2020-0159",
+]

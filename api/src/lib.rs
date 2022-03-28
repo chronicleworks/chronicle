@@ -167,7 +167,7 @@ where
 /// A clonable api handle
 pub struct ApiDispatch {
     tx: Sender<ApiSendWithReply>,
-    notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
+    pub notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
 }
 
 impl ApiDispatch {
@@ -201,8 +201,8 @@ where
         uuidgen: U,
     ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
     where
-        R: LedgerReader + 'static + Send,
-        W: LedgerWriter + 'static + Send,
+        R: LedgerReader + Send + 'static,
+        W: LedgerWriter + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -240,7 +240,7 @@ where
                 .state_updates(
                     store
                         .get_last_offset()
-                        .unwrap_or(Some(Offset::Genesis))
+                        .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
                         .unwrap_or(Offset::Genesis),
                 )
                 .await
@@ -259,8 +259,8 @@ where
                 select! {
                         state = state_updates.next().fuse() =>{
                             if let Some((offset, prov, correlation_id)) = state {
-                                    api.sync(&prov, offset.clone())
-                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = ?correlation_id))
+                                    api.sync(&prov, offset.clone(),correlation_id.clone())
+                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
                                         .await
                                         .map_err(|e| {
                                             error!(?e, "Api sync to confirmed commit");
@@ -269,9 +269,10 @@ where
                         },
                         cmd = rx.recv().fuse() => {
                             if let Some((command, reply)) = cmd {
-                            trace!(?rx, "Recv api command from channel");
 
-                            let result = api.dispatch(command).await;
+                            let result = api
+                                .dispatch(command)
+                                .await;
 
                             reply
                                 .send(result)
@@ -333,7 +334,6 @@ where
     #[instrument]
     async fn activity_generate(
         &self,
-
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -385,9 +385,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -401,7 +401,6 @@ where
     #[instrument]
     async fn activity_use(
         &self,
-
         name: String,
         namespace: String,
         activity: Option<String>,
@@ -457,9 +456,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -473,7 +472,6 @@ where
     #[instrument]
     async fn create_activity(
         &self,
-
         name: String,
         namespace: String,
         domaintype: Option<String>,
@@ -509,9 +507,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -562,9 +560,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     iri,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -583,9 +581,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     IriBuf::new(&*namespace).unwrap(),
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -779,9 +777,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -794,26 +792,30 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            let (id, _) = api
+            let (_id, _) = api
                 .store
                 .namespace_by_name(&mut connection, &query.namespace)?;
-            Ok(ApiResponse::Prov(
-                IriBuf::new(id.as_str()).unwrap(),
-                vec![api.store.prov_model_for_namespace(&mut connection, query)?],
-                ChronicleTransactionId::from(Uuid::default()),
+            Ok(ApiResponse::query_reply(
+                api.store.prov_model_for_namespace(&mut connection, query)?,
             ))
         })
         .await?
     }
 
     #[instrument]
-    async fn sync(&self, prov: &ProvModel, offset: Offset) -> Result<ApiResponse, ApiError> {
+    async fn sync(
+        &self,
+        prov: &ProvModel,
+        offset: Offset,
+        correlation_id: ChronicleTransactionId,
+    ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         let prov = prov.clone();
 
         tokio::task::spawn_blocking(move || {
+            //TODO: This should be a single tx
             api.store.apply_prov(&prov)?;
-            api.store.set_last_offset(offset)?;
+            api.store.set_last_offset(offset, correlation_id)?;
 
             Ok(ApiResponse::Unit)
         })
@@ -865,9 +867,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -925,9 +927,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -976,9 +978,9 @@ where
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::Prov(
+                Ok(ApiResponse::submission(
                     id,
-                    vec![ProvModel::from_tx(&to_apply)],
+                    ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
             })
@@ -1005,13 +1007,13 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::{net::SocketAddr, str::FromStr, time::Duration};
+    use std::{net::SocketAddr, str::FromStr};
 
     use chrono::{TimeZone, Utc};
     use common::{
         commands::{ApiResponse, KeyImport},
         ledger::InMemLedger,
-        prov::ProvModel,
+        prov::{ChronicleTransactionId, ProvModel},
     };
 
     use tempfile::TempDir;
@@ -1028,17 +1030,18 @@ mod test {
     struct TestDispatch(ApiDispatch, ProvModel);
 
     impl TestDispatch {
-        pub async fn dispatch(&mut self, command: ApiCommand) -> Result<(), ApiError> {
+        pub async fn dispatch(
+            &mut self,
+            command: ApiCommand,
+        ) -> Result<Option<(ProvModel, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Prov(_subject, prov, _correlation_id) =
-                self.0.dispatch(command).await?
-            {
-                for prov in prov {
-                    self.1.merge(prov);
-                }
-            }
+            if let ApiResponse::Submission { prov, .. } = self.0.dispatch(command).await? {
+                self.1.merge(*prov);
 
-            Ok(())
+                Ok(Some(self.0.notify_commit.subscribe().recv().await.unwrap()))
+            } else {
+                Ok(None)
+            }
         }
     }
 
@@ -1199,8 +1202,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1231,8 +1232,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
-
-        tokio::time::sleep(Duration::from_secs(2)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             name: "testactivity".to_owned(),
@@ -1283,8 +1282,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
@@ -1302,8 +1299,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }))
         .await
         .unwrap();
-
-        tokio::time::sleep(Duration::from_secs(4)).await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             name: None,

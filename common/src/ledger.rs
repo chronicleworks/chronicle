@@ -6,10 +6,22 @@ use uuid::Uuid;
 
 use crate::{
     context::PROV,
-    prov::{ChronicleOperation, ChronicleTransactionId, ProcessorError, ProvModel},
+    prov::{
+        vocab::Chronicle, ActivityUses, AttachmentId, ChronicleIri, ChronicleOperation,
+        ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, Domaintype,
+        EndActivity, EntityAttach, GenerateEntity, IdentityId, NamespaceId, ProcessorError,
+        ProvModel, RegisterKey, StartActivity,
+    },
 };
+
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use std::{cell::RefCell, collections::HashMap, fmt::Display, pin::Pin, str::from_utf8};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    pin::Pin,
+    str::from_utf8,
+};
 
 #[derive(Debug)]
 pub enum SubmissionError {
@@ -197,49 +209,61 @@ impl serde::Serialize for InMemLedger {
 
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for InMemLedger {
-    #[instrument]
     async fn submit(
         &mut self,
         tx: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SubmissionError> {
         let id = ChronicleTransactionId::from(Uuid::new_v4());
 
+        let mut model = ProvModel::default();
+        let mut output = vec![];
+
         for tx in tx {
-            debug!(?tx, "Process transaction");
-            let dependencies = tx.dependencies().await.unwrap();
-            debug!(?dependencies, "Dependencies");
+            debug!(?tx, "Processing");
 
-            let (output, state) = tx
-                .process(
-                    ProvModel::default(),
-                    tx.dependencies()
-                        .await?
-                        .iter()
-                        .filter_map(|dep| {
-                            self.kv
-                                .borrow()
-                                .get(dep)
-                                .map(|json| StateInput::new(json.to_string().as_bytes().into()))
-                        })
-                        .collect(),
-                )
-                .await?;
+            let deps = tx.dependencies();
 
-            for output in output {
-                let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-                debug!(?output.address, "Address");
-                debug!(%state, "New state");
-                self.kv.borrow_mut().insert(output.address, state);
-            }
+            debug!(?deps, "Input addresses");
 
-            self.chan
-                .send((Offset::from(&*self.head.to_string()), state, id.clone()))
-                .await
-                .ok();
+            let input = self
+                .kv
+                .borrow()
+                .iter()
+                .filter(|(k, _v)| deps.contains(k))
+                .map(|(_addr, json)| StateInput::new(json.to_string().as_bytes().into()))
+                .into_iter()
+                .collect();
 
-            self.head += 1;
+            debug!(?input, "Processing input state");
+
+            let (mut tx_output, updated_model) = tx.process(model, input).await.unwrap();
+
+            output.append(&mut tx_output);
+            model = updated_model;
         }
 
+        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
+        let output = output
+            .into_iter()
+            .map(|state| (state.address.clone(), state))
+            .collect::<BTreeMap<_, _>>()
+            .into_iter()
+            .map(|x| x.1)
+            .collect::<Vec<_>>();
+
+        for output in output {
+            let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
+            debug!(?output.address, "Address");
+            debug!(%state, "New state");
+            self.kv.borrow_mut().insert(output.address, state);
+        }
+
+        self.chan
+            .send((Offset::from(&*self.head.to_string()), model, id.clone()))
+            .await
+            .ok();
+
+        self.head += 1;
         Ok(id)
     }
 }
@@ -249,6 +273,22 @@ pub struct LedgerAddress {
     // Namespaces do not have a namespace
     pub namespace: Option<String>,
     pub resource: String,
+}
+
+impl LedgerAddress {
+    fn namespace(ns: &NamespaceId) -> Self {
+        Self {
+            namespace: None,
+            resource: ns.to_string(),
+        }
+    }
+
+    fn in_namespace<R: ChronicleIri>(ns: &NamespaceId, resource: &R) -> Self {
+        Self {
+            namespace: Some(ns.to_string()),
+            resource: resource.to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -274,50 +314,84 @@ impl StateOutput {
     }
 }
 
-/// A prov model represented as one or more JSON-LD documents
-impl ProvModel {}
-
 impl ChronicleOperation {
-    /// Compute dependencies for a chronicle transaction, input and output addresses are always symmetric
-    pub async fn dependencies(&self) -> Result<Vec<LedgerAddress>, ProcessorError> {
-        let mut model = ProvModel::default();
-        model.apply(self);
-
-        let json_ld = model.to_json().compact_stable_order().await?;
-        let _graph = &model.to_json().compact().await?.0["@graph"];
-
-        Ok(
-            if let Some(graph) = json_ld.get("@graph").and_then(|graph| graph.as_array()) {
-                graph
-                    .iter()
-                    .map(|resource| {
-                        Ok(LedgerAddress {
-                            namespace: resource
-                                .get("namespace")
-                                .and_then(|ns| ns.as_str())
-                                .map(|ns| ns.to_owned()),
-                            resource: resource
-                                .get("@id")
-                                .and_then(|id| id.as_str())
-                                .ok_or(ProcessorError::NotANode {})?
-                                .to_owned(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, ProcessorError>>()?
-            } else {
-                vec![LedgerAddress {
-                    namespace: json_ld
-                        .get("namespace")
-                        .and_then(|ns| ns.as_str())
-                        .map(|ns| ns.to_owned()),
-                    resource: json_ld
-                        .get("@id")
-                        .and_then(|id| id.as_str())
-                        .ok_or(ProcessorError::NotANode {})?
-                        .to_owned(),
-                }]
-            },
-        )
+    /// Compute dependencies for a chronicle operation, input and output addresses are always symmetric
+    pub fn dependencies(&self) -> Vec<LedgerAddress> {
+        match self {
+            ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
+                vec![LedgerAddress::namespace(id)]
+            }
+            ChronicleOperation::CreateAgent(CreateAgent { namespace, id, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            // Key registration requires identity + agent
+            ChronicleOperation::RegisterKey(RegisterKey {
+                namespace,
+                id,
+                publickey,
+                ..
+            }) => vec![
+                LedgerAddress::in_namespace(namespace, id),
+                LedgerAddress::in_namespace(
+                    namespace,
+                    &IdentityId::from(Chronicle::identity(id, publickey)),
+                ),
+            ],
+            ChronicleOperation::CreateActivity(CreateActivity { namespace, id, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            ChronicleOperation::ActivityUses(ActivityUses {
+                namespace,
+                id,
+                activity,
+            }) => {
+                vec![
+                    LedgerAddress::in_namespace(namespace, activity),
+                    LedgerAddress::in_namespace(namespace, id),
+                ]
+            }
+            ChronicleOperation::GenerateEntity(GenerateEntity {
+                namespace,
+                id,
+                activity,
+            }) => vec![
+                LedgerAddress::in_namespace(namespace, activity),
+                LedgerAddress::in_namespace(namespace, id),
+            ],
+            ChronicleOperation::EntityAttach(EntityAttach {
+                namespace,
+                id,
+                agent,
+                identityid,
+                signature,
+                ..
+            }) => {
+                vec![
+                    LedgerAddress::in_namespace(namespace, agent),
+                    LedgerAddress::in_namespace(namespace, id),
+                    LedgerAddress::in_namespace(namespace, identityid),
+                    LedgerAddress::in_namespace(
+                        namespace,
+                        &AttachmentId::from(Chronicle::attachment(id, &*signature)),
+                    ),
+                ]
+            }
+            ChronicleOperation::Domaintype(Domaintype::Agent { id, namespace, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            ChronicleOperation::Domaintype(Domaintype::Entity { id, namespace, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+            ChronicleOperation::Domaintype(Domaintype::Activity { id, namespace, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
+        }
     }
 
     /// Take input states and apply them to the prov model, then apply transaction,

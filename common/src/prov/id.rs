@@ -1,8 +1,12 @@
 use iref::AsIri;
 use uuid::Uuid;
 
+pub trait ChronicleIri: std::ops::Deref<Target = String> {}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AttachmentId(String);
+
+impl ChronicleIri for AttachmentId {}
 
 impl std::ops::Deref for AttachmentId {
     type Target = String;
@@ -48,6 +52,8 @@ impl From<AttachmentId> for String {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct IdentityId(String);
 
+impl ChronicleIri for IdentityId {}
+
 impl std::ops::Deref for IdentityId {
     type Target = String;
 
@@ -92,6 +98,8 @@ impl From<IdentityId> for String {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct DomaintypeId(String);
 
+impl ChronicleIri for DomaintypeId {}
+
 impl std::ops::Deref for DomaintypeId {
     type Target = String;
 
@@ -135,6 +143,8 @@ impl From<DomaintypeId> for String {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct NamespaceId(String);
+
+impl ChronicleIri for NamespaceId {}
 
 impl std::ops::Deref for NamespaceId {
     type Target = String;
@@ -188,6 +198,8 @@ impl From<NamespaceId> for String {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct EntityId(String);
 
+impl ChronicleIri for EntityId {}
+
 impl std::ops::Deref for EntityId {
     type Target = String;
 
@@ -231,6 +243,7 @@ impl EntityId {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct AgentId(String);
+impl ChronicleIri for AgentId {}
 
 impl From<AgentId> for String {
     fn from(val: AgentId) -> Self {
@@ -275,6 +288,8 @@ where
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ActivityId(String);
+
+impl ChronicleIri for ActivityId {}
 
 impl From<ActivityId> for String {
     fn from(val: ActivityId) -> Self {
