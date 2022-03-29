@@ -24,6 +24,7 @@ use custom_error::custom_error;
 use futures::Future;
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use tokio::sync::broadcast::error::RecvError;
+use url::Url;
 
 use std::{
     io,
@@ -35,8 +36,6 @@ use user_error::UFE;
 
 #[allow(dead_code)]
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
-    use url::Url;
-
     Ok(SawtoothSubmitter::new(
         &options
             .value_of("sawtooth")
@@ -48,8 +47,6 @@ fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter,
 
 #[allow(dead_code)]
 fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
-    use url::Url;
-
     Ok(StateDelta::new(
         &options
             .value_of("sawtooth")
@@ -277,7 +274,9 @@ async fn main() {
     }
 
     if matches.is_present("instrument") {
-        telemetry::tracing();
+        telemetry::telemetry(
+            Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
+        );
     }
 
     config_and_exec(&matches)

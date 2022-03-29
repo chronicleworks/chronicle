@@ -50,10 +50,8 @@ services:
     environment:
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-      - OTEL_EXPORTER_JAEGER_AGENT_HOST=jaeger
-      - OTEL_EXPORTER_JAEGER_AGENT_PORT=6831
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 --instrument"
+    command: "/usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 --instrument http://jaeger:14268/api/traces"
     depends_on:
       - validator
     volumes:
@@ -65,10 +63,8 @@ services:
     environment:
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-      - OTEL_EXPORTER_JAEGER_AGENT_HOST=jaeger
-      - OTEL_EXPORTER_JAEGER_AGENT_PORT=6831
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:9982 --instrument"
+    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:9982 --instrument http://jaeger:14268/api/traces"
     expose:
       - 9982
     ports:
@@ -86,8 +82,6 @@ services:
     environment:
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-      - OTEL_EXPORTER_JAEGER_AGENT_HOST=jaeger
-      - OTEL_EXPORTER_JAEGER_AGENT_PORT=6831
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
     command: "/bin/sh"
     stdin_open: true

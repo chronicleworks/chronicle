@@ -8,13 +8,15 @@ use tp::ChronicleTransactionHandler;
 use tracing::subscriber::set_global_default;
 use tracing_log::LogTracer;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, EnvFilter, Registry};
+use url::Url;
 
-pub fn tracing() {
+pub fn telemetry(collector_endpoint: Url) {
     LogTracer::init().expect("Failed to set logger");
 
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_service_name("chronicle_tp")
-        .install_simple()
+        .with_collector_endpoint(collector_endpoint.as_str())
+        .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
     let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -49,12 +51,15 @@ async fn main() {
             Arg::new("instrument")
                 .short('i')
                 .long("instrument")
+                .value_name("instrument")
+                .takes_value(true)
+                .value_hint(ValueHint::Url)
                 .help("Instrument using RUST_LOG environment"),
         )
         .get_matches();
 
     if matches.is_present("instrument") {
-        tracing();
+        telemetry(Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap());
     }
 
     let endpoint = matches
