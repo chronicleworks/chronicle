@@ -1,5 +1,3 @@
-use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
-
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
@@ -22,6 +20,7 @@ use diesel::{
     Queryable, SqliteConnection,
 };
 use futures::Stream;
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
 use user_error::UFE;
@@ -370,14 +369,14 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn agent<'a>(
+    async fn agents_by_type<'a>(
         &self,
         ctx: &Context<'a>,
-        name: String,
-        namespace: String,
-    ) -> async_graphql::Result<Option<Agent>> {
+        typ: ID,
+        namespace: ID,
+    ) -> async_graphql::Result<Vec<Agent>> {
         use crate::persistence::schema::{
-            agent::{self, dsl},
+            agent::{self},
             namespace::dsl as nsdsl,
         };
 
@@ -387,12 +386,16 @@ impl Query {
 
         Ok(agent::table
             .inner_join(nsdsl::namespace)
-            .filter(dsl::name.eq(name).and(nsdsl::name.eq(namespace)))
-            .first::<(Agent, Namespace)>(&mut connection)
-            .optional()?
-            .map(|x| x.0))
+            .filter(
+                nsdsl::name
+                    .eq(&**namespace)
+                    .and(agent::domaintype.eq(&**typ)),
+            )
+            .load::<(Agent, Namespace)>(&mut connection)?
+            .into_iter()
+            .map(|x| x.0)
+            .collect())
     }
-
     async fn agent_by_iri<'a>(
         &self,
         ctx: &Context<'a>,
