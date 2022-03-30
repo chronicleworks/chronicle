@@ -3,13 +3,16 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_graphql::{
     extensions::Tracing,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload,
+    Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
 };
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use common::commands::{
-    ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
-    PathOrFile,
+use common::{
+    commands::{
+        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
+        PathOrFile,
+    },
+    prov::{vocab::Chronicle, AgentId},
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -134,6 +137,10 @@ impl Submission {
 
 #[Object]
 impl Agent {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::agent(&*self.name).to_string())
+    }
+
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
         use crate::persistence::schema::namespace::{self, dsl};
         let store = ctx.data_unchecked::<Store>();
@@ -386,32 +393,31 @@ impl Query {
             .map(|x| x.0))
     }
 
-    async fn activities_by_time<'a>(
+    async fn agent_by_iri<'a>(
         &self,
         ctx: &Context<'a>,
-        types: Vec<String>,
-        from_inclusive: Option<DateTime<Utc>>,
-        end_exclusive: Option<DateTime<Utc>>,
-    ) -> async_graphql::Result<Vec<Activity>> {
-        use crate::persistence::schema::activity;
+        iri: ID,
+        namespace: ID,
+    ) -> async_graphql::Result<Agent> {
+        use crate::persistence::schema::{
+            agent::{self, dsl},
+            namespace::dsl as nsdsl,
+        };
+
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
-        let mut query = activity::table.into_boxed();
+        let name = AgentId::new(&**iri);
 
-        if let Some(start) = from_inclusive {
-            query = query.filter(activity::started.gt(start.naive_utc()));
-        }
-
-        if let Some(end) = end_exclusive {
-            query = query.filter(activity::started.lt(end.naive_utc()));
-        }
-
-        for t in types {
-            query = query.or_filter(activity::domaintype.eq(t))
-        }
-
-        Ok(query.load::<Activity>(&mut connection)?)
+        Ok(agent::table
+            .inner_join(nsdsl::namespace)
+            .filter(
+                dsl::name
+                    .eq(name.decompose())
+                    .and(nsdsl::name.eq(&**namespace)),
+            )
+            .first::<(Agent, Namespace)>(&mut connection)
+            .map(|x| x.0)?)
     }
 }
 
