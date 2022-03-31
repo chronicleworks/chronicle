@@ -671,6 +671,12 @@ impl Subscription {
     }
 }
 
+pub fn exportable_schema() -> String {
+    let schema = Schema::build(Query, Mutation, Subscription).finish();
+
+    schema.federation_sdl()
+}
+
 #[instrument]
 pub async fn serve_graphql(
     pool: Pool<ConnectionManager<SqliteConnection>>,

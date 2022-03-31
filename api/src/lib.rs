@@ -38,7 +38,7 @@ use common::{
 
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-pub use graphql::serve_graphql;
+pub use graphql::{exportable_schema, serve_graphql};
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;

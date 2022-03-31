@@ -302,6 +302,11 @@ async fn main() {
         std::process::exit(0);
     }
 
+    if matches.is_present("export-schema") {
+        eprint!("{}", api::exportable_schema());
+        std::process::exit(0);
+    }
+
     if matches.is_present("instrument") {
         telemetry::telemetry(
             Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),

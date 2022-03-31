@@ -33,6 +33,12 @@ pub fn cli() -> Command<'static> {
                 .help("Insutrment using RUST_LOG environment"),
         )
         .arg(
+            Arg::new("export-schema")
+                .long("export-schema")
+                .takes_value(false)
+                .help("Print SDL and exit"),
+        )
+        .arg(
             Arg::new("ui")
                 .long("ui")
                 .required(false)
