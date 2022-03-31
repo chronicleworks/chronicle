@@ -6,7 +6,7 @@ mod cli;
 mod config;
 mod telemetry;
 
-use api::{Api, ApiDispatch, ApiError, UuidGen};
+use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 use cli::cli;
@@ -21,6 +21,10 @@ use common::{
 };
 use config::*;
 use custom_error::custom_error;
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    SqliteConnection,
+};
 use futures::Future;
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use tokio::sync::broadcast::error::RecvError;
@@ -28,7 +32,9 @@ use url::Url;
 
 use std::{
     io,
+    net::SocketAddr,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use tracing::{error, instrument};
@@ -66,18 +72,38 @@ struct UniqueUuid;
 
 impl UuidGen for UniqueUuid {}
 
+fn pool(config: &Config) -> Result<Pool<ConnectionManager<SqliteConnection>>, ApiError> {
+    Ok(Pool::builder()
+        .connection_customizer(Box::new(ConnectionOptions {
+            enable_wal: true,
+            enable_foreign_keys: true,
+            busy_timeout: Some(Duration::from_secs(2)),
+        }))
+        .build(ConnectionManager::<SqliteConnection>::new(
+            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+        ))?)
+}
+
+fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
+    if let Some(addr) = options.value_of("ui-interface") {
+        Ok(Some(addr.parse()?))
+    } else {
+        Ok(None)
+    }
+}
+
 async fn api(
     options: &ArgMatches,
     config: &Config,
-) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError> {
+) -> Result<(ApiDispatch, Option<impl Future<Output = ()>>), ApiError> {
     #[cfg(not(feature = "inmem"))]
     {
         let submitter = submitter(config, options)?;
         let state = state_delta(config, options)?;
 
         Api::new(
-            options.value_of("ui-interface").unwrap().parse()?,
-            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+            graphql_addr(options)?,
+            pool(config)?,
             submitter,
             state,
             &config.secrets.path,
@@ -91,8 +117,8 @@ async fn api(
         let state = ledger.reader();
 
         Ok(Api::new(
-            options.value_of("ui-interface").unwrap().parse()?,
-            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+            graphql_addr(options)?,
+            pool(config)?,
             ledger,
             state,
             &config.secrets.path,
@@ -245,7 +271,10 @@ async fn api_exec(
 
         Ok((exresult?, ret_api))
     } else {
-        ui.await;
+        // Block on graphql ui if running
+        if let Some(ui) = ui {
+            ui.await;
+        }
         Ok((ApiResponse::Unit, ret_api))
     }
 }

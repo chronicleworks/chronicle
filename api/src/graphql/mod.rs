@@ -731,3 +731,93 @@ pub async fn serve_graphql(
 
     warp::serve(routes).run(address).await;
 }
+
+#[cfg(test)]
+mod test {
+    use async_graphql::{Request, Schema};
+    use common::ledger::InMemLedger;
+    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use r2d2::Pool;
+    use std::time::Duration;
+    use tempfile::TempDir;
+    use tracing::Level;
+    use uuid::Uuid;
+
+    use crate::{persistence::ConnectionOptions, Api, UuidGen};
+
+    use super::{Mutation, Query, Store, Subscription};
+
+    #[derive(Debug, Clone)]
+    struct SameUuid;
+
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    async fn test_schema() -> Schema<Query, Mutation, Subscription> {
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_max_level(Level::TRACE)
+            .try_init()
+            .ok();
+
+        let secretpath = TempDir::new().unwrap();
+
+        // We need to use a real file for sqlite, as in mem either re-creates between
+        // macos temp dir permissions don't work with sqlite
+        std::fs::create_dir("./sqlite_test").ok();
+        let dbid = Uuid::new_v4();
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+                "./sqlite_test/db{}.sqlite",
+                dbid
+            )))
+            .unwrap();
+
+        let (dispatch, _ui) = Api::new(
+            None,
+            pool.clone(),
+            ledger,
+            reader,
+            &secretpath.into_path(),
+            SameUuid,
+        )
+        .await
+        .unwrap();
+
+        Schema::build(Query, Mutation, Subscription)
+            .data(Store::new(pool))
+            .data(dispatch)
+            .finish()
+    }
+
+    #[tokio::test]
+    async fn agent_can_be_created_and_queried() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                createAgent(name:"bobross", typ: "artist") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create);
+    }
+}
