@@ -1,46 +1,46 @@
 [package]
-name = "common"
-version = "0.1.0"
+build   = "build.rs"
 edition = "2021"
-build = "build.rs"
+name    = "common"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iref = "2.0.3"
-iref-enum = "1.2.0"
-static-iref = "1.0.0"
-serde = "1.0.135"
-serde_derive = "1.0.135"
-derivative = "2.2.0"
-uuid = { version = "0.8.2", features = ["serde"] }
-rand = { version = "0.8.4", features = ["getrandom"] }
-pkcs8 = { version = "0.8", features = ["alloc", "std"] }
-k256 = { version = "0.10.2", features = [
-    "arithmetic",
-    "ecdsa",
-    "pkcs8",
-    "sha256",
-    "std",
-    "pem",
-] }
-rand_core = "0.6.3"
+async-trait = "0.1.53"
+chrono = { version = "0.4.19", features = ["serde"] }
 custom_error = "1.9.2"
+derivative = "2.2.0"
+futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
+iref = "2.1.2"
+iref-enum = "2.0.0"
 json = "0.12.4"
-chrono = { version = "0.4.19", features = ["serde"] }
-lazy_static = "1.4.0"
 json-ld = "0.4.0"
-tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
-futures = "0.3.19"
-tracing = "0.1.29"
-serde_json = { version = "1.0.78" }
-async-trait = "0.1.52"
+k256 = { version = "0.10.4", features = [
+  "arithmetic",
+  "ecdsa",
+  "pkcs8",
+  "sha256",
+  "std",
+  "pem",
+] }
+lazy_static = "1.4.0"
+pkcs8 = { version = "0.8.0", features = ["alloc", "std"] }
+rand = { version = "0.8.5", features = ["getrandom"] }
+rand_core = "0.6.3"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.79"
+static-iref = "2.0.0"
+tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
+tracing = "0.1.32"
 url = { version = "2.2.2", features = ["serde"] }
+uuid = { version = "0.8.2", features = ["serde"] }
 
 [build-dependencies]
-json = "0.12.4"
+json        = "0.12.4"
 lazy_static = "1.4.0"
 
 [dev-dependencies]

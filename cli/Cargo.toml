@@ -11,15 +11,15 @@ path = "src/main.rs"
 
 [dependencies]
 api = { path = "../api" }
-clap = { version = "3.0.12" }
+clap = "3.1.6"
 clap_complete = "3.1.1"
 colored_json = "2.1.0"
 common = { path = "../common" }
 custom_error = "1.9.2"
 dotenv = "0.15.0"
-futures = "0.3.19"
+futures = "0.3.21"
 hex = "0.4.3"
-k256 = { version = "0.10.2", features = [
+k256 = { version = "0.10.4", features = [
   "arithmetic",
   "ecdsa",
   "pkcs8",
@@ -27,26 +27,26 @@ k256 = { version = "0.10.2", features = [
   "std",
   "pem",
 ] }
-open = "2.0.2"
-opentelemetry = { version = "*", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "*", features = [
+open = "2.1.1"
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "0.16.0", features = [
   "rt-tokio",
   "collector_client",
   "reqwest_collector_client",
 ] }
 proto = { path = "../sawtooth_protocol" }
 question = "0.2.2"
-rand = { version = "0.8.4", features = ["getrandom"] }
+rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
-serde = "1.0.135"
-serde_derive = "1.0.135"
+serde = "1.0.136"
+serde_derive = "1.0.136"
 shellexpand = "2.1.0"
-tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
 toml = "0.5.8"
-tracing = "0.1.29"
-tracing-log = "0.1"
+tracing = "0.1.32"
+tracing-log = "0.1.2"
 tracing-opentelemetry = "0.17.2"
-tracing-subscriber = { version = "0.3.6", features = [
+tracing-subscriber = { version = "0.3.9", features = [
   "default",
   "registry",
   "env-filter",

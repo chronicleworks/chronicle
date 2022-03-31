@@ -1,5 +1,5 @@
 use async_graphql::{
-    extensions::Tracing,
+    extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
 };
@@ -679,7 +679,9 @@ pub async fn serve_graphql(
     open: bool,
 ) {
     let schema = Schema::build(Query, Mutation, Subscription)
-        .extension(Tracing)
+        .extension(OpenTelemetry::new(opentelemetry::global::tracer(
+            "chronicle-api-gql",
+        )))
         .data(Store::new(pool.clone()))
         .data(api)
         .finish();

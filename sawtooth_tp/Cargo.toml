@@ -10,19 +10,19 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = "1.1.0"
-clap = { version = "3.0.12" }
-clap_generate = "3.0.2"
+clap = "3.1.6"
+clap_generate = "3.0.3"
 common = { path = "../common" }
 crossbeam = "0.8.1"
 custom_error = "1.9.2"
 derivative = "2.2.0"
-futures = "0.3.19"
+futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
-k256 = { version = "0.10.2", features = [
+k256 = { version = "0.10.4", features = [
   "arithmetic",
   "ecdsa",
   "pkcs8",
@@ -32,26 +32,25 @@ k256 = { version = "0.10.2", features = [
 ] }
 lazy_static = "1.4.0"
 openssl = "0.10.38"
-opentelemetry = { version = "*", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "*", features = [
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "0.16.0", features = [
   "rt-tokio",
   "reqwest_collector_client",
   "collector_client",
 ] }
-prost = "0.9.0"
-prost-types = "0.9.0"
+prost = "0.10.0"
 proto = { path = "../sawtooth_protocol" }
-rand = { version = "0.8.4", features = ["getrandom"] }
+rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
-sawtooth-sdk = "0.5.0"
-serde = "1.0.135"
+sawtooth-sdk = "0.5.2"
+serde = "1.0.136"
 serde_cbor = "0.11.2"
-serde_derive = "1.0.135"
-tokio = { version = "1.15.0", features = ["time", "macros", "rt-multi-thread"] }
-tracing = "0.1.29"
+serde_derive = "1.0.136"
+tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
+tracing = "0.1.32"
 tracing-log = "0.1.2"
 tracing-opentelemetry = "0.17.2"
-tracing-subscriber = { version = "0.3.6", features = [
+tracing-subscriber = { version = "0.3.9", features = [
   "default",
   "registry",
   "env-filter",
@@ -62,10 +61,10 @@ zmq = "0.9.2"
 
 [build-dependencies]
 glob        = "0.3.0"
-prost-build = "0.9.0"
+prost-build = "0.10.0"
 
 [dev-dependencies]
-protobuf = "2"
+protobuf = "2.27.1"
 
 [features]
 default          = ["vendored-zmq", "vendored-openssl"]

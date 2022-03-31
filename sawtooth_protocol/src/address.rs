@@ -22,7 +22,7 @@ impl From<&LedgerAddress> for SawtoothAddress {
         if let Some(ns) = addr.namespace.as_ref() {
             sha.update(ns.as_bytes())
         }
-        sha.update(&addr.resource.as_bytes());
+        sha.update(addr.resource.as_bytes());
         SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode_upper(sha.finish())))
     }
 }
