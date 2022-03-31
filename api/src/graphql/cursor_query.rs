@@ -16,26 +16,26 @@ pub struct CursorPosition<T> {
     limit: i64,
 }
 
-pub trait Paginate: Sized {
+pub trait Cursorise: Sized {
     fn cursor(
         self,
         after: Option<i32>,
         before: Option<i32>,
-        first: Option<i32>,
-        last: Option<i32>,
+        first: Option<usize>,
+        last: Option<usize>,
     ) -> CursorPosition<Self>;
 }
 
-impl<T> Paginate for T {
+impl<T> Cursorise for T {
     fn cursor(
         self,
         after: Option<i32>,
         before: Option<i32>,
-        first: Option<i32>,
-        last: Option<i32>,
+        first: Option<usize>,
+        last: Option<usize>,
     ) -> CursorPosition<Self> {
-        let mut start = after.map(|after| after + 1).unwrap_or(0);
-        let mut end = before.unwrap_or(DEFAULT_PAGE_SIZE);
+        let mut start = after.map(|after| after + 1).unwrap_or(0) as usize;
+        let mut end = before.unwrap_or(DEFAULT_PAGE_SIZE) as usize;
         if let Some(first) = first {
             end = (start + first).min(end);
         }

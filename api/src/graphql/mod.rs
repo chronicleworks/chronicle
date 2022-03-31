@@ -1,4 +1,5 @@
 use async_graphql::{
+    connection::{query, Connection, Edge, EmptyFields},
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
@@ -28,8 +29,9 @@ use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
 };
-
+mod cursor_query;
 use crate::ApiDispatch;
+use cursor_query::Cursorise;
 
 #[derive(Default, Queryable)]
 pub struct Agent {
@@ -330,6 +332,7 @@ impl Entity {
 
 custom_error! {pub GraphQlError
     Db{source: diesel::result::Error}                           = "Database operation failed",
+    R2d2{source: r2d2::Error }                                  = "Connection pool error",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
     Api{source: crate::ApiError}                                = "API",
 }
@@ -374,27 +377,48 @@ impl Query {
         ctx: &Context<'a>,
         typ: ID,
         namespace: ID,
-    ) -> async_graphql::Result<Vec<Agent>> {
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
         use crate::persistence::schema::{
             agent::{self},
             namespace::dsl as nsdsl,
         };
 
-        let store = ctx.data_unchecked::<Store>();
+        query(
+            after,
+            before,
+            first,
+            last,
+            |after, before, first, last| async move {
+                let store = ctx.data_unchecked::<Store>();
 
-        let mut connection = store.pool.get()?;
+                let mut connection = store.pool.get()?;
 
-        Ok(agent::table
-            .inner_join(nsdsl::namespace)
-            .filter(
-                nsdsl::name
-                    .eq(&**namespace)
-                    .and(agent::domaintype.eq(&**typ)),
-            )
-            .load::<(Agent, Namespace)>(&mut connection)?
-            .into_iter()
-            .map(|x| x.0)
-            .collect())
+                let agents = agent::table
+                    .inner_join(nsdsl::namespace)
+                    .filter(
+                        nsdsl::name
+                            .eq(&**namespace)
+                            .and(agent::domaintype.eq(&**typ)),
+                    )
+                    .cursor(after, before, first, last)
+                    .load::<((Agent, Namespace), i64)>(&mut connection)?
+                    .into_iter()
+                    .map(|x| x.0 .0);
+
+                let mut connection = Connection::new(false, false);
+
+                connection.append(
+                    agents.map(|agent| Edge::with_additional_fields(0, agent, EmptyFields)),
+                );
+
+                Ok::<_, GraphQlError>(connection)
+            },
+        )
+        .await
     }
     async fn agent_by_iri<'a>(
         &self,
