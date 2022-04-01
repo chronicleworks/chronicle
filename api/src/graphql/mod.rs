@@ -33,7 +33,8 @@ mod cursor_query;
 use crate::ApiDispatch;
 use cursor_query::Cursorise;
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::agent)]
 pub struct Agent {
     pub id: i32,
     pub name: String,
@@ -43,7 +44,8 @@ pub struct Agent {
     pub identity_id: Option<i32>,
 }
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::identity)]
 pub struct Identity {
     pub id: i32,
     pub namespace_id: i32,
@@ -372,11 +374,12 @@ pub struct Query;
 
 #[Object]
 impl Query {
+    #[allow(clippy::too_many_arguments)]
     async fn agents_by_type<'a>(
         &self,
         ctx: &Context<'a>,
         typ: ID,
-        namespace: ID,
+        namespace: Option<ID>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -396,24 +399,22 @@ impl Query {
                 let store = ctx.data_unchecked::<Store>();
 
                 let mut connection = store.pool.get()?;
+                let ns = namespace.unwrap_or_else(|| "default".into());
 
                 let agents = agent::table
                     .inner_join(nsdsl::namespace)
-                    .filter(
-                        nsdsl::name
-                            .eq(&**namespace)
-                            .and(agent::domaintype.eq(&**typ)),
-                    )
+                    .filter(nsdsl::name.eq(&**ns).and(agent::domaintype.eq(&**typ)))
+                    .select(Agent::as_select())
                     .cursor(after, before, first, last)
-                    .load::<((Agent, Namespace), i64)>(&mut connection)?
+                    .load::<(Agent, i64)>(&mut connection)?
                     .into_iter()
-                    .map(|x| x.0 .0);
+                    .enumerate();
 
                 let mut connection = Connection::new(false, false);
 
-                connection.append(
-                    agents.map(|agent| Edge::with_additional_fields(0, agent, EmptyFields)),
-                );
+                connection.append(agents.map(|(pos, (agent, count))| {
+                    Edge::with_additional_fields((pos as i32) + (count as i32), agent, EmptyFields)
+                }));
 
                 Ok::<_, GraphQlError>(connection)
             },
@@ -833,7 +834,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn agent_can_be_created_and_queried() {
+    async fn agent_can_be_created() {
         let schema = test_schema().await;
 
         let create = schema
@@ -849,5 +850,52 @@ mod test {
             .await;
 
         insta::assert_toml_snapshot!(create);
+    }
+
+    #[tokio::test]
+    async fn query_agents_by_cursor() {
+        let schema = test_schema().await;
+
+        for i in 0..100 {
+            schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                createAgent(name:"bobross{}", typ: "artist") {{
+                    context
+                }}
+            }}
+        "#,
+                    i
+                )))
+                .await;
+        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let default_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(default_cursor);
     }
 }
