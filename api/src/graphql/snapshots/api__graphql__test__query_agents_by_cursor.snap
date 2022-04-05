@@ -1,6 +1,6 @@
 ---
 source: api/src/graphql/mod.rs
-assertion_line: 899
+assertion_line: 887
 expression: default_cursor
 ---
 {
@@ -8,9 +8,9 @@ expression: default_cursor
     "agentsByType": {
       "pageInfo": {
         "hasPreviousPage": false,
-        "hasNextPage": false,
-        "startCursor": "100",
-        "endCursor": "109"
+        "hasNextPage": true,
+        "startCursor": "0",
+        "endCursor": "9"
       },
       "edges": [
         {
@@ -18,70 +18,70 @@ expression: default_cursor
             "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
             "name": "bobross0"
           },
-          "cursor": "100"
+          "cursor": "0"
         },
         {
           "node": {
             "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
             "name": "bobross1"
           },
-          "cursor": "101"
+          "cursor": "1"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross2",
-            "name": "bobross2"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
+            "name": "bobross10"
           },
-          "cursor": "102"
+          "cursor": "2"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross3",
-            "name": "bobross3"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
+            "name": "bobross11"
           },
-          "cursor": "103"
+          "cursor": "3"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross4",
-            "name": "bobross4"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
+            "name": "bobross12"
           },
-          "cursor": "104"
+          "cursor": "4"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross5",
-            "name": "bobross5"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
+            "name": "bobross13"
           },
-          "cursor": "105"
+          "cursor": "5"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross6",
-            "name": "bobross6"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
+            "name": "bobross14"
           },
-          "cursor": "106"
+          "cursor": "6"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross7",
-            "name": "bobross7"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
+            "name": "bobross15"
           },
-          "cursor": "107"
+          "cursor": "7"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross8",
-            "name": "bobross8"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
+            "name": "bobross16"
           },
-          "cursor": "108"
+          "cursor": "8"
         },
         {
           "node": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross9",
-            "name": "bobross9"
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
+            "name": "bobross17"
           },
-          "cursor": "109"
+          "cursor": "9"
         }
       ]
     }

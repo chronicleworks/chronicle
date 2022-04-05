@@ -12,8 +12,53 @@ const DEFAULT_PAGE_SIZE: i32 = 10;
 #[derive(QueryId)]
 pub struct CursorPosition<T> {
     query: T,
-    start: i64,
-    limit: i64,
+    pub(crate) start: i64,
+    pub(crate) limit: i64,
+}
+
+macro_rules! gql_cursor {
+    ($after:expr, $before: expr, $first: expr, $last: expr, $query:expr, $order:expr, $node_type:tt,$connection: expr) => {{
+        use crate::graphql::cursor_query::Cursorise;
+        use async_graphql::connection::{Connection, Edge, EmptyFields};
+
+        query(
+            $after,
+            $before,
+            $first,
+            $last,
+            |after, before, first, last| async move {
+                let rx = $query
+                    .order($order)
+                    .select(<$node_type>::as_select())
+                    .cursor(after, before, first, last);
+
+                let start = rx.start;
+                let limit = rx.limit;
+
+                let rx = rx.load::<($node_type, i64)>(&mut $connection)?;
+
+                let mut gql = Connection::new(
+                    rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
+                    rx.first()
+                        .map(|(_, total)| ((start as i64) + (limit as i64)) < *total)
+                        .unwrap_or(false),
+                );
+
+                gql.append(rx.into_iter().enumerate().map(
+                    (|(pos, (agent, _count))| {
+                        Edge::with_additional_fields(
+                            (pos as i32) + (start as i32),
+                            agent,
+                            EmptyFields,
+                        )
+                    }),
+                ));
+
+                Ok::<_, GraphQlError>(gql)
+            },
+        )
+        .await
+    }};
 }
 
 pub trait Cursorise: Sized {
@@ -37,7 +82,7 @@ impl<T> Cursorise for T {
         let mut start = after.map(|after| after + 1).unwrap_or(0) as usize;
         let mut end = before.unwrap_or(DEFAULT_PAGE_SIZE) as usize;
         if let Some(first) = first {
-            end = (start + first).min(end);
+            end = start + first
         }
         if let Some(last) = last {
             start = if last > end - start { end } else { end - last };

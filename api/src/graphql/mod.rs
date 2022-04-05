@@ -1,5 +1,5 @@
 use async_graphql::{
-    connection::{query, Connection, Edge, EmptyFields},
+    connection::{query, Connection, EmptyFields},
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
@@ -29,9 +29,10 @@ use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
 };
-mod cursor_query;
+
 use crate::ApiDispatch;
-use cursor_query::Cursorise;
+#[macro_use]
+mod cursor_query;
 
 #[derive(Default, Queryable, Selectable)]
 #[diesel(table_name = crate::persistence::schema::agent)]
@@ -390,36 +391,23 @@ impl Query {
             namespace::dsl as nsdsl,
         };
 
-        query(
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+        let ns = namespace.unwrap_or_else(|| "default".into());
+
+        gql_cursor!(
             after,
             before,
             first,
             last,
-            |after, before, first, last| async move {
-                let store = ctx.data_unchecked::<Store>();
-
-                let mut connection = store.pool.get()?;
-                let ns = namespace.unwrap_or_else(|| "default".into());
-
-                let agents = agent::table
-                    .inner_join(nsdsl::namespace)
-                    .filter(nsdsl::name.eq(&**ns).and(agent::domaintype.eq(&**typ)))
-                    .select(Agent::as_select())
-                    .cursor(after, before, first, last)
-                    .load::<(Agent, i64)>(&mut connection)?
-                    .into_iter()
-                    .enumerate();
-
-                let mut connection = Connection::new(false, false);
-
-                connection.append(agents.map(|(pos, (agent, count))| {
-                    Edge::with_additional_fields((pos as i32) + (count as i32), agent, EmptyFields)
-                }));
-
-                Ok::<_, GraphQlError>(connection)
-            },
+            agent::table
+                .inner_join(nsdsl::namespace)
+                .filter(nsdsl::name.eq(&**ns).and(agent::domaintype.eq(&**typ))),
+            agent::name.asc(),
+            Agent,
+            connection
         )
-        .await
     }
     async fn agent_by_iri<'a>(
         &self,
@@ -897,5 +885,57 @@ mod test {
             .await;
 
         insta::assert_json_snapshot!(default_cursor);
+
+        let middle_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist", first: 20, after: "3") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(middle_cursor);
+
+        let out_of_bound_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist", first: 20, after: "90") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(out_of_bound_cursor);
     }
 }
