@@ -73,28 +73,45 @@ create table attachment (
 
 create index attachment_signature_idx on attachment(signature);
 
-create table wasgeneratedby (
-    activity_id integer not null,
-    entity_id integer not null,
+create table delegation (
+    id integer primary key not null,
+    delegate_id integer not null,
+    responsible_id integer not null,
+    activity_id integer,
+    type text,
+    foreign key(delegate_id) references agent(id),
+    foreign key(responsible_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    foreign key(entity_id) references entity(id),
-    primary key(activity_id,entity_id)
-);
+    primary key(delegate_id,responsible_id)
+)
 
-create table used (
+create table deriviation (
+    id integer primary key not null,
     activity_id integer not null,
-    entity_id integer not null,
+    generated_entity integer not null,
+    used_entity integer not null,
+    type text,
     foreign key(activity_id) references activity(id),
-    foreign key(entity_id) references entity(id),
-    primary key(activity_id,entity_id)
-);
+    foreign key(generated_entity) references entity(id),
+    foreign key(used_entity) references entity(id)
+)
 
-create table wasassociatedwith (
+create table generation (
+    id integer primary key not null,
+    activity_id integer not null,
+    generated_entity integer not null,
+    type text,
+    time timestamp,
+    foreign key(activity_id) references activity(id),
+    foreign key(generated_entity) references entity(id),
+)
+
+create table associsation (
+    id integer primary key not null,
     agent_id integer not null,
     activity_id integer not null,
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    primary key(agent_id,activity_id)
 );
 
 create table hadidentity (

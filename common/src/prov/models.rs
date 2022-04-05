@@ -334,6 +334,10 @@ impl Entity {
     }
 }
 
+pub struct Derivition {}
+
+pub struct Delegation {}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
     pub namespaces: HashMap<NamespaceId, Namespace>,
@@ -348,7 +352,7 @@ pub struct ProvModel {
     pub had_attachment: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AttachmentId)>>,
     pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
     pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_generated_by: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
+    pub derived: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
     pub used: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, EntityId)>>,
 }
 
