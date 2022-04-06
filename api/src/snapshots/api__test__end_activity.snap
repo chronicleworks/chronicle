@@ -1,8 +1,7 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1302
+assertion_line: 1260
 expression: "serde_json::to_string_pretty(&v).unwrap()"
-
 ---
 {
   "@context": {
@@ -89,6 +88,7 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "chronicle:activity:testactivity",
       "@type": "prov:Activity",
       "associated": [
+        "chronicle:agent:testagent",
         "chronicle:agent:testagent"
       ],
       "endTime": "2014-07-08T09:10:11+00:00",

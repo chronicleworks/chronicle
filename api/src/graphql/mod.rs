@@ -60,7 +60,8 @@ impl Identity {
     }
 }
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::activity)]
 pub struct Activity {
     pub id: i32,
     pub name: String,
@@ -70,7 +71,8 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Default, Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::entity)]
 pub struct Entity {
     id: i32,
     name: String,
@@ -79,13 +81,15 @@ pub struct Entity {
     attachment_id: Option<i32>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::attachment)]
+#[allow(dead_code)]
 pub struct Attachment {
-    _id: i32,
-    _namespace_id: i32,
+    id: i32,
+    namespace_id: i32,
     signature_time: NaiveDateTime,
     signature: String,
-    _signer_id: i32,
+    signer_id: i32,
     locator: Option<String>,
 }
 
@@ -224,33 +228,37 @@ impl Activity {
         &self,
         ctx: &Context<'a>,
     ) -> async_graphql::Result<Vec<Agent>> {
-        use crate::persistence::schema::wasassociatedwith::{self, dsl};
+        use crate::persistence::schema::association::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = wasassociatedwith::table
+        let res = association::table
             .filter(dsl::activity_id.eq(self.id))
+            .order(dsl::offset)
             .inner_join(crate::persistence::schema::agent::table)
-            .load::<((i32, i32), Agent)>(&mut connection)?;
+            .select(Agent::as_select())
+            .load::<Agent>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
     }
 
     async fn used<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-        use crate::persistence::schema::used::{self, dsl};
+        use crate::persistence::schema::useage::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = used::table
+        let res = useage::table
             .filter(dsl::activity_id.eq(self.id))
+            .order(dsl::offset)
             .inner_join(crate::persistence::schema::entity::table)
-            .load::<((i32, i32), Entity)>(&mut connection)?;
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
     }
 }
 
@@ -295,41 +303,23 @@ impl Entity {
             Ok(None)
         }
     }
-
-    async fn was_attributed_to<'a>(
-        &self,
-        ctx: &Context<'a>,
-    ) -> async_graphql::Result<Vec<Activity>> {
-        use crate::persistence::schema::wasgeneratedby::{self, dsl};
-
-        let store = ctx.data_unchecked::<Store>();
-
-        let mut connection = store.pool.get()?;
-
-        let res = wasgeneratedby::table
-            .filter(dsl::entity_id.eq(self.id))
-            .inner_join(crate::persistence::schema::activity::table)
-            .load::<((i32, i32), Activity)>(&mut connection)?;
-
-        Ok(res.into_iter().map(|(_, x)| x).collect())
-    }
-
     async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
     ) -> async_graphql::Result<Vec<Activity>> {
-        use crate::persistence::schema::wasgeneratedby::{self, dsl};
+        use crate::persistence::schema::generation::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = wasgeneratedby::table
-            .filter(dsl::entity_id.eq(self.id))
+        let res = generation::table
+            .filter(dsl::generated_entity_id.eq(self.id))
             .inner_join(crate::persistence::schema::activity::table)
-            .load::<((i32, i32), Activity)>(&mut connection)?;
+            .select(Activity::as_select())
+            .load::<Activity>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
     }
 }
 

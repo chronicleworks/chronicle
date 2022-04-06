@@ -101,6 +101,14 @@ pub struct GenerateEntity {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct DeriveEntity {
+    pub namespace: NamespaceId,
+    pub id: EntityId,
+    pub generated_id: Option<EntityId>,
+    pub used_id: Option<EntityId>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct EntityAttach {
     pub namespace: NamespaceId,
     pub id: EntityId,
@@ -334,26 +342,73 @@ impl Entity {
     }
 }
 
-pub struct Derivition {}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DerivationType {
+    Domain(String),
+    Revision,
+    Quotation,
+    PrimarySource,
+}
 
-pub struct Delegation {}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Derivation {
+    pub generated_id: EntityId,
+    pub used_id: EntityId,
+    pub activity_id: Option<ActivityId>,
+    pub typ: DerivationType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delegation {
+    pub delegate_id: AgentId,
+    pub responsible_id: AgentId,
+    pub activity_id: ActivityId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Association {
+    pub agent_id: AgentId,
+    pub activity_id: ActivityId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Useage {
+    pub activity_id: ActivityId,
+    pub entity_id: EntityId,
+    pub time: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Generation {
+    pub activity_id: ActivityId,
+    pub generated_id: EntityId,
+    pub time: Option<DateTime<Utc>>,
+}
+
+type NamespacedId<T> = (NamespaceId, T);
+type NamespacedAgent = NamespacedId<AgentId>;
+type NamespacedEntity = NamespacedId<EntityId>;
+type NamespacedActivity = NamespacedId<ActivityId>;
+type NamespacedIdentity = NamespacedId<IdentityId>;
+type NamespacedAttachment = NamespacedId<AttachmentId>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
     pub namespaces: HashMap<NamespaceId, Namespace>,
-    pub agents: HashMap<(NamespaceId, AgentId), Agent>,
-    pub activities: HashMap<(NamespaceId, ActivityId), Activity>,
-    pub entities: HashMap<(NamespaceId, EntityId), Entity>,
-    pub identities: HashMap<(NamespaceId, IdentityId), Identity>,
-    pub attachments: HashMap<(NamespaceId, AttachmentId), Attachment>,
-    pub has_identity: HashMap<(NamespaceId, AgentId), (NamespaceId, IdentityId)>,
-    pub had_identity: HashMap<(NamespaceId, AgentId), HashSet<(NamespaceId, IdentityId)>>,
-    pub has_attachment: HashMap<(NamespaceId, EntityId), (NamespaceId, AttachmentId)>,
-    pub had_attachment: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AttachmentId)>>,
-    pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
-    pub derived: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
-    pub used: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, EntityId)>>,
+    pub agents: HashMap<NamespacedAgent, Agent>,
+    pub activities: HashMap<NamespacedActivity, Activity>,
+    pub entities: HashMap<NamespacedEntity, Entity>,
+    pub identities: HashMap<NamespacedIdentity, Identity>,
+    pub attachments: HashMap<NamespacedAttachment, Attachment>,
+    pub has_identity: HashMap<NamespacedAgent, (NamespaceId, IdentityId)>,
+    pub had_identity: HashMap<NamespacedAgent, HashSet<(NamespaceId, IdentityId)>>,
+    pub has_attachment: HashMap<NamespacedEntity, (NamespaceId, AttachmentId)>,
+    pub had_attachment: HashMap<NamespacedEntity, HashSet<(NamespaceId, AttachmentId)>>,
+    pub association: HashMap<NamespacedActivity, Vec<Association>>,
+    pub derivation: HashMap<NamespacedEntity, Vec<Derivation>>,
+    pub delegation: HashMap<NamespacedAgent, Vec<Delegation>>,
+    pub generation: HashMap<NamespacedEntity, Vec<Generation>>,
+    pub useage: HashMap<NamespacedActivity, Vec<Useage>>,
 }
 
 impl ProvModel {
@@ -424,77 +479,82 @@ impl ProvModel {
                 })
                 .or_insert(links);
         }
-        for (id, links) in other.was_associated_with {
-            self.was_associated_with
+        for (id, mut rhs) in other.association {
+            self.association
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.was_attributed_to {
-            self.was_attributed_to
+
+        for (id, mut rhs) in other.generation {
+            self.generation
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.was_generated_by {
-            self.was_generated_by
+
+        for (id, mut rhs) in other.useage {
+            self.useage
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.used {
-            self.used
+
+        for (id, mut rhs) in other.derivation {
+            self.derivation
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
+        }
+
+        for (id, mut rhs) in other.delegation {
+            self.delegation
+                .entry(id.clone())
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
     }
 
-    pub fn associate_with(
+    pub fn was_associated_with(
         &mut self,
         namespace: &NamespaceId,
-        activity: &ActivityId,
-        agent: &AgentId,
+        activity_id: &ActivityId,
+        agent_id: &AgentId,
     ) {
-        self.was_associated_with
-            .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace.to_owned(), agent.clone()));
+        self.association
+            .entry((namespace.clone(), activity_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Association {
+                agent_id: agent_id.clone(),
+                activity_id: activity_id.clone(),
+            });
     }
 
-    pub fn generate_by(
+    pub fn was_generated_by(
         &mut self,
         namespace: NamespaceId,
-        entity: &EntityId,
-        activity: &ActivityId,
+        generated_id: &EntityId,
+        activity_id: &ActivityId,
     ) {
-        self.was_generated_by
-            .entry((namespace.clone(), entity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace, activity.clone()));
+        self.generation
+            .entry((namespace, generated_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Generation {
+                activity_id: activity_id.clone(),
+                generated_id: generated_id.clone(),
+                time: None,
+            })
     }
 
-    pub fn used(&mut self, namespace: NamespaceId, activity: &ActivityId, entity: &EntityId) {
-        self.used
-            .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace, entity.clone()));
+    pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
+        self.useage
+            .entry((namespace, activity_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Useage {
+                activity_id: activity_id.clone(),
+                entity_id: entity_id.clone(),
+                time: None,
+            })
     }
 
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
@@ -589,8 +649,8 @@ impl ProvModel {
         );
     }
 
-    /// Transform a sequence of ChronicleTransaction events into a provenance model,
-    /// If a statement requires a subject or object that does not currently exist in the model, then we create it
+    ///! Transform a sequence of `ChronicleOperation` events into a provenance model,
+    ///! If a statement requires a subject or object that does not currently exist in the model, then we create it
     pub fn apply(&mut self, tx: &ChronicleOperation) {
         let tx = tx.to_owned();
         match tx {
@@ -672,7 +732,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(&namespace, &id, &agent);
+                self.was_associated_with(&namespace, &id, &agent);
             }
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
@@ -714,7 +774,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(&namespace, &id, &agent);
+                self.was_associated_with(&namespace, &id, &agent);
             }
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
@@ -766,7 +826,7 @@ impl ProvModel {
                     self.add_entity(Entity::new(id.clone(), &namespace, name, None));
                 }
 
-                self.generate_by(namespace, &id, &activity)
+                self.was_generated_by(namespace, &id, &activity)
             }
             ChronicleOperation::EntityAttach(EntityAttach {
                 namespace,
@@ -1011,14 +1071,11 @@ impl ProvModel {
                     .ok();
             }
 
-            if let Some(asoc) = self
-                .was_associated_with
-                .get(&(namespace.to_owned(), id.to_owned()))
-            {
+            if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for asoc in asoc.iter() {
+                    ids.push(object! {"@id": asoc.agent_id.as_str()});
                 }
 
                 activitydoc
@@ -1026,11 +1083,11 @@ impl ProvModel {
                     .ok();
             }
 
-            if let Some(asoc) = self.used.get(&(namespace.to_owned(), id.to_owned())) {
+            if let Some(useage) = self.useage.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for useage in useage.iter() {
+                    ids.push(object! {"@id": useage.entity_id.as_str()});
                 }
 
                 activitydoc
@@ -1065,14 +1122,23 @@ impl ProvModel {
                 }]
             };
 
-            if let Some(asoc) = self
-                .was_generated_by
-                .get(&(namespace.to_owned(), id.to_owned()))
-            {
+            if let Some(generation) = self.generation.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for generation in generation.iter() {
+                    ids.push(object! {"@id": generation.activity_id.as_str()});
+                }
+
+                entitydoc
+                    .insert(Iri::from(Prov::WasGeneratedBy).as_str(), ids)
+                    .ok();
+            }
+
+            if let Some(generation) = self.generation.get(&(namespace.to_owned(), id.to_owned())) {
+                let mut ids = json::Array::new();
+
+                for generation in generation.iter() {
+                    ids.push(object! {"@id": generation.activity_id.as_str()});
                 }
 
                 entitydoc
@@ -1267,7 +1333,7 @@ impl ProvModel {
         }
 
         for agent in wasassociatedwith {
-            self.associate_with(&namespaceid, &activity.id, &agent);
+            self.was_associated_with(&namespaceid, &activity.id, &agent);
         }
 
         self.add_activity(activity);
@@ -1391,7 +1457,7 @@ impl ProvModel {
         }
 
         for activity in generatedby {
-            self.generate_by(namespaceid.clone(), &id, &activity);
+            self.was_generated_by(namespaceid.clone(), &id, &activity);
         }
 
         self.add_entity(Entity::new(id, &namespaceid, &name, domaintypeid));
@@ -1539,9 +1605,9 @@ pub mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        vocab::Chronicle, AgentId, ChronicleOperation, CreateActivity, CreateAgent,
-        CreateNamespace, Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel,
-        RegisterKey,
+        vocab::Chronicle, AgentId, Association, ChronicleOperation, CreateActivity, CreateAgent,
+        CreateNamespace, Domaintype, DomaintypeId, EndActivity, GenerateEntity, Generation,
+        ProvModel, RegisterKey, Useage,
     };
 
     use super::{ActivityUses, CompactedJson, EntityAttach, NamespaceId, StartActivity};
@@ -1799,9 +1865,6 @@ pub mod test {
                 prov.apply(tx);
             }
 
-            // Key registration overwrites public key, so we only assert the last one
-            let mut regkey_assertion:  Box<dyn FnOnce()->Result<(), TestCaseError>> = Box::new(|| {Ok(())});
-
             // Now assert the final prov object matches what we would expect from the input transactions
             for tx in tx.iter() {
                 match tx {
@@ -1822,23 +1885,20 @@ pub mod test {
                     },
                     ChronicleOperation::RegisterKey(
                         RegisterKey { namespace, name, id, publickey}) => {
-                            regkey_assertion = Box::new(|| {
-                                let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
-                                prop_assert!(agent.is_some());
-                                let agent = agent.unwrap();
-                                let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
-                                prop_assert!(identity.is_some());
-                                let identity = identity.unwrap();
-                                let identity = prov.identities.get(identity);
-                                prop_assert!(identity.is_some());
-                                let identity = identity.unwrap();
+                            let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
+                            prop_assert!(agent.is_some());
+                            let agent = agent.unwrap();
+                            let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
+                            prop_assert!(identity.is_some());
+                            let identity = identity.unwrap();
+                            let identity = prov.identities.get(identity);
+                            prop_assert!(identity.is_some());
+                            let identity = identity.unwrap();
 
-                                prop_assert_eq!(&agent.name, &name.clone());
-                                prop_assert_eq!(&agent.namespaceid, &namespace.clone());
-                                prop_assert_eq!(&identity.public_key, &publickey.clone());
-                                Ok(())
-                            })
-                        },
+                            prop_assert_eq!(&agent.name, &name.clone());
+                            prop_assert_eq!(&agent.namespaceid, &namespace.clone());
+                            prop_assert_eq!(&identity.public_key, &publickey.clone());
+                    },
                     ChronicleOperation::CreateActivity(
                         CreateActivity { namespace, id, name }) => {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
@@ -1858,10 +1918,14 @@ pub mod test {
                         prop_assert!(activity.started == Some(time.to_owned()));
                         prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
 
-                        prop_assert!(prov.was_associated_with.get(
-                            &(namespace.to_owned(),id.to_owned()))
+                        let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),agent.to_owned())));
+                            .contains(&Association {
+                                agent_id: agent.clone(),
+                                activity_id: id.clone()
+                            });
+
+                        prop_assert!(has_assoc);
                     },
                     ChronicleOperation::EndActivity(
                         EndActivity { namespace, id, agent, time }) => {
@@ -1874,10 +1938,14 @@ pub mod test {
                         prop_assert!(activity.ended == Some(time.to_owned()));
                         prop_assert!(activity.started.unwrap() <= *time);
 
-                        prop_assert!(prov.was_associated_with.get(
-                            &(namespace.clone(),id.clone()))
+                        let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),agent.to_owned())));
+                            .contains(&Association {
+                                agent_id: agent.clone(),
+                                activity_id: id.clone()
+                            });
+
+                        prop_assert!(has_assoc);
                     }
                     ChronicleOperation::ActivityUses(
                         ActivityUses { namespace, id, activity }) => {
@@ -1894,11 +1962,15 @@ pub mod test {
                         prop_assert_eq!(&activity.name, &activity_id.decompose());
                         prop_assert_eq!(&activity.namespaceid, namespace);
 
-                        prop_assert!(prov.used.get(
-                            &(namespace.clone(),activity.id.clone()))
+                        let has_useage = prov.useage.get(&(namespace.to_owned(), activity_id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),id.to_owned())));
+                            .contains(&Useage {
+                                activity_id: activity_id.clone(),
+                                entity_id: id.clone(),
+                                time: None
+                            });
 
+                        prop_assert!(has_useage);
                     },
                     ChronicleOperation::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
                         let activity_id = activity;
@@ -1914,10 +1986,15 @@ pub mod test {
                         prop_assert_eq!(&activity.name, &activity_id.decompose());
                         prop_assert_eq!(&activity.namespaceid, namespace);
 
-                        prop_assert!(prov.was_generated_by.get(
+                        let has_generation = prov.generation.get(
                             &(namespace.clone(),id.clone()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),activity.id.to_owned())));
+                            .contains(& Generation {
+                                activity_id: activity_id.clone(),
+                                generated_id: id.clone(),
+                                time: None });
+
+                        prop_assert!(has_generation);
                     }
                     ChronicleOperation::EntityAttach(
                         EntityAttach{
@@ -1967,8 +2044,6 @@ pub mod test {
                     },
                 }
             }
-            (regkey_assertion)()?;
-
 
             // Test that serialisation to and from JSON-LD is symmetric
             let json = compact_json(&prov).0;

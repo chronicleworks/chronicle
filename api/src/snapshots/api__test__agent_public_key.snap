@@ -1,8 +1,7 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1192
+assertion_line: 1171
 expression: api.1
-
 ---
 namespaces:
   "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea":
@@ -33,8 +32,9 @@ has_identity:
 had_identity: {}
 has_attachment: {}
 had_attachment: {}
-was_associated_with: {}
-was_attributed_to: {}
-was_generated_by: {}
-used: {}
+association: {}
+derivation: {}
+delegation: {}
+generation: {}
+useage: {}
 
