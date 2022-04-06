@@ -1,4 +1,5 @@
 use async_graphql::{
+    connection::{query, Connection, EmptyFields},
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
@@ -30,8 +31,11 @@ use warp::{
 };
 
 use crate::ApiDispatch;
+#[macro_use]
+mod cursor_query;
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::agent)]
 pub struct Agent {
     pub id: i32,
     pub name: String,
@@ -41,7 +45,8 @@ pub struct Agent {
     pub identity_id: Option<i32>,
 }
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::identity)]
 pub struct Identity {
     pub id: i32,
     pub namespace_id: i32,
@@ -330,6 +335,7 @@ impl Entity {
 
 custom_error! {pub GraphQlError
     Db{source: diesel::result::Error}                           = "Database operation failed",
+    R2d2{source: r2d2::Error }                                  = "Connection pool error",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
     Api{source: crate::ApiError}                                = "API",
 }
@@ -369,12 +375,17 @@ pub struct Query;
 
 #[Object]
 impl Query {
+    #[allow(clippy::too_many_arguments)]
     async fn agents_by_type<'a>(
         &self,
         ctx: &Context<'a>,
         typ: ID,
-        namespace: ID,
-    ) -> async_graphql::Result<Vec<Agent>> {
+        namespace: Option<ID>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
         use crate::persistence::schema::{
             agent::{self},
             namespace::dsl as nsdsl,
@@ -383,18 +394,20 @@ impl Query {
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
+        let ns = namespace.unwrap_or_else(|| "default".into());
 
-        Ok(agent::table
-            .inner_join(nsdsl::namespace)
-            .filter(
-                nsdsl::name
-                    .eq(&**namespace)
-                    .and(agent::domaintype.eq(&**typ)),
-            )
-            .load::<(Agent, Namespace)>(&mut connection)?
-            .into_iter()
-            .map(|x| x.0)
-            .collect())
+        gql_cursor!(
+            after,
+            before,
+            first,
+            last,
+            agent::table
+                .inner_join(nsdsl::namespace)
+                .filter(nsdsl::name.eq(&**ns).and(agent::domaintype.eq(&**typ))),
+            agent::name.asc(),
+            Agent,
+            connection
+        )
     }
     async fn agent_by_iri<'a>(
         &self,
@@ -671,6 +684,12 @@ impl Subscription {
     }
 }
 
+pub fn exportable_schema() -> String {
+    let schema = Schema::build(Query, Mutation, Subscription).finish();
+
+    schema.federation_sdl()
+}
+
 #[instrument]
 pub async fn serve_graphql(
     pool: Pool<ConnectionManager<SqliteConnection>>,
@@ -730,4 +749,193 @@ pub async fn serve_graphql(
         });
 
     warp::serve(routes).run(address).await;
+}
+
+#[cfg(test)]
+mod test {
+    use async_graphql::{Request, Schema};
+    use common::ledger::InMemLedger;
+    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use r2d2::Pool;
+    use std::time::Duration;
+    use tempfile::TempDir;
+    use tracing::Level;
+    use uuid::Uuid;
+
+    use crate::{persistence::ConnectionOptions, Api, UuidGen};
+
+    use super::{Mutation, Query, Store, Subscription};
+
+    #[derive(Debug, Clone)]
+    struct SameUuid;
+
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    async fn test_schema() -> Schema<Query, Mutation, Subscription> {
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_max_level(Level::TRACE)
+            .try_init()
+            .ok();
+
+        let secretpath = TempDir::new().unwrap();
+
+        // We need to use a real file for sqlite, as in mem either re-creates between
+        // macos temp dir permissions don't work with sqlite
+        std::fs::create_dir("./sqlite_test").ok();
+        let dbid = Uuid::new_v4();
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+                "./sqlite_test/db{}.sqlite",
+                dbid
+            )))
+            .unwrap();
+
+        let (dispatch, _ui) = Api::new(
+            None,
+            pool.clone(),
+            ledger,
+            reader,
+            &secretpath.into_path(),
+            SameUuid,
+        )
+        .await
+        .unwrap();
+
+        Schema::build(Query, Mutation, Subscription)
+            .data(Store::new(pool))
+            .data(dispatch)
+            .finish()
+    }
+
+    #[tokio::test]
+    async fn agent_can_be_created() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                createAgent(name:"bobross", typ: "artist") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create);
+    }
+
+    #[tokio::test]
+    async fn query_agents_by_cursor() {
+        let schema = test_schema().await;
+
+        for i in 0..100 {
+            schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                createAgent(name:"bobross{}", typ: "artist") {{
+                    context
+                }}
+            }}
+        "#,
+                    i
+                )))
+                .await;
+        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let default_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(default_cursor);
+
+        let middle_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist", first: 20, after: "3") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(middle_cursor);
+
+        let out_of_bound_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(typ: "artist", first: 20, after: "90") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(out_of_bound_cursor);
+    }
 }

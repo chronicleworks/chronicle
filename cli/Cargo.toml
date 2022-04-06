@@ -16,6 +16,12 @@ clap_complete = "3.1.1"
 colored_json = "2.1.0"
 common = { path = "../common" }
 custom_error = "1.9.2"
+diesel = { version = "^2.0.0", features = [
+  "sqlite",
+  "uuid",
+  "chrono",
+  "r2d2",
+], git = "https://github.com/diesel-rs/diesel" }
 dotenv = "0.15.0"
 futures = "0.3.21"
 hex = "0.4.3"

@@ -10,7 +10,7 @@ use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, Future, FutureExt, StreamExt};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
-use persistence::{ConnectionOptions, Store, StoreError, MIGRATIONS};
+use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     convert::Infallible,
@@ -18,7 +18,6 @@ use std::{
     net::{AddrParseError, SocketAddr},
     path::Path,
     sync::Arc,
-    time::Duration,
 };
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
@@ -39,10 +38,10 @@ use common::{
 
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
+pub use graphql::{exportable_schema, serve_graphql};
+pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
-
-pub use graphql::serve_graphql;
 
 custom_error! {pub ApiError
     Store{source: persistence::StoreError}                      = "Storage",
@@ -193,26 +192,18 @@ where
 {
     #[instrument(skip(ledger_writer, ledger_reader))]
     pub async fn new<R, W>(
-        addr: SocketAddr,
-        dbpath: &str,
+        graphql_addr: Option<SocketAddr>,
+        pool: Pool<ConnectionManager<SqliteConnection>>,
         ledger_writer: W,
         ledger_reader: R,
         secret_path: &Path,
         uuidgen: U,
-    ) -> Result<(ApiDispatch, impl Future<Output = ()>), ApiError>
+    ) -> Result<(ApiDispatch, Option<impl Future<Output = ()>>), ApiError>
     where
         R: LedgerReader + Send + 'static,
         W: LedgerWriter + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
-
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(Duration::from_secs(2)),
-            }))
-            .build(ConnectionManager::<SqliteConnection>::new(dbpath))?;
 
         let (commit_notify_tx, _) = tokio::sync::broadcast::channel(20);
         let dispatch = ApiDispatch {
@@ -290,7 +281,7 @@ where
 
         Ok((
             dispatch.clone(),
-            graphql::serve_graphql(ql_pool, dispatch, addr, true),
+            graphql_addr.map(|addr| graphql::serve_graphql(ql_pool, dispatch, addr, true)),
         ))
     }
 
@@ -1016,11 +1007,13 @@ mod test {
         prov::{ChronicleTransactionId, ProvModel},
     };
 
+    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use r2d2::Pool;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
 
-    use crate::{Api, ApiDispatch, ApiError, UuidGen};
+    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
 
     use common::commands::{
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
@@ -1070,9 +1063,21 @@ mod test {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(std::time::Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+                "./sqlite_test/db{}.sqlite",
+                dbid
+            )))
+            .unwrap();
+
         let (dispatch, _ui) = Api::new(
-            SocketAddr::from_str("0.0.0.0:8080").unwrap(),
-            &*format!("./sqlite_test/db{}.sqlite", dbid),
+            Some(SocketAddr::from_str("0.0.0.0:8080").unwrap()),
+            pool,
             ledger,
             reader,
             &secretpath.into_path(),
