@@ -80,7 +80,7 @@ pub enum Subtype {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum ChronicleTransaction {
+pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
     CreateAgent(CreateAgent),
     RegisterKey(RegisterKey),

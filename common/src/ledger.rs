@@ -9,8 +9,8 @@ use crate::{
     prov::{
         vocab::Chronicle, ActivityUses, AttachmentId, ChronicleIri, ChronicleOperation,
         ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, Domaintype,
-        EndActivity, EntityAttach, GenerateEntity, IdentityId, NamespaceId, ProcessorError,
-        ProvModel, RegisterKey, StartActivity,
+        EndActivity, EntityAttach, EntityDerive, GenerateEntity, IdentityId, NamespaceId,
+        ProcessorError, ProvModel, RegisterKey, StartActivity,
     },
 };
 
@@ -382,6 +382,22 @@ impl ChronicleOperation {
                     ),
                 ]
             }
+            ChronicleOperation::EntityDerive(EntityDerive {
+                namespace,
+                id,
+                used_id,
+                activity_id,
+                ..
+            }) => vec![
+                activity_id
+                    .as_ref()
+                    .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id)),
+                Some(LedgerAddress::in_namespace(namespace, used_id)),
+                Some(LedgerAddress::in_namespace(namespace, id)),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
             ChronicleOperation::Domaintype(Domaintype::Agent { id, namespace, .. }) => {
                 vec![LedgerAddress::in_namespace(namespace, id)]
             }

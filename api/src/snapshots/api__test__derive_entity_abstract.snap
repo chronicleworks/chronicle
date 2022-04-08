@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1184
+assertion_line: 1408
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -103,7 +103,26 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
     },
     "xsd": "http://www.w3.org/2001/XMLSchema#"
   },
-  "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-  "@type": "chronicle:Namespace",
-  "label": "testns"
+  "@graph": [
+    {
+      "@id": "chronicle:entity:testgeneratedentity",
+      "@type": "prov:Entity",
+      "label": "testgeneratedentity",
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "wasDerivedFrom": [
+        "chronicle:entity:testusedentity"
+      ]
+    },
+    {
+      "@id": "chronicle:entity:testusedentity",
+      "@type": "prov:Entity",
+      "label": "testusedentity",
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+    },
+    {
+      "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "@type": "chronicle:Namespace",
+      "label": "testns"
+    }
+  ]
 }
