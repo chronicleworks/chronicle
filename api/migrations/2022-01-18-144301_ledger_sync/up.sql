@@ -88,13 +88,13 @@ create table delegation (
 create table derivation (
     offset integer not null,
     activity_id integer,
-    generated_entity integer not null,
-    used_entity integer not null,
-    typ text,
+    generated_entity_id integer not null,
+    used_entity_id integer not null,
+    typ integer,
     foreign key(activity_id) references activity(id),
-    foreign key(generated_entity) references entity(id),
-    foreign key(used_entity) references entity(id),
-    primary key(offset,generated_entity)
+    foreign key(generated_entity_id) references entity(id),
+    foreign key(used_entity_id) references entity(id),
+    primary key(offset,generated_entity_id)
 );
 
 create table generation (

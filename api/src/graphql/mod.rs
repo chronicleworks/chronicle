@@ -11,7 +11,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
         PathOrFile,
     },
-    prov::{vocab::Chronicle, AgentId},
+    prov::{vocab::Chronicle, AgentId, DerivationType, EntityId},
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -262,8 +262,34 @@ impl Activity {
     }
 }
 
+impl Entity {
+    async fn typed_derivation<'a>(
+        &self,
+        ctx: &Context<'a>,
+        typ: Option<DerivationType>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        use crate::persistence::schema::derivation::{self, dsl};
+        use crate::persistence::schema::entity::{self as entitydsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = derivation::table
+            .filter(dsl::generated_entity_id.eq(self.id).and(dsl::typ.eq(typ)))
+            .inner_join(entitydsl::table.on(dsl::used_entity_id.eq(entitydsl::id)))
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
+
+        Ok(res)
+    }
+}
+
 #[Object]
 impl Entity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::entity(&*self.name).to_string())
+    }
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
         use crate::persistence::schema::namespace::{self, dsl};
         let store = ctx.data_unchecked::<Store>();
@@ -320,6 +346,40 @@ impl Entity {
             .load::<Activity>(&mut connection)?;
 
         Ok(res)
+    }
+
+    async fn was_derived_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        use crate::persistence::schema::derivation::{self, dsl};
+        use crate::persistence::schema::entity::{self as entitydsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = derivation::table
+            .filter(dsl::generated_entity_id.eq(self.id))
+            .inner_join(entitydsl::table.on(dsl::used_entity_id.eq(entitydsl::id)))
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
+
+        Ok(res)
+    }
+
+    async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::PrimarySource))
+            .await
+    }
+
+    async fn was_revision_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::Revision))
+            .await
+    }
+    async fn was_quoted_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::Quotation))
+            .await
     }
 }
 
@@ -399,12 +459,12 @@ impl Query {
             connection
         )
     }
-    async fn agent_by_iri<'a>(
+    async fn agent_by_id<'a>(
         &self,
         ctx: &Context<'a>,
-        iri: ID,
-        namespace: ID,
-    ) -> async_graphql::Result<Agent> {
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Agent>> {
         use crate::persistence::schema::{
             agent::{self, dsl},
             namespace::dsl as nsdsl,
@@ -412,18 +472,40 @@ impl Query {
 
         let store = ctx.data_unchecked::<Store>();
 
+        let ns = namespace.unwrap_or_else(|| "default".into());
         let mut connection = store.pool.get()?;
-        let name = AgentId::new(&**iri);
+        let name = AgentId::new(&**id);
 
         Ok(agent::table
             .inner_join(nsdsl::namespace)
-            .filter(
-                dsl::name
-                    .eq(name.decompose())
-                    .and(nsdsl::name.eq(&**namespace)),
-            )
-            .first::<(Agent, Namespace)>(&mut connection)
-            .map(|x| x.0)?)
+            .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+            .select(Agent::as_select())
+            .first::<Agent>(&mut connection)
+            .optional()?)
+    }
+
+    async fn entity_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Entity>> {
+        use crate::persistence::schema::{
+            entity::{self, dsl},
+            namespace::dsl as nsdsl,
+        };
+
+        let store = ctx.data_unchecked::<Store>();
+        let ns = namespace.unwrap_or_else(|| "default".into());
+        let mut connection = store.pool.get()?;
+        let name = EntityId::new(&**id);
+
+        Ok(entity::table
+            .inner_join(nsdsl::namespace)
+            .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+            .select(Entity::as_select())
+            .first::<Entity>(&mut connection)
+            .optional()?)
     }
 }
 
@@ -446,9 +528,40 @@ async fn transaction_context<'a>(
     }
 }
 
+/// Mutation methods that are not exposed as graphql
+impl Mutation {
+    async fn derivation<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+        typ: Option<DerivationType>,
+    ) -> async_graphql::Result<Submission> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or_else(|| "default".into());
+
+        let used_entity = EntityId::new(&**used_entity);
+        let generated_entity = EntityId::new(&**generated_entity);
+
+        let res = api
+            .dispatch(ApiCommand::Entity(EntityCommand::Derive {
+                name: generated_entity.decompose().to_string(),
+                namespace,
+                activity: None,
+                used_entity: used_entity.decompose().to_string(),
+                typ,
+            }))
+            .await?;
+
+        transaction_context(res, ctx).await
+    }
+}
+
 #[Object]
 impl Mutation {
-    pub async fn create_agent<'a>(
+    pub async fn agent<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -470,7 +583,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn create_activity<'a>(
+    pub async fn activity<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -490,6 +603,66 @@ impl Mutation {
             .await?;
 
         transaction_context(res, ctx).await
+    }
+
+    pub async fn was_derived_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(ctx, namespace, generated_entity, used_entity, None)
+            .await
+    }
+
+    pub async fn was_revision_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::Revision),
+        )
+        .await
+    }
+    pub async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::PrimarySource),
+        )
+        .await
+    }
+    pub async fn was_quoted_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::Quotation),
+        )
+        .await
     }
 
     pub async fn generate_key<'a>(
@@ -561,7 +734,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn activity_use<'a>(
+    pub async fn used<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,
@@ -585,7 +758,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn activity_generate<'a>(
+    pub async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,
@@ -609,7 +782,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn entity_attach<'a>(
+    pub async fn has_attachment<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -812,6 +985,159 @@ mod test {
     }
 
     #[tokio::test]
+    async fn untyped_derivation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn primary_source() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    hadPrimarySource {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn revision() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasRevisionOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn quotation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasQuotedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
     async fn agent_can_be_created() {
         let schema = test_schema().await;
 
@@ -819,7 +1145,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                createAgent(name:"bobross", typ: "artist") {
+                agent(name:"bobross", typ: "artist") {
                     context
                 }
             }
@@ -839,7 +1165,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                createAgent(name:"bobross{}", typ: "artist") {{
+                agent(name:"bobross{}", typ: "artist") {{
                     context
                 }}
             }}
@@ -848,7 +1174,7 @@ mod test {
                 )))
                 .await;
         }
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let default_cursor = schema
             .execute(Request::new(

@@ -2,4 +2,5 @@
 # see diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/persistence/schema.rs"
+file         = "src/persistence/schema.rs"
+import_types = ["diesel::sql_types::*", "common::prov::*"]

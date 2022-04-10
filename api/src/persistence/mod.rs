@@ -4,6 +4,7 @@ use chrono::DateTime;
 
 use chrono::Utc;
 use common::prov::Association;
+use common::prov::Derivation;
 use common::prov::Generation;
 use common::prov::Useage;
 use common::{
@@ -493,6 +494,17 @@ impl Store {
             }
         }
 
+        for ((namespaceid, _), derivation) in model.derivation.iter() {
+            debug!(
+                namespace = ?namespaceid,
+                derivation = ?derivation,
+                "Apply generation"
+            );
+            for (offset, derivation) in derivation.iter().enumerate() {
+                self.apply_derivation(connection, model, namespaceid, offset, derivation)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -611,6 +623,51 @@ impl Store {
                 &asoc::offset.eq(offset as i32),
                 &asoc::activity_id.eq(storedactivity.id),
                 &asoc::agent_id.eq(storedagent.id),
+            ))
+            .execute(connection)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(connection))]
+    fn apply_derivation(
+        &self,
+        connection: &mut SqliteConnection,
+        model: &ProvModel,
+        namespace: &common::prov::NamespaceId,
+        offset: usize,
+        derivation: &Derivation,
+    ) -> Result<(), StoreError> {
+        let used = model
+            .entities
+            .get(&(namespace.to_owned(), derivation.used_id.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                entityid: derivation.used_id.clone(),
+            })?;
+
+        let generated = model
+            .entities
+            .get(&(namespace.to_owned(), derivation.generated_id.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
+                entityid: derivation.generated_id.clone(),
+            })?;
+
+        let stored_generated = self.entity_by_entity_name_and_namespace(
+            connection,
+            &generated.name,
+            &generated.namespaceid,
+        )?;
+
+        let stored_used =
+            self.entity_by_entity_name_and_namespace(connection, &used.name, &used.namespaceid)?;
+
+        use schema::derivation::dsl as link;
+        diesel::insert_or_ignore_into(schema::derivation::table)
+            .values((
+                &link::offset.eq(offset as i32),
+                &link::used_entity_id.eq(stored_used.id),
+                &link::generated_entity_id.eq(stored_generated.id),
+                &link::typ.eq(derivation.typ),
             ))
             .execute(connection)?;
 

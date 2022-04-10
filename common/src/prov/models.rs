@@ -1,5 +1,12 @@
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
+use diesel::{
+    backend::Backend,
+    deserialize::FromSql,
+    serialize::{self, Output, ToSql},
+    sql_types::Integer,
+    QueryId, SqlType,
+};
 use futures::TryFutureExt;
 use iref::{AsIri, Iri, IriBuf};
 use json::{object, JsonValue};
@@ -344,11 +351,42 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[diesel(sql_type = Integer)]
+#[repr(i32)]
 pub enum DerivationType {
     Revision,
     Quotation,
     PrimarySource,
+}
+
+impl<DB> ToSql<Integer, DB> for DerivationType
+where
+    DB: Backend,
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> serialize::Result {
+        match self {
+            DerivationType::Revision => 1.to_sql(out),
+            DerivationType::Quotation => 2.to_sql(out),
+            DerivationType::PrimarySource => 3.to_sql(out),
+        }
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for DerivationType
+where
+    DB: Backend,
+    i32: FromSql<Integer, DB>,
+{
+    fn from_sql(bytes: diesel::backend::RawValue<'_, DB>) -> diesel::deserialize::Result<Self> {
+        match i32::from_sql(bytes)? {
+            1 => Ok(DerivationType::Revision),
+            2 => Ok(DerivationType::Quotation),
+            3 => Ok(DerivationType::PrimarySource),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
 }
 
 impl DerivationType {

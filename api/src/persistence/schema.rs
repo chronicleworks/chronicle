@@ -1,6 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     activity (id) {
         id -> Integer,
         name -> Text,
@@ -12,6 +15,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     agent (id) {
         id -> Integer,
         name -> Text,
@@ -23,6 +29,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     association (offset, agent_id) {
         offset -> Integer,
         agent_id -> Integer,
@@ -31,6 +40,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     attachment (id) {
         id -> Integer,
         namespace_id -> Integer,
@@ -42,6 +54,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     delegation (offset, delegate_id, responsible_id) {
         offset -> Integer,
         delegate_id -> Integer,
@@ -52,16 +67,22 @@ diesel::table! {
 }
 
 diesel::table! {
-    derivation (offset, generated_entity) {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
+    derivation (offset, generated_entity_id) {
         offset -> Integer,
         activity_id -> Nullable<Integer>,
-        generated_entity -> Integer,
-        used_entity -> Integer,
-        typ -> Nullable<Text>,
+        generated_entity_id -> Integer,
+        used_entity_id -> Integer,
+        typ -> Nullable<Integer>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     entity (id) {
         id -> Integer,
         name -> Text,
@@ -72,6 +93,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     generation (offset, generated_entity_id) {
         offset -> Integer,
         activity_id -> Integer,
@@ -81,6 +105,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     hadattachment (entity_id, attachment_id) {
         entity_id -> Integer,
         attachment_id -> Integer,
@@ -88,6 +115,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     hadidentity (agent_id, identity_id) {
         agent_id -> Integer,
         identity_id -> Integer,
@@ -95,6 +125,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     identity (id) {
         id -> Integer,
         namespace_id -> Integer,
@@ -103,6 +136,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     ledgersync (correlation_id) {
         correlation_id -> Text,
         offset -> Nullable<Text>,
@@ -111,6 +147,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     namespace (id) {
         id -> Integer,
         name -> Text,
@@ -119,6 +158,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     useage (offset, entity_id) {
         offset -> Integer,
         activity_id -> Integer,
