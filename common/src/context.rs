@@ -91,6 +91,12 @@ lazy_static! {
             "@container": "@set"
         },
 
+        "actedOnBehalfOf": {
+            "@id": "prov:actedOnBehalfOf",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
         "wasQuotedFrom": {
             "@id": "prov:wasQuotedFrom",
             "@type" : "@id",

@@ -1,11 +1,16 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1319
+assertion_line: 1378
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
   "@context": {
     "@version": 1.1,
+    "actedOnBehalfOf": {
+      "@container": "@set",
+      "@id": "prov:actedOnBehalfOf",
+      "@type": "@id"
+    },
     "activity": {
       "@id": "prov:activity",
       "@type": "@id"
