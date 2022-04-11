@@ -24,7 +24,6 @@ use futures::Stream;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
-use user_error::UFE;
 use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
@@ -178,6 +177,22 @@ impl Agent {
         } else {
             Ok(None)
         }
+    }
+
+    async fn acted_on_behalf_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Agent>> {
+        use crate::persistence::schema::agent as agentdsl;
+        use crate::persistence::schema::delegation::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        Ok(delegation::table
+            .filter(dsl::responsible_id.eq(self.id))
+            .order(dsl::offset)
+            .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
+            .select(Agent::as_select())
+            .load::<Agent>(&mut connection)?)
     }
 
     #[graphql(name = "type")]
@@ -390,13 +405,30 @@ custom_error! {pub GraphQlError
     Api{source: crate::ApiError}                                = "API",
 }
 
-impl UFE for GraphQlError {}
+impl GraphQlError {
+    fn error_sources(
+        mut source: Option<&(dyn std::error::Error + 'static)>,
+    ) -> Option<Vec<String>> {
+        /* Check if we have any sources to derive reasons from */
+        if source.is_some() {
+            /* Add all the error sources to a list of reasons for the error */
+            let mut reasons = Vec::new();
+            while let Some(error) = source {
+                reasons.push(error.to_string());
+                source = error.source();
+            }
+            Some(reasons)
+        } else {
+            None
+        }
+    }
+}
 
 impl ErrorExtensions for GraphQlError {
     // lets define our base extensions
     fn extend(&self) -> Error {
-        Error::new(self.summary()).extend_with(|_err, e| {
-            if let Some(reasons) = self.reasons() {
+        Error::new(self.to_string()).extend_with(|_err, e| {
+            if let Some(reasons) = Self::error_sources(custom_error::Error::source(&self)) {
                 let mut i = 1;
                 for reason in reasons {
                     e.set(format!("reason {}", i), reason);
@@ -599,6 +631,32 @@ impl Mutation {
                 name,
                 namespace: namespace.clone(),
                 domaintype: typ,
+            }))
+            .await?;
+
+        transaction_context(res, ctx).await
+    }
+
+    pub async fn acted_on_behalf_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        responsible: ID,
+        delegate: ID,
+    ) -> async_graphql::Result<Submission> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+
+        let responsible_id = AgentId::new(&**responsible);
+        let delegate_id = AgentId::new(&**delegate);
+
+        let res = api
+            .dispatch(ApiCommand::Agent(AgentCommand::Delegate {
+                name: responsible_id.decompose().to_string(),
+                delegate: delegate_id.decompose().to_string(),
+                activity: None,
+                namespace: namespace.clone(),
             }))
             .await?;
 
@@ -982,6 +1040,45 @@ mod test {
             .data(Store::new(pool))
             .data(dispatch)
             .finish()
+    }
+
+    #[tokio::test]
+    async fn delegation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                actedOnBehalfOf(
+                    responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
+                    delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
+                    ) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                    actedOnBehalfOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
     }
 
     #[tokio::test]

@@ -38,8 +38,14 @@ pub enum AgentCommand {
         namespace: String,
         registration: KeyRegistration,
     },
-    Use {
+    UseInContext {
         name: String,
+        namespace: String,
+    },
+    Delegate {
+        name: String,
+        delegate: String,
+        activity: Option<String>,
         namespace: String,
     },
 }

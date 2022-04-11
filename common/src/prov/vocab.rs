@@ -32,6 +32,8 @@ pub enum Prov {
     WasQuotedFrom,
     #[iri("prov:wasRevisionOf")]
     WasRevisionOf,
+    #[iri("prov:actedOnBehalfOf")]
+    ActedOnBehalfOf,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]

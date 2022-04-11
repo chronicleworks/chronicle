@@ -28,10 +28,10 @@ use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
-        vocab::Chronicle as ChronicleVocab, ActivityId, ActivityUses, ChronicleOperation,
-        ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, DerivationType,
-        Domaintype, EndActivity, EntityAttach, EntityDerive, EntityId, GenerateEntity, NamespaceId,
-        ProvModel, RegisterKey, StartActivity,
+        vocab::Chronicle as ChronicleVocab, ActivityId, ActivityUses, ActsOnBehalfOf, AgentId,
+        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
+        DerivationType, Domaintype, EndActivity, EntityAttach, EntityDerive, EntityId,
+        GenerateEntity, NamespaceId, ProvModel, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -608,8 +608,23 @@ where
                 )
                 .await
             }
-            ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
-                self.use_agent(name.to_owned(), namespace.to_owned()).await
+            ApiCommand::Agent(AgentCommand::UseInContext { name, namespace }) => {
+                self.use_in_context(name.to_owned(), namespace.to_owned())
+                    .await
+            }
+            ApiCommand::Agent(AgentCommand::Delegate {
+                name,
+                delegate,
+                activity,
+                namespace,
+            }) => {
+                self.delegate(
+                    namespace.to_owned(),
+                    name.to_owned(),
+                    delegate.to_owned(),
+                    activity.to_owned(),
+                )
+                .await
             }
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
@@ -709,6 +724,47 @@ where
             }
             ApiCommand::Query(query) => self.query(query.to_owned()).await,
         }
+    }
+
+    #[instrument]
+    async fn delegate(
+        &self,
+        namespace: String,
+        name: String,
+        delegate_name: String,
+        activity: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let id = ChronicleVocab::agent(&name);
+                let delegate_id: AgentId = ChronicleVocab::agent(&delegate_name).into();
+                let activity_id: Option<ActivityId> =
+                    activity.map(|activity| ChronicleVocab::activity(&activity).into());
+
+                let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                    namespace,
+                    id: id.clone().into(),
+                    activity_id,
+                    delegate_id,
+                });
+
+                to_apply.push(tx);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
     }
 
     #[instrument]
@@ -876,7 +932,6 @@ where
     #[instrument]
     async fn register_key(
         &self,
-
         name: String,
         namespace: String,
         registration: KeyRegistration,
@@ -1039,7 +1094,11 @@ where
     }
 
     #[instrument]
-    async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+    async fn use_in_context(
+        &self,
+        name: String,
+        namespace: String,
+    ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
@@ -1259,7 +1318,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
@@ -1290,7 +1349,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
@@ -1331,7 +1390,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))

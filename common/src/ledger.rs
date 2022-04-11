@@ -7,10 +7,10 @@ use uuid::Uuid;
 use crate::{
     context::PROV,
     prov::{
-        vocab::Chronicle, ActivityUses, AttachmentId, ChronicleIri, ChronicleOperation,
-        ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, Domaintype,
-        EndActivity, EntityAttach, EntityDerive, GenerateEntity, IdentityId, NamespaceId,
-        ProcessorError, ProvModel, RegisterKey, StartActivity,
+        vocab::Chronicle, ActivityUses, ActsOnBehalfOf, AttachmentId, ChronicleIri,
+        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
+        Domaintype, EndActivity, EntityAttach, EntityDerive, GenerateEntity, IdentityId,
+        NamespaceId, ProcessorError, ProvModel, RegisterKey, StartActivity,
     },
 };
 
@@ -382,6 +382,22 @@ impl ChronicleOperation {
                     ),
                 ]
             }
+            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+                ..
+            }) => vec![
+                activity_id
+                    .as_ref()
+                    .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id)),
+                Some(LedgerAddress::in_namespace(namespace, delegate_id)),
+                Some(LedgerAddress::in_namespace(namespace, id)),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
                 id,

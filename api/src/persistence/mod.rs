@@ -4,6 +4,7 @@ use chrono::DateTime;
 
 use chrono::Utc;
 use common::prov::Association;
+use common::prov::Delegation;
 use common::prov::Derivation;
 use common::prov::Generation;
 use common::prov::Useage;
@@ -498,10 +499,21 @@ impl Store {
             debug!(
                 namespace = ?namespaceid,
                 derivation = ?derivation,
-                "Apply generation"
+                "Apply derevation"
             );
             for (offset, derivation) in derivation.iter().enumerate() {
                 self.apply_derivation(connection, model, namespaceid, offset, derivation)?;
+            }
+        }
+
+        for ((namespaceid, _), delegation) in model.delegation.iter() {
+            debug!(
+                namespace = ?namespaceid,
+                delegation = ?delegation,
+                "Apply delegation"
+            );
+            for (offset, delegation) in delegation.iter().enumerate() {
+                self.apply_delegation(connection, model, namespaceid, offset, delegation)?;
             }
         }
 
@@ -623,6 +635,70 @@ impl Store {
                 &asoc::offset.eq(offset as i32),
                 &asoc::activity_id.eq(storedactivity.id),
                 &asoc::agent_id.eq(storedagent.id),
+            ))
+            .execute(connection)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(connection))]
+    fn apply_delegation(
+        &self,
+        connection: &mut SqliteConnection,
+        model: &ProvModel,
+        namespace: &common::prov::NamespaceId,
+        offset: usize,
+        delegation: &Delegation,
+    ) -> Result<(), StoreError> {
+        let responsible = model
+            .agents
+            .get(&(namespace.to_owned(), delegation.responsible_id.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
+                agentid: delegation.responsible_id.clone(),
+            })
+            .and_then(|agent| {
+                self.agent_by_agent_name_and_namespace(connection, &agent.name, &agent.namespaceid)
+            })?;
+
+        let delegate = model
+            .agents
+            .get(&(namespace.to_owned(), delegation.delegate_id.to_owned()))
+            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
+                agentid: delegation.delegate_id.clone(),
+            })
+            .and_then(|agent| {
+                self.agent_by_agent_name_and_namespace(connection, &agent.name, &agent.namespaceid)
+            })?;
+
+        let activity = match delegation.activity_id.as_ref().map(|activity_id| {
+            model
+                .activities
+                .get(&(namespace.to_owned(), activity_id.to_owned()))
+                .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
+                    activityid: activity_id.clone(),
+                })
+                .and_then(|activity| {
+                    self.activity_by_activity_name_and_namespace(
+                        connection,
+                        &activity.name,
+                        &activity.namespaceid,
+                    )
+                })
+                .map(|activity| activity.id)
+        }) {
+            // TODO: This must be in stdrust surely
+            Some(Ok(x)) => Ok(Some(x)),
+            Some(Err(e)) => Err(e),
+            _ => Ok(None),
+        }?;
+
+        use schema::delegation::dsl as link;
+        diesel::insert_or_ignore_into(schema::delegation::table)
+            .values((
+                &link::offset.eq(offset as i32),
+                &link::responsible_id.eq(responsible.id),
+                &link::delegate_id.eq(delegate.id),
+                &link::activity_id.eq(activity),
             ))
             .execute(connection)?;
 
