@@ -57,7 +57,7 @@ pub fn cli() -> Command<'static> {
                 .long("gql-interface")
                 .required(false)
                 .takes_value(true)
-                .default_value("127.0.0.1:4000")
+                .default_value("127.0.0.1:9982")
                 .help("The graphql server address"),
         )
         .subcommand(
