@@ -64,11 +64,11 @@ services:
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
     image: "chronicle:${ISOLATION_ID?Isolation id must be set}"
-    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:9982 --instrument http://jaeger:14268/api/traces"
+    command: "/usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui --ui-interface 0.0.0.0:4000 --instrument http://jaeger:14268/api/traces"
     expose:
-      - 9982
+      - 4000
     ports:
-      - "9982:9982"
+      - "4000:4000"
     depends_on:
       - devmode-engine
       - validator

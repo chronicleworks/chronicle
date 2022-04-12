@@ -39,26 +39,26 @@ pub fn cli() -> Command<'static> {
                 .help("Print SDL and exit"),
         )
         .arg(
-            Arg::new("ui")
-                .long("ui")
+            Arg::new("gql")
+                .long("gql")
                 .required(false)
                 .takes_value(false)
-                .help("Start a web user interface"),
+                .help("Start the graphql server"),
         )
         .arg(
             Arg::new("open")
                 .long("open")
                 .required(false)
                 .takes_value(false)
-                .help("Open the default browser for the user interface"),
+                .help("Open apollo studio sandbox"),
         )
         .arg(
-            Arg::new("ui-interface")
-                .long("ui-interface")
+            Arg::new("gql-interface")
+                .long("gql-interface")
                 .required(false)
                 .takes_value(true)
-                .default_value("127.0.0.1:9982")
-                .help("The user interface address"),
+                .default_value("127.0.0.1:4000")
+                .help("The graphql server address"),
         )
         .subcommand(
             Command::new("namespace")
