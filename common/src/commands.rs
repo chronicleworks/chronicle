@@ -6,7 +6,7 @@ use futures::AsyncRead;
 use iref::IriBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::prov::{ChronicleTransactionId, ProvModel};
+use crate::prov::{ChronicleTransactionId, DerivationType, ProvModel};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -38,8 +38,14 @@ pub enum AgentCommand {
         namespace: String,
         registration: KeyRegistration,
     },
-    Use {
+    UseInContext {
         name: String,
+        namespace: String,
+    },
+    Delegate {
+        name: String,
+        delegate: String,
+        activity: Option<String>,
         namespace: String,
     },
 }
@@ -116,6 +122,13 @@ pub enum EntityCommand {
         locator: Option<String>,
         agent: Option<String>,
     },
+    Derive {
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+        used_entity: String,
+        typ: Option<DerivationType>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,15 +147,15 @@ pub enum ApiCommand {
 
 #[derive(Debug)]
 pub enum ApiResponse {
-    ///! The api has successfully executed the operation, but that has no useful output
+    /// The api has successfully executed the operation, but has no useful output
     Unit,
-    ///! The api has validated the command and submitted a transaction to ledger
+    /// The api has validated the command and submitted a transaction to a ledger
     Submission {
         subject: IriBuf,
         prov: Box<ProvModel>,
         correlation_id: ChronicleTransactionId,
     },
-    ///! The api has successfully executed the query
+    /// The api has successfully executed the query
     QueryReply { prov: Box<ProvModel> },
 }
 

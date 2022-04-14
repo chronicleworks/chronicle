@@ -73,28 +73,56 @@ create table attachment (
 
 create index attachment_signature_idx on attachment(signature);
 
-create table wasgeneratedby (
-    activity_id integer not null,
-    entity_id integer not null,
+create table delegation (
+    offset integer not null,
+    delegate_id integer not null,
+    responsible_id integer not null,
+    activity_id integer,
+    typ text,
+    foreign key(delegate_id) references agent(id),
+    foreign key(responsible_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    foreign key(entity_id) references entity(id),
-    primary key(activity_id,entity_id)
+    primary key(offset,responsible_id,delegate_id)
 );
 
-create table used (
-    activity_id integer not null,
-    entity_id integer not null,
+create table derivation (
+    offset integer not null,
+    activity_id integer,
+    generated_entity_id integer not null,
+    used_entity_id integer not null,
+    typ integer,
     foreign key(activity_id) references activity(id),
-    foreign key(entity_id) references entity(id),
-    primary key(activity_id,entity_id)
+    foreign key(generated_entity_id) references entity(id),
+    foreign key(used_entity_id) references entity(id),
+    primary key(offset,generated_entity_id)
 );
 
-create table wasassociatedwith (
+create table generation (
+    offset integer not null,
+    activity_id integer not null,
+    generated_entity_id integer not null,
+    typ text,
+    foreign key(activity_id) references activity(id),
+    foreign key(generated_entity_id) references entity(id),
+    primary key(offset,generated_entity_id)
+);
+
+create table association (
+    offset integer not null,
     agent_id integer not null,
     activity_id integer not null,
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    primary key(agent_id,activity_id)
+    primary key(offset,agent_id)
+);
+
+create table useage (
+    offset integer not null,
+    activity_id integer not null,
+    entity_id integer not null,
+    foreign key(entity_id) references entity(id),
+    foreign key(activity_id) references activity(id),
+    primary key(offset,entity_id)
 );
 
 create table hadidentity (

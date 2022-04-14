@@ -185,7 +185,7 @@ async fn api_exec(
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+                    api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
                         name: m.value_of("agent_name").unwrap().to_owned(),
                         namespace: m.value_of("namespace").unwrap().to_owned(),
                     }))

@@ -24,6 +24,16 @@ pub enum Prov {
     StartedAtTime,
     #[iri("prov:endedAtTime")]
     EndedAtTime,
+    #[iri("prov:wasDerivedFrom")]
+    WasDerivedFrom,
+    #[iri("prov:hadPrimarySource")]
+    HadPrimarySource,
+    #[iri("prov:wasQuotedFrom")]
+    WasQuotedFrom,
+    #[iri("prov:wasRevisionOf")]
+    WasRevisionOf,
+    #[iri("prov:actedOnBehalfOf")]
+    ActedOnBehalfOf,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]

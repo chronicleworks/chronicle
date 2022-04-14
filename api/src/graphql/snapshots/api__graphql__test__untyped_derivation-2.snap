@@ -1,0 +1,7 @@
+---
+source: api/src/graphql/mod.rs
+assertion_line: 979
+expression: derived
+---
+[[data.entityById.wasDerivedFrom]]
+id = 'http://blockchaintp.com/chronicle/ns#entity:used'

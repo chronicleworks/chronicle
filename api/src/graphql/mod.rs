@@ -11,7 +11,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
         PathOrFile,
     },
-    prov::{vocab::Chronicle, AgentId},
+    prov::{vocab::Chronicle, AgentId, DerivationType, EntityId},
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -24,7 +24,6 @@ use futures::Stream;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, instrument};
-use user_error::UFE;
 use warp::{
     hyper::{Response, StatusCode},
     Filter, Rejection,
@@ -60,7 +59,8 @@ impl Identity {
     }
 }
 
-#[derive(Default, Queryable)]
+#[derive(Default, Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::activity)]
 pub struct Activity {
     pub id: i32,
     pub name: String,
@@ -70,7 +70,8 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Default, Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::entity)]
 pub struct Entity {
     id: i32,
     name: String,
@@ -79,13 +80,15 @@ pub struct Entity {
     attachment_id: Option<i32>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::persistence::schema::attachment)]
+#[allow(dead_code)]
 pub struct Attachment {
-    _id: i32,
-    _namespace_id: i32,
+    id: i32,
+    namespace_id: i32,
     signature_time: NaiveDateTime,
     signature: String,
-    _signer_id: i32,
+    signer_id: i32,
     locator: Option<String>,
 }
 
@@ -176,6 +179,22 @@ impl Agent {
         }
     }
 
+    async fn acted_on_behalf_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Agent>> {
+        use crate::persistence::schema::agent as agentdsl;
+        use crate::persistence::schema::delegation::{self, dsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        Ok(delegation::table
+            .filter(dsl::responsible_id.eq(self.id))
+            .order(dsl::offset)
+            .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
+            .select(Agent::as_select())
+            .load::<Agent>(&mut connection)?)
+    }
+
     #[graphql(name = "type")]
     async fn typ(&self) -> &str {
         if let Some(ref typ) = self.domaintype {
@@ -224,38 +243,68 @@ impl Activity {
         &self,
         ctx: &Context<'a>,
     ) -> async_graphql::Result<Vec<Agent>> {
-        use crate::persistence::schema::wasassociatedwith::{self, dsl};
+        use crate::persistence::schema::association::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = wasassociatedwith::table
+        let res = association::table
             .filter(dsl::activity_id.eq(self.id))
+            .order(dsl::offset)
             .inner_join(crate::persistence::schema::agent::table)
-            .load::<((i32, i32), Agent)>(&mut connection)?;
+            .select(Agent::as_select())
+            .load::<Agent>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
     }
 
     async fn used<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-        use crate::persistence::schema::used::{self, dsl};
+        use crate::persistence::schema::useage::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = used::table
+        let res = useage::table
             .filter(dsl::activity_id.eq(self.id))
+            .order(dsl::offset)
             .inner_join(crate::persistence::schema::entity::table)
-            .load::<((i32, i32), Entity)>(&mut connection)?;
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
+    }
+}
+
+impl Entity {
+    async fn typed_derivation<'a>(
+        &self,
+        ctx: &Context<'a>,
+        typ: Option<DerivationType>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        use crate::persistence::schema::derivation::{self, dsl};
+        use crate::persistence::schema::entity::{self as entitydsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = derivation::table
+            .filter(dsl::generated_entity_id.eq(self.id).and(dsl::typ.eq(typ)))
+            .inner_join(entitydsl::table.on(dsl::used_entity_id.eq(entitydsl::id)))
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
+
+        Ok(res)
     }
 }
 
 #[Object]
 impl Entity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::entity(&*self.name).to_string())
+    }
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
         use crate::persistence::schema::namespace::{self, dsl};
         let store = ctx.data_unchecked::<Store>();
@@ -295,41 +344,57 @@ impl Entity {
             Ok(None)
         }
     }
-
-    async fn was_attributed_to<'a>(
-        &self,
-        ctx: &Context<'a>,
-    ) -> async_graphql::Result<Vec<Activity>> {
-        use crate::persistence::schema::wasgeneratedby::{self, dsl};
-
-        let store = ctx.data_unchecked::<Store>();
-
-        let mut connection = store.pool.get()?;
-
-        let res = wasgeneratedby::table
-            .filter(dsl::entity_id.eq(self.id))
-            .inner_join(crate::persistence::schema::activity::table)
-            .load::<((i32, i32), Activity)>(&mut connection)?;
-
-        Ok(res.into_iter().map(|(_, x)| x).collect())
-    }
-
     async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
     ) -> async_graphql::Result<Vec<Activity>> {
-        use crate::persistence::schema::wasgeneratedby::{self, dsl};
+        use crate::persistence::schema::generation::{self, dsl};
 
         let store = ctx.data_unchecked::<Store>();
 
         let mut connection = store.pool.get()?;
 
-        let res = wasgeneratedby::table
-            .filter(dsl::entity_id.eq(self.id))
+        let res = generation::table
+            .filter(dsl::generated_entity_id.eq(self.id))
             .inner_join(crate::persistence::schema::activity::table)
-            .load::<((i32, i32), Activity)>(&mut connection)?;
+            .select(Activity::as_select())
+            .load::<Activity>(&mut connection)?;
 
-        Ok(res.into_iter().map(|(_, x)| x).collect())
+        Ok(res)
+    }
+
+    async fn was_derived_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        use crate::persistence::schema::derivation::{self, dsl};
+        use crate::persistence::schema::entity::{self as entitydsl};
+
+        let store = ctx.data_unchecked::<Store>();
+
+        let mut connection = store.pool.get()?;
+
+        let res = derivation::table
+            .filter(dsl::generated_entity_id.eq(self.id))
+            .inner_join(entitydsl::table.on(dsl::used_entity_id.eq(entitydsl::id)))
+            .select(Entity::as_select())
+            .load::<Entity>(&mut connection)?;
+
+        Ok(res)
+    }
+
+    async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::PrimarySource))
+            .await
+    }
+
+    async fn was_revision_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::Revision))
+            .await
+    }
+    async fn was_quoted_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        self.typed_derivation(ctx, Some(DerivationType::Quotation))
+            .await
     }
 }
 
@@ -340,13 +405,30 @@ custom_error! {pub GraphQlError
     Api{source: crate::ApiError}                                = "API",
 }
 
-impl UFE for GraphQlError {}
+impl GraphQlError {
+    fn error_sources(
+        mut source: Option<&(dyn std::error::Error + 'static)>,
+    ) -> Option<Vec<String>> {
+        /* Check if we have any sources to derive reasons from */
+        if source.is_some() {
+            /* Add all the error sources to a list of reasons for the error */
+            let mut reasons = Vec::new();
+            while let Some(error) = source {
+                reasons.push(error.to_string());
+                source = error.source();
+            }
+            Some(reasons)
+        } else {
+            None
+        }
+    }
+}
 
 impl ErrorExtensions for GraphQlError {
     // lets define our base extensions
     fn extend(&self) -> Error {
-        Error::new(self.summary()).extend_with(|_err, e| {
-            if let Some(reasons) = self.reasons() {
+        Error::new(self.to_string()).extend_with(|_err, e| {
+            if let Some(reasons) = Self::error_sources(custom_error::Error::source(&self)) {
                 let mut i = 1;
                 for reason in reasons {
                     e.set(format!("reason {}", i), reason);
@@ -409,12 +491,12 @@ impl Query {
             connection
         )
     }
-    async fn agent_by_iri<'a>(
+    async fn agent_by_id<'a>(
         &self,
         ctx: &Context<'a>,
-        iri: ID,
-        namespace: ID,
-    ) -> async_graphql::Result<Agent> {
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Agent>> {
         use crate::persistence::schema::{
             agent::{self, dsl},
             namespace::dsl as nsdsl,
@@ -422,18 +504,40 @@ impl Query {
 
         let store = ctx.data_unchecked::<Store>();
 
+        let ns = namespace.unwrap_or_else(|| "default".into());
         let mut connection = store.pool.get()?;
-        let name = AgentId::new(&**iri);
+        let name = AgentId::new(&**id);
 
         Ok(agent::table
             .inner_join(nsdsl::namespace)
-            .filter(
-                dsl::name
-                    .eq(name.decompose())
-                    .and(nsdsl::name.eq(&**namespace)),
-            )
-            .first::<(Agent, Namespace)>(&mut connection)
-            .map(|x| x.0)?)
+            .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+            .select(Agent::as_select())
+            .first::<Agent>(&mut connection)
+            .optional()?)
+    }
+
+    async fn entity_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Entity>> {
+        use crate::persistence::schema::{
+            entity::{self, dsl},
+            namespace::dsl as nsdsl,
+        };
+
+        let store = ctx.data_unchecked::<Store>();
+        let ns = namespace.unwrap_or_else(|| "default".into());
+        let mut connection = store.pool.get()?;
+        let name = EntityId::new(&**id);
+
+        Ok(entity::table
+            .inner_join(nsdsl::namespace)
+            .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+            .select(Entity::as_select())
+            .first::<Entity>(&mut connection)
+            .optional()?)
     }
 }
 
@@ -456,9 +560,40 @@ async fn transaction_context<'a>(
     }
 }
 
+/// Mutation methods that are not exposed as graphql
+impl Mutation {
+    async fn derivation<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+        typ: Option<DerivationType>,
+    ) -> async_graphql::Result<Submission> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or_else(|| "default".into());
+
+        let used_entity = EntityId::new(&**used_entity);
+        let generated_entity = EntityId::new(&**generated_entity);
+
+        let res = api
+            .dispatch(ApiCommand::Entity(EntityCommand::Derive {
+                name: generated_entity.decompose().to_string(),
+                namespace,
+                activity: None,
+                used_entity: used_entity.decompose().to_string(),
+                typ,
+            }))
+            .await?;
+
+        transaction_context(res, ctx).await
+    }
+}
+
 #[Object]
 impl Mutation {
-    pub async fn create_agent<'a>(
+    pub async fn agent<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -480,7 +615,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn create_activity<'a>(
+    pub async fn activity<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -500,6 +635,92 @@ impl Mutation {
             .await?;
 
         transaction_context(res, ctx).await
+    }
+
+    pub async fn acted_on_behalf_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        responsible: ID,
+        delegate: ID,
+    ) -> async_graphql::Result<Submission> {
+        let api = ctx.data_unchecked::<ApiDispatch>();
+
+        let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+
+        let responsible_id = AgentId::new(&**responsible);
+        let delegate_id = AgentId::new(&**delegate);
+
+        let res = api
+            .dispatch(ApiCommand::Agent(AgentCommand::Delegate {
+                name: responsible_id.decompose().to_string(),
+                delegate: delegate_id.decompose().to_string(),
+                activity: None,
+                namespace: namespace.clone(),
+            }))
+            .await?;
+
+        transaction_context(res, ctx).await
+    }
+
+    pub async fn was_derived_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(ctx, namespace, generated_entity, used_entity, None)
+            .await
+    }
+
+    pub async fn was_revision_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::Revision),
+        )
+        .await
+    }
+    pub async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::PrimarySource),
+        )
+        .await
+    }
+    pub async fn was_quoted_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        self.derivation(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+            Some(DerivationType::Quotation),
+        )
+        .await
     }
 
     pub async fn generate_key<'a>(
@@ -571,7 +792,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn activity_use<'a>(
+    pub async fn used<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,
@@ -595,7 +816,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn activity_generate<'a>(
+    pub async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
         activity: String,
@@ -619,7 +840,7 @@ impl Mutation {
         transaction_context(res, ctx).await
     }
 
-    pub async fn entity_attach<'a>(
+    pub async fn has_attachment<'a>(
         &self,
         ctx: &Context<'a>,
         name: String,
@@ -822,6 +1043,198 @@ mod test {
     }
 
     #[tokio::test]
+    async fn delegation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                actedOnBehalfOf(
+                    responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
+                    delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
+                    ) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                    actedOnBehalfOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn untyped_derivation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn primary_source() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    hadPrimarySource {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn revision() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasRevisionOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn quotation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasQuotedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
     async fn agent_can_be_created() {
         let schema = test_schema().await;
 
@@ -829,7 +1242,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                createAgent(name:"bobross", typ: "artist") {
+                agent(name:"bobross", typ: "artist") {
                     context
                 }
             }
@@ -849,7 +1262,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                createAgent(name:"bobross{}", typ: "artist") {{
+                agent(name:"bobross{}", typ: "artist") {{
                     context
                 }}
             }}
@@ -858,7 +1271,7 @@ mod test {
                 )))
                 .await;
         }
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let default_cursor = schema
             .execute(Request::new(

@@ -28,10 +28,10 @@ use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
-        vocab::Chronicle as ChronicleVocab, ActivityUses, ChronicleOperation,
-        ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace, Domaintype,
-        EndActivity, EntityAttach, GenerateEntity, NamespaceId, ProvModel, RegisterKey,
-        StartActivity,
+        vocab::Chronicle as ChronicleVocab, ActivityId, ActivityUses, ActsOnBehalfOf, AgentId,
+        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
+        DerivationType, Domaintype, EndActivity, EntityAttach, EntityDerive, EntityId,
+        GenerateEntity, NamespaceId, ProvModel, RegisterKey, StartActivity,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -608,8 +608,23 @@ where
                 )
                 .await
             }
-            ApiCommand::Agent(AgentCommand::Use { name, namespace }) => {
-                self.use_agent(name.to_owned(), namespace.to_owned()).await
+            ApiCommand::Agent(AgentCommand::UseInContext { name, namespace }) => {
+                self.use_in_context(name.to_owned(), namespace.to_owned())
+                    .await
+            }
+            ApiCommand::Agent(AgentCommand::Delegate {
+                name,
+                delegate,
+                activity,
+                namespace,
+            }) => {
+                self.delegate(
+                    namespace.to_owned(),
+                    name.to_owned(),
+                    delegate.to_owned(),
+                    activity.to_owned(),
+                )
+                .await
             }
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
@@ -691,8 +706,108 @@ where
                 )
                 .await
             }
+            ApiCommand::Entity(EntityCommand::Derive {
+                name,
+                namespace,
+                activity,
+                used_entity,
+                typ,
+            }) => {
+                self.entity_derive(
+                    name.to_owned(),
+                    namespace.to_owned(),
+                    activity.to_owned(),
+                    used_entity.to_owned(),
+                    typ.to_owned(),
+                )
+                .await
+            }
             ApiCommand::Query(query) => self.query(query.to_owned()).await,
         }
+    }
+
+    #[instrument]
+    async fn delegate(
+        &self,
+        namespace: String,
+        name: String,
+        delegate_name: String,
+        activity: Option<String>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let id = ChronicleVocab::agent(&name);
+                let delegate_id: AgentId = ChronicleVocab::agent(&delegate_name).into();
+                let activity_id: Option<ActivityId> =
+                    activity.map(|activity| ChronicleVocab::activity(&activity).into());
+
+                let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                    namespace,
+                    id: id.clone().into(),
+                    activity_id,
+                    delegate_id,
+                });
+
+                to_apply.push(tx);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
+    #[instrument]
+    async fn entity_derive(
+        &self,
+        name: String,
+        namespace: String,
+        activity: Option<String>,
+        used_entity: String,
+        typ: Option<DerivationType>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let id = ChronicleVocab::entity(&name);
+                let used_id: EntityId = ChronicleVocab::entity(&used_entity).into();
+                let activity_id: Option<ActivityId> =
+                    activity.map(|activity| ChronicleVocab::activity(&activity).into());
+
+                let tx = ChronicleOperation::EntityDerive(EntityDerive {
+                    namespace,
+                    typ,
+                    id: id.clone().into(),
+                    used_id,
+                    activity_id,
+                });
+
+                to_apply.push(tx);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::EntityAttach), reading input files and using the agent's private keys as required
@@ -817,7 +932,6 @@ where
     #[instrument]
     async fn register_key(
         &self,
-
         name: String,
         namespace: String,
         registration: KeyRegistration,
@@ -980,7 +1094,11 @@ where
     }
 
     #[instrument]
-    async fn use_agent(&self, name: String, namespace: String) -> Result<ApiResponse, ApiError> {
+    async fn use_in_context(
+        &self,
+        name: String,
+        namespace: String,
+    ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
@@ -1002,9 +1120,9 @@ mod test {
 
     use chrono::{TimeZone, Utc};
     use common::{
-        commands::{ApiResponse, KeyImport},
+        commands::{ApiResponse, EntityCommand, KeyImport},
         ledger::InMemLedger,
-        prov::{ChronicleTransactionId, ProvModel},
+        prov::{ChronicleTransactionId, DerivationType, ProvModel},
     };
 
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
@@ -1200,7 +1318,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
@@ -1231,7 +1349,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
@@ -1272,7 +1390,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Use {
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
         }))
@@ -1283,15 +1401,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
             domaintype: Some("testtype".to_owned()),
-        }))
-        .await
-        .unwrap();
-
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            name: "testentity".to_owned(),
-            namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
-            activity: Some("testactivity".to_owned()),
         }))
         .await
         .unwrap();
@@ -1338,11 +1447,70 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            name: "testentity".to_owned(),
+        assert_json_ld!(api);
+    }
+
+    #[tokio::test]
+    async fn derive_entity_abstract() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
+            name: "testgeneratedentity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
-            activity: Some("testactivity".to_owned()),
+            activity: None,
+            used_entity: "testusedentity".to_owned(),
+            typ: None,
+        }))
+        .await
+        .unwrap();
+
+        assert_json_ld!(api);
+    }
+
+    #[tokio::test]
+    async fn derive_entity_primary_source() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
+            name: "testgeneratedentity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+            used_entity: "testusedentity".to_owned(),
+            typ: Some(DerivationType::primary_source()),
+        }))
+        .await
+        .unwrap();
+
+        assert_json_ld!(api);
+    }
+
+    #[tokio::test]
+    async fn derive_entity_revision() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
+            name: "testgeneratedentity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+            used_entity: "testusedentity".to_owned(),
+            typ: Some(DerivationType::revision()),
+        }))
+        .await
+        .unwrap();
+
+        assert_json_ld!(api);
+    }
+
+    #[tokio::test]
+    async fn derive_entity_quotation() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
+            name: "testgeneratedentity".to_owned(),
+            namespace: "testns".to_owned(),
+            activity: None,
+            used_entity: "testusedentity".to_owned(),
+            typ: Some(DerivationType::quotation()),
         }))
         .await
         .unwrap();

@@ -78,17 +78,3 @@ pub enum Subtype {
     Agent { id: AgentId, subtype: String },
     Activity { id: ActivityId, subtype: String },
 }
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum ChronicleTransaction {
-    CreateNamespace(CreateNamespace),
-    CreateAgent(CreateAgent),
-    RegisterKey(RegisterKey),
-    CreateActivity(CreateActivity),
-    StartActivity(StartActivity),
-    EndActivity(EndActivity),
-    ActivityUses(ActivityUses),
-    GenerateEntity(GenerateEntity),
-    EntityAttach(EntityAttach),
-    Subtype(Subtype),
-}

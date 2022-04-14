@@ -50,7 +50,6 @@ lazy_static! {
             "@id": "chronicle:signedAtTime",
         },
 
-
         "identity": {
             "@id": "chronicle:hasIdentity",
             "@type" : "@id",
@@ -74,8 +73,38 @@ lazy_static! {
             "@container": "@set"
         },
 
-        "associated": {
+        "wasAssociatedWith": {
             "@id": "prov:wasAssociatedWith",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "wasDerivedFrom": {
+            "@id": "prov:wasDerivedFrom",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "hadPrimarySource": {
+            "@id": "prov:hadPrimarySource",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "actedOnBehalfOf": {
+            "@id": "prov:actedOnBehalfOf",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "wasQuotedFrom": {
+            "@id": "prov:wasQuotedFrom",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
+        "wasRevisionOf": {
+            "@id": "prov:wasRevisionOf",
             "@type" : "@id",
             "@container": "@set"
         },
@@ -86,7 +115,7 @@ lazy_static! {
             "@container": "@set"
         },
 
-        "generatedBy": {
+        "wasGeneratedBy": {
             "@id": "prov:wasGeneratedBy",
             "@type" : "@id",
             "@container": "@set"

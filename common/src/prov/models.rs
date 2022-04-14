@@ -1,5 +1,12 @@
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
+use diesel::{
+    backend::Backend,
+    deserialize::FromSql,
+    serialize::{self, Output, ToSql},
+    sql_types::Integer,
+    QueryId, SqlType,
+};
 use futures::TryFutureExt;
 use iref::{AsIri, Iri, IriBuf};
 use json::{object, JsonValue};
@@ -56,6 +63,14 @@ pub struct CreateAgent {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct ActsOnBehalfOf {
+    pub namespace: NamespaceId,
+    pub id: AgentId,
+    pub delegate_id: AgentId,
+    pub activity_id: Option<ActivityId>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct RegisterKey {
     pub namespace: NamespaceId,
     pub id: AgentId,
@@ -98,6 +113,15 @@ pub struct GenerateEntity {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct EntityDerive {
+    pub namespace: NamespaceId,
+    pub id: EntityId,
+    pub used_id: EntityId,
+    pub activity_id: Option<ActivityId>,
+    pub typ: Option<DerivationType>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -188,12 +212,14 @@ impl ChronicleTransaction {
 pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
     CreateAgent(CreateAgent),
+    AgentActsOnBehalfOf(ActsOnBehalfOf),
     RegisterKey(RegisterKey),
     CreateActivity(CreateActivity),
     StartActivity(StartActivity),
     EndActivity(EndActivity),
     ActivityUses(ActivityUses),
     GenerateEntity(GenerateEntity),
+    EntityDerive(EntityDerive),
     EntityAttach(EntityAttach),
     Domaintype(Domaintype),
 }
@@ -250,6 +276,16 @@ impl Agent {
             domaintypeid,
         }
     }
+
+    // Create a prototypical agent from its IRI, we can only determine name
+    pub fn prototype_from_id(namespaceid: NamespaceId, id: AgentId) -> Self {
+        Self {
+            namespaceid,
+            name: id.decompose().to_string(),
+            id,
+            domaintypeid: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,17 +301,29 @@ pub struct Activity {
 impl Activity {
     pub fn new(
         id: ActivityId,
-        ns: NamespaceId,
+        namespaceid: NamespaceId,
         name: &str,
         domaintypeid: Option<DomaintypeId>,
     ) -> Self {
         Self {
             id,
-            namespaceid: ns,
+            namespaceid,
             name: name.to_owned(),
             started: None,
             ended: None,
             domaintypeid,
+        }
+    }
+
+    // Create a prototypical agent from its IRI, we can only determine name
+    pub fn prototype_from_id(namespaceid: NamespaceId, id: ActivityId) -> Self {
+        Self {
+            namespaceid,
+            name: id.decompose().to_string(),
+            id,
+            started: None,
+            ended: None,
+            domaintypeid: None,
         }
     }
 }
@@ -334,22 +382,117 @@ impl Entity {
     }
 }
 
+#[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[diesel(sql_type = Integer)]
+#[repr(i32)]
+pub enum DerivationType {
+    Revision,
+    Quotation,
+    PrimarySource,
+}
+
+impl<DB> ToSql<Integer, DB> for DerivationType
+where
+    DB: Backend,
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> serialize::Result {
+        match self {
+            DerivationType::Revision => 1.to_sql(out),
+            DerivationType::Quotation => 2.to_sql(out),
+            DerivationType::PrimarySource => 3.to_sql(out),
+        }
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for DerivationType
+where
+    DB: Backend,
+    i32: FromSql<Integer, DB>,
+{
+    fn from_sql(bytes: diesel::backend::RawValue<'_, DB>) -> diesel::deserialize::Result<Self> {
+        match i32::from_sql(bytes)? {
+            1 => Ok(DerivationType::Revision),
+            2 => Ok(DerivationType::Quotation),
+            3 => Ok(DerivationType::PrimarySource),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
+}
+
+impl DerivationType {
+    pub fn revision() -> Self {
+        Self::Revision
+    }
+
+    pub fn quotation() -> Self {
+        Self::Quotation
+    }
+
+    pub fn primary_source() -> Self {
+        Self::PrimarySource
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Derivation {
+    pub generated_id: EntityId,
+    pub used_id: EntityId,
+    pub activity_id: Option<ActivityId>,
+    pub typ: Option<DerivationType>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delegation {
+    pub delegate_id: AgentId,
+    pub responsible_id: AgentId,
+    pub activity_id: Option<ActivityId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Association {
+    pub agent_id: AgentId,
+    pub activity_id: ActivityId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Useage {
+    pub activity_id: ActivityId,
+    pub entity_id: EntityId,
+    pub time: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Generation {
+    pub activity_id: ActivityId,
+    pub generated_id: EntityId,
+    pub time: Option<DateTime<Utc>>,
+}
+
+type NamespacedId<T> = (NamespaceId, T);
+type NamespacedAgent = NamespacedId<AgentId>;
+type NamespacedEntity = NamespacedId<EntityId>;
+type NamespacedActivity = NamespacedId<ActivityId>;
+type NamespacedIdentity = NamespacedId<IdentityId>;
+type NamespacedAttachment = NamespacedId<AttachmentId>;
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
     pub namespaces: HashMap<NamespaceId, Namespace>,
-    pub agents: HashMap<(NamespaceId, AgentId), Agent>,
-    pub activities: HashMap<(NamespaceId, ActivityId), Activity>,
-    pub entities: HashMap<(NamespaceId, EntityId), Entity>,
-    pub identities: HashMap<(NamespaceId, IdentityId), Identity>,
-    pub attachments: HashMap<(NamespaceId, AttachmentId), Attachment>,
-    pub has_identity: HashMap<(NamespaceId, AgentId), (NamespaceId, IdentityId)>,
-    pub had_identity: HashMap<(NamespaceId, AgentId), HashSet<(NamespaceId, IdentityId)>>,
-    pub has_attachment: HashMap<(NamespaceId, EntityId), (NamespaceId, AttachmentId)>,
-    pub had_attachment: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AttachmentId)>>,
-    pub was_associated_with: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_attributed_to: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, AgentId)>>,
-    pub was_generated_by: HashMap<(NamespaceId, EntityId), HashSet<(NamespaceId, ActivityId)>>,
-    pub used: HashMap<(NamespaceId, ActivityId), HashSet<(NamespaceId, EntityId)>>,
+    pub agents: HashMap<NamespacedAgent, Agent>,
+    pub activities: HashMap<NamespacedActivity, Activity>,
+    pub entities: HashMap<NamespacedEntity, Entity>,
+    pub identities: HashMap<NamespacedIdentity, Identity>,
+    pub attachments: HashMap<NamespacedAttachment, Attachment>,
+    pub has_identity: HashMap<NamespacedAgent, NamespacedIdentity>,
+    pub had_identity: HashMap<NamespacedAgent, HashSet<NamespacedIdentity>>,
+    pub has_attachment: HashMap<NamespacedEntity, NamespacedAttachment>,
+    pub had_attachment: HashMap<NamespacedEntity, HashSet<NamespacedAttachment>>,
+    pub association: HashMap<NamespacedActivity, Vec<Association>>,
+    pub derivation: HashMap<NamespacedEntity, Vec<Derivation>>,
+    pub delegation: HashMap<NamespacedAgent, Vec<Delegation>>,
+    pub generation: HashMap<NamespacedEntity, Vec<Generation>>,
+    pub useage: HashMap<NamespacedActivity, Vec<Useage>>,
 }
 
 impl ProvModel {
@@ -420,77 +563,120 @@ impl ProvModel {
                 })
                 .or_insert(links);
         }
-        for (id, links) in other.was_associated_with {
-            self.was_associated_with
+        for (id, mut rhs) in other.association {
+            self.association
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.was_attributed_to {
-            self.was_attributed_to
+
+        for (id, mut rhs) in other.generation {
+            self.generation
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.was_generated_by {
-            self.was_generated_by
+
+        for (id, mut rhs) in other.useage {
+            self.useage
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
-        for (id, links) in other.used {
-            self.used
+
+        for (id, mut rhs) in other.derivation {
+            self.derivation
                 .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
+        }
+
+        for (id, mut rhs) in other.delegation {
+            self.delegation
+                .entry(id.clone())
+                .and_modify(|xs| xs.append(&mut rhs))
+                .or_insert(rhs);
         }
     }
 
-    pub fn associate_with(
-        &mut self,
-        namespace: &NamespaceId,
-        activity: &ActivityId,
-        agent: &AgentId,
-    ) {
-        self.was_associated_with
-            .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace.to_owned(), agent.clone()));
-    }
-
-    pub fn generate_by(
+    /// Append a derivation to the model
+    pub fn was_derived_from(
         &mut self,
         namespace: NamespaceId,
-        entity: &EntityId,
-        activity: &ActivityId,
+        typ: Option<DerivationType>,
+        used_id: EntityId,
+        id: EntityId,
+        activity_id: Option<ActivityId>,
     ) {
-        self.was_generated_by
-            .entry((namespace.clone(), entity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace, activity.clone()));
+        self.derivation
+            .entry((namespace, id.clone()))
+            .or_insert_with(Vec::new)
+            .push(Derivation {
+                typ,
+                generated_id: id,
+                used_id,
+                activity_id,
+            });
     }
 
-    pub fn used(&mut self, namespace: NamespaceId, activity: &ActivityId, entity: &EntityId) {
-        self.used
-            .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(HashSet::new)
-            .insert((namespace, entity.clone()));
+    /// Append a delegation to the model
+    pub fn acted_on_behalf_of(
+        &mut self,
+        namespace: NamespaceId,
+        responsible_id: AgentId,
+        delegate_id: AgentId,
+        activity_id: Option<ActivityId>,
+    ) {
+        self.delegation
+            .entry((namespace, responsible_id.clone()))
+            .or_insert_with(Vec::new)
+            .push(Delegation {
+                responsible_id,
+                delegate_id,
+                activity_id,
+            });
+    }
+
+    pub fn was_associated_with(
+        &mut self,
+        namespace: &NamespaceId,
+        activity_id: &ActivityId,
+        agent_id: &AgentId,
+    ) {
+        self.association
+            .entry((namespace.clone(), activity_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Association {
+                agent_id: agent_id.clone(),
+                activity_id: activity_id.clone(),
+            });
+    }
+
+    pub fn was_generated_by(
+        &mut self,
+        namespace: NamespaceId,
+        generated_id: &EntityId,
+        activity_id: &ActivityId,
+    ) {
+        self.generation
+            .entry((namespace, generated_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Generation {
+                activity_id: activity_id.clone(),
+                generated_id: generated_id.clone(),
+                time: None,
+            })
+    }
+
+    pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
+        self.useage
+            .entry((namespace, activity_id.clone()))
+            .or_insert_with(std::vec::Vec::new)
+            .push(Useage {
+                activity_id: activity_id.clone(),
+                entity_id: entity_id.clone(),
+                time: None,
+            })
     }
 
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
@@ -585,7 +771,7 @@ impl ProvModel {
         );
     }
 
-    /// Transform a sequence of ChronicleTransaction events into a provenance model,
+    /// Transform a sequence of `ChronicleOperation` events into a provenance model,
     /// If a statement requires a subject or object that does not currently exist in the model, then we create it
     pub fn apply(&mut self, tx: &ChronicleOperation) {
         let tx = tx.to_owned();
@@ -607,6 +793,35 @@ impl ProvModel {
                     (namespace.clone(), id.clone()),
                     Agent::new(id, namespace, name, None),
                 );
+            }
+
+            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+            }) => {
+                self.namespace_context(&namespace);
+
+                self.agents
+                    .entry((namespace.clone(), id.clone()))
+                    .or_insert_with(|| Agent::prototype_from_id(namespace.clone(), id.clone()));
+
+                self.agents
+                    .entry((namespace.clone(), delegate_id.clone()))
+                    .or_insert_with(|| {
+                        Agent::prototype_from_id(namespace.clone(), delegate_id.clone())
+                    });
+
+                if let Some(activity_id) = activity_id.clone() {
+                    self.activities
+                        .entry((namespace.clone(), activity_id.clone()))
+                        .or_insert_with(|| {
+                            Activity::prototype_from_id(namespace.clone(), activity_id)
+                        });
+                }
+
+                self.acted_on_behalf_of(namespace, id, delegate_id, activity_id)
             }
             ChronicleOperation::RegisterKey(RegisterKey {
                 namespace,
@@ -668,7 +883,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(&namespace, &id, &agent);
+                self.was_associated_with(&namespace, &id, &agent);
             }
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
@@ -710,7 +925,7 @@ impl ProvModel {
                         activity
                     });
 
-                self.associate_with(&namespace, &id, &agent);
+                self.was_associated_with(&namespace, &id, &agent);
             }
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
@@ -762,7 +977,7 @@ impl ProvModel {
                     self.add_entity(Entity::new(id.clone(), &namespace, name, None));
                 }
 
-                self.generate_by(namespace, &id, &activity)
+                self.was_generated_by(namespace, &id, &activity)
             }
             ChronicleOperation::EntityAttach(EntityAttach {
                 namespace,
@@ -815,6 +1030,32 @@ impl ProvModel {
                     locator,
                     signature_time,
                 );
+            }
+            ChronicleOperation::EntityDerive(EntityDerive {
+                namespace,
+                id,
+                typ,
+                used_id,
+                activity_id,
+            }) => {
+                self.namespace_context(&namespace);
+
+                // Ensure the generated entity is in the graph
+                if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
+                    let name = id.decompose();
+                    self.add_entity(Entity::new(id.clone(), &namespace, name, None));
+                }
+
+                // Enmsure the used entity is in the graph
+                if !self
+                    .entities
+                    .contains_key(&(namespace.clone(), used_id.clone()))
+                {
+                    let name = used_id.decompose();
+                    self.add_entity(Entity::new(used_id.clone(), &namespace, name, None));
+                }
+
+                self.was_derived_from(namespace, typ, used_id, id, activity_id);
             }
             ChronicleOperation::Domaintype(Domaintype::Entity {
                 namespace,
@@ -962,6 +1203,21 @@ impl ProvModel {
                     .ok();
             }
 
+            if let Some(delegation) = self
+                .delegation
+                .get(&(agent.namespaceid.to_owned(), id.to_owned()))
+            {
+                let mut ids = json::Array::new();
+
+                for delegation in delegation.iter() {
+                    ids.push(object! {"@id": delegation.delegate_id.as_str()});
+                }
+
+                agentdoc
+                    .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), ids)
+                    .ok();
+            }
+
             let mut values = json::Array::new();
 
             values.push(object! {
@@ -1007,14 +1263,11 @@ impl ProvModel {
                     .ok();
             }
 
-            if let Some(asoc) = self
-                .was_associated_with
-                .get(&(namespace.to_owned(), id.to_owned()))
-            {
+            if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for asoc in asoc.iter() {
+                    ids.push(object! {"@id": asoc.agent_id.as_str()});
                 }
 
                 activitydoc
@@ -1022,11 +1275,11 @@ impl ProvModel {
                     .ok();
             }
 
-            if let Some(asoc) = self.used.get(&(namespace.to_owned(), id.to_owned())) {
+            if let Some(useage) = self.useage.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for useage in useage.iter() {
+                    ids.push(object! {"@id": useage.entity_id.as_str()});
                 }
 
                 activitydoc
@@ -1061,14 +1314,48 @@ impl ProvModel {
                 }]
             };
 
-            if let Some(asoc) = self
-                .was_generated_by
-                .get(&(namespace.to_owned(), id.to_owned()))
-            {
+            if let Some(derivation) = self.derivation.get(&(namespace.to_owned(), id.to_owned())) {
+                let mut derived_ids = json::Array::new();
+                let mut primary_ids = json::Array::new();
+                let mut quotation_ids = json::Array::new();
+                let mut revision_ids = json::Array::new();
+
+                for derivation in derivation.iter() {
+                    let id = object! {"@id": derivation.used_id.as_str()};
+                    match derivation.typ {
+                        Some(DerivationType::PrimarySource) => primary_ids.push(id),
+                        Some(DerivationType::Quotation) => quotation_ids.push(id),
+                        Some(DerivationType::Revision) => revision_ids.push(id),
+                        _ => derived_ids.push(id),
+                    }
+                }
+                if !derived_ids.is_empty() {
+                    entitydoc
+                        .insert(Iri::from(Prov::WasDerivedFrom).as_str(), derived_ids)
+                        .ok();
+                }
+                if !primary_ids.is_empty() {
+                    entitydoc
+                        .insert(Iri::from(Prov::HadPrimarySource).as_str(), primary_ids)
+                        .ok();
+                }
+                if !quotation_ids.is_empty() {
+                    entitydoc
+                        .insert(Iri::from(Prov::WasQuotedFrom).as_str(), quotation_ids)
+                        .ok();
+                }
+                if !revision_ids.is_empty() {
+                    entitydoc
+                        .insert(Iri::from(Prov::WasRevisionOf).as_str(), revision_ids)
+                        .ok();
+                }
+            }
+
+            if let Some(generation) = self.generation.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for (_, id) in asoc.iter() {
-                    ids.push(object! {"@id": id.as_str()});
+                for generation in generation.iter() {
+                    ids.push(object! {"@id": generation.activity_id.as_str()});
                 }
 
                 entitydoc
@@ -1195,6 +1482,13 @@ impl ProvModel {
 
         let domaintypeid = Self::extract_domain_type(agent)?;
 
+        for delegated in extract_reference_ids(&Prov::ActedOnBehalfOf, agent)?
+            .into_iter()
+            .map(|id| AgentId::new(id.as_str()))
+        {
+            self.acted_on_behalf_of(namespaceid.clone(), id.clone(), delegated, None);
+        }
+
         for identity in extract_reference_ids(&Chronicle::HasIdentity, agent)?
             .into_iter()
             .map(|id| IdentityId::new(id.as_str()))
@@ -1263,7 +1557,7 @@ impl ProvModel {
         }
 
         for agent in wasassociatedwith {
-            self.associate_with(&namespaceid, &activity.id, &agent);
+            self.was_associated_with(&namespaceid, &activity.id, &agent);
         }
 
         self.add_activity(activity);
@@ -1386,8 +1680,54 @@ impl ProvModel {
             self.had_attachment(namespaceid.clone(), id.clone(), &attachment);
         }
 
+        for derived in extract_reference_ids(&Prov::WasDerivedFrom, entity)?
+            .into_iter()
+            .map(|id| EntityId::new(id.as_str()))
+        {
+            self.was_derived_from(namespaceid.clone(), None, derived, id.clone(), None);
+        }
+
+        for derived in extract_reference_ids(&Prov::WasQuotedFrom, entity)?
+            .into_iter()
+            .map(|id| EntityId::new(id.as_str()))
+        {
+            self.was_derived_from(
+                namespaceid.clone(),
+                Some(DerivationType::quotation()),
+                derived,
+                id.clone(),
+                None,
+            );
+        }
+
+        for derived in extract_reference_ids(&Prov::WasRevisionOf, entity)?
+            .into_iter()
+            .map(|id| EntityId::new(id.as_str()))
+        {
+            self.was_derived_from(
+                namespaceid.clone(),
+                Some(DerivationType::revision()),
+                derived,
+                id.clone(),
+                None,
+            );
+        }
+
+        for derived in extract_reference_ids(&Prov::HadPrimarySource, entity)?
+            .into_iter()
+            .map(|id| EntityId::new(id.as_str()))
+        {
+            self.was_derived_from(
+                namespaceid.clone(),
+                Some(DerivationType::primary_source()),
+                derived,
+                id.clone(),
+                None,
+            );
+        }
+
         for activity in generatedby {
-            self.generate_by(namespaceid.clone(), &id, &activity);
+            self.was_generated_by(namespaceid.clone(), &id, &activity);
         }
 
         self.add_entity(Entity::new(id, &namespaceid, &name, domaintypeid));
@@ -1535,12 +1875,15 @@ pub mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        vocab::Chronicle, AgentId, ChronicleOperation, CreateActivity, CreateAgent,
-        CreateNamespace, Domaintype, DomaintypeId, EndActivity, GenerateEntity, ProvModel,
-        RegisterKey,
+        vocab::Chronicle, AgentId, Association, ChronicleOperation, CreateActivity, CreateAgent,
+        CreateNamespace, Delegation, Derivation, Domaintype, DomaintypeId, EndActivity,
+        GenerateEntity, Generation, ProvModel, RegisterKey, Useage,
     };
 
-    use super::{ActivityUses, CompactedJson, EntityAttach, NamespaceId, StartActivity};
+    use super::{
+        ActivityUses, ActsOnBehalfOf, CompactedJson, EntityAttach, EntityDerive, NamespaceId,
+        StartActivity,
+    };
 
     prop_compose! {
         fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
@@ -1659,7 +2002,6 @@ pub mod test {
             let activity = Chronicle::activity(&activity_name).into();
             let id = Chronicle::entity(&entity_name).into();
 
-
             ActivityUses {
                 namespace,
                 id,
@@ -1711,6 +2053,42 @@ pub mod test {
     }
 
     prop_compose! {
+        fn entity_derive() (
+            name in name(),
+            used in name(),
+            namespace in namespace(),
+        ) -> EntityDerive {
+            let id = Chronicle::entity(&name).into();
+            let used_id = Chronicle::entity(&used).into();
+
+            EntityDerive {
+                namespace,
+                id,
+                used_id,
+                activity_id: None,
+                typ: None
+            }
+        }
+    }
+
+    prop_compose! {
+        fn agent_acts_on_behalf_of() (
+            name in name(),
+            delegate in name(),
+            namespace in namespace(),
+        ) -> ActsOnBehalfOf {
+
+            ActsOnBehalfOf {
+                id: Chronicle::agent(&name).into(),
+                delegate_id: Chronicle::agent(&delegate).into(),
+                activity_id: None,
+                namespace,
+            }
+
+        }
+    }
+
+    prop_compose! {
         fn set_domain_type() (name in name(), namespace in namespace()) -> impl Strategy<Value = Domaintype> {
             let entityname = name.clone();
             let entityns = namespace.clone();
@@ -1752,11 +2130,13 @@ pub mod test {
             4 => activity_uses().prop_map(ChronicleOperation::ActivityUses),
             4 => generate_entity().prop_map(ChronicleOperation::GenerateEntity),
             2 => entity_attach().prop_map(ChronicleOperation::EntityAttach),
+            2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
+            2 => agent_acts_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
             2 => set_domain_type().prop_flat_map(|x| x.prop_map(ChronicleOperation::Domaintype)),
         ]
     }
 
-    fn transaction_seq() -> impl Strategy<Value = Vec<ChronicleOperation>> {
+    fn operation_seq() -> impl Strategy<Value = Vec<ChronicleOperation>> {
         proptest::collection::vec(transaction(), 1..50)
     }
 
@@ -1787,18 +2167,15 @@ pub mod test {
             max_shrink_iters: std::u32::MAX, verbose: 0, .. ProptestConfig::default()
         })]
         #[test]
-        fn test_transactions(tx in transaction_seq()) {
+        fn operations(tx in operation_seq()) {
             let mut prov = ProvModel::default();
 
-            // Apply each transaction in order
+            // Apply each operation in order
             for tx in tx.iter() {
                 prov.apply(tx);
             }
 
-            // Key registration overwrites public key, so we only assert the last one
-            let mut regkey_assertion:  Box<dyn FnOnce()->Result<(), TestCaseError>> = Box::new(|| {Ok(())});
-
-            // Now assert the final prov object matches what we would expect from the input transactions
+            // Now assert that the final prov object matches what we would expect from the input operations
             for tx in tx.iter() {
                 match tx {
                     ChronicleOperation::CreateNamespace(CreateNamespace{id,name,uuid}) => {
@@ -1816,25 +2193,49 @@ pub mod test {
                         prop_assert_eq!(&agent.name, name);
                         prop_assert_eq!(&agent.namespaceid, namespace);
                     },
+                    ChronicleOperation::AgentActsOnBehalfOf(
+                        ActsOnBehalfOf {namespace, id, delegate_id, activity_id }
+                    ) => {
+                        let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(agent.is_some());
+                        let agent = agent.unwrap();
+
+                        let delegate = &prov.agents.get(&(namespace.to_owned(),delegate_id.to_owned()));
+                        prop_assert!(delegate.is_some());
+                        let delegate = delegate.unwrap();
+
+                        if let Some(activity_id) = activity_id {
+                            let activity = &prov.activities.get(&(namespace.to_owned(),activity_id.to_owned()));
+                            prop_assert!(activity.is_some());
+                        }
+
+                        let has_delegation = prov.delegation.get(&(namespace.to_owned(),id.to_owned()))
+                            .unwrap()
+                            .contains(&Delegation {
+                                responsible_id: agent.id.clone(),
+                                delegate_id: delegate.id.clone(),
+                                activity_id: activity_id.clone(),
+                            });
+
+                        prop_assert!(has_delegation);
+
+                    }
                     ChronicleOperation::RegisterKey(
                         RegisterKey { namespace, name, id, publickey}) => {
-                            regkey_assertion = Box::new(|| {
-                                let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
-                                prop_assert!(agent.is_some());
-                                let agent = agent.unwrap();
-                                let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
-                                prop_assert!(identity.is_some());
-                                let identity = identity.unwrap();
-                                let identity = prov.identities.get(identity);
-                                prop_assert!(identity.is_some());
-                                let identity = identity.unwrap();
+                            let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
+                            prop_assert!(agent.is_some());
+                            let agent = agent.unwrap();
+                            let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
+                            prop_assert!(identity.is_some());
+                            let identity = identity.unwrap();
+                            let identity = prov.identities.get(identity);
+                            prop_assert!(identity.is_some());
+                            let identity = identity.unwrap();
 
-                                prop_assert_eq!(&agent.name, &name.clone());
-                                prop_assert_eq!(&agent.namespaceid, &namespace.clone());
-                                prop_assert_eq!(&identity.public_key, &publickey.clone());
-                                Ok(())
-                            })
-                        },
+                            prop_assert_eq!(&agent.name, &name.clone());
+                            prop_assert_eq!(&agent.namespaceid, &namespace.clone());
+                            prop_assert_eq!(&identity.public_key, &publickey.clone());
+                    },
                     ChronicleOperation::CreateActivity(
                         CreateActivity { namespace, id, name }) => {
                         let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
@@ -1854,10 +2255,14 @@ pub mod test {
                         prop_assert!(activity.started == Some(time.to_owned()));
                         prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
 
-                        prop_assert!(prov.was_associated_with.get(
-                            &(namespace.to_owned(),id.to_owned()))
+                        let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),agent.to_owned())));
+                            .contains(&Association {
+                                agent_id: agent.clone(),
+                                activity_id: id.clone()
+                            });
+
+                        prop_assert!(has_assoc);
                     },
                     ChronicleOperation::EndActivity(
                         EndActivity { namespace, id, agent, time }) => {
@@ -1870,10 +2275,14 @@ pub mod test {
                         prop_assert!(activity.ended == Some(time.to_owned()));
                         prop_assert!(activity.started.unwrap() <= *time);
 
-                        prop_assert!(prov.was_associated_with.get(
-                            &(namespace.clone(),id.clone()))
+                        let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),agent.to_owned())));
+                            .contains(&Association {
+                                agent_id: agent.clone(),
+                                activity_id: id.clone()
+                            });
+
+                        prop_assert!(has_assoc);
                     }
                     ChronicleOperation::ActivityUses(
                         ActivityUses { namespace, id, activity }) => {
@@ -1890,11 +2299,15 @@ pub mod test {
                         prop_assert_eq!(&activity.name, &activity_id.decompose());
                         prop_assert_eq!(&activity.namespaceid, namespace);
 
-                        prop_assert!(prov.used.get(
-                            &(namespace.clone(),activity.id.clone()))
+                        let has_useage = prov.useage.get(&(namespace.to_owned(), activity_id.to_owned()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),id.to_owned())));
+                            .contains(&Useage {
+                                activity_id: activity_id.clone(),
+                                entity_id: id.clone(),
+                                time: None
+                            });
 
+                        prop_assert!(has_useage);
                     },
                     ChronicleOperation::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
                         let activity_id = activity;
@@ -1910,10 +2323,15 @@ pub mod test {
                         prop_assert_eq!(&activity.name, &activity_id.decompose());
                         prop_assert_eq!(&activity.namespaceid, namespace);
 
-                        prop_assert!(prov.was_generated_by.get(
+                        let has_generation = prov.generation.get(
                             &(namespace.clone(),id.clone()))
                             .unwrap()
-                            .contains(&(namespace.to_owned(),activity.id.to_owned())));
+                            .contains(& Generation {
+                                activity_id: activity_id.clone(),
+                                generated_id: id.clone(),
+                                time: None });
+
+                        prop_assert!(has_generation);
                     }
                     ChronicleOperation::EntityAttach(
                         EntityAttach{
@@ -1939,6 +2357,31 @@ pub mod test {
                         prop_assert_eq!(&agent.namespaceid, namespace);
 
                     },
+                    ChronicleOperation::EntityDerive(EntityDerive {
+                      namespace,
+                      id,
+                      used_id,
+                      activity_id,
+                      typ,
+                    }) => {
+                        let generated_entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                        prop_assert!(generated_entity.is_some());
+
+                        let used_entity = &prov.entities.get(&(namespace.to_owned(),used_id.to_owned()));
+                        prop_assert!(used_entity.is_some());
+
+                        let has_derivation = prov.derivation.get(
+                            &(namespace.clone(),id.clone()))
+                            .unwrap()
+                            .contains(& Derivation {
+                                used_id: used_id.clone(),
+                                activity_id: activity_id.clone(),
+                                generated_id: id.clone(),
+                                typ: typ.clone()
+                        });
+
+                        prop_assert!(has_derivation);
+                    }
                     ChronicleOperation::Domaintype(
                         Domaintype::Entity  { namespace, id, domaintype }) => {
                         let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
@@ -1963,8 +2406,6 @@ pub mod test {
                     },
                 }
             }
-            (regkey_assertion)()?;
-
 
             // Test that serialisation to and from JSON-LD is symmetric
             let json = compact_json(&prov).0;

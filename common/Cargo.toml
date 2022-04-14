@@ -11,6 +11,12 @@ async-trait = "0.1.53"
 chrono = { version = "0.4.19", features = ["serde"] }
 custom_error = "1.9.2"
 derivative = "2.2.0"
+diesel = { version = "^2.0.0", features = [
+  "sqlite",
+  "uuid",
+  "chrono",
+  "r2d2",
+], git = "https://github.com/diesel-rs/diesel" }
 futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
@@ -37,7 +43,7 @@ static-iref = "2.0.0"
 tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = { version = "2.2.2", features = ["serde"] }
-uuid = { version = "0.8.2", features = ["serde"] }
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
 
 [build-dependencies]
 json        = "0.12.4"

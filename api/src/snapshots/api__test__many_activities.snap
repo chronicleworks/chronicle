@@ -1,23 +1,22 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1396
+assertion_line: 1535
 expression: "serde_json::to_string_pretty(&v).unwrap()"
-
 ---
 {
   "@context": {
     "@version": 1.1,
+    "actedOnBehalfOf": {
+      "@container": "@set",
+      "@id": "prov:actedOnBehalfOf",
+      "@type": "@id"
+    },
     "activity": {
       "@id": "prov:activity",
       "@type": "@id"
     },
     "agent": {
       "@id": "prov:agent",
-      "@type": "@id"
-    },
-    "associated": {
-      "@container": "@set",
-      "@id": "prov:wasAssociatedWith",
       "@type": "@id"
     },
     "attachment": {
@@ -32,9 +31,9 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "prov:entity",
       "@type": "@id"
     },
-    "generatedBy": {
+    "hadPrimarySource": {
       "@container": "@set",
-      "@id": "prov:wasGeneratedBy",
+      "@id": "prov:hadPrimarySource",
       "@type": "@id"
     },
     "identity": {
@@ -80,6 +79,31 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
     "used": {
       "@container": "@set",
       "@id": "prov:used",
+      "@type": "@id"
+    },
+    "wasAssociatedWith": {
+      "@container": "@set",
+      "@id": "prov:wasAssociatedWith",
+      "@type": "@id"
+    },
+    "wasDerivedFrom": {
+      "@container": "@set",
+      "@id": "prov:wasDerivedFrom",
+      "@type": "@id"
+    },
+    "wasGeneratedBy": {
+      "@container": "@set",
+      "@id": "prov:wasGeneratedBy",
+      "@type": "@id"
+    },
+    "wasQuotedFrom": {
+      "@container": "@set",
+      "@id": "prov:wasQuotedFrom",
+      "@type": "@id"
+    },
+    "wasRevisionOf": {
+      "@container": "@set",
+      "@id": "prov:wasRevisionOf",
       "@type": "@id"
     },
     "xsd": "http://www.w3.org/2001/XMLSchema#"
