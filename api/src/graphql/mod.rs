@@ -1,7 +1,6 @@
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     extensions::OpenTelemetry,
-    http::{playground_source, GraphQLPlaygroundConfig},
     Context, Error, ErrorExtensions, Object, Schema, Subscription, Upload, ID,
 };
 use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
@@ -23,11 +22,8 @@ use diesel::{
 use futures::Stream;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{debug, instrument};
-use warp::{
-    hyper::{Response, StatusCode},
-    Filter, Rejection,
-};
+use tracing::instrument;
+use warp::{hyper::StatusCode, Filter, Rejection};
 
 use crate::ApiDispatch;
 #[macro_use]
@@ -937,39 +933,41 @@ pub async fn serve_graphql(
         },
     );
 
-    let graphql_playground = warp::path::end().and(warp::get()).map(|| {
-        Response::builder()
-            .header("content-type", "text/html")
-            .body(playground_source(
-                GraphQLPlaygroundConfig::new("/").subscription_endpoint("/"),
-            ))
-    });
+    let routes =
+        graphql_subscription(schema)
+            .or(graphql_post)
+            .recover(|err: Rejection| async move {
+                if let Some(GraphQLBadRequest(err)) = err.find() {
+                    return Ok::<_, Infallible>(warp::reply::with_status(
+                        err.to_string(),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
 
-    let open_address = address;
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        debug!(?open_address, "Open browser at");
-        open::that(&format!("http://{}/", open_address)).ok();
-    });
+                Ok(warp::reply::with_status(
+                    "INTERNAL_SERVER_ERROR".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ))
+            });
 
-    let routes = graphql_subscription(schema)
-        .or(graphql_playground)
-        .or(graphql_post)
-        .recover(|err: Rejection| async move {
-            if let Some(GraphQLBadRequest(err)) = err.find() {
-                return Ok::<_, Infallible>(warp::reply::with_status(
-                    err.to_string(),
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
+    if open {
+        let allow_apollo_studio = warp::cors()
+            .allow_methods(vec!["GET", "POST"])
+            .allow_any_origin()
+            .allow_headers(vec!["Content-Type"])
+            .allow_credentials(true);
 
-            Ok(warp::reply::with_status(
-                "INTERNAL_SERVER_ERROR".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ))
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            open::that("https://studio.apollographql.com/sandbox/explorer/").ok();
         });
 
-    warp::serve(routes).run(address).await;
+        warp::serve(routes.with(allow_apollo_studio))
+            .run(address)
+            .await;
+    } else {
+        warp::serve(routes).run(address).await;
+    }
 }
 
 #[cfg(test)]

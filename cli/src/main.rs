@@ -85,7 +85,9 @@ fn pool(config: &Config) -> Result<Pool<ConnectionManager<SqliteConnection>>, Ap
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
-    if let Some(addr) = options.value_of("ui-interface") {
+    if !options.is_present("gql") {
+        Ok(None)
+    } else if let Some(addr) = options.value_of("gql-interface") {
         Ok(Some(addr.parse()?))
     } else {
         Ok(None)
@@ -303,7 +305,7 @@ async fn main() {
     }
 
     if matches.is_present("export-schema") {
-        eprint!("{}", api::exportable_schema());
+        print!("{}", api::exportable_schema());
         std::process::exit(0);
     }
 
