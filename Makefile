@@ -1,37 +1,46 @@
-export ISOLATION_ID=local
-export REGISTRY=localhost:5000
-
 MAKEFILE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+include $(MAKEFILE_DIR)/standard_defs.mk
 
-export AWS_REGION ?= us-east-1
-export AWS_ACCESS_KEY_ID ?=
-export AWS_SECRET_ACCESS_KEY ?=
 export OPENSSL_STATIC=1
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
-clean: clean_containers
+clean: clean_containers clean_target
 
 distclean: clean_docker clean_markers
 
 build: $(MARKERS)/build
 
-package: $(MARKERS)/package
+analyze: analyze_fossa
 
-test: $(MARKERS)/test
+publish: gh-create-draft-release
+	container_id=$$(docker create chronicle:${ISOLATION_ID}); \
+	  docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/ && \
+	  docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/ && \
+		target/chronicle --export-schema > `pwd`/target/chronicle.graphql 2>&1 && \
+		docker rm $$container_id
+	if [ "$(RELEASABLE)" = "yes" ]; then \
+	  $(GH_RELEASE) upload $(VERSION) target/* ; \
+	fi
 
-analyze: analyze_fossa analyze_sonar_cargo
+run:
+	docker-compose -f docker/chronicle.yaml up --force-recreate
 
-publish: $(MARKERS)/publish_cargo
-
-run: $(MARKERS)/run
-
-$(MARKERS)/run:
-	docker compose -f ./docker-compose.yaml up --force-recreate
-
-$(MARKERS)/test:
-	docker buildx build --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --target test .
+.PHONY: stop
+stop:
+	docker-compose -f docker/chronicle.yaml down || true
 
 $(MARKERS)/build:
-	docker buildx build --cache-from src=./docker/cache,type=local,dest=./docker/cache --cache-to  type=local,dest=./docker/cache,mode=max --output=type=registry,registry.insecure=true --target chronicle -t $(REGISTRY)/chronicle:$(ISOLATION_ID) .
+	docker-compose -f docker-compose.yaml build
+	touch $@
 
+clean_containers:
+	docker-compose -f docker/chronicle.yaml rm -f || true
+	docker-compose -f docker-compose.yaml rm -f || true
+
+clean_docker: stop
+	docker-compose -f docker/chronicle.yaml down -v --rmi all || true
+	docker-compose -f docker-compose.yaml down -v --rmi all || true
+
+clean_target:
+	rm -rf target

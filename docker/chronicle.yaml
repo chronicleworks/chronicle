@@ -1,0 +1,105 @@
+---
+services:
+  settings-tp:
+    image: blockchaintp/sawtooth-settings-tp:BTP2.1.0
+    depends_on:
+      - validator
+    entrypoint: settings-tp -v --connect tcp://validator:4004
+    volumes: &rngVolumes
+      - /dev/urandom:/dev/random
+      - /dev/urandom:/dev/urandom
+
+  validator:
+    image: blockchaintp/sawtooth-validator:BTP2.1.0
+    expose:
+      - 4004
+      - 8800
+      - 5050
+    ports:
+      - "4004:4004"
+      - "8800:8800"
+      - "5050:5050"
+    entrypoint: "bash -c"
+    command: |
+      sawadm keygen && sawtooth keygen \
+        && sawset genesis -k \
+          /etc/sawtooth/keys/validator.priv -o config-genesis.batch \
+        && sawset proposal create -k /etc/sawtooth/keys/validator.priv \
+            sawtooth.consensus.min_wait_time=0 \
+            sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch \
+        && sawadm genesis config-genesis.batch consensus-settings.batch \
+        && sawtooth-validator -v --scheduler parallel \
+              --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004 \
+              --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800
+    volumes: *rngVolumes
+
+  devmode-engine:
+    image: blockchaintp/sawtooth-devmode-engine-rust:BTP2.1.0
+    depends_on:
+      - validator
+    entrypoint: devmode-engine-rust -C tcp://validator:5050
+    volumes: *rngVolumes
+
+  rest-api:
+    image: blockchaintp/sawtooth-rest-api:BTP2.1.0
+    expose:
+      - 8008
+    ports:
+      - "8008:8008"
+    depends_on:
+      - validator
+    entrypoint: |
+      sawtooth-rest-api --connect tcp://validator:4004 --bind rest-api:8008
+    volumes: *rngVolumes
+
+  chronicle-sawtooth-tp:
+    environment: &rustenv
+      - RUST_BACKTRACE=full
+      - RUST_LOG=debug
+    image: &chronicleImage chronicle:${ISOLATION_ID:-local}
+    command: |
+      /usr/local/bin/chronicle_sawtooth_tp -C tcp://validator:4004 \
+        --instrument http://jaeger:14268/api/traces
+    depends_on:
+      - validator
+    volumes: *rngVolumes
+
+  chronicle-sawtooth-api:
+    environment: *rustenv
+    image: *chronicleImage
+    command: |
+      /usr/local/bin/chronicle --sawtooth tcp://validator:4004 --ui \
+        --ui-interface 0.0.0.0:9982 --instrument http://jaeger:14268/api/traces
+    expose:
+      - 9982
+    ports:
+      - "9982:9982"
+    depends_on:
+      - devmode-engine
+      - validator
+    volumes: *rngVolumes
+
+  # A chronicle container to exec into for CLI operations
+  chronicle-sawtooth-cli:
+    environment: *rustenv
+    image: *chronicleImage
+    command: "/bin/sh"
+    stdin_open: true
+    tty: true
+    depends_on:
+      - devmode-engine
+      - validator
+    volumes: *rngVolumes
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    expose:
+      - 16686
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "9411:9411"

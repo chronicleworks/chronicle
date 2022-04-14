@@ -83,11 +83,6 @@ repos:
           - --pattern
           - '^(?!((fix|feature)\/[a-zA-Z0-9\-]+)$).*'
       - id: trailing-whitespace
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-go
-    rev: v1.0.1
-    hooks:
-      - id: checkmake
-        files: "^(.*/?Makefile|.*.mk)$"
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.1.10
     hooks:
