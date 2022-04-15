@@ -1,4 +1,4 @@
-FROM rust:buster AS chef
+FROM rust:bullseye AS chef
 # We only pay the installation cost once,
 # it will be cached from the second build onwards
 RUN cargo install cargo-chef
@@ -38,7 +38,7 @@ FROM builder AS application
 COPY . .
 RUN cargo build --release
 
-FROM ubuntu:bionic AS chronicle
+FROM ubuntu:focal AS chronicle
 WORKDIR /
 COPY --from=application /app/target/release/chronicle /usr/local/bin
 COPY --from=application /app/target/release/chronicle_sawtooth_tp /usr/local/bin

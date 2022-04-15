@@ -1,9 +1,9 @@
 # Default owners
-* @btp-engineering
+* @catenasys/btp-engineering
 
 # Documentation has additional team to review
-/docs/* @btp-engineering @btp-documentation
-/doc/* @btp-engineering @btp-documentation
+/docs/* @catenasys/btp-engineering @catenasys/btp-documentation
+/doc/* @catenasys/btp-engineering @catenasys/btp-documentation
 
 # Repository Admin only for .github
-/.github/* @repository-admin
+/.github/* @catenasys/repository-admin

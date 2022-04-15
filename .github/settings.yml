@@ -83,11 +83,11 @@ teams:
     #              issues and pull requests without write access.
   - name: btp-engineering
     permission: maintain
-  - name: documentation
+  - name: btp-documentation
     permission: maintain
   - name: repository-admin
     permission: admin
-  - name: build-bot
+  - name: ci-bots
     permission: admin
 
 branches:
