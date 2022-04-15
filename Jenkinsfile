@@ -71,11 +71,17 @@ pipeline {
       }
     }
 
-    stage('Publish') {
+    stage("Publish") {
+      when {
+        expression { env.BRANCH_NAME == "master" }
+      }
       steps {
-        sh '''
-          make publish
-        '''
+        withCredentials([string(credentialsId: 'btp-build-github-pat',
+                                variable: 'GITHUB_TOKEN')]) {
+          sh '''
+            make publish
+          '''
+        }
       }
     }
   }
