@@ -3,17 +3,26 @@
 A tool for recording and querying provenance onto distributed ledgers.
 
 ## Provenance
-![PROV-O](doc/images/starting-points.svg)
-Chronicle implements the [PROV-O starting point terms](https://www.w3.org/TR/2013/REC-prov-o-20130430/#description-starting-point-terms), encoding them in [JSON-LD compact form](https://json-ld.org/spec/latest/json-ld-api/#compaction) onto a backend ledger - currently sawtooth or an in memory stub for testing purposes.
 
+![PROV-O](docs/images/starting-points.svg)
+Chronicle implements the
+[PROV-O starting point terms](https://www.w3.org/TR/2013/REC-prov-o-20130430/#description-starting-point-terms)
+, encoding them in
+[JSON-LD compact form](https://json-ld.org/spec/latest/json-ld-api/#compaction)
+onto a backend ledger - currently sawtooth or an in memory stub for testing
+purposes.
 
 ## Chronicle vocabulary
 
-As well as core prov, we have additional vocabulary to describe cryptographic proceses, identities and prevent conflict between multiple domains on-chain using namespaces.
+As well as core prov, we have additional vocabulary to describe cryptographic
+processes, identities and prevent conflict between multiple domains on-chain
+using namespaces.
 
 ### chronicle:Identity
 
-Represents a cryptographic identity for an agent, supporting a single current signing identity via chronicle:hasIdentity and historical identities via chronicle:hadIdentity.
+Represents a cryptographic identity for an agent, supporting a single current
+signing identity via chronicle:hasIdentity and historical identities via
+chronicle:hadIdentity.
 
 ### chronicle:publicKey
 
@@ -37,17 +46,21 @@ Range: chronicle:Identity
 
 ### chronicle:Namespace
 
-An IRI containing a name and uuid part, used for disambigation. Discrete chronicle instances that with to work on the same namespace must share the uuid part.
+An IRI containing a name and uuid part, used for disambiguation. Discrete
+chronicle instances that with to work on the same namespace must share the uuid
+part.
 
 ### chronicle:hasNamespace
 
-Allows disambiguation of potentially conflicting IRIs on the same chain, used as a component for address generation.
+Allows disambiguation of potentially conflicting IRIs on the same chain, used
+as a component for address generation.
 
 Domain: All prov and chronicle resouces
 
 ### chronicle:Attachment
 
-A resource describing an external resource, linked to a prov:Entity and signed by an agent.
+A resource describing an external resource, linked to a prov:Entity and signed
+by an agent.
 
 ### chronicle:hasAttachment
 
@@ -90,13 +103,19 @@ Range: chronicle:Identity
 
 ## Deployment
 
-Chronicle is a self contained binary executable that can be used as an ephemeral command line interface for provenance recording and interrogation or as a grapql server to provide an interface for higher level services. It embeds sqlite for local syncronisation with a backend ledger and is capable of basic key management using a file system.
+Chronicle is a self contained binary executable that can be used as an ephemeral
+command line interface for provenance recording and interrogation or as a graphql
+server to provide an interface for higher level services. It embeds sqlite for
+local synchronization with a backend ledger and is capable of basic key
+management using a file system.
 
-Chroncicle instances do not share state directly as they have individual data stores, so syncronise via ledger updates. The abstract transaction processor should process an API operation in under a miliscond.
+Chronicle instances do not share state directly as they have individual data
+stores, so synchronize via ledger updates. The abstract transaction processor
+should process an API operation in under a millisecond.
 
 ## Transaction processing
 
-Chronicle records provenance by running an abstract deterministic transaction processor both locally and as part of consensus. This transaction model is designed to be infallible - barring infrastructure issues, provenance will always be recorded for any operation that succeeds locally.
-
-
-
+Chronicle records provenance by running an abstract deterministic transaction
+processor both locally and as part of consensus. This transaction model is
+designed to be infallible - barring infrastructure issues, provenance will
+always be recorded for any operation that succeeds locally.

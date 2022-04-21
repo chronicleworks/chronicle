@@ -518,6 +518,7 @@ dependencies = [
  "chrono",
  "custom_error",
  "derivative",
+ "diesel",
  "futures",
  "glob",
  "hex",

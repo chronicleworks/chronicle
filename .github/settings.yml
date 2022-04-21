@@ -122,6 +122,7 @@ branches:
         contexts:
           - DCO
           - cargo-checkmate
+          - continuous-integration/jenkins/pr-head
       # Required. Enforce all configured restrictions for administrators. Set
       # to true to enforce required status checks for repository administrators.
       # Set to null to disable.

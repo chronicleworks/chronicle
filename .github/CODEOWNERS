@@ -3,7 +3,6 @@
 
 # Documentation has additional team to review
 /docs/* @catenasys/btp-engineering @catenasys/btp-documentation
-/doc/* @catenasys/btp-engineering @catenasys/btp-documentation
 
 # Repository Admin only for .github
 /.github/* @catenasys/repository-admin
