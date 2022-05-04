@@ -1,7 +1,7 @@
 mod id;
-mod models;
-pub mod transactions;
+mod model;
+pub mod operations;
 pub mod vocab;
 
 pub use id::*;
-pub use models::*;
+pub use model::*;

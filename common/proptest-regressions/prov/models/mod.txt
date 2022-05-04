@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc bd764dc5055ffe1c5844769b18625a40e9d1f3ec140af86c2a33d742f0e09f6c # shrinks to tx = [SetAttributes(Entity { namespace: NamespaceId("http://blockchaintp.com/chronicle/ns#ns:a:00000000-0000-0000-0000-000000000000"), id: EntityId("http://blockchaintp.com/chronicle/ns#entity:a"), attributes: Attributes { typ: Some(DomaintypeId("http://blockchaintp.com/chronicle/ns#domaintype:mSB8++e0u-Ja-o-lA-oo+K3g+WlwIu")), attributes: {"A": Attribute { typ: "A", value: String("data") }, "a": Attribute { typ: "a", value: String("data") }, "-": Attribute { typ: "-", value: String("data") }, "+": Attribute { typ: "+", value: String("data") }} } })]

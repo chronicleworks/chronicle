@@ -127,6 +127,10 @@ lazy_static! {
 
         "endTime": {
              "@id": "prov:endedAtTime",
-        }
+        },
+        "value": {
+            "@id": "chronicle:value",
+            "@type" : "@json",
+        },
     };
 }

@@ -20,13 +20,13 @@ chrono = "0.4.19"
 common = { path = "../common" }
 custom_error = "1.9.2"
 derivative = "2.2.0"
-diesel = { version = "^2.0.0", features = [
+diesel = { version = "2.0.0-rc.0", features = [
   "sqlite",
   "uuid",
   "chrono",
   "r2d2",
 ], git = "https://github.com/diesel-rs/diesel" }
-diesel_migrations = { version = "^2.0.0", features = [
+diesel_migrations = { version = "2.0.0-rc.0", features = [
   "sqlite",
 ], git = "https://github.com/diesel-rs/diesel/" }
 futures = "0.3.21"

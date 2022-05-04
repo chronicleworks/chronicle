@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 5d903914c5be8a19427ef50530a7588d4dff9e7b6ab246f86c06ca41708da4f9 # shrinks to tx = [ActivityUses(ActivityUses { namespace: NamespaceId("http://blockchaintp.com/chronicle/ns#ns:ik0Yowd+Nh-37-uY8ECN2-b-FCX+960:00000000-0000-0000-0000-000000000000"), id: EntityId("http://blockchaintp.com/chronicle/ns#entity:a"), activity: ActivityId("http://blockchaintp.com/chronicle/ns#activity:a") })]

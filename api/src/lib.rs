@@ -28,10 +28,9 @@ use common::{
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
-        vocab::Chronicle as ChronicleVocab, ActivityId, ActivityUses, ActsOnBehalfOf, AgentId,
-        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
-        DerivationType, Domaintype, EndActivity, EntityAttach, EntityDerive, EntityId,
-        GenerateEntity, NamespaceId, ProvModel, RegisterKey, StartActivity,
+        operations::{ChronicleOperation, CreateNamespace, GenerateEntity, SetAttributes},
+        vocab::Chronicle as ChronicleVocab,
+        ActivityId, ChronicleTransactionId, NamespaceId, ProvModel,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -365,10 +364,10 @@ where
                 to_apply.push(create);
 
                 if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleOperation::Domaintype(Domaintype::Entity {
+                    let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
                         id: id.clone().into(),
                         namespace,
-                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
+                        attributes: Some(ChronicleVocab::domaintype(&domaintype).into()),
                     });
 
                     to_apply.push(set_type)

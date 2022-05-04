@@ -6,7 +6,10 @@ use futures::AsyncRead;
 use iref::IriBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::prov::{ChronicleTransactionId, DerivationType, ProvModel};
+use crate::{
+    attributes::Attributes,
+    prov::{operations::DerivationType, ChronicleTransactionId, ProvModel},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -31,7 +34,7 @@ pub enum AgentCommand {
     Create {
         name: String,
         namespace: String,
-        domaintype: Option<String>,
+        properties: Attributes,
     },
     RegisterKey {
         name: String,
@@ -55,7 +58,7 @@ pub enum ActivityCommand {
     Create {
         name: String,
         namespace: String,
-        domaintype: Option<String>,
+        properties: Attributes,
     },
     Start {
         name: String,
@@ -72,13 +75,11 @@ pub enum ActivityCommand {
     Use {
         name: String,
         namespace: String,
-        domaintype: Option<String>,
         activity: Option<String>,
     },
     Generate {
         name: String,
         namespace: String,
-        domaintype: Option<String>,
         activity: Option<String>,
     },
 }
@@ -115,6 +116,11 @@ impl<'de> Deserialize<'de> for PathOrFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityCommand {
+    Create {
+        name: String,
+        namespace: String,
+        properties: Attributes,
+    },
     Attach {
         name: String,
         namespace: String,
@@ -125,9 +131,9 @@ pub enum EntityCommand {
     Derive {
         name: String,
         namespace: String,
+        derivation: DerivationType,
         activity: Option<String>,
         used_entity: String,
-        typ: Option<DerivationType>,
     },
 }
 

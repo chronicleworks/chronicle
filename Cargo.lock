@@ -1507,6 +1507,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "meta-chronicle-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "meta-chronicle-macro"
+version = "0.1.0"
+dependencies = [
+ "meta-chronicle-impl",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "metadeps"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

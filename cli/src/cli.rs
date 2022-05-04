@@ -30,7 +30,7 @@ pub fn cli() -> Command<'static> {
                 .value_name("instrument")
                 .takes_value(true)
                 .value_hint(ValueHint::Url)
-                .help("Insutrment using RUST_LOG environment"),
+                .help("Instrument using RUST_LOG environment"),
         )
         .arg(
             Arg::new("console-logging")

@@ -72,6 +72,8 @@ pub enum Chronicle {
     SignedAtTime,
     #[iri("chronicle:signedBy")]
     SignedBy,
+    #[iri("chronicle:value")]
+    Value,
 }
 
 impl Chronicle {

@@ -1,6 +1,6 @@
 use common::{
     ledger::Offset,
-    prov::{ChronicleOperation, ChronicleTransactionId},
+    prov::{operations::ChronicleOperation, ChronicleTransactionId},
 };
 use custom_error::custom_error;
 use k256::ecdsa::{signature::Signer, Signature, SigningKey};
@@ -134,7 +134,10 @@ impl MessageBuilder {
 
 #[cfg(test)]
 mod test {
-    use common::prov::{vocab::Chronicle, ChronicleOperation, CreateNamespace};
+    use common::prov::{
+        operations::{ChronicleOperation, CreateNamespace},
+        vocab::Chronicle,
+    };
     use k256::{ecdsa::SigningKey, SecretKey};
     use prost::Message;
     use rand::prelude::StdRng;

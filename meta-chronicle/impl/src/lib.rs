@@ -1,8 +1,8 @@
 //! This crate implements the macro for `meta_chronicle` and should not be used directly.
-
+#![allow(warnings)]
 use std::collections::HashMap;
 
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use quote::quote;
 
 #[derive(Debug)]
@@ -22,7 +22,6 @@ struct ActivityModel {
 
 #[derive(Debug, Default)]
 struct ChronicleModel {
-    name: String,
     agents: HashMap<String, AgentModel>,
     activities: HashMap<String, ActivityModel>,
     entities: HashMap<String, EntityModel>,
@@ -34,7 +33,7 @@ enum ParsedType {
     Entity(EntityModel),
 }
 
-fn rec_type(stream: &TokenStream) -> Result<Option<ParsedType>, syn::Error> {
+fn rec_type(_stream: &TokenStream) -> Result<Option<ParsedType>, syn::Error> {
     unimplemented!()
 }
 
