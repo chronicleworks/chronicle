@@ -34,7 +34,7 @@ pub enum AgentCommand {
     Create {
         name: String,
         namespace: String,
-        properties: Attributes,
+        attributes: Attributes,
     },
     RegisterKey {
         name: String,
@@ -58,7 +58,7 @@ pub enum ActivityCommand {
     Create {
         name: String,
         namespace: String,
-        properties: Attributes,
+        attributes: Attributes,
     },
     Start {
         name: String,
@@ -119,7 +119,7 @@ pub enum EntityCommand {
     Create {
         name: String,
         namespace: String,
-        properties: Attributes,
+        attributes: Attributes,
     },
     Attach {
         name: String,

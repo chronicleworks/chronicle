@@ -4,7 +4,7 @@ use crate::{
 
 use common::{
     ledger::{LedgerWriter, SubmissionError},
-    prov::{ChronicleOperation, ChronicleTransactionId, ProcessorError},
+    prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
 use derivative::Derivative;
@@ -56,7 +56,7 @@ impl SawtoothSubmitter {
     }
 
     #[instrument]
-    async fn submit(
+    fn submit(
         &mut self,
         transactions: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
@@ -114,6 +114,6 @@ impl LedgerWriter for SawtoothSubmitter {
         &mut self,
         tx: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SubmissionError> {
-        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
+        self.submit(tx).map_err(SawtoothSubmissionError::into)
     }
 }
