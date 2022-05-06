@@ -141,6 +141,30 @@ create table hadattachment (
     primary key(entity_id,attachment_id)
 );
 
+create table entity_attribute (
+    entity_id integer not null,
+    typename text not null,
+    value text,
+    foreign key(entity_id ) references entity(id),
+    primary key(entity_id,typename)
+);
+
+create table agent_attribute (
+    agent_id integer not null,
+    typename text not null,
+    value text,
+    foreign key(agent_id ) references agent(id),
+    primary key(agent_id,typename)
+);
+
+create table activity_attribute (
+    activity_id integer not null,
+    typename text not null,
+    value text,
+    foreign key(activity_id ) references activity(id),
+    primary key(activity_id,typename)
+);
+
 
 
 

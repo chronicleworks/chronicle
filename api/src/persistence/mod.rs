@@ -3,6 +3,7 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use chrono::DateTime;
 
 use chrono::Utc;
+use common::attributes::Attribute;
 use common::prov::Association;
 use common::prov::Delegation;
 use common::prov::Derivation;
@@ -135,11 +136,12 @@ impl Store {
         connection: &mut SqliteConnection,
         Activity {
             ref name,
-            id,
             namespaceid,
             started,
             ended,
             domaintypeid,
+            attributes,
+            ..
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -163,6 +165,24 @@ impl Store {
             ))
             .execute(connection)?;
 
+        let query::Activity { id, .. } =
+            self.activity_by_activity_name_and_namespace(connection, &*name, &namespaceid)?;
+
+        diesel::insert_or_ignore_into(schema::activity_attribute::table)
+            .values(
+                attributes
+                    .iter()
+                    .map(
+                        |(_, Attribute { typ, value, .. })| query::ActivityAttribute {
+                            activity_id: id,
+                            typename: &*typ,
+                            value: &*value.to_string(),
+                        },
+                    )
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)?;
+
         Ok(())
     }
 
@@ -175,8 +195,9 @@ impl Store {
         Agent {
             ref name,
             namespaceid,
-            id: _,
             domaintypeid,
+            attributes,
+            ..
         }: &Agent,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
@@ -191,6 +212,22 @@ impl Store {
                 dsl::current.eq(0),
                 dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
             ))
+            .execute(connection)?;
+
+        let query::Agent { id, .. } =
+            self.agent_by_agent_name_and_namespace(connection, &*name, &namespaceid)?;
+
+        diesel::insert_or_ignore_into(schema::agent_attribute::table)
+            .values(
+                attributes
+                    .iter()
+                    .map(|(_, Attribute { typ, value, .. })| query::AgentAttribute {
+                        agent_id: id,
+                        typename: &*typ,
+                        value: &*value.to_string(),
+                    })
+                    .collect::<Vec<_>>(),
+            )
             .execute(connection)?;
 
         Ok(())
@@ -258,6 +295,26 @@ impl Store {
                 dsl::namespace_id.eq(nsid),
                 dsl::domaintype.eq(entity.domaintypeid.as_ref().map(|x| x.decompose())),
             ))
+            .execute(connection)?;
+
+        let query::Entity { id, .. } = self.entity_by_entity_name_and_namespace(
+            connection,
+            &*entity.name,
+            &entity.namespaceid,
+        )?;
+
+        diesel::insert_or_ignore_into(schema::entity_attribute::table)
+            .values(
+                entity
+                    .attributes
+                    .iter()
+                    .map(|(_, Attribute { typ, value, .. })| query::EntityAttribute {
+                        entity_id: id,
+                        typename: &*typ,
+                        value: &*value.to_string(),
+                    })
+                    .collect::<Vec<_>>(),
+            )
             .execute(connection)?;
 
         Ok(())

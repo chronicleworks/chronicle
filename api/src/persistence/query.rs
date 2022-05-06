@@ -29,6 +29,30 @@ pub struct NewOffset<'a> {
 }
 
 #[derive(Insertable)]
+#[diesel(table_name = entity_attribute)]
+pub struct EntityAttribute<'a> {
+    pub entity_id: i32,
+    pub typename: &'a str,
+    pub value: &'a str,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = activity_attribute)]
+pub struct ActivityAttribute<'a> {
+    pub activity_id: i32,
+    pub typename: &'a str,
+    pub value: &'a str,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = agent_attribute)]
+pub struct AgentAttribute<'a> {
+    pub agent_id: i32,
+    pub typename: &'a str,
+    pub value: &'a str,
+}
+
+#[derive(Insertable)]
 #[diesel(table_name = activity)]
 pub struct NewActivity<'a> {
     pub name: &'a str,
