@@ -144,7 +144,7 @@ create table hadattachment (
 create table entity_attribute (
     entity_id integer not null,
     typename text not null,
-    value text,
+    value text not null,
     foreign key(entity_id ) references entity(id),
     primary key(entity_id,typename)
 );
@@ -152,7 +152,7 @@ create table entity_attribute (
 create table agent_attribute (
     agent_id integer not null,
     typename text not null,
-    value text,
+    value text not null,
     foreign key(agent_id ) references agent(id),
     primary key(agent_id,typename)
 );
@@ -160,7 +160,7 @@ create table agent_attribute (
 create table activity_attribute (
     activity_id integer not null,
     typename text not null,
-    value text,
+    value text not null,
     foreign key(activity_id ) references activity(id),
     primary key(activity_id,typename)
 );

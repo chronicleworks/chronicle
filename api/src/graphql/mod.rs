@@ -787,7 +787,6 @@ pub async fn used<'a>(
         .dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name,
             namespace: namespace.clone(),
-            domaintype: typ,
             activity: Some(activity),
         }))
         .await?;
@@ -800,7 +799,6 @@ pub async fn was_generated_by<'a>(
     activity: String,
     name: String,
     namespace: Option<String>,
-    typ: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
@@ -810,7 +808,6 @@ pub async fn was_generated_by<'a>(
         .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name,
             namespace: namespace.clone(),
-            domaintype: typ,
             activity: Some(activity),
         }))
         .await?;

@@ -43,6 +43,7 @@ custom_error! {pub StoreError
     DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {:?}",
     DbPool{source: r2d2::Error}                                 = "Connection pool error",
     Uuid{source: uuid::Error}                                   = "Invalid UUID",
+    Json{source: serde_json::Error}                             = "Unreadable Attribute",
     TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
@@ -171,12 +172,12 @@ impl Store {
         diesel::insert_or_ignore_into(schema::activity_attribute::table)
             .values(
                 attributes
-                    .iter()
+                    .into_iter()
                     .map(
                         |(_, Attribute { typ, value, .. })| query::ActivityAttribute {
                             activity_id: id,
-                            typename: &*typ,
-                            value: &*value.to_string(),
+                            typename: typ.to_owned(),
+                            value: value.to_string(),
                         },
                     )
                     .collect::<Vec<_>>(),
@@ -223,8 +224,8 @@ impl Store {
                     .iter()
                     .map(|(_, Attribute { typ, value, .. })| query::AgentAttribute {
                         agent_id: id,
-                        typename: &*typ,
-                        value: &*value.to_string(),
+                        typename: typ.to_owned(),
+                        value: value.to_string(),
                     })
                     .collect::<Vec<_>>(),
             )
@@ -310,8 +311,8 @@ impl Store {
                     .iter()
                     .map(|(_, Attribute { typ, value, .. })| query::EntityAttribute {
                         entity_id: id,
-                        typename: &*typ,
-                        value: &*value.to_string(),
+                        typename: typ.to_owned(),
+                        value: value.to_string(),
                     })
                     .collect::<Vec<_>>(),
             )
@@ -1103,6 +1104,10 @@ impl Store {
             .load::<query::Agent>(connection)?;
 
         for agent in agents {
+            let attributes = schema::agent_attribute::table
+                .filter(schema::agent_attribute::agent_id.eq(&agent.id))
+                .load::<query::AgentAttribute>(connection)?;
+
             debug!(?agent, "Map agent to prov");
             let agentid: AgentId = Chronicle::agent(&agent.name).into();
             model.agents.insert(
@@ -1112,6 +1117,20 @@ impl Store {
                     namespaceid: namespaceid.clone(),
                     name: agent.name,
                     domaintypeid: agent.domaintype.map(|x| Chronicle::domaintype(&x).into()),
+                    attributes: attributes
+                        .into_iter()
+                        .map(|attr| {
+                            serde_json::from_str(&*attr.value).map(|value| {
+                                (
+                                    attr.typename.clone(),
+                                    Attribute {
+                                        typ: attr.typename,
+                                        value,
+                                    },
+                                )
+                            })
+                        })
+                        .collect::<Result<HashMap<_, _>, _>>()?,
                 },
             );
 
@@ -1137,6 +1156,9 @@ impl Store {
 
         for activity in activities {
             debug!(?activity, "Map activity to prov");
+            let attributes = schema::activity_attribute::table
+                .filter(schema::activity_attribute::activity_id.eq(&activity.id))
+                .load::<query::ActivityAttribute>(connection)?;
 
             let id: ActivityId = Chronicle::activity(&activity.name).into();
             model.activities.insert(
@@ -1150,6 +1172,20 @@ impl Store {
                     domaintypeid: activity
                         .domaintype
                         .map(|x| Chronicle::domaintype(&x).into()),
+                    attributes: attributes
+                        .into_iter()
+                        .map(|attr| {
+                            serde_json::from_str(&*attr.value).map(|value| {
+                                (
+                                    attr.typename.clone(),
+                                    Attribute {
+                                        typ: attr.typename,
+                                        value,
+                                    },
+                                )
+                            })
+                        })
+                        .collect::<Result<HashMap<_, _>, _>>()?,
                 },
             );
 
@@ -1181,13 +1217,17 @@ impl Store {
             .load::<query::Entity>(connection)?;
 
         for query::Entity {
-            id: _,
+            id,
             namespace_id: _,
             domaintype,
             name,
             attachment_id: _,
         } in entites
         {
+            let attributes = schema::entity_attribute::table
+                .filter(schema::entity_attribute::entity_id.eq(&id))
+                .load::<query::EntityAttribute>(connection)?;
+
             let id: EntityId = Chronicle::entity(&name).into();
             model.entities.insert(
                 (namespaceid.clone(), id.clone()),
@@ -1196,6 +1236,20 @@ impl Store {
                     namespaceid: namespaceid.clone(),
                     name,
                     domaintypeid: domaintype.map(|x| Chronicle::domaintype(&x).into()),
+                    attributes: attributes
+                        .into_iter()
+                        .map(|attr| {
+                            serde_json::from_str(&*attr.value).map(|value| {
+                                (
+                                    attr.typename.clone(),
+                                    Attribute {
+                                        typ: attr.typename,
+                                        value,
+                                    },
+                                )
+                            })
+                        })
+                        .collect::<Result<HashMap<_, _>, _>>()?,
                 },
             );
         }

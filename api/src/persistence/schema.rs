@@ -21,7 +21,7 @@ diesel::table! {
     activity_attribute (activity_id, typename) {
         activity_id -> Integer,
         typename -> Text,
-        value -> Nullable<Text>,
+        value -> Text,
     }
 }
 
@@ -46,7 +46,7 @@ diesel::table! {
     agent_attribute (agent_id, typename) {
         agent_id -> Integer,
         typename -> Text,
-        value -> Nullable<Text>,
+        value -> Text,
     }
 }
 
@@ -121,7 +121,7 @@ diesel::table! {
     entity_attribute (entity_id, typename) {
         entity_id -> Integer,
         typename -> Text,
-        value -> Nullable<Text>,
+        value -> Text,
     }
 }
 
