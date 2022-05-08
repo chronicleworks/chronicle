@@ -131,7 +131,7 @@ pub enum EntityCommand {
     Derive {
         name: String,
         namespace: String,
-        derivation: DerivationType,
+        derivation: Option<DerivationType>,
         activity: Option<String>,
         used_entity: String,
     },

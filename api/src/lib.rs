@@ -1505,7 +1505,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            derivation: DerivationType::Revision,
+            derivation: None,
         }))
         .await
         .unwrap();
@@ -1521,7 +1521,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             name: "testgeneratedentity".to_owned(),
             namespace: "testns".to_owned(),
             activity: None,
-            derivation: DerivationType::PrimarySource,
+            derivation: Some(DerivationType::PrimarySource),
             used_entity: "testusedentity".to_owned(),
         }))
         .await
@@ -1539,7 +1539,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            derivation: DerivationType::Revision,
+            derivation: Some(DerivationType::Revision),
         }))
         .await
         .unwrap();
@@ -1556,7 +1556,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            derivation: DerivationType::Quotation,
+            derivation: Some(DerivationType::Quotation),
         }))
         .await
         .unwrap();
