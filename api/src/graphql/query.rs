@@ -11,7 +11,7 @@ use crate::graphql::Store;
 use super::{Agent, Entity};
 
 #[allow(clippy::too_many_arguments)]
-async fn agents_by_type<'a>(
+pub async fn agents_by_type<'a>(
     ctx: &Context<'a>,
     typ: ID,
     namespace: Option<ID>,
@@ -43,7 +43,7 @@ async fn agents_by_type<'a>(
         connection
     )
 }
-async fn agent_by_id<'a>(
+pub async fn agent_by_id<'a>(
     id: ID,
     ctx: &Context<'a>,
     namespace: Option<String>,
@@ -67,7 +67,7 @@ async fn agent_by_id<'a>(
         .optional()?)
 }
 
-async fn entity_by_id<'a>(
+pub async fn entity_by_id<'a>(
     id: ID,
     ctx: &Context<'a>,
     namespace: Option<String>,

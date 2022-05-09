@@ -225,81 +225,115 @@ impl Subscription {
     }
 }
 
-pub fn exportable_schema<Query, Mutation>(query: Query, mutation: Mutation) -> String
+#[derive(Debug, Clone)]
+pub struct ChronicleGraphQl<Query, Mutation>
 where
     Query: ObjectType + 'static,
     Mutation: ObjectType + 'static,
 {
-    let schema = Schema::build(query, mutation, Subscription).finish();
-
-    schema.federation_sdl()
-}
-
-#[instrument(skip(query, mutation))]
-pub async fn serve_graphql<Query, Mutation>(
     query: Query,
     mutation: Mutation,
-    pool: Pool<ConnectionManager<SqliteConnection>>,
-    api: ApiDispatch,
-    address: SocketAddr,
-    open: bool,
-) where
-    Query: ObjectType + 'static,
-    Mutation: ObjectType + 'static,
-{
-    let schema = Schema::build(query, mutation, Subscription)
-        .extension(OpenTelemetry::new(opentelemetry::global::tracer(
-            "chronicle-api-gql",
-        )))
-        .data(Store::new(pool.clone()))
-        .data(api)
-        .finish();
+}
 
-    let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
-        |(schema, request): (
-            Schema<Query, Mutation, Subscription>,
-            async_graphql::Request,
-        )| async move {
-            Ok::<_, Infallible>(async_graphql_warp::GraphQLResponse::from(
-                schema.execute(request).await,
-            ))
-        },
+#[async_trait::async_trait]
+pub trait ChronicleGraphQlServer {
+    async fn serve_graphql(
+        &self,
+        pool: Pool<ConnectionManager<SqliteConnection>>,
+        api: ApiDispatch,
+        address: SocketAddr,
+        open: bool,
     );
+}
 
-    let routes =
-        graphql_subscription(schema)
-            .or(graphql_post)
-            .recover(|err: Rejection| async move {
-                if let Some(GraphQLBadRequest(err)) = err.find() {
-                    return Ok::<_, Infallible>(warp::reply::with_status(
-                        err.to_string(),
-                        StatusCode::BAD_REQUEST,
-                    ));
-                }
+impl<Query, Mutation> ChronicleGraphQl<Query, Mutation>
+where
+    Query: ObjectType + 'static + Clone,
+    Mutation: ObjectType + 'static + Clone,
+{
+    pub fn new(query: Query, mutation: Mutation) -> Self {
+        Self { query, mutation }
+    }
 
-                Ok(warp::reply::with_status(
-                    "INTERNAL_SERVER_ERROR".to_string(),
-                    StatusCode::INTERNAL_SERVER_ERROR,
+    pub fn exportable_schema(&self) -> String
+    where
+        Query: ObjectType + 'static,
+        Mutation: ObjectType + 'static,
+    {
+        let schema =
+            Schema::build(self.query.clone(), self.mutation.clone(), Subscription).finish();
+
+        schema.federation_sdl()
+    }
+}
+
+#[async_trait::async_trait]
+impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
+where
+    Query: ObjectType + 'static + Clone,
+    Mutation: ObjectType + 'static + Clone,
+{
+    async fn serve_graphql(
+        &self,
+        pool: Pool<ConnectionManager<SqliteConnection>>,
+        api: ApiDispatch,
+        address: SocketAddr,
+        open: bool,
+    ) {
+        let schema = Schema::build(self.query.clone(), self.mutation.clone(), Subscription)
+            .extension(OpenTelemetry::new(opentelemetry::global::tracer(
+                "chronicle-api-gql",
+            )))
+            .data(Store::new(pool.clone()))
+            .data(api)
+            .finish();
+
+        let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
+            |(schema, request): (
+                Schema<Query, Mutation, Subscription>,
+                async_graphql::Request,
+            )| async move {
+                Ok::<_, Infallible>(async_graphql_warp::GraphQLResponse::from(
+                    schema.execute(request).await,
                 ))
+            },
+        );
+
+        let routes =
+            graphql_subscription(schema)
+                .or(graphql_post)
+                .recover(|err: Rejection| async move {
+                    if let Some(GraphQLBadRequest(err)) = err.find() {
+                        return Ok::<_, Infallible>(warp::reply::with_status(
+                            err.to_string(),
+                            StatusCode::BAD_REQUEST,
+                        ));
+                    }
+
+                    Ok(warp::reply::with_status(
+                        "INTERNAL_SERVER_ERROR".to_string(),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ))
+                });
+
+        if open {
+            let allow_apollo_studio = warp::cors()
+                .allow_methods(vec!["GET", "POST"])
+                .allow_any_origin()
+                .allow_headers(vec!["Content-Type"])
+                .allow_credentials(true);
+
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                open::that("https://studio.apollographql.com/sandbox/explorer/").ok();
             });
 
-    if open {
-        let allow_apollo_studio = warp::cors()
-            .allow_methods(vec!["GET", "POST"])
-            .allow_any_origin()
-            .allow_headers(vec!["Content-Type"])
-            .allow_credentials(true);
-
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            open::that("https://studio.apollographql.com/sandbox/explorer/").ok();
-        });
-
-        warp::serve(routes.with(allow_apollo_studio))
-            .run(address)
-            .await;
-    } else {
-        warp::serve(routes).run(address).await;
+            warp::serve(routes.with(allow_apollo_studio))
+                .run(address)
+                .await;
+        } else {
+            warp::serve(routes).run(address).await;
+        }
     }
 }
 
@@ -316,7 +350,7 @@ mod test {
 
     use crate::{persistence::ConnectionOptions, Api, UuidGen};
 
-    use super::{Mutation, Query, Store, Subscription};
+    use super::{Store, Subscription};
 
     #[derive(Debug, Clone)]
     struct SameUuid;

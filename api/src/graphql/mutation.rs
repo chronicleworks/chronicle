@@ -16,7 +16,7 @@ use common::{
 use crate::ApiDispatch;
 
 use super::Submission;
-async fn transaction_context<'a>(
+pub async fn transaction_context<'a>(
     res: ApiResponse,
     _ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {
@@ -33,7 +33,7 @@ async fn transaction_context<'a>(
     }
 }
 
-async fn derivation<'a>(
+pub async fn derivation<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
     generated_entity: ID,

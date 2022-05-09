@@ -5,7 +5,7 @@ use diesel::prelude::*;
 
 use super::Namespace;
 
-async fn typed_derivation<'a>(
+pub async fn typed_derivation<'a>(
     id: i32,
     ctx: &Context<'a>,
     typ: Option<DerivationType>,
@@ -26,7 +26,10 @@ async fn typed_derivation<'a>(
     Ok(res)
 }
 
-async fn namespace<'a>(namespace_id: i32, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+pub async fn namespace<'a>(
+    namespace_id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Namespace> {
     use crate::persistence::schema::namespace::{self, dsl};
     let store = ctx.data_unchecked::<Store>();
 
@@ -37,7 +40,7 @@ async fn namespace<'a>(namespace_id: i32, ctx: &Context<'a>) -> async_graphql::R
         .first::<Namespace>(&mut connection)?)
 }
 
-async fn attachment<'a>(
+pub async fn attachment<'a>(
     attachment_id: Option<i32>,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<Attachment>> {
@@ -55,7 +58,10 @@ async fn attachment<'a>(
         Ok(None)
     }
 }
-async fn was_generated_by<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Activity>> {
+pub async fn was_generated_by<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<Activity>> {
     use crate::persistence::schema::generation::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();
@@ -71,7 +77,10 @@ async fn was_generated_by<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Resu
     Ok(res)
 }
 
-async fn was_derived_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+pub async fn was_derived_from<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<Entity>> {
     use crate::persistence::schema::derivation::{self, dsl};
     use crate::persistence::schema::entity::{self as entitydsl};
 
@@ -88,13 +97,16 @@ async fn was_derived_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Resu
     Ok(res)
 }
 
-async fn had_primary_source<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+pub async fn had_primary_source<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<Entity>> {
     typed_derivation(id, ctx, Some(DerivationType::PrimarySource)).await
 }
 
-async fn was_revision_of<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+pub async fn was_revision_of<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
     typed_derivation(id, ctx, Some(DerivationType::Revision)).await
 }
-async fn was_quoted_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+pub async fn was_quoted_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
     typed_derivation(id, ctx, Some(DerivationType::Quotation)).await
 }

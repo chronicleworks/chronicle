@@ -17,6 +17,7 @@ use std::{
     marker::PhantomData,
     net::{AddrParseError, SocketAddr},
     path::Path,
+    rc::Rc,
     sync::Arc,
 };
 use tokio::{
@@ -40,9 +41,9 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
+use graphql::ChronicleGraphQlServer;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-pub use graphql::{exportable_schema, serve_graphql};
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
@@ -194,15 +195,14 @@ impl<U> Api<U>
 where
     U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
 {
-    #[instrument(skip(ledger_writer, ledger_reader))]
+    #[instrument(skip(ledger_writer, ledger_reader,))]
     pub async fn new<R, W>(
-        graphql_addr: Option<SocketAddr>,
         pool: Pool<ConnectionManager<SqliteConnection>>,
         ledger_writer: W,
         ledger_reader: R,
         secret_path: &Path,
         uuidgen: U,
-    ) -> Result<(ApiDispatch, Option<impl Future<Output = ()>>), ApiError>
+    ) -> Result<ApiDispatch, ApiError>
     where
         R: LedgerReader + Send + 'static,
         W: LedgerWriter + Send + 'static,
@@ -224,8 +224,6 @@ where
                 connection.run_pending_migrations(MIGRATIONS).map(|_| ())
             })
             .map_err(|migration| StoreError::DbMigration { migration })?;
-
-        let ql_pool = pool;
 
         tokio::task::spawn(async move {
             let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
@@ -283,10 +281,7 @@ where
             }
         });
 
-        Ok((
-            dispatch.clone(),
-            graphql_addr.map(|addr| graphql::serve_graphql(ql_pool, dispatch, addr, true)),
-        ))
+        Ok(dispatch)
     }
 
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
@@ -686,7 +681,7 @@ where
                 used_entity,
                 derivation,
             }) => {
-                self.entity_derive(name, namespace, activity, used_entity, Some(derivation))
+                self.entity_derive(name, namespace, activity, used_entity, derivation)
                     .await
             }
             ApiCommand::Query(query) => self.query(query).await,
@@ -1083,8 +1078,6 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::{net::SocketAddr, str::FromStr};
-
     use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
@@ -1164,16 +1157,9 @@ mod test {
             )))
             .unwrap();
 
-        let (dispatch, _ui) = Api::new(
-            Some(SocketAddr::from_str("0.0.0.0:8080").unwrap()),
-            pool,
-            ledger,
-            reader,
-            &secretpath.into_path(),
-            SameUuid,
-        )
-        .await
-        .unwrap();
+        let dispatch = Api::new(pool, ledger, reader, &secretpath.into_path(), SameUuid)
+            .await
+            .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
     }
