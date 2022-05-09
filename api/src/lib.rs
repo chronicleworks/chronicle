@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
-mod graphql;
+pub mod graphql;
 mod persistence;
 
 use chrono::{DateTime, Utc};
@@ -7,19 +7,12 @@ use custom_error::*;
 use derivative::*;
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
-use futures::{select, AsyncReadExt, Future, FutureExt, StreamExt};
+use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
-use std::{
-    convert::Infallible,
-    marker::PhantomData,
-    net::{AddrParseError, SocketAddr},
-    path::Path,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
@@ -41,7 +34,6 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use graphql::ChronicleGraphQlServer;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
 pub use persistence::ConnectionOptions;

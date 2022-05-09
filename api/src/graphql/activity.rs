@@ -4,7 +4,10 @@ use diesel::prelude::*;
 
 use super::{Entity, Namespace};
 
-async fn namespace<'a>(namespaceid: i32, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+pub async fn namespace<'a>(
+    namespaceid: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Namespace> {
     use crate::persistence::schema::namespace::{self, dsl};
     let store = ctx.data_unchecked::<Store>();
 
@@ -15,7 +18,10 @@ async fn namespace<'a>(namespaceid: i32, ctx: &Context<'a>) -> async_graphql::Re
         .first::<Namespace>(&mut connection)?)
 }
 
-async fn was_associated_with<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Agent>> {
+pub async fn was_associated_with<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<Agent>> {
     use crate::persistence::schema::association::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();
@@ -32,7 +38,7 @@ async fn was_associated_with<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::R
     Ok(res)
 }
 
-async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
     use crate::persistence::schema::useage::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();

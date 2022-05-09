@@ -15,3 +15,12 @@ pub struct Attributes {
     pub typ: Option<DomaintypeId>,
     pub attributes: HashMap<String, Attribute>,
 }
+
+impl Attributes {
+    pub fn type_only(typ: Option<DomaintypeId>) -> Self {
+        Self {
+            typ,
+            attributes: HashMap::new(),
+        }
+    }
+}

@@ -1,6 +1,7 @@
 use super::CliError;
 use clap::ArgMatches;
 use common::signing::DirectoryStoredKeys;
+use serde_derive::{Deserialize, Serialize};
 
 use question::{Answer, Question};
 

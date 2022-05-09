@@ -64,7 +64,7 @@ pub async fn agent<'a>(
     ctx: &Context<'a>,
     name: String,
     namespace: Option<String>,
-    typ: Option<String>,
+    _typ: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -103,6 +103,27 @@ pub async fn activity<'a>(
     transaction_context(res, ctx).await
 }
 
+pub async fn entity<'a>(
+    ctx: &Context<'a>,
+    name: String,
+    namespace: Option<String>,
+    _typ: Option<String>,
+    attributes: Attributes,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+
+    let res = api
+        .dispatch(ApiCommand::Entity(EntityCommand::Create {
+            name,
+            namespace: namespace.clone(),
+            attributes,
+        }))
+        .await?;
+
+    transaction_context(res, ctx).await
+}
 pub async fn acted_on_behalf_of<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
@@ -254,7 +275,7 @@ pub async fn used<'a>(
     activity: String,
     name: String,
     namespace: Option<String>,
-    typ: Option<String>,
+    _typ: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 

@@ -167,12 +167,12 @@ impl Store {
             .execute(connection)?;
 
         let query::Activity { id, .. } =
-            self.activity_by_activity_name_and_namespace(connection, &*name, &namespaceid)?;
+            self.activity_by_activity_name_and_namespace(connection, &*name, namespaceid)?;
 
         diesel::insert_or_ignore_into(schema::activity_attribute::table)
             .values(
                 attributes
-                    .into_iter()
+                    .iter()
                     .map(
                         |(_, Attribute { typ, value, .. })| query::ActivityAttribute {
                             activity_id: id,
@@ -216,7 +216,7 @@ impl Store {
             .execute(connection)?;
 
         let query::Agent { id, .. } =
-            self.agent_by_agent_name_and_namespace(connection, &*name, &namespaceid)?;
+            self.agent_by_agent_name_and_namespace(connection, &*name, namespaceid)?;
 
         diesel::insert_or_ignore_into(schema::agent_attribute::table)
             .values(
