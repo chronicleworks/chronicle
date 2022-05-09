@@ -2,18 +2,36 @@
 //! We delegate to the underlying concrete, attributeless graphql objects in the api crate,
 //! wrapping those in our types here.
 #![cfg_attr(feature = "strict", deny(warnings))]
-mod bootstrap;
-
-use api::graphql::{self, Namespace};
+use api::graphql::{self, Namespace, Submission};
 use api::{self, graphql::Identity};
 use async_graphql::*;
 use bootstrap::*;
+use chrono::{DateTime, Utc};
 use clap_complete::Shell;
+use common::attributes::Attributes;
 use common::prov::vocab::{Chronicle, Prov};
 use iref::Iri;
 use tracing::error;
 use url::Url;
 use user_error::UFE;
+
+pub struct DelegatedActivity(graphql::Activity);
+
+#[Object]
+impl DelegatedActivity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::activity(&*self.0.name).to_string())
+    }
+}
+
+pub struct DelegatedEntity(graphql::Entity);
+
+#[Object]
+impl DelegatedEntity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::entity(&*self.0.name).to_string())
+    }
+}
 
 pub struct DelegatedAgent(graphql::Agent);
 
@@ -49,6 +67,160 @@ impl DelegatedAgent {
     #[graphql(name = "type")]
     async fn typ(&self) -> String {
         Iri::from(Prov::Agent).to_string()
+    }
+}
+
+pub struct Mutation;
+
+#[Object]
+impl Mutation {
+    pub async fn agent<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::agent(ctx, name, namespace, Attributes::default()).await
+    }
+
+    pub async fn activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::activity(ctx, name, namespace, Attributes::default()).await
+    }
+
+    pub async fn entity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::entity(ctx, name, namespace, Attributes::default()).await
+    }
+    pub async fn acted_on_behalf_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        responsible: ID,
+        delegate: ID,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
+    }
+
+    pub async fn was_derived_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::was_derived_from(ctx, namespace, generated_entity, used_entity).await
+    }
+
+    pub async fn was_revision_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::was_revision_of(ctx, namespace, generated_entity, used_entity).await
+    }
+    pub async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::had_primary_source(ctx, namespace, generated_entity, used_entity).await
+    }
+    pub async fn was_quoted_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::was_quoted_from(ctx, namespace, generated_entity, used_entity).await
+    }
+
+    pub async fn generate_key<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::generate_key(ctx, name, namespace).await
+    }
+
+    pub async fn start_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::start_activity(ctx, name, namespace, agent, time).await
+    }
+
+    pub async fn end_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::end_activity(ctx, name, namespace, agent, time).await
+    }
+
+    pub async fn used<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+        _typ: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::used(ctx, activity, name, namespace).await
+    }
+
+    pub async fn was_generated_by<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::was_generated_by(ctx, activity, name, namespace).await
+    }
+
+    pub async fn has_attachment<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attachment: Upload,
+        on_behalf_of_agent: String,
+        locator: String,
+    ) -> async_graphql::Result<Submission> {
+        graphql::mutation::has_attachment(
+            ctx,
+            name,
+            namespace,
+            attachment,
+            on_behalf_of_agent,
+            locator,
+        )
+        .await
     }
 }
 

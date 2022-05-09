@@ -350,6 +350,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootstrap"
+version = "0.1.0"
+dependencies = [
+ "api",
+ "async-graphql",
+ "clap",
+ "clap_complete",
+ "colored_json",
+ "common",
+ "custom_error",
+ "diesel",
+ "dotenv",
+ "futures",
+ "hex",
+ "iref",
+ "k256",
+ "open",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "proto",
+ "question",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_derive",
+ "shellexpand",
+ "tokio",
+ "toml 0.5.8",
+ "tracing",
+ "tracing-log",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "user-error",
+ "uuid",
+]
+
+[[package]]
 name = "buf_redux"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,6 +496,8 @@ version = "0.1.0"
 dependencies = [
  "api",
  "async-graphql",
+ "bootstrap",
+ "chrono",
  "clap",
  "clap_complete",
  "colored_json",

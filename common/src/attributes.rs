@@ -10,7 +10,7 @@ pub struct Attribute {
     pub value: Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Attributes {
     pub typ: Option<DomaintypeId>,
     pub attributes: HashMap<String, Attribute>,

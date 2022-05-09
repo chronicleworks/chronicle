@@ -3,6 +3,7 @@
 members = [
   "common",
   "api",
+  "bootstrap",
   "cli",
   "sawtooth_protocol",
   "sawtooth_tp",

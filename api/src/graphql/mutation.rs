@@ -33,7 +33,7 @@ pub async fn transaction_context<'a>(
     }
 }
 
-pub async fn derivation<'a>(
+async fn derivation<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
     generated_entity: ID,
@@ -64,7 +64,6 @@ pub async fn agent<'a>(
     ctx: &Context<'a>,
     name: String,
     namespace: Option<String>,
-    _typ: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -107,7 +106,6 @@ pub async fn entity<'a>(
     ctx: &Context<'a>,
     name: String,
     namespace: Option<String>,
-    _typ: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -275,7 +273,6 @@ pub async fn used<'a>(
     activity: String,
     name: String,
     namespace: Option<String>,
-    _typ: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
