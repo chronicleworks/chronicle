@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1171
+assertion_line: 1249
 expression: api.1
 ---
 namespaces:
@@ -15,6 +15,7 @@ agents:
     namespaceid: "http://blockchaintp.com/chronicle/ns#ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
     name: testagent
     domaintypeid: ~
+    attributes: {}
 activities: {}
 entities: {}
 identities:

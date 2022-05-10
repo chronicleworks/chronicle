@@ -1,4 +1,4 @@
-use crate::graphql::{Agent, Store};
+use crate::chronicle_graphql::{Agent, Store};
 use async_graphql::Context;
 use diesel::prelude::*;
 

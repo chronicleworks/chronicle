@@ -2,23 +2,25 @@ mod cli;
 mod config;
 pub mod telemetry;
 
-pub use cli::*;
-
+use api::chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer};
 use api::{Api, ApiDispatch};
 use api::{ApiError, ConnectionOptions, UuidGen};
+use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
-use clap_complete::{generate, Generator};
+use clap_complete::{generate, Generator, Shell};
+pub use cli::*;
+use common::prov::DomaintypeId;
 use common::{
     attributes::Attributes,
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
         KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
     },
-    prov::{vocab::Chronicle, CompactionError, DomaintypeId},
+    prov::{vocab::Chronicle, CompactionError},
 };
 use custom_error::custom_error;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::instrument;
+use tracing::{error, instrument};
 use user_error::UFE;
 
 use common::signing::SignerError;
@@ -70,7 +72,8 @@ struct UniqueUuid;
 
 impl UuidGen for UniqueUuid {}
 
-fn pool(config: &Config) -> Result<Pool<ConnectionManager<SqliteConnection>>, ApiError> {
+type ConnectionPool = Pool<ConnectionManager<SqliteConnection>>;
+fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
     Ok(Pool::builder()
         .connection_customizer(Box::new(ConnectionOptions {
             enable_wal: true,
@@ -92,13 +95,36 @@ fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
     }
 }
 
+pub async fn graphql_server<Query, Mutation>(
+    api: &ApiDispatch,
+    pool: &ConnectionPool,
+    gql: ChronicleGraphQl<Query, Mutation>,
+    options: &ArgMatches,
+    open: bool,
+) -> Result<(), ApiError>
+where
+    Query: ObjectType + Copy,
+    Mutation: ObjectType + Copy,
+{
+    if let Some(addr) = graphql_addr(options)? {
+        gql.serve_graphql(pool.clone(), api.clone(), addr, open)
+            .await
+    }
+
+    Ok(())
+}
+
 #[cfg(not(feature = "inmem"))]
-pub async fn api(options: &ArgMatches, config: &Config) -> Result<ApiDispatch, ApiError> {
+pub async fn api(
+    pool: &ConnectionPool,
+    options: &ArgMatches,
+    config: &Config,
+) -> Result<ApiDispatch, ApiError> {
     let submitter = submitter(config, options)?;
     let state = state_delta(config, options)?;
 
     Api::new(
-        pool(config)?,
+        pool.clone(),
         submitter,
         state,
         &config.secrets.path,
@@ -108,12 +134,16 @@ pub async fn api(options: &ArgMatches, config: &Config) -> Result<ApiDispatch, A
 }
 
 #[cfg(feature = "inmem")]
-pub async fn api(_options: &ArgMatches, config: &Config) -> Result<api::ApiDispatch, ApiError> {
+pub async fn api(
+    pool: &ConnectionPool,
+    _options: &ArgMatches,
+    config: &Config,
+) -> Result<api::ApiDispatch, ApiError> {
     let mut ledger = ledger()?;
     let state = ledger.reader();
 
     Api::new(
-        pool(config)?,
+        pool.clone(),
         ledger,
         state,
         &config.secrets.path,
@@ -131,14 +161,20 @@ fn domain_type(args: &ArgMatches) -> Option<DomaintypeId> {
     }
 }
 
-#[instrument]
-async fn api_exec(
+#[instrument(skip(gql))]
+async fn execute_arguments<Query, Mutation>(
+    gql: ChronicleGraphQl<Query, Mutation>,
     config: Config,
     options: &ArgMatches,
-) -> Result<(ApiResponse, ApiDispatch), ApiError> {
+) -> Result<(ApiResponse, ApiDispatch), ApiError>
+where
+    Query: ObjectType + Copy,
+    Mutation: ObjectType + Copy,
+{
     dotenv::dotenv().ok();
 
-    let api = api(options, &config).await?;
+    let pool = pool(&config)?;
+    let api = api(&pool, options, &config).await?;
     let ret_api = api.clone();
 
     let execution = vec![
@@ -264,10 +300,8 @@ async fn api_exec(
 
         Ok((exresult?, ret_api))
     } else {
-        // Block on graphql ui if running
-        //if let Some(ui) = ui {
-        //    ui.await;
-        //}
+        graphql_server(&api, &pool, gql, options, options.is_present("open")).await?;
+
         Ok((ApiResponse::Unit, ret_api))
     }
 }
@@ -284,10 +318,17 @@ custom_error! {pub CliError
 
 impl UFE for CliError {}
 
-pub async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
+async fn config_and_exec<Query, Mutation>(
+    gql: ChronicleGraphQl<Query, Mutation>,
+    matches: &ArgMatches,
+) -> Result<(), CliError>
+where
+    Query: ObjectType + Copy,
+    Mutation: ObjectType + Copy,
+{
     use colored_json::prelude::*;
     let config = handle_config_and_init(matches)?;
-    let response = api_exec(config, matches).await?;
+    let response = execute_arguments(gql, config, matches).await?;
 
     match response {
         (
@@ -326,6 +367,43 @@ pub async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
     Ok(())
 }
 
-pub fn print_completions<G: Generator>(gen: G, app: &mut Command) {
+fn print_completions<G: Generator>(gen: G, app: &mut Command) {
     generate(gen, app, app.get_name().to_string(), &mut io::stdout());
+}
+
+pub async fn bootstrap<Query, Mutation>(gql: ChronicleGraphQl<Query, Mutation>)
+where
+    Query: ObjectType + 'static + Copy,
+    Mutation: ObjectType + 'static + Copy,
+{
+    let matches = cli().get_matches();
+
+    if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
+        let mut app = cli();
+        eprintln!("Generating completion file for {}...", generator);
+        print_completions(generator, &mut app);
+        std::process::exit(0);
+    }
+
+    if matches.is_present("export-schema") {
+        print!("{}", gql.exportable_schema());
+        std::process::exit(0);
+    }
+
+    if matches.is_present("instrument") {
+        telemetry::telemetry(
+            Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
+        );
+    }
+
+    config_and_exec(gql, &matches)
+        .await
+        .map_err(|e| {
+            error!(?e, "Api error");
+            e.into_ufe().print();
+            std::process::exit(1);
+        })
+        .ok();
+
+    std::process::exit(0);
 }

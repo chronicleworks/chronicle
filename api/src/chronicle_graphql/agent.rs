@@ -1,7 +1,7 @@
 use async_graphql::Context;
 use diesel::prelude::*;
 
-use crate::graphql::{Identity, Namespace, Store};
+use crate::chronicle_graphql::{Identity, Namespace, Store};
 
 use super::Agent;
 

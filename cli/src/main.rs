@@ -2,62 +2,185 @@
 //! We delegate to the underlying concrete, attributeless graphql objects in the api crate,
 //! wrapping those in our types here.
 #![cfg_attr(feature = "strict", deny(warnings))]
-use api::graphql::{self, Namespace, Submission};
-use api::{self, graphql::Identity};
+use api::chronicle_graphql::{self, ChronicleGraphQl, Evidence, Namespace, Submission};
+use api::{self, chronicle_graphql::Identity};
+use async_graphql::connection::{Connection, EmptyFields};
 use async_graphql::*;
 use bootstrap::*;
 use chrono::{DateTime, Utc};
-use clap_complete::Shell;
-use common::attributes::Attributes;
 use common::prov::vocab::{Chronicle, Prov};
+use common::prov::DomaintypeId;
 use iref::Iri;
-use tracing::error;
-use url::Url;
-use user_error::UFE;
 
-pub struct DelegatedActivity(graphql::Activity);
+#[derive(Default, InputObject)]
+pub struct Attributes {
+    #[graphql(name = "type")]
+    pub typ: Option<String>,
+}
+
+impl From<Attributes> for common::attributes::Attributes {
+    fn from(attributes: Attributes) -> Self {
+        common::attributes::Attributes {
+            typ: attributes
+                .typ
+                .map(|typ| DomaintypeId::from(Chronicle::domaintype(&typ))),
+            ..Default::default()
+        }
+    }
+}
+
+pub struct Activity(chronicle_graphql::Activity);
 
 #[Object]
-impl DelegatedActivity {
+impl Activity {
     async fn id(&self) -> ID {
         ID::from(Chronicle::activity(&*self.0.name).to_string())
     }
-}
-
-pub struct DelegatedEntity(graphql::Entity);
-
-#[Object]
-impl DelegatedEntity {
-    async fn id(&self) -> ID {
-        ID::from(Chronicle::entity(&*self.0.name).to_string())
-    }
-}
-
-pub struct DelegatedAgent(graphql::Agent);
-
-#[Object]
-impl DelegatedAgent {
-    async fn id(&self) -> ID {
-        ID::from(Chronicle::agent(&*self.0.name).to_string())
-    }
 
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
-        graphql::agent::namespace(self.0.namespace_id, ctx).await
+        chronicle_graphql::activity::namespace(self.0.namespace_id, ctx).await
     }
 
     async fn name(&self) -> &str {
         &self.0.name
     }
 
-    async fn identity<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Identity>> {
-        graphql::agent::identity(self.0.identity_id, ctx).await
+    async fn started(&self) -> Option<DateTime<Utc>> {
+        self.0.started.map(|x| DateTime::from_utc(x, Utc))
     }
 
-    async fn acted_on_behalf_of<'a>(
+    async fn ended(&self) -> Option<DateTime<Utc>> {
+        self.0.ended.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> String {
+        if let Some(ref typ) = self.0.domaintype {
+            typ.to_string()
+        } else {
+            Iri::from(Prov::Activity).to_string()
+        }
+    }
+
+    async fn was_associated_with<'a>(
         &self,
         ctx: &Context<'a>,
-    ) -> async_graphql::Result<Vec<DelegatedAgent>> {
-        Ok(graphql::agent::acted_on_behalf_of(self.0.id, ctx)
+    ) -> async_graphql::Result<Vec<Agent>> {
+        Ok(
+            chronicle_graphql::activity::was_associated_with(self.0.id, ctx)
+                .await?
+                .into_iter()
+                .map(Agent)
+                .collect(),
+        )
+    }
+
+    async fn used<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::activity::used(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+}
+pub struct Entity(chronicle_graphql::Entity);
+
+#[Object]
+impl Entity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::entity(&*self.0.name).to_string())
+    }
+
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        chronicle_graphql::entity::namespace(self.0.namespace_id, ctx).await
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> String {
+        if let Some(ref typ) = self.0.domaintype {
+            typ.to_string()
+        } else {
+            Iri::from(Prov::Agent).to_string()
+        }
+    }
+
+    async fn evidence<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Evidence>> {
+        chronicle_graphql::entity::evidence(self.0.attachment_id, ctx).await
+    }
+    async fn was_generated_by<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Activity>> {
+        Ok(chronicle_graphql::entity::was_generated_by(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Activity)
+            .collect())
+    }
+
+    async fn was_derived_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_derived_from(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+
+    async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        Ok(
+            chronicle_graphql::entity::had_primary_source(self.0.id, ctx)
+                .await?
+                .into_iter()
+                .map(Entity)
+                .collect(),
+        )
+    }
+
+    async fn was_revision_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_revision_of(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+    async fn was_quoted_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_quoted_from(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+}
+
+pub struct Agent(chronicle_graphql::Agent);
+
+#[Object]
+impl Agent {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::agent(&*self.0.name).to_string())
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        chronicle_graphql::agent::namespace(self.0.namespace_id, ctx).await
+    }
+
+    async fn identity<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Identity>> {
+        chronicle_graphql::agent::identity(self.0.identity_id, ctx).await
+    }
+
+    async fn acted_on_behalf_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Agent>> {
+        Ok(chronicle_graphql::agent::acted_on_behalf_of(self.0.id, ctx)
             .await?
             .into_iter()
             .map(Self)
@@ -70,6 +193,7 @@ impl DelegatedAgent {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Mutation;
 
 #[Object]
@@ -81,7 +205,7 @@ impl Mutation {
         namespace: Option<String>,
         attributes: Attributes,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::agent(ctx, name, namespace, Attributes::default()).await
+        chronicle_graphql::mutation::agent(ctx, name, namespace, attributes.into()).await
     }
 
     pub async fn activity<'a>(
@@ -91,7 +215,7 @@ impl Mutation {
         namespace: Option<String>,
         attributes: Attributes,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::activity(ctx, name, namespace, Attributes::default()).await
+        chronicle_graphql::mutation::activity(ctx, name, namespace, attributes.into()).await
     }
 
     pub async fn entity<'a>(
@@ -101,7 +225,7 @@ impl Mutation {
         namespace: Option<String>,
         attributes: Attributes,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::entity(ctx, name, namespace, Attributes::default()).await
+        chronicle_graphql::mutation::entity(ctx, name, namespace, attributes.into()).await
     }
     pub async fn acted_on_behalf_of<'a>(
         &self,
@@ -110,7 +234,7 @@ impl Mutation {
         responsible: ID,
         delegate: ID,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
+        chronicle_graphql::mutation::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
     }
 
     pub async fn was_derived_from<'a>(
@@ -120,7 +244,8 @@ impl Mutation {
         generated_entity: ID,
         used_entity: ID,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::was_derived_from(ctx, namespace, generated_entity, used_entity).await
+        chronicle_graphql::mutation::was_derived_from(ctx, namespace, generated_entity, used_entity)
+            .await
     }
 
     pub async fn was_revision_of<'a>(
@@ -130,7 +255,8 @@ impl Mutation {
         generated_entity: ID,
         used_entity: ID,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::was_revision_of(ctx, namespace, generated_entity, used_entity).await
+        chronicle_graphql::mutation::was_revision_of(ctx, namespace, generated_entity, used_entity)
+            .await
     }
     pub async fn had_primary_source<'a>(
         &self,
@@ -139,7 +265,13 @@ impl Mutation {
         generated_entity: ID,
         used_entity: ID,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::had_primary_source(ctx, namespace, generated_entity, used_entity).await
+        chronicle_graphql::mutation::had_primary_source(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
+        )
+        .await
     }
     pub async fn was_quoted_from<'a>(
         &self,
@@ -148,7 +280,8 @@ impl Mutation {
         generated_entity: ID,
         used_entity: ID,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::was_quoted_from(ctx, namespace, generated_entity, used_entity).await
+        chronicle_graphql::mutation::was_quoted_from(ctx, namespace, generated_entity, used_entity)
+            .await
     }
 
     pub async fn generate_key<'a>(
@@ -157,7 +290,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::generate_key(ctx, name, namespace).await
+        chronicle_graphql::mutation::generate_key(ctx, name, namespace).await
     }
 
     pub async fn start_activity<'a>(
@@ -168,7 +301,7 @@ impl Mutation {
         agent: String,
         time: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::start_activity(ctx, name, namespace, agent, time).await
+        chronicle_graphql::mutation::start_activity(ctx, name, namespace, agent, time).await
     }
 
     pub async fn end_activity<'a>(
@@ -179,7 +312,7 @@ impl Mutation {
         agent: String,
         time: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::end_activity(ctx, name, namespace, agent, time).await
+        chronicle_graphql::mutation::end_activity(ctx, name, namespace, agent, time).await
     }
 
     pub async fn used<'a>(
@@ -190,7 +323,7 @@ impl Mutation {
         namespace: Option<String>,
         _typ: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::used(ctx, activity, name, namespace).await
+        chronicle_graphql::mutation::used(ctx, activity, name, namespace).await
     }
 
     pub async fn was_generated_by<'a>(
@@ -200,7 +333,7 @@ impl Mutation {
         name: String,
         namespace: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::was_generated_by(ctx, activity, name, namespace).await
+        chronicle_graphql::mutation::was_generated_by(ctx, activity, name, namespace).await
     }
 
     pub async fn has_attachment<'a>(
@@ -212,7 +345,7 @@ impl Mutation {
         on_behalf_of_agent: String,
         locator: String,
     ) -> async_graphql::Result<Submission> {
-        graphql::mutation::has_attachment(
+        chronicle_graphql::mutation::has_attachment(
             ctx,
             name,
             namespace,
@@ -224,58 +357,69 @@ impl Mutation {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct Query;
+
+#[Object]
+impl Query {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn agents_by_type<'a>(
+        &self,
+        ctx: &Context<'a>,
+        agent_type: ID,
+        namespace: Option<ID>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
+        Ok(chronicle_graphql::query::agents_by_type(
+            ctx, agent_type, namespace, after, before, first, last,
+        )
+        .await?
+        .map_node(Agent))
+    }
+    pub async fn agent_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Agent>> {
+        Ok(chronicle_graphql::query::agent_by_id(ctx, id, namespace)
+            .await?
+            .map(Agent))
+    }
+
+    pub async fn entity_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Entity>> {
+        Ok(chronicle_graphql::query::entity_by_id(ctx, id, namespace)
+            .await?
+            .map(Entity))
+    }
+}
+
 #[tokio::main]
-async fn main() {
-    let matches = cli().get_matches();
-
-    if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
-        let mut app = cli();
-        eprintln!("Generating completion file for {}...", generator);
-        print_completions(generator, &mut app);
-        std::process::exit(0);
-    }
-
-    if matches.is_present("export-schema") {
-        print!("{}", api::exportable_schema());
-        std::process::exit(0);
-    }
-
-    if matches.is_present("console-logging") {
-        telemetry::console_logging();
-    }
-
-    if matches.is_present("instrument") {
-        telemetry::telemetry(
-            Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
-        );
-    }
-
-    config_and_exec(&matches)
-        .await
-        .map_err(|e| {
-            error!(?e, "Api error");
-            e.into_ufe().print();
-            std::process::exit(1);
-        })
-        .ok();
-
-    std::process::exit(0);
+pub async fn main() {
+    bootstrap(ChronicleGraphQl::new(Query, Mutation)).await
 }
 
 #[cfg(test)]
 mod test {
+    use super::{Mutation, Query};
+    use crate::chronicle_graphql::{Store, Subscription};
+    use api::{Api, ConnectionOptions, UuidGen};
     use async_graphql::{Request, Schema};
     use common::ledger::InMemLedger;
+    use diesel::r2d2::Pool;
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
-    use r2d2::Pool;
     use std::time::Duration;
     use tempfile::TempDir;
     use tracing::Level;
     use uuid::Uuid;
-
-    use crate::{persistence::ConnectionOptions, Api, UuidGen};
-
-    use super::{Store, Subscription};
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -315,8 +459,7 @@ mod test {
             )))
             .unwrap();
 
-        let (dispatch, _ui) = Api::new(
-            None,
+        let dispatch = Api::new(
             pool.clone(),
             ledger,
             reader,
@@ -532,7 +675,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                agent(name:"bobross", typ: "artist") {
+                agent(name:"bobross", attributes: { type: "artist" }) {
                     context
                 }
             }
@@ -552,7 +695,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                agent(name:"bobross{}", typ: "artist") {{
+                agent(name:"bobross{}", attributes: {{ type: "artist"}}) {{
                     context
                 }}
             }}
@@ -567,7 +710,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(typ: "artist") {
+                agentsByType(agentType: "artist") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -593,7 +736,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(typ: "artist", first: 20, after: "3") {
+                agentsByType(agentType: "artist", first: 20, after: "3") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -619,7 +762,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(typ: "artist", first: 20, after: "90") {
+                agentsByType(agentType: "artist", first: 20, after: "90") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage

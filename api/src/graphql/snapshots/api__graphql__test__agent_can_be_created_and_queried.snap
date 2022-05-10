@@ -1,7 +1,0 @@
----
-source: api/src/graphql/mod.rs
-assertion_line: 819
-expression: create
----
-[data.createAgent]
-context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'

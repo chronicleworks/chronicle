@@ -18,8 +18,8 @@ pub struct CursorPosition<T> {
 
 macro_rules! gql_cursor {
     ($after:expr, $before: expr, $first: expr, $last: expr, $query:expr, $order:expr, $node_type:tt,$connection: expr) => {{
-        use crate::graphql::cursor_query::Cursorise;
-        use crate::graphql::GraphQlError;
+        use crate::chronicle_graphql::cursor_query::Cursorise;
+        use crate::chronicle_graphql::GraphQlError;
         use async_graphql::connection::query;
         use async_graphql::connection::{Connection, Edge, EmptyFields};
 

@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
-pub mod graphql;
+pub mod chronicle_graphql;
 mod persistence;
 
 use chrono::{DateTime, Utc};

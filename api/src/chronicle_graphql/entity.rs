@@ -1,4 +1,4 @@
-use crate::graphql::{Activity, Attachment, Entity, Store};
+use crate::chronicle_graphql::{Activity, Entity, Evidence, Store};
 use async_graphql::Context;
 use common::prov::operations::DerivationType;
 use diesel::prelude::*;
@@ -40,10 +40,10 @@ pub async fn namespace<'a>(
         .first::<Namespace>(&mut connection)?)
 }
 
-pub async fn attachment<'a>(
+pub async fn evidence<'a>(
     attachment_id: Option<i32>,
     ctx: &Context<'a>,
-) -> async_graphql::Result<Option<Attachment>> {
+) -> async_graphql::Result<Option<Evidence>> {
     use crate::persistence::schema::attachment::{self, dsl};
     let store = ctx.data_unchecked::<Store>();
 
@@ -52,7 +52,7 @@ pub async fn attachment<'a>(
     if let Some(attachment_id) = attachment_id {
         Ok(attachment::table
             .filter(dsl::id.eq(attachment_id))
-            .first::<Attachment>(&mut connection)
+            .first::<Evidence>(&mut connection)
             .optional()?)
     } else {
         Ok(None)

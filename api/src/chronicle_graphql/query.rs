@@ -6,7 +6,7 @@ use async_graphql::{
 use common::prov::{AgentId, EntityId};
 use diesel::prelude::*;
 
-use crate::graphql::Store;
+use crate::chronicle_graphql::Store;
 
 use super::{Agent, Entity};
 
@@ -44,8 +44,8 @@ pub async fn agents_by_type<'a>(
     )
 }
 pub async fn agent_by_id<'a>(
-    id: ID,
     ctx: &Context<'a>,
+    id: ID,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Agent>> {
     use crate::persistence::schema::{
@@ -68,8 +68,8 @@ pub async fn agent_by_id<'a>(
 }
 
 pub async fn entity_by_id<'a>(
-    id: ID,
     ctx: &Context<'a>,
+    id: ID,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Entity>> {
     use crate::persistence::schema::{

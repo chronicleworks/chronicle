@@ -72,3 +72,7 @@ strict = []
 inmem = []
 
 [build-dependencies]
+
+[dev-dependencies]
+insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+tempfile = "3.3.0"

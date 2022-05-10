@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1501
+assertion_line: 1525
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -81,6 +81,10 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "prov:used",
       "@type": "@id"
     },
+    "value": {
+      "@id": "chronicle:value",
+      "@type": "@json"
+    },
     "wasAssociatedWith": {
       "@container": "@set",
       "@id": "prov:wasAssociatedWith",
@@ -114,6 +118,7 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@type": "prov:Entity",
       "label": "testgeneratedentity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {},
       "wasRevisionOf": [
         "chronicle:entity:testusedentity"
       ]
@@ -122,7 +127,8 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "chronicle:entity:testusedentity",
       "@type": "prov:Entity",
       "label": "testusedentity",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {}
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

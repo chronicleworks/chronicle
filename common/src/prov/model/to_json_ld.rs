@@ -330,7 +330,7 @@ impl ProvModel {
 
         doc.insert(
             &Chronicle::Value.as_iri().to_string(),
-            object! {"@value" : attribute_node},
+            object! {"@value" : attribute_node, "@type": "@json"},
         )
         .ok();
     }

@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1535
+assertion_line: 1570
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -81,6 +81,10 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "prov:used",
       "@type": "@id"
     },
+    "value": {
+      "@id": "chronicle:value",
+      "@type": "@json"
+    },
     "wasAssociatedWith": {
       "@container": "@set",
       "@id": "prov:wasAssociatedWith",
@@ -113,901 +117,1201 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "chronicle:activity:testactivity0",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity0",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity1",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity1",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity10",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity10",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity11",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity11",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity12",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity12",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity13",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity13",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity14",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity14",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity15",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity15",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity16",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity16",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity17",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity17",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity18",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity18",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity19",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity19",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity2",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity2",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity20",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity20",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity21",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity21",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity22",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity22",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity23",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity23",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity24",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity24",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity25",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity25",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity26",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity26",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity27",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity27",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity28",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity28",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity29",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity29",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity3",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity3",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity30",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity30",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity31",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity31",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity32",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity32",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity33",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity33",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity34",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity34",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity35",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity35",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity36",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity36",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity37",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity37",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity38",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity38",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity39",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity39",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity4",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity4",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity40",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity40",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity41",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity41",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity42",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity42",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity43",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity43",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity44",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity44",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity45",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity45",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity46",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity46",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity47",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity47",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity48",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity48",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity49",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity49",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity5",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity5",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity50",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity50",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity51",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity51",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity52",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity52",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity53",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity53",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity54",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity54",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity55",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity55",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity56",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity56",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity57",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity57",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity58",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity58",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity59",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity59",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity6",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity6",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity60",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity60",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity61",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity61",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity62",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity62",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity63",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity63",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity64",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity64",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity65",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity65",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity66",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity66",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity67",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity67",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity68",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity68",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity69",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity69",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity7",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity7",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity70",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity70",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity71",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity71",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity72",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity72",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity73",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity73",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity74",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity74",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity75",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity75",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity76",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity76",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity77",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity77",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity78",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity78",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity79",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity79",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity8",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity8",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity80",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity80",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity81",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity81",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity82",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity82",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity83",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity83",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity84",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity84",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity85",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity85",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity86",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity86",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity87",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity87",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity88",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity88",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity89",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity89",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity9",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity9",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity90",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity90",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity91",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity91",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity92",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity92",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity93",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity93",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity94",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity94",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity95",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity95",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity96",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity96",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity97",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity97",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity98",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity98",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:activity:testactivity99",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:testtype"
+        "chronicle:domaintype:test"
       ],
       "label": "testactivity99",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "value": {
+        "test": "test"
+      }
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

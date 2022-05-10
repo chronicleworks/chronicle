@@ -1,7 +1,0 @@
----
-source: api/src/graphql/mod.rs
-assertion_line: 1081
-expression: derived
----
-[[data.agentById.actedOnBehalfOf]]
-id = 'http://blockchaintp.com/chronicle/ns#agent:delegate'

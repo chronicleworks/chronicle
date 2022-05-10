@@ -76,7 +76,7 @@ pub struct Entity {
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::persistence::schema::attachment)]
 #[allow(dead_code)]
-pub struct Attachment {
+pub struct Evidence {
     id: i32,
     namespace_id: i32,
     signature_time: NaiveDateTime,
@@ -86,7 +86,7 @@ pub struct Attachment {
 }
 
 #[Object]
-impl Attachment {
+impl Evidence {
     async fn signature_time(&self) -> DateTime<Utc> {
         DateTime::from_utc(self.signature_time, Utc)
     }
@@ -248,8 +248,8 @@ pub trait ChronicleGraphQlServer {
 
 impl<Query, Mutation> ChronicleGraphQl<Query, Mutation>
 where
-    Query: ObjectType + 'static + Clone,
-    Mutation: ObjectType + 'static + Clone,
+    Query: ObjectType + Copy,
+    Mutation: ObjectType + Copy,
 {
     pub fn new(query: Query, mutation: Mutation) -> Self {
         Self { query, mutation }
@@ -257,11 +257,10 @@ where
 
     pub fn exportable_schema(&self) -> String
     where
-        Query: ObjectType + 'static,
-        Mutation: ObjectType + 'static,
+        Query: ObjectType + Copy,
+        Mutation: ObjectType + Copy,
     {
-        let schema =
-            Schema::build(self.query.clone(), self.mutation.clone(), Subscription).finish();
+        let schema = Schema::build(self.query, self.mutation, Subscription).finish();
 
         schema.federation_sdl()
     }
@@ -270,8 +269,8 @@ where
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
 where
-    Query: ObjectType + 'static + Clone,
-    Mutation: ObjectType + 'static + Clone,
+    Query: ObjectType + Copy,
+    Mutation: ObjectType + Copy,
 {
     async fn serve_graphql(
         &self,
@@ -280,7 +279,7 @@ where
         address: SocketAddr,
         open: bool,
     ) {
-        let schema = Schema::build(self.query.clone(), self.mutation.clone(), Subscription)
+        let schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
                 "chronicle-api-gql",
             )))
