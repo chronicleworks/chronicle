@@ -35,7 +35,7 @@ pub fn cli() -> Command<'static> {
         .arg(
             Arg::new("console-logging")
                 .long("console-logging")
-                .help("Instrument using RUST_LOG environment"),
+                .help("Instrument using RUST_LOG environment, writing in human readable format to stdio"),
         )
         .arg(
             Arg::new("export-schema")

@@ -390,6 +390,10 @@ where
         std::process::exit(0);
     }
 
+    if matches.is_present("console-logging") {
+        telemetry::console_logging();
+    }
+
     if matches.is_present("instrument") {
         telemetry::telemetry(
             Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
