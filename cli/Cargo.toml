@@ -69,7 +69,7 @@ uuid = "0.8.2"
 [features]
 strict = []
 # Use an in memory stub ledger
-inmem = []
+inmem = ["bootstrap/inmem"]
 
 [build-dependencies]
 
