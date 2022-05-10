@@ -1,0 +1,7 @@
+---
+source: cli/src/main.rs
+assertion_line: 550
+expression: derived
+---
+[[data.entityById.wasDerivedFrom]]
+id = 'http://blockchaintp.com/chronicle/ns#entity:used'

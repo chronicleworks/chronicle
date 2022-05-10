@@ -1,0 +1,7 @@
+---
+source: cli/src/main.rs
+assertion_line: 514
+expression: derived
+---
+[[data.agentById.actedOnBehalfOf]]
+id = 'http://blockchaintp.com/chronicle/ns#agent:delegate'

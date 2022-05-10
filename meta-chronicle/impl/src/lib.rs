@@ -63,17 +63,4 @@ pub fn meta_chronicle(item: TokenStream) -> Result<TokenStream, syn::Error> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn example() {
-        assert!(meta_chronicle(quote! {
-                agent(artist) {
-                    properties: {
-                    name: String,
-                }
-        }})
-        .is_ok());
-    }
-}
+mod tests {}

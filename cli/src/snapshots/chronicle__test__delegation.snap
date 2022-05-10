@@ -1,0 +1,7 @@
+---
+source: cli/src/main.rs
+assertion_line: 497
+expression: created
+---
+[data.actedOnBehalfOf]
+context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
