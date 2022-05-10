@@ -18,6 +18,17 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
+    activity_attribute (activity_id, typename) {
+        activity_id -> Integer,
+        typename -> Text,
+        value -> Text,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     agent (id) {
         id -> Integer,
         name -> Text,
@@ -25,6 +36,17 @@ diesel::table! {
         domaintype -> Nullable<Text>,
         current -> Integer,
         identity_id -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
+    agent_attribute (agent_id, typename) {
+        agent_id -> Integer,
+        typename -> Text,
+        value -> Text,
     }
 }
 
@@ -89,6 +111,17 @@ diesel::table! {
         namespace_id -> Integer,
         domaintype -> Nullable<Text>,
         attachment_id -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
+    entity_attribute (entity_id, typename) {
+        entity_id -> Integer,
+        typename -> Text,
+        value -> Text,
     }
 }
 
@@ -169,8 +202,10 @@ diesel::table! {
 }
 
 diesel::joinable!(activity -> namespace (namespace_id));
+diesel::joinable!(activity_attribute -> activity (activity_id));
 diesel::joinable!(agent -> identity (identity_id));
 diesel::joinable!(agent -> namespace (namespace_id));
+diesel::joinable!(agent_attribute -> agent (agent_id));
 diesel::joinable!(association -> activity (activity_id));
 diesel::joinable!(association -> agent (agent_id));
 diesel::joinable!(attachment -> identity (signer_id));
@@ -179,6 +214,7 @@ diesel::joinable!(delegation -> activity (activity_id));
 diesel::joinable!(derivation -> activity (activity_id));
 diesel::joinable!(entity -> attachment (attachment_id));
 diesel::joinable!(entity -> namespace (namespace_id));
+diesel::joinable!(entity_attribute -> entity (entity_id));
 diesel::joinable!(generation -> activity (activity_id));
 diesel::joinable!(generation -> entity (generated_entity_id));
 diesel::joinable!(hadattachment -> attachment (attachment_id));
@@ -191,12 +227,15 @@ diesel::joinable!(useage -> entity (entity_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     activity,
+    activity_attribute,
     agent,
+    agent_attribute,
     association,
     attachment,
     delegation,
     derivation,
     entity,
+    entity_attribute,
     generation,
     hadattachment,
     hadidentity,

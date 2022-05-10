@@ -11,12 +11,15 @@ path = "src/main.rs"
 
 [dependencies]
 api = { path = "../api" }
+async-graphql = "3.0.38"
+bootstrap = { path = "../bootstrap" }
+chrono = { version = "0.4.19", features = ["serde"] }
 clap = "3.1.6"
 clap_complete = "3.1.1"
 colored_json = "2.1.0"
 common = { path = "../common" }
 custom_error = "1.9.2"
-diesel = { version = "^2.0.0", features = [
+diesel = { version = "2.0.0-rc.0", features = [
   "sqlite",
   "uuid",
   "chrono",
@@ -25,6 +28,7 @@ diesel = { version = "^2.0.0", features = [
 dotenv = "0.15.0"
 futures = "0.3.21"
 hex = "0.4.3"
+iref = "2.1.2"
 k256 = { version = "0.10.4", features = [
   "arithmetic",
   "ecdsa",
@@ -65,6 +69,10 @@ uuid = "0.8.2"
 [features]
 strict = []
 # Use an in memory stub ledger
-inmem = []
+inmem = ["bootstrap/inmem"]
 
 [build-dependencies]
+
+[dev-dependencies]
+insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+tempfile = "3.3.0"

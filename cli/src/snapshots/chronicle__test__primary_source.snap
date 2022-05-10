@@ -1,0 +1,7 @@
+---
+source: cli/src/main.rs
+assertion_line: 570
+expression: created
+---
+[data.hadPrimarySource]
+context = 'http://blockchaintp.com/chronicle/ns#entity:generated'

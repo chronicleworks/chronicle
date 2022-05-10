@@ -350,6 +350,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootstrap"
+version = "0.1.0"
+dependencies = [
+ "api",
+ "async-graphql",
+ "clap",
+ "clap_complete",
+ "colored_json",
+ "common",
+ "custom_error",
+ "diesel",
+ "dotenv",
+ "futures",
+ "hex",
+ "iref",
+ "k256",
+ "open",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "proto",
+ "question",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_derive",
+ "shellexpand",
+ "tokio",
+ "toml 0.5.8",
+ "tracing",
+ "tracing-log",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "user-error",
+ "uuid",
+]
+
+[[package]]
 name = "buf_redux"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -457,6 +495,9 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "api",
+ "async-graphql",
+ "bootstrap",
+ "chrono",
  "clap",
  "clap_complete",
  "colored_json",
@@ -466,6 +507,8 @@ dependencies = [
  "dotenv",
  "futures",
  "hex",
+ "insta",
+ "iref",
  "k256",
  "open",
  "opentelemetry",
@@ -477,6 +520,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "shellexpand",
+ "tempfile",
  "tokio",
  "toml 0.5.8",
  "tracing",
@@ -1504,6 +1548,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "meta-chronicle-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "meta-chronicle-macro"
+version = "0.1.0"
+dependencies = [
+ "meta-chronicle-impl",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2542,9 +2605,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.79"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
+checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
  "itoa",
  "ryu",

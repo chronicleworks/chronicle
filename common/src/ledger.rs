@@ -7,10 +7,14 @@ use uuid::Uuid;
 use crate::{
     context::PROV,
     prov::{
-        vocab::Chronicle, ActivityUses, ActsOnBehalfOf, AttachmentId, ChronicleIri,
-        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
-        Domaintype, EndActivity, EntityAttach, EntityDerive, GenerateEntity, IdentityId,
-        NamespaceId, ProcessorError, ProvModel, RegisterKey, StartActivity,
+        operations::{
+            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
+            CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
+            RegisterKey, SetAttributes, StartActivity,
+        },
+        vocab::Chronicle,
+        AttachmentId, ChronicleIri, ChronicleTransactionId, IdentityId, NamespaceId,
+        ProcessorError, ProvModel,
     },
 };
 
@@ -356,6 +360,9 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, id),
                 ]
             }
+            ChronicleOperation::CreateEntity(CreateEntity { namespace, id, .. }) => {
+                vec![LedgerAddress::in_namespace(namespace, id)]
+            }
             ChronicleOperation::GenerateEntity(GenerateEntity {
                 namespace,
                 id,
@@ -414,13 +421,15 @@ impl ChronicleOperation {
             .into_iter()
             .flatten()
             .collect(),
-            ChronicleOperation::Domaintype(Domaintype::Agent { id, namespace, .. }) => {
+            ChronicleOperation::SetAttributes(SetAttributes::Agent { id, namespace, .. }) => {
                 vec![LedgerAddress::in_namespace(namespace, id)]
             }
-            ChronicleOperation::Domaintype(Domaintype::Entity { id, namespace, .. }) => {
+            ChronicleOperation::SetAttributes(SetAttributes::Entity { id, namespace, .. }) => {
                 vec![LedgerAddress::in_namespace(namespace, id)]
             }
-            ChronicleOperation::Domaintype(Domaintype::Activity { id, namespace, .. }) => {
+            ChronicleOperation::SetAttributes(SetAttributes::Activity {
+                id, namespace, ..
+            }) => {
                 vec![LedgerAddress::in_namespace(namespace, id)]
             }
         }

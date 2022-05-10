@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1243
+assertion_line: 1192
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -80,6 +80,10 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@container": "@set",
       "@id": "prov:used",
       "@type": "@id"
+    },
+    "value": {
+      "@id": "chronicle:value",
+      "@type": "@json"
     },
     "wasAssociatedWith": {
       "@container": "@set",

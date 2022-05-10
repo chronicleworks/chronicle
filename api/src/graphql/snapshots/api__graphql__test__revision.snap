@@ -1,7 +1,0 @@
----
-source: api/src/graphql/mod.rs
-assertion_line: 1062
-expression: created
----
-[data.wasRevisionOf]
-context = 'http://blockchaintp.com/chronicle/ns#entity:generated'

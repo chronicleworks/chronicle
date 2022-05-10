@@ -28,6 +28,30 @@ pub struct NewOffset<'a> {
     pub sync_time: Option<NaiveDateTime>,
 }
 
+#[derive(Insertable, Queryable, Selectable)]
+#[diesel(table_name = entity_attribute)]
+pub struct EntityAttribute {
+    pub entity_id: i32,
+    pub typename: String,
+    pub value: String,
+}
+
+#[derive(Insertable, Queryable, Selectable)]
+#[diesel(table_name = activity_attribute)]
+pub struct ActivityAttribute {
+    pub activity_id: i32,
+    pub typename: String,
+    pub value: String,
+}
+
+#[derive(Insertable, Queryable, Selectable)]
+#[diesel(table_name = agent_attribute)]
+pub struct AgentAttribute {
+    pub agent_id: i32,
+    pub typename: String,
+    pub value: String,
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = activity)]
 pub struct NewActivity<'a> {
@@ -38,7 +62,8 @@ pub struct NewActivity<'a> {
     pub domaintype: Option<&'a str>,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = agent)]
 pub struct Agent {
     pub id: i32,
     pub name: String,
@@ -75,7 +100,8 @@ pub struct Attachment {
     pub locator: Option<String>,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = entity)]
 pub struct Entity {
     pub id: i32,
     pub name: String,
@@ -84,7 +110,7 @@ pub struct Entity {
     pub attachment_id: Option<i32>,
 }
 
-#[derive(Insertable, AsChangeset, Default)]
+#[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = agent)]
 pub struct NewAgent<'a> {
     pub name: &'a str,

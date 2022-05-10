@@ -4,6 +4,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate iref_enum;
 
+pub mod attributes;
 pub mod commands;
 pub mod context;
 pub mod ledger;

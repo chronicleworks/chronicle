@@ -1,0 +1,89 @@
+---
+source: cli/src/main.rs
+assertion_line: 733
+expression: default_cursor
+---
+{
+  "data": {
+    "agentsByType": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true,
+        "startCursor": "0",
+        "endCursor": "9"
+      },
+      "edges": [
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
+            "name": "bobross0"
+          },
+          "cursor": "0"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
+            "name": "bobross1"
+          },
+          "cursor": "1"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
+            "name": "bobross10"
+          },
+          "cursor": "2"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
+            "name": "bobross11"
+          },
+          "cursor": "3"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
+            "name": "bobross12"
+          },
+          "cursor": "4"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
+            "name": "bobross13"
+          },
+          "cursor": "5"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
+            "name": "bobross14"
+          },
+          "cursor": "6"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
+            "name": "bobross15"
+          },
+          "cursor": "7"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
+            "name": "bobross16"
+          },
+          "cursor": "8"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
+            "name": "bobross17"
+          },
+          "cursor": "9"
+        }
+      ]
+    }
+  }
+}

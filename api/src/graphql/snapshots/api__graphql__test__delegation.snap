@@ -1,7 +1,0 @@
----
-source: api/src/graphql/mod.rs
-assertion_line: 1051
-expression: created
----
-[data.actedOnBehalfOf]
-context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'

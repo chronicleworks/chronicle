@@ -1,378 +1,787 @@
+//! The default graphql api - only abstract resources
+//! We delegate to the underlying concrete, attributeless graphql objects in the api crate,
+//! wrapping those in our types here.
 #![cfg_attr(feature = "strict", deny(warnings))]
-#[macro_use]
-extern crate serde_derive;
+use api::chronicle_graphql::{self, ChronicleGraphQl, Evidence, Namespace, Submission};
+use api::{self, chronicle_graphql::Identity};
+use async_graphql::connection::{Connection, EmptyFields};
+use async_graphql::*;
+use bootstrap::*;
+use chrono::{DateTime, Utc};
+use common::prov::vocab::{Chronicle, Prov};
+use common::prov::DomaintypeId;
+use iref::Iri;
 
-mod cli;
-mod config;
-mod telemetry;
-
-use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
-use clap::{ArgMatches, Command};
-use clap_complete::{generate, Generator, Shell};
-use cli::cli;
-
-use common::{
-    commands::{
-        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
-        KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
-    },
-    prov::CompactionError,
-    signing::SignerError,
-};
-use config::*;
-use custom_error::custom_error;
-use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    SqliteConnection,
-};
-use futures::Future;
-use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
-use tokio::sync::broadcast::error::RecvError;
-use url::Url;
-
-use std::{
-    io,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    time::Duration,
-};
-
-use tracing::{error, instrument};
-use user_error::UFE;
-
-#[allow(dead_code)]
-fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
-    Ok(SawtoothSubmitter::new(
-        &options
-            .value_of("sawtooth")
-            .map(Url::parse)
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
-    ))
+#[derive(Default, InputObject)]
+pub struct Attributes {
+    #[graphql(name = "type")]
+    pub typ: Option<String>,
 }
 
-#[allow(dead_code)]
-fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
-    Ok(StateDelta::new(
-        &options
-            .value_of("sawtooth")
-            .map(Url::parse)
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
-    ))
-}
-
-#[cfg(feature = "inmem")]
-fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
-    Ok(common::ledger::InMemLedger::new())
-}
-
-#[derive(Debug, Clone)]
-struct UniqueUuid;
-
-impl UuidGen for UniqueUuid {}
-
-fn pool(config: &Config) -> Result<Pool<ConnectionManager<SqliteConnection>>, ApiError> {
-    Ok(Pool::builder()
-        .connection_customizer(Box::new(ConnectionOptions {
-            enable_wal: true,
-            enable_foreign_keys: true,
-            busy_timeout: Some(Duration::from_secs(2)),
-        }))
-        .build(ConnectionManager::<SqliteConnection>::new(
-            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
-        ))?)
-}
-
-fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
-    if !options.is_present("gql") {
-        Ok(None)
-    } else if let Some(addr) = options.value_of("gql-interface") {
-        Ok(Some(addr.parse()?))
-    } else {
-        Ok(None)
+impl From<Attributes> for common::attributes::Attributes {
+    fn from(attributes: Attributes) -> Self {
+        common::attributes::Attributes {
+            typ: attributes
+                .typ
+                .map(|typ| DomaintypeId::from(Chronicle::domaintype(&typ))),
+            ..Default::default()
+        }
     }
 }
 
-async fn api(
-    options: &ArgMatches,
-    config: &Config,
-) -> Result<(ApiDispatch, Option<impl Future<Output = ()>>), ApiError> {
-    #[cfg(not(feature = "inmem"))]
-    {
-        let submitter = submitter(config, options)?;
-        let state = state_delta(config, options)?;
+pub struct Activity(chronicle_graphql::Activity);
 
-        Api::new(
-            graphql_addr(options)?,
-            pool(config)?,
-            submitter,
-            state,
-            &config.secrets.path,
-            UniqueUuid,
+#[Object]
+impl Activity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::activity(&*self.0.name).to_string())
+    }
+
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        chronicle_graphql::activity::namespace(self.0.namespace_id, ctx).await
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn started(&self) -> Option<DateTime<Utc>> {
+        self.0.started.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    async fn ended(&self) -> Option<DateTime<Utc>> {
+        self.0.ended.map(|x| DateTime::from_utc(x, Utc))
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> String {
+        if let Some(ref typ) = self.0.domaintype {
+            typ.to_string()
+        } else {
+            Iri::from(Prov::Activity).to_string()
+        }
+    }
+
+    async fn was_associated_with<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Agent>> {
+        Ok(
+            chronicle_graphql::activity::was_associated_with(self.0.id, ctx)
+                .await?
+                .into_iter()
+                .map(Agent)
+                .collect(),
+        )
+    }
+
+    async fn used<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::activity::used(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+}
+pub struct Entity(chronicle_graphql::Entity);
+
+#[Object]
+impl Entity {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::entity(&*self.0.name).to_string())
+    }
+
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        chronicle_graphql::entity::namespace(self.0.namespace_id, ctx).await
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> String {
+        if let Some(ref typ) = self.0.domaintype {
+            typ.to_string()
+        } else {
+            Iri::from(Prov::Agent).to_string()
+        }
+    }
+
+    async fn evidence<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Evidence>> {
+        chronicle_graphql::entity::evidence(self.0.attachment_id, ctx).await
+    }
+    async fn was_generated_by<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Activity>> {
+        Ok(chronicle_graphql::entity::was_generated_by(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Activity)
+            .collect())
+    }
+
+    async fn was_derived_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_derived_from(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+
+    async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<Vec<Entity>> {
+        Ok(
+            chronicle_graphql::entity::had_primary_source(self.0.id, ctx)
+                .await?
+                .into_iter()
+                .map(Entity)
+                .collect(),
+        )
+    }
+
+    async fn was_revision_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_revision_of(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+    async fn was_quoted_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+        Ok(chronicle_graphql::entity::was_quoted_from(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Entity)
+            .collect())
+    }
+}
+
+pub struct Agent(chronicle_graphql::Agent);
+
+#[Object]
+impl Agent {
+    async fn id(&self) -> ID {
+        ID::from(Chronicle::agent(&*self.0.name).to_string())
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
+        chronicle_graphql::agent::namespace(self.0.namespace_id, ctx).await
+    }
+
+    async fn identity<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Identity>> {
+        chronicle_graphql::agent::identity(self.0.identity_id, ctx).await
+    }
+
+    async fn acted_on_behalf_of<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Agent>> {
+        Ok(chronicle_graphql::agent::acted_on_behalf_of(self.0.id, ctx)
+            .await?
+            .into_iter()
+            .map(Self)
+            .collect())
+    }
+
+    #[graphql(name = "type")]
+    async fn typ(&self) -> String {
+        Iri::from(Prov::Agent).to_string()
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Mutation;
+
+#[Object]
+impl Mutation {
+    pub async fn agent<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::agent(ctx, name, namespace, attributes.into()).await
+    }
+
+    pub async fn activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::activity(ctx, name, namespace, attributes.into()).await
+    }
+
+    pub async fn entity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attributes: Attributes,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::entity(ctx, name, namespace, attributes.into()).await
+    }
+    pub async fn acted_on_behalf_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        responsible: ID,
+        delegate: ID,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
+    }
+
+    pub async fn was_derived_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::was_derived_from(ctx, namespace, generated_entity, used_entity)
+            .await
+    }
+
+    pub async fn was_revision_of<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::was_revision_of(ctx, namespace, generated_entity, used_entity)
+            .await
+    }
+    pub async fn had_primary_source<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::had_primary_source(
+            ctx,
+            namespace,
+            generated_entity,
+            used_entity,
         )
         .await
     }
-    #[cfg(feature = "inmem")]
-    {
-        let mut ledger = ledger()?;
-        let state = ledger.reader();
+    pub async fn was_quoted_from<'a>(
+        &self,
+        ctx: &Context<'a>,
+        namespace: Option<String>,
+        generated_entity: ID,
+        used_entity: ID,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::was_quoted_from(ctx, namespace, generated_entity, used_entity)
+            .await
+    }
 
-        Ok(Api::new(
-            graphql_addr(options)?,
-            pool(config)?,
-            ledger,
-            state,
-            &config.secrets.path,
-            UniqueUuid,
+    pub async fn generate_key<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::generate_key(ctx, name, namespace).await
+    }
+
+    pub async fn start_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::start_activity(ctx, name, namespace, agent, time).await
+    }
+
+    pub async fn end_activity<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        agent: String,
+        time: Option<DateTime<Utc>>,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::end_activity(ctx, name, namespace, agent, time).await
+    }
+
+    pub async fn used<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+        _typ: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::used(ctx, activity, name, namespace).await
+    }
+
+    pub async fn was_generated_by<'a>(
+        &self,
+        ctx: &Context<'a>,
+        activity: String,
+        name: String,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::was_generated_by(ctx, activity, name, namespace).await
+    }
+
+    pub async fn has_attachment<'a>(
+        &self,
+        ctx: &Context<'a>,
+        name: String,
+        namespace: Option<String>,
+        attachment: Upload,
+        on_behalf_of_agent: String,
+        locator: String,
+    ) -> async_graphql::Result<Submission> {
+        chronicle_graphql::mutation::has_attachment(
+            ctx,
+            name,
+            namespace,
+            attachment,
+            on_behalf_of_agent,
+            locator,
         )
-        .await?)
+        .await
     }
 }
 
-fn domain_type(args: &ArgMatches) -> Option<String> {
-    if !args.is_present("domaintype") {
-        None
-    } else {
-        args.value_of("domaintype").map(|x| x.to_owned())
+#[derive(Copy, Clone)]
+pub struct Query;
+
+#[Object]
+impl Query {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn agents_by_type<'a>(
+        &self,
+        ctx: &Context<'a>,
+        agent_type: ID,
+        namespace: Option<ID>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
+        Ok(chronicle_graphql::query::agents_by_type(
+            ctx, agent_type, namespace, after, before, first, last,
+        )
+        .await?
+        .map_node(Agent))
+    }
+    pub async fn agent_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Agent>> {
+        Ok(chronicle_graphql::query::agent_by_id(ctx, id, namespace)
+            .await?
+            .map(Agent))
+    }
+
+    pub async fn entity_by_id<'a>(
+        &self,
+        ctx: &Context<'a>,
+        id: ID,
+        namespace: Option<String>,
+    ) -> async_graphql::Result<Option<Entity>> {
+        Ok(chronicle_graphql::query::entity_by_id(ctx, id, namespace)
+            .await?
+            .map(Entity))
     }
 }
-
-#[instrument]
-async fn api_exec(
-    config: Config,
-    options: &ArgMatches,
-) -> Result<(ApiResponse, ApiDispatch), ApiError> {
-    dotenv::dotenv().ok();
-
-    let (api, ui) = api(options, &config).await?;
-    let ret_api = api.clone();
-
-    let execution = vec![
-        options.subcommand_matches("namespace").and_then(|m| {
-            m.subcommand_matches("create").map(|m| {
-                api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                    name: m.value_of("namespace").unwrap().to_owned(),
-                }))
-            })
-        }),
-        options.subcommand_matches("agent").and_then(|m| {
-            vec![
-                m.subcommand_matches("create").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        domaintype: domain_type(m),
-                    }))
-                }),
-                m.subcommand_matches("register-key").map(|m| {
-                    let registration = {
-                        if m.is_present("generate") {
-                            KeyRegistration::Generate
-                        } else if m.is_present("privatekey") {
-                            KeyRegistration::ImportSigning(KeyImport::FromPath {
-                                path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
-                            })
-                        } else {
-                            KeyRegistration::ImportVerifying(KeyImport::FromPath {
-                                path: m.value_of_t::<PathBuf>("privatekey").unwrap(),
-                            })
-                        }
-                    };
-
-                    api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        registration,
-                    }))
-                }),
-                m.subcommand_matches("use").map(|m| {
-                    api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                    }))
-                }),
-            ]
-            .into_iter()
-            .flatten()
-            .next()
-        }),
-        options.subcommand_matches("activity").and_then(|m| {
-            vec![
-                m.subcommand_matches("create").map(|m| {
-                    api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        domaintype: domain_type(m),
-                    }))
-                }),
-                m.subcommand_matches("start").map(|m| {
-                    api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        time: None,
-                        agent: None,
-                    }))
-                }),
-                m.subcommand_matches("end").map(|m| {
-                    api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-                        name: m.value_of("activity_name").map(|x| x.to_owned()),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        time: None,
-                        agent: None,
-                    }))
-                }),
-                m.subcommand_matches("use").map(|m| {
-                    api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-                        name: m.value_of("entity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
-                        domaintype: domain_type(m),
-                    }))
-                }),
-                m.subcommand_matches("generate").map(|m| {
-                    api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-                        name: m.value_of("entity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
-                        domaintype: domain_type(m),
-                    }))
-                }),
-            ]
-            .into_iter()
-            .flatten()
-            .next()
-        }),
-        options.subcommand_matches("entity").and_then(|m| {
-            vec![m.subcommand_matches("attach").map(|m| {
-                api.dispatch(ApiCommand::Entity(EntityCommand::Attach {
-                    name: m.value_of("entity_name").unwrap().to_owned(),
-                    namespace: m.value_of("namespace").unwrap().to_owned(),
-                    file: PathOrFile::Path(m.value_of_t::<PathBuf>("file").unwrap()),
-                    locator: m.value_of("locator").map(|x| x.to_owned()),
-                    agent: m.value_of("agent").map(|x| x.to_owned()),
-                }))
-            })]
-            .into_iter()
-            .flatten()
-            .next()
-        }),
-        options.subcommand_matches("export").map(|m| {
-            api.dispatch(ApiCommand::Query(QueryCommand {
-                namespace: m.value_of("namespace").unwrap().to_owned(),
-            }))
-        }),
-    ]
-    .into_iter()
-    .flatten()
-    .next();
-
-    // If we actually execute a command, then do not run the api
-    if let Some(execution) = execution {
-        let exresult = execution.await;
-
-        Ok((exresult?, ret_api))
-    } else {
-        // Block on graphql ui if running
-        if let Some(ui) = ui {
-            ui.await;
-        }
-        Ok((ApiResponse::Unit, ret_api))
-    }
-}
-
-custom_error! {pub CliError
-    Api{source: api::ApiError}                  = "Api error",
-    Keys{source: SignerError}                   = "Key storage",
-    FileSystem{source: std::io::Error}          = "Cannot locate configuration file",
-    ConfigInvalid{source: toml::de::Error}      = "Invalid configuration file",
-    InvalidPath                                 = "Invalid path", //TODO - the path, you know how annoying this is
-    Ld{source: CompactionError}                 = "Invalid Json LD",
-    CommitNoticiationStream {source: RecvError} = "Failure in commit notification stream"
-}
-
-impl UFE for CliError {}
 
 #[tokio::main]
-async fn main() {
-    let matches = cli().get_matches();
-
-    if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
-        let mut app = cli();
-        eprintln!("Generating completion file for {}...", generator);
-        print_completions(generator, &mut app);
-        std::process::exit(0);
-    }
-
-    if matches.is_present("export-schema") {
-        print!("{}", api::exportable_schema());
-        std::process::exit(0);
-    }
-
-    if matches.is_present("console-logging") {
-        telemetry::console_logging();
-    }
-
-    if matches.is_present("instrument") {
-        telemetry::telemetry(
-            Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
-        );
-    }
-
-    config_and_exec(&matches)
-        .await
-        .map_err(|e| {
-            error!(?e, "Api error");
-            e.into_ufe().print();
-            std::process::exit(1);
-        })
-        .ok();
-
-    std::process::exit(0);
+pub async fn main() {
+    bootstrap(ChronicleGraphQl::new(Query, Mutation)).await
 }
 
-async fn config_and_exec(matches: &ArgMatches) -> Result<(), CliError> {
-    use colored_json::prelude::*;
-    let config = handle_config_and_init(matches)?;
-    let response = api_exec(config, matches).await?;
+#[cfg(test)]
+mod test {
+    use super::{Mutation, Query};
+    use crate::chronicle_graphql::{Store, Subscription};
+    use api::{Api, ConnectionOptions, UuidGen};
+    use async_graphql::{Request, Schema};
+    use common::ledger::InMemLedger;
+    use diesel::r2d2::Pool;
+    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use std::time::Duration;
+    use tempfile::TempDir;
+    use tracing::Level;
+    use uuid::Uuid;
 
-    match response {
-        (
-            ApiResponse::Submission {
-                subject,
-                prov: _,
-                correlation_id,
-            },
-            api,
-        ) => {
-            // For commands that have initiated a ledger operation, wait for the matching result
-            let mut tx_notifications = api.notify_commit.subscribe();
+    #[derive(Debug, Clone)]
+    struct SameUuid;
 
-            loop {
-                let (_prov, incoming_correlation_id) =
-                    tx_notifications.recv().await.map_err(CliError::from)?;
-                if correlation_id == incoming_correlation_id {
-                    println!("{}", subject);
-                    break;
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    async fn test_schema() -> Schema<Query, Mutation, Subscription> {
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_max_level(Level::TRACE)
+            .try_init()
+            .ok();
+
+        let secretpath = TempDir::new().unwrap();
+
+        // We need to use a real file for sqlite, as in mem either re-creates between
+        // macos temp dir permissions don't work with sqlite
+        std::fs::create_dir("./sqlite_test").ok();
+        let dbid = Uuid::new_v4();
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+                "./sqlite_test/db{}.sqlite",
+                dbid
+            )))
+            .unwrap();
+
+        let dispatch = Api::new(
+            pool.clone(),
+            ledger,
+            reader,
+            &secretpath.into_path(),
+            SameUuid,
+        )
+        .await
+        .unwrap();
+
+        Schema::build(Query, Mutation, Subscription)
+            .data(Store::new(pool))
+            .data(dispatch)
+            .finish()
+    }
+
+    #[tokio::test]
+    async fn delegation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                actedOnBehalfOf(
+                    responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
+                    delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
+                    ) {
+                    context
                 }
             }
-        }
-        (ApiResponse::QueryReply { prov }, _) => {
-            println!(
-                "{}",
-                prov.to_json()
-                    .compact()
-                    .await?
-                    .to_string()
-                    .to_colored_json_auto()
-                    .unwrap()
-            );
-        }
-        (ApiResponse::Unit, _api) => {}
-    };
-    Ok(())
-}
+        "#,
+            ))
+            .await;
 
-fn print_completions<G: Generator>(gen: G, app: &mut Command) {
-    generate(gen, app, app.get_name().to_string(), &mut io::stdout());
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                    actedOnBehalfOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn untyped_derivation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn primary_source() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    hadPrimarySource {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn revision() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasRevisionOf {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn quotation() {
+        let schema = test_schema().await;
+
+        let created = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(created);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let derived = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    wasDerivedFrom {
+                        id
+                    }
+                    wasQuotedFrom {
+                        id
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(derived);
+    }
+
+    #[tokio::test]
+    async fn agent_can_be_created() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                agent(name:"bobross", attributes: { type: "artist" }) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create);
+    }
+
+    #[tokio::test]
+    async fn query_agents_by_cursor() {
+        let schema = test_schema().await;
+
+        for i in 0..100 {
+            schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                agent(name:"bobross{}", attributes: {{ type: "artist"}}) {{
+                    context
+                }}
+            }}
+        "#,
+                    i
+                )))
+                .await;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let default_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(agentType: "artist") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(default_cursor);
+
+        let middle_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(agentType: "artist", first: 20, after: "3") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(middle_cursor);
+
+        let out_of_bound_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                agentsByType(agentType: "artist", first: 20, after: "90") {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id,
+                            name
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(out_of_bound_cursor);
+    }
 }

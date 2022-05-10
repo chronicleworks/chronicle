@@ -1,0 +1,159 @@
+---
+source: cli/src/main.rs
+assertion_line: 759
+expression: middle_cursor
+---
+{
+  "data": {
+    "agentsByType": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true,
+        "startCursor": "4",
+        "endCursor": "23"
+      },
+      "edges": [
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
+            "name": "bobross12"
+          },
+          "cursor": "4"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
+            "name": "bobross13"
+          },
+          "cursor": "5"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
+            "name": "bobross14"
+          },
+          "cursor": "6"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
+            "name": "bobross15"
+          },
+          "cursor": "7"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
+            "name": "bobross16"
+          },
+          "cursor": "8"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
+            "name": "bobross17"
+          },
+          "cursor": "9"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross18",
+            "name": "bobross18"
+          },
+          "cursor": "10"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross19",
+            "name": "bobross19"
+          },
+          "cursor": "11"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross2",
+            "name": "bobross2"
+          },
+          "cursor": "12"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross20",
+            "name": "bobross20"
+          },
+          "cursor": "13"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross21",
+            "name": "bobross21"
+          },
+          "cursor": "14"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross22",
+            "name": "bobross22"
+          },
+          "cursor": "15"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross23",
+            "name": "bobross23"
+          },
+          "cursor": "16"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross24",
+            "name": "bobross24"
+          },
+          "cursor": "17"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross25",
+            "name": "bobross25"
+          },
+          "cursor": "18"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross26",
+            "name": "bobross26"
+          },
+          "cursor": "19"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross27",
+            "name": "bobross27"
+          },
+          "cursor": "20"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross28",
+            "name": "bobross28"
+          },
+          "cursor": "21"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross29",
+            "name": "bobross29"
+          },
+          "cursor": "22"
+        },
+        {
+          "node": {
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross3",
+            "name": "bobross3"
+          },
+          "cursor": "23"
+        }
+      ]
+    }
+  }
+}

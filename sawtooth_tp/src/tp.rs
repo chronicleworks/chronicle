@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use common::{
     ledger::StateInput,
-    prov::{ChronicleOperation, ProvModel},
+    prov::{operations::ChronicleOperation, ProvModel},
 };
 use sawtooth_protocol::address::{SawtoothAddress, PREFIX};
 

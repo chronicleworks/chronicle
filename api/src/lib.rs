@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
-mod graphql;
+pub mod chronicle_graphql;
 mod persistence;
 
 use chrono::{DateTime, Utc};
@@ -7,38 +7,35 @@ use custom_error::*;
 use derivative::*;
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
-use futures::{select, AsyncReadExt, Future, FutureExt, StreamExt};
+use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 use iref::IriBuf;
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
-use std::{
-    convert::Infallible,
-    marker::PhantomData,
-    net::{AddrParseError, SocketAddr},
-    path::Path,
-    sync::Arc,
-};
+use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
 };
 
 use common::{
+    attributes::Attributes,
     commands::*,
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
-        vocab::Chronicle as ChronicleVocab, ActivityId, ActivityUses, ActsOnBehalfOf, AgentId,
-        ChronicleOperation, ChronicleTransactionId, CreateActivity, CreateAgent, CreateNamespace,
-        DerivationType, Domaintype, EndActivity, EntityAttach, EntityDerive, EntityId,
-        GenerateEntity, NamespaceId, ProvModel, RegisterKey, StartActivity,
+        operations::{
+            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
+            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
+            GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+        },
+        vocab::Chronicle as ChronicleVocab,
+        ActivityId, AgentId, ChronicleTransactionId, EntityId, NamespaceId, ProvModel,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
 
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-pub use graphql::{exportable_schema, serve_graphql};
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
@@ -190,15 +187,14 @@ impl<U> Api<U>
 where
     U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
 {
-    #[instrument(skip(ledger_writer, ledger_reader))]
+    #[instrument(skip(ledger_writer, ledger_reader,))]
     pub async fn new<R, W>(
-        graphql_addr: Option<SocketAddr>,
         pool: Pool<ConnectionManager<SqliteConnection>>,
         ledger_writer: W,
         ledger_reader: R,
         secret_path: &Path,
         uuidgen: U,
-    ) -> Result<(ApiDispatch, Option<impl Future<Output = ()>>), ApiError>
+    ) -> Result<ApiDispatch, ApiError>
     where
         R: LedgerReader + Send + 'static,
         W: LedgerWriter + Send + 'static,
@@ -220,8 +216,6 @@ where
                 connection.run_pending_migrations(MIGRATIONS).map(|_| ())
             })
             .map_err(|migration| StoreError::DbMigration { migration })?;
-
-        let ql_pool = pool;
 
         tokio::task::spawn(async move {
             let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
@@ -279,10 +273,7 @@ where
             }
         });
 
-        Ok((
-            dispatch.clone(),
-            graphql_addr.map(|addr| graphql::serve_graphql(ql_pool, dispatch, addr, true)),
-        ))
+        Ok(dispatch)
     }
 
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
@@ -328,7 +319,6 @@ where
         name: String,
         namespace: String,
         activity: Option<String>,
-        domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -364,16 +354,6 @@ where
 
                 to_apply.push(create);
 
-                if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleOperation::Domaintype(Domaintype::Entity {
-                        id: id.clone().into(),
-                        namespace,
-                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-                    });
-
-                    to_apply.push(set_type)
-                }
-
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::submission(
@@ -395,7 +375,6 @@ where
         name: String,
         namespace: String,
         activity: Option<String>,
-        domaintype: Option<String>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -433,15 +412,6 @@ where
 
                     to_apply.push(create);
 
-                    if let Some(domaintype) = domaintype {
-                        let set_type = ChronicleOperation::Domaintype(Domaintype::Entity {
-                            id: id.clone().into(),
-                            namespace,
-                            domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-                        });
-
-                        to_apply.push(set_type)
-                    }
                     (id, to_apply)
                 };
 
@@ -457,7 +427,58 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::CreateActivity), and possibly (ChronicleTransaction::Domaintype) if specified
+    /// Submits operations [`CreateEntity`], and [`SetAttributes::Entity`]
+    ///
+    /// We use our local store to see if the agent already exists, disambiguating the URI if so
+    #[instrument]
+    async fn create_entity(
+        &self,
+        name: String,
+        namespace: String,
+        attributes: Attributes,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let name = api
+                    .store
+                    .disambiguate_entity_name(connection, &name, &namespace)?;
+
+                let iri = ChronicleVocab::entity(&name);
+
+                let create = ChronicleOperation::CreateEntity(CreateEntity {
+                    name: name.to_owned(),
+                    id: iri.clone().into(),
+                    namespace: namespace.clone(),
+                });
+
+                to_apply.push(create);
+
+                let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
+                    id: ChronicleVocab::agent(&name).into(),
+                    namespace,
+                    attributes,
+                });
+
+                to_apply.push(set_type);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::submission(
+                    iri,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
+    /// Submits operations [`CreateActivity`], and [`SetAttributes::Activity`]
     ///
     /// We use our local store to see if the activity already exists, disambiguating the URI if so
     #[instrument]
@@ -465,7 +486,7 @@ where
         &self,
         name: String,
         namespace: String,
-        domaintype: Option<String>,
+        attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -486,15 +507,13 @@ where
 
                 to_apply.push(create);
 
-                if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleOperation::Domaintype(Domaintype::Activity {
-                        id: id.clone().into(),
-                        namespace,
-                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-                    });
+                let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
+                    id: id.clone().into(),
+                    namespace,
+                    attributes,
+                });
 
-                    to_apply.push(set_type)
-                }
+                to_apply.push(set_type);
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
@@ -508,7 +527,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::CreateAgent), and possibly (ChronicleTransaction::Domaintype) if specified
+    /// Submits operations [`CreateAgent`], and [`SetAttributes::Agent`]
     ///
     /// We use our local store to see if the agent already exists, disambiguating the URI if so
     #[instrument]
@@ -516,7 +535,7 @@ where
         &self,
         name: String,
         namespace: String,
-        domaintype: Option<String>,
+        attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -539,15 +558,13 @@ where
 
                 to_apply.push(create);
 
-                if let Some(domaintype) = domaintype {
-                    let set_type = ChronicleOperation::Domaintype(Domaintype::Agent {
-                        id: ChronicleVocab::agent(&name).into(),
-                        namespace,
-                        domaintype: Some(ChronicleVocab::domaintype(&domaintype).into()),
-                    });
+                let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
+                    id: ChronicleVocab::agent(&name).into(),
+                    namespace,
+                    attributes,
+                });
 
-                    to_apply.push(set_type)
-                }
+                to_apply.push(set_type);
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
@@ -584,112 +601,61 @@ where
 
     #[instrument]
     async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
-        match &command {
+        match command {
             ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(name).await
+                self.create_namespace(&name).await
             }
             ApiCommand::Agent(AgentCommand::Create {
                 name,
                 namespace,
-                domaintype,
-            }) => {
-                self.create_agent(name.to_owned(), namespace.to_owned(), domaintype.clone())
-                    .await
-            }
+                attributes,
+            }) => self.create_agent(name, namespace, attributes).await,
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 name,
                 namespace,
                 registration,
-            }) => {
-                self.register_key(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    registration.to_owned(),
-                )
-                .await
-            }
+            }) => self.register_key(name, namespace, registration).await,
             ApiCommand::Agent(AgentCommand::UseInContext { name, namespace }) => {
-                self.use_in_context(name.to_owned(), namespace.to_owned())
-                    .await
+                self.use_in_context(name, namespace).await
             }
             ApiCommand::Agent(AgentCommand::Delegate {
                 name,
                 delegate,
                 activity,
                 namespace,
-            }) => {
-                self.delegate(
-                    namespace.to_owned(),
-                    name.to_owned(),
-                    delegate.to_owned(),
-                    activity.to_owned(),
-                )
-                .await
-            }
+            }) => self.delegate(namespace, name, delegate, activity).await,
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
                 namespace,
-                domaintype,
-            }) => {
-                self.create_activity(name.to_owned(), namespace.to_owned(), domaintype.clone())
-                    .await
-            }
+                attributes,
+            }) => self.create_activity(name, namespace, attributes).await,
             ApiCommand::Activity(ActivityCommand::Start {
                 name,
                 namespace,
                 time,
                 agent,
-            }) => {
-                self.start_activity(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    time.to_owned(),
-                    agent.to_owned(),
-                )
-                .await
-            }
+            }) => self.start_activity(name, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::End {
                 name,
                 namespace,
                 time,
                 agent,
-            }) => {
-                self.end_activity(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    time.to_owned(),
-                    agent.to_owned(),
-                )
-                .await
-            }
+            }) => self.end_activity(name, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::Use {
                 name,
                 namespace,
                 activity,
-                domaintype,
-            }) => {
-                self.activity_use(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    activity.to_owned(),
-                    domaintype.to_owned(),
-                )
-                .await
-            }
+            }) => self.activity_use(name, namespace, activity).await,
+            ApiCommand::Entity(EntityCommand::Create {
+                name,
+                namespace,
+                attributes,
+            }) => self.create_entity(name, namespace, attributes).await,
             ApiCommand::Activity(ActivityCommand::Generate {
                 name,
                 namespace,
                 activity,
-                domaintype,
-            }) => {
-                self.activity_generate(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    activity.to_owned(),
-                    domaintype.to_owned(),
-                )
-                .await
-            }
+            }) => self.activity_generate(name, namespace, activity).await,
             ApiCommand::Entity(EntityCommand::Attach {
                 name,
                 namespace,
@@ -697,32 +663,20 @@ where
                 locator,
                 agent,
             }) => {
-                self.entity_attach(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    file.clone(),
-                    locator.to_owned(),
-                    agent.to_owned(),
-                )
-                .await
+                self.entity_attach(name, namespace, file.clone(), locator, agent)
+                    .await
             }
             ApiCommand::Entity(EntityCommand::Derive {
                 name,
                 namespace,
                 activity,
                 used_entity,
-                typ,
+                derivation,
             }) => {
-                self.entity_derive(
-                    name.to_owned(),
-                    namespace.to_owned(),
-                    activity.to_owned(),
-                    used_entity.to_owned(),
-                    typ.to_owned(),
-                )
-                .await
+                self.entity_derive(name, namespace, activity, used_entity, derivation)
+                    .await
             }
-            ApiCommand::Query(query) => self.query(query.to_owned()).await,
+            ApiCommand::Query(query) => self.query(query).await,
         }
     }
 
@@ -1116,13 +1070,15 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::{net::SocketAddr, str::FromStr};
-
     use chrono::{TimeZone, Utc};
     use common::{
+        attributes::{Attribute, Attributes},
         commands::{ApiResponse, EntityCommand, KeyImport},
         ledger::InMemLedger,
-        prov::{ChronicleTransactionId, DerivationType, ProvModel},
+        prov::{
+            operations::DerivationType, vocab::Chronicle, ChronicleTransactionId, DomaintypeId,
+            ProvModel,
+        },
     };
 
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
@@ -1193,16 +1149,9 @@ mod test {
             )))
             .unwrap();
 
-        let (dispatch, _ui) = Api::new(
-            Some(SocketAddr::from_str("0.0.0.0:8080").unwrap()),
-            pool,
-            ledger,
-            reader,
-            &secretpath.into_path(),
-            SameUuid,
-        )
-        .await
-        .unwrap();
+        let dispatch = Api::new(pool, ledger, reader, &secretpath.into_path(), SameUuid)
+            .await
+            .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
     }
@@ -1250,7 +1199,18 @@ mod test {
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1298,7 +1258,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1313,7 +1284,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1344,7 +1326,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1385,7 +1378,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             name: "testagent".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1400,7 +1404,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1408,7 +1423,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
             activity: Some("testactivity".to_owned()),
         }))
         .await
@@ -1433,7 +1447,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             name: "testactivity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
@@ -1441,7 +1466,6 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             name: "testentity".to_owned(),
             namespace: "testns".to_owned(),
-            domaintype: Some("testtype".to_owned()),
             activity: Some("testactivity".to_owned()),
         }))
         .await
@@ -1459,7 +1483,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            typ: None,
+            derivation: None,
         }))
         .await
         .unwrap();
@@ -1475,8 +1499,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             name: "testgeneratedentity".to_owned(),
             namespace: "testns".to_owned(),
             activity: None,
+            derivation: Some(DerivationType::PrimarySource),
             used_entity: "testusedentity".to_owned(),
-            typ: Some(DerivationType::primary_source()),
         }))
         .await
         .unwrap();
@@ -1493,7 +1517,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            typ: Some(DerivationType::revision()),
+            derivation: Some(DerivationType::Revision),
         }))
         .await
         .unwrap();
@@ -1510,7 +1534,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".to_owned(),
             activity: None,
             used_entity: "testusedentity".to_owned(),
-            typ: Some(DerivationType::quotation()),
+            derivation: Some(DerivationType::Quotation),
         }))
         .await
         .unwrap();
@@ -1526,7 +1550,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
                 name: format!("testactivity{}", i),
                 namespace: "testns".to_owned(),
-                domaintype: Some("testtype".to_owned()),
+                attributes: Attributes {
+                    typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                    attributes: [(
+                        "test".to_owned(),
+                        Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
             }))
             .await
             .unwrap();
