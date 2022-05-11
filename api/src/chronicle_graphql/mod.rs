@@ -262,7 +262,7 @@ where
     {
         let schema = Schema::build(self.query, self.mutation, Subscription).finish();
 
-        schema.federation_sdl()
+        schema.sdl()
     }
 }
 
