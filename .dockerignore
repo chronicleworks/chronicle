@@ -1,2 +1,12 @@
-target
+.cargo
+.github
+build
 docker/cache
+markers
+target
+.dockerignore
+.fossa.yml
+.pre-commit-config.yaml
+.tool-versions
+Makefile
+standard_defs.mk
