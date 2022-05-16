@@ -3,17 +3,20 @@ use std::{path::PathBuf, pin::Pin, sync::Arc};
 use chrono::{DateTime, Utc};
 use derivative::*;
 use futures::AsyncRead;
-use iref::IriBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
     attributes::Attributes,
-    prov::{operations::DerivationType, ChronicleTransactionId, ProvModel},
+    prov::{
+        operations::DerivationType, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
+        EntityId, Name, ProvModel,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
-    Create { name: String },
+    Create { name: Name },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,56 +35,117 @@ pub enum KeyRegistration {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentCommand {
     Create {
-        name: String,
-        namespace: String,
+        name: Name,
+        namespace: Name,
         attributes: Attributes,
     },
     RegisterKey {
-        name: String,
-        namespace: String,
+        id: AgentId,
+        namespace: Name,
         registration: KeyRegistration,
     },
     UseInContext {
-        name: String,
-        namespace: String,
+        id: AgentId,
+        namespace: Name,
     },
     Delegate {
-        name: String,
-        delegate: String,
-        activity: Option<String>,
-        namespace: String,
+        id: AgentId,
+        delegate: AgentId,
+        activity: Option<ActivityId>,
+        namespace: Name,
     },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityCommand {
     Create {
-        name: String,
-        namespace: String,
+        name: Name,
+        namespace: Name,
         attributes: Attributes,
     },
     Start {
-        name: String,
-        namespace: String,
+        id: ActivityId,
+        namespace: Name,
         time: Option<DateTime<Utc>>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     },
     End {
-        name: Option<String>,
-        namespace: String,
+        id: Option<ActivityId>,
+        namespace: Name,
         time: Option<DateTime<Utc>>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     },
     Use {
-        name: String,
-        namespace: String,
-        activity: Option<String>,
+        id: EntityId,
+        namespace: Name,
+        activity: Option<ActivityId>,
     },
     Generate {
-        name: String,
-        namespace: String,
-        activity: Option<String>,
+        id: EntityId,
+        namespace: Name,
+        activity: Option<ActivityId>,
     },
+}
+
+impl ActivityCommand {
+    pub fn create(
+        name: impl AsRef<str>,
+        namespace: impl AsRef<str>,
+        attributes: Attributes,
+    ) -> Self {
+        Self::Create {
+            name: name.as_ref().into(),
+            namespace: namespace.as_ref().into(),
+            attributes,
+        }
+    }
+
+    pub fn start(
+        id: ActivityId,
+        namespace: impl AsRef<str>,
+        time: Option<DateTime<Utc>>,
+        agent: Option<AgentId>,
+    ) -> Self {
+        Self::Start {
+            id,
+            namespace: namespace.as_ref().into(),
+            time,
+            agent,
+        }
+    }
+
+    pub fn end(
+        id: Option<ActivityId>,
+        namespace: impl AsRef<str>,
+        time: Option<DateTime<Utc>>,
+        agent: Option<AgentId>,
+    ) -> Self {
+        Self::End {
+            id,
+            namespace: namespace.as_ref().into(),
+            time,
+            agent,
+        }
+    }
+
+    pub fn r#use(id: EntityId, namespace: impl AsRef<str>, activity: Option<ActivityId>) -> Self {
+        Self::Use {
+            id,
+            namespace: namespace.as_ref().into(),
+            activity,
+        }
+    }
+    pub fn generate(
+        id: EntityId,
+        namespace: impl AsRef<str>,
+        activity: Option<ActivityId>,
+    ) -> Self {
+        Self::Generate {
+            id,
+            namespace: namespace.as_ref().into(),
+            activity,
+        }
+    }
 }
 
 #[derive(Derivative)]
@@ -117,24 +181,70 @@ impl<'de> Deserialize<'de> for PathOrFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityCommand {
     Create {
-        name: String,
-        namespace: String,
+        name: Name,
+        namespace: Name,
         attributes: Attributes,
     },
     Attach {
-        name: String,
-        namespace: String,
+        id: EntityId,
+        namespace: Name,
         file: PathOrFile,
         locator: Option<String>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     },
     Derive {
-        name: String,
-        namespace: String,
+        id: EntityId,
+        namespace: Name,
         derivation: Option<DerivationType>,
-        activity: Option<String>,
-        used_entity: String,
+        activity: Option<ActivityId>,
+        used_entity: EntityId,
     },
+}
+
+impl EntityCommand {
+    pub fn create(
+        name: impl AsRef<str>,
+        namespace: impl AsRef<str>,
+        attributes: Attributes,
+    ) -> Self {
+        Self::Create {
+            name: name.as_ref().into(),
+            namespace: namespace.as_ref().into(),
+            attributes,
+        }
+    }
+
+    pub fn attach(
+        id: EntityId,
+        namespace: impl AsRef<str>,
+        file: PathOrFile,
+        locator: Option<String>,
+        agent: Option<AgentId>,
+    ) -> Self {
+        Self::Attach {
+            id,
+            namespace: namespace.as_ref().into(),
+            file,
+            locator,
+            agent,
+        }
+    }
+
+    pub fn detach(
+        id: EntityId,
+        namespace: impl AsRef<str>,
+        derivation: Option<DerivationType>,
+        activity: Option<ActivityId>,
+        used_entity: EntityId,
+    ) -> Self {
+        Self::Derive {
+            id,
+            namespace: namespace.as_ref().into(),
+            derivation,
+            activity,
+            used_entity,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,7 +267,7 @@ pub enum ApiResponse {
     Unit,
     /// The api has validated the command and submitted a transaction to a ledger
     Submission {
-        subject: IriBuf,
+        subject: ChronicleIri,
         prov: Box<ProvModel>,
         correlation_id: ChronicleTransactionId,
     },
@@ -167,12 +277,12 @@ pub enum ApiResponse {
 
 impl ApiResponse {
     pub fn submission(
-        subject: IriBuf,
+        subject: impl Into<ChronicleIri>,
         prov: ProvModel,
         correlation_id: ChronicleTransactionId,
     ) -> Self {
         ApiResponse::Submission {
-            subject,
+            subject: subject.into(),
             prov: Box::new(prov),
             correlation_id,
         }

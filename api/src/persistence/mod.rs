@@ -7,14 +7,18 @@ use common::attributes::Attribute;
 use common::prov::Association;
 use common::prov::Delegation;
 use common::prov::Derivation;
+use common::prov::DomaintypeId;
 use common::prov::Generation;
-use common::prov::Useage;
+use common::prov::Name;
+use common::prov::NamePart;
+use common::prov::PublicKeyPart;
+use common::prov::SignaturePart;
 use common::{
     ledger::Offset,
     prov::{
-        vocab::Chronicle, Activity, ActivityId, Agent, AgentId, Attachment, AttachmentId,
+        Activity, ActivityId, Agent, AgentId, Attachment, AttachmentId,
         ChronicleTransactionId, ChronicleTransactionIdError, Entity, EntityId, Identity,
-        IdentityId, Namespace, NamespaceId, ProvModel,
+        IdentityId, Namespace, NamespaceId, ProvModel, Useage,
     },
 };
 use custom_error::custom_error;
@@ -104,10 +108,10 @@ impl Store {
     pub fn activity_by_activity_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
+        name: &Name,
         namespaceid: &NamespaceId,
     ) -> Result<query::Activity, StoreError> {
-        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         use schema::activity::dsl;
 
         Ok(schema::activity::table
@@ -119,10 +123,10 @@ impl Store {
     pub(crate) fn agent_by_agent_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
-        namespaceid: &NamespaceId,
+        name: Name,
+        namespaceid: NamespaceId,
     ) -> Result<query::Agent, StoreError> {
-        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         use schema::agent::dsl;
 
         Ok(schema::agent::table
@@ -148,7 +152,7 @@ impl Store {
     ) -> Result<(), StoreError> {
         use schema::activity::{self as dsl};
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
         diesel::insert_into(schema::activity::table)
             .values((
@@ -156,7 +160,7 @@ impl Store {
                 dsl::namespace_id.eq(nsid),
                 dsl::started.eq(started.map(|t| t.naive_utc())),
                 dsl::ended.eq(ended.map(|t| t.naive_utc())),
-                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
             ))
             .on_conflict((dsl::name, dsl::namespace_id))
             .do_update()
@@ -204,19 +208,19 @@ impl Store {
     ) -> Result<(), StoreError> {
         use schema::agent::dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
         diesel::insert_or_ignore_into(schema::agent::table)
             .values((
                 dsl::name.eq(name),
                 dsl::namespace_id.eq(nsid),
                 dsl::current.eq(0),
-                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.decompose())),
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
             ))
             .execute(connection)?;
 
         let query::Agent { id, .. } =
-            self.agent_by_agent_name_and_namespace(connection, &*name, namespaceid)?;
+            self.agent_by_agent_name_and_namespace(connection, name.clone(), namespaceid.clone())?;
 
         diesel::insert_or_ignore_into(schema::agent_attribute::table)
             .values(
@@ -249,8 +253,8 @@ impl Store {
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
-        let (agent_name, public_key) = signer.decompose();
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
+        let (agent_name, public_key) = (signer.name_part(), signer.public_key_part());
 
         use schema::{agent::dsl as agentdsl, identity::dsl as identitydsl};
         let signer_id = agentdsl::agent
@@ -288,20 +292,20 @@ impl Store {
     ) -> Result<(), StoreError> {
         use schema::entity::dsl;
         let (_namespaceid, nsid) =
-            self.namespace_by_name(connection, entity.namespaceid.decompose().0)?;
+            self.namespace_by_name(connection, entity.namespaceid.name_part())?;
 
         diesel::insert_or_ignore_into(schema::entity::table)
             .values((
-                dsl::name.eq(&*entity.name),
+                dsl::name.eq(&entity.name),
                 dsl::namespace_id.eq(nsid),
-                dsl::domaintype.eq(entity.domaintypeid.as_ref().map(|x| x.decompose())),
+                dsl::domaintype.eq(entity.domaintypeid.as_ref().map(|x| x.name_part())),
             ))
             .execute(connection)?;
 
         let query::Entity { id, .. } = self.entity_by_entity_name_and_namespace(
             connection,
-            &*entity.name,
-            &entity.namespaceid,
+            entity.name.clone(),
+            entity.namespaceid.clone(),
         )?;
 
         diesel::insert_or_ignore_into(schema::entity_attribute::table)
@@ -330,14 +334,14 @@ impl Store {
         entity: &EntityId,
         attachment: &AttachmentId,
     ) -> Result<(), StoreError> {
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         let attachment = self.attachment_by(connection, namespaceid, attachment)?;
         use schema::entity::dsl;
 
         diesel::update(schema::entity::table)
             .filter(
                 dsl::name
-                    .eq(entity.decompose())
+                    .eq(entity.name_part())
                     .and(dsl::namespace_id.eq(nsid)),
             )
             .set(dsl::attachment_id.eq(attachment.id))
@@ -356,8 +360,11 @@ impl Store {
         attachment: &AttachmentId,
     ) -> Result<(), StoreError> {
         let attachment = self.attachment_by(connection, namespaceid, attachment)?;
-        let entity =
-            self.entity_by_entity_name_and_namespace(connection, entity.decompose(), namespaceid)?;
+        let entity = self.entity_by_entity_name_and_namespace(
+            connection,
+            entity.name_part().clone(),
+            namespaceid.clone(),
+        )?;
         use schema::hadattachment::dsl;
 
         diesel::insert_or_ignore_into(schema::hadattachment::table)
@@ -379,14 +386,14 @@ impl Store {
         agent: &AgentId,
         identity: &IdentityId,
     ) -> Result<(), StoreError> {
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         let identity = self.identity_by(connection, namespaceid, identity)?;
         use schema::agent::dsl;
 
         diesel::update(schema::agent::table)
             .filter(
                 dsl::name
-                    .eq(agent.decompose())
+                    .eq(agent.name_part())
                     .and(dsl::namespace_id.eq(nsid)),
             )
             .set(dsl::identity_id.eq(identity.id))
@@ -405,8 +412,11 @@ impl Store {
         identity: &IdentityId,
     ) -> Result<(), StoreError> {
         let identity = self.identity_by(connection, namespaceid, identity)?;
-        let agent =
-            self.agent_by_agent_name_and_namespace(connection, agent.decompose(), namespaceid)?;
+        let agent = self.agent_by_agent_name_and_namespace(
+            connection,
+            agent.name_part().clone(),
+            namespaceid.clone(),
+        )?;
         use schema::hadidentity::dsl;
 
         diesel::insert_or_ignore_into(schema::hadidentity::table)
@@ -430,7 +440,7 @@ impl Store {
     ) -> Result<(), StoreError> {
         use schema::identity::dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
         diesel::insert_or_ignore_into(schema::identity::table)
             .values((dsl::namespace_id.eq(nsid), dsl::public_key.eq(public_key)))
@@ -638,8 +648,8 @@ impl Store {
 
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
-            &proventity.name,
-            &proventity.namespaceid,
+            proventity.name.clone(),
+            proventity.namespaceid.clone(),
         )?;
 
         use schema::useage::dsl as link;
@@ -683,8 +693,8 @@ impl Store {
 
         let storedagent = self.agent_by_agent_name_and_namespace(
             connection,
-            &provagent.name,
-            &provagent.namespaceid,
+            provagent.name.clone(),
+            provagent.namespaceid.clone(),
         )?;
 
         use schema::association::dsl as asoc;
@@ -715,7 +725,11 @@ impl Store {
                 agentid: delegation.responsible_id.clone(),
             })
             .and_then(|agent| {
-                self.agent_by_agent_name_and_namespace(connection, &agent.name, &agent.namespaceid)
+                self.agent_by_agent_name_and_namespace(
+                    connection,
+                    agent.name.clone(),
+                    agent.namespaceid.clone(),
+                )
             })?;
 
         let delegate = model
@@ -725,7 +739,11 @@ impl Store {
                 agentid: delegation.delegate_id.clone(),
             })
             .and_then(|agent| {
-                self.agent_by_agent_name_and_namespace(connection, &agent.name, &agent.namespaceid)
+                self.agent_by_agent_name_and_namespace(
+                    connection,
+                    agent.name.clone(),
+                    agent.namespaceid.clone(),
+                )
             })?;
 
         let activity = match delegation.activity_id.as_ref().map(|activity_id| {
@@ -788,12 +806,15 @@ impl Store {
 
         let stored_generated = self.entity_by_entity_name_and_namespace(
             connection,
-            &generated.name,
-            &generated.namespaceid,
+            generated.name.clone(),
+            generated.namespaceid.clone(),
         )?;
 
-        let stored_used =
-            self.entity_by_entity_name_and_namespace(connection, &used.name, &used.namespaceid)?;
+        let stored_used = self.entity_by_entity_name_and_namespace(
+            connection,
+            used.name.clone(),
+            used.namespaceid.clone(),
+        )?;
 
         use schema::derivation::dsl as link;
         diesel::insert_or_ignore_into(schema::derivation::table)
@@ -838,8 +859,8 @@ impl Store {
 
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
-            &proventity.name,
-            &proventity.namespaceid,
+            proventity.name.clone(),
+            proventity.namespaceid.clone(),
         )?;
 
         use schema::generation::dsl as link;
@@ -864,9 +885,9 @@ impl Store {
     pub(crate) fn disambiguate_activity_name(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
+        name: &Name,
         namespaceid: &NamespaceId,
-    ) -> Result<String, StoreError> {
+    ) -> Result<Name, StoreError> {
         use schema::{activity::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::activity::table
@@ -874,7 +895,7 @@ impl Store {
             .filter(
                 dsl::name
                     .eq(name)
-                    .and(nsdsl::name.eq(namespaceid.decompose().0)),
+                    .and(nsdsl::name.eq(namespaceid.name_part())),
             )
             .count()
             .first::<i64>(connection)?;
@@ -887,16 +908,16 @@ impl Store {
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
 
-        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()).into())
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
     pub(crate) fn disambiguate_agent_name(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
+        name: &Name,
         namespaceid: &NamespaceId,
-    ) -> Result<String, StoreError> {
+    ) -> Result<Name, StoreError> {
         use schema::{agent::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::agent::table
@@ -904,7 +925,7 @@ impl Store {
             .filter(
                 dsl::name
                     .eq(name)
-                    .and(nsdsl::name.eq(namespaceid.decompose().0)),
+                    .and(nsdsl::name.eq(namespaceid.name_part())),
             )
             .count()
             .first::<i64>(connection)?;
@@ -917,7 +938,7 @@ impl Store {
             .select(max(dsl::id))
             .first::<Option<i32>>(connection)?;
 
-        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()).into())
     }
 
     /// Ensure the name is unique within the namespace, if not, then postfix the rowid
@@ -925,17 +946,17 @@ impl Store {
     pub(crate) fn disambiguate_entity_name(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
-        namespaceid: &NamespaceId,
-    ) -> Result<String, StoreError> {
+        name: Name,
+        namespaceid: NamespaceId,
+    ) -> Result<Name, StoreError> {
         use schema::{entity::dsl, namespace::dsl as nsdsl};
 
         let collision = schema::entity::table
             .inner_join(schema::namespace::table)
             .filter(
                 dsl::name
-                    .eq(name)
-                    .and(nsdsl::name.eq(namespaceid.decompose().0)),
+                    .eq(&name)
+                    .and(nsdsl::name.eq(namespaceid.name_part())),
             )
             .count()
             .first::<i64>(connection)?;
@@ -954,16 +975,16 @@ impl Store {
 
         trace!(?name, "Is not unique, postfix with last rowid");
 
-        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()))
+        Ok(format!("{}-{}", name, ambiguous.unwrap_or_default()).into())
     }
 
     pub(crate) fn entity_by_entity_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
-        name: &str,
-        namespaceid: &NamespaceId,
+        name: Name,
+        namespaceid: NamespaceId,
     ) -> Result<query::Entity, StoreError> {
-        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
+        let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         use schema::entity::dsl;
 
         Ok(schema::entity::table
@@ -976,14 +997,14 @@ impl Store {
     pub(crate) fn get_activity_by_name_or_last_started(
         &self,
         connection: &mut SqliteConnection,
-        name: Option<String>,
-        namespace: &NamespaceId,
+        name: Option<Name>,
+        namespace: NamespaceId,
     ) -> Result<query::Activity, StoreError> {
         use schema::activity::dsl;
 
         if let Some(name) = name {
             trace!(%name, "Use existing");
-            Ok(self.activity_by_activity_name_and_namespace(connection, &name, namespace)?)
+            Ok(self.activity_by_activity_name_and_namespace(connection, &name, &namespace)?)
         } else {
             trace!("Use last started");
             Ok(schema::activity::table
@@ -1028,7 +1049,7 @@ impl Store {
     pub(crate) fn namespace_by_name(
         &self,
         connection: &mut SqliteConnection,
-        namespace: &str,
+        namespace: &Name,
     ) -> Result<(NamespaceId, i32), StoreError> {
         use self::schema::namespace::dsl;
 
@@ -1039,10 +1060,7 @@ impl Store {
             .optional()?
             .ok_or(StoreError::RecordNotFound {})?;
 
-        Ok((
-            Chronicle::namespace(&ns.1, &Uuid::from_str(&ns.2)?).into(),
-            ns.0,
-        ))
+        Ok((NamespaceId::from_name(ns.1, Uuid::from_str(&ns.2)?), ns.0))
     }
 
     #[instrument(skip(connection))]
@@ -1053,8 +1071,8 @@ impl Store {
         attachment: &AttachmentId,
     ) -> Result<query::Attachment, StoreError> {
         use self::schema::attachment::dsl;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
-        let (_entity_name, id_signature) = attachment.decompose();
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
+        let id_signature = attachment.signature_part();
 
         Ok(dsl::attachment
             .filter(
@@ -1073,8 +1091,8 @@ impl Store {
         identity: &IdentityId,
     ) -> Result<query::Identity, StoreError> {
         use self::schema::identity::dsl;
-        let (_, nsid) = self.namespace_by_name(connection, namespaceid.decompose().0)?;
-        let (_agent_name, public_key) = identity.decompose();
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
+        let public_key = identity.public_key_part();
 
         Ok(dsl::identity
             .filter(
@@ -1097,7 +1115,8 @@ impl Store {
         query: QueryCommand,
     ) -> Result<ProvModel, StoreError> {
         let mut model = ProvModel::default();
-        let (namespaceid, nsid) = self.namespace_by_name(connection, &query.namespace)?;
+        let (namespaceid, nsid) =
+            self.namespace_by_name(connection, &Name::from(&query.namespace))?;
 
         let agents = schema::agent::table
             .filter(schema::agent::namespace_id.eq(&nsid))
@@ -1109,14 +1128,14 @@ impl Store {
                 .load::<query::AgentAttribute>(connection)?;
 
             debug!(?agent, "Map agent to prov");
-            let agentid: AgentId = Chronicle::agent(&agent.name).into();
+            let agentid: AgentId = AgentId::from_name(&agent.name);
             model.agents.insert(
                 (namespaceid.clone(), agentid.clone()),
                 Agent {
                     id: agentid.clone(),
                     namespaceid: namespaceid.clone(),
-                    name: agent.name,
-                    domaintypeid: agent.domaintype.map(|x| Chronicle::domaintype(&x).into()),
+                    name: Name::from(&agent.name),
+                    domaintypeid: agent.domaintype.map(|x| DomaintypeId::from_name(&x)),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
@@ -1142,11 +1161,7 @@ impl Store {
                 .load_iter::<String>(connection)?
             {
                 let asoc = asoc?;
-                model.was_associated_with(
-                    &namespaceid,
-                    &Chronicle::activity(&asoc).into(),
-                    &agentid,
-                );
+                model.was_associated_with(&namespaceid, &ActivityId::from_name(&asoc), &agentid);
             }
         }
 
@@ -1160,18 +1175,16 @@ impl Store {
                 .filter(schema::activity_attribute::activity_id.eq(&activity.id))
                 .load::<query::ActivityAttribute>(connection)?;
 
-            let id: ActivityId = Chronicle::activity(&activity.name).into();
+            let id: ActivityId = ActivityId::from_name(&activity.name);
             model.activities.insert(
                 (namespaceid.clone(), id.clone()),
                 Activity {
                     id: id.clone(),
                     namespaceid: namespaceid.clone(),
-                    name: activity.name,
+                    name: activity.name.into(),
                     started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
                     ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
-                    domaintypeid: activity
-                        .domaintype
-                        .map(|x| Chronicle::domaintype(&x).into()),
+                    domaintypeid: activity.domaintype.map(|x| DomaintypeId::from_name(&x)),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
@@ -1197,7 +1210,7 @@ impl Store {
                 .load_iter::<String>(connection)?
             {
                 let asoc = asoc?;
-                model.was_generated_by(namespaceid.clone(), &Chronicle::entity(&asoc).into(), &id);
+                model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&asoc), &id);
             }
 
             for used in schema::useage::table
@@ -1208,7 +1221,7 @@ impl Store {
                 .load_iter::<String>(connection)?
             {
                 let used = used?;
-                model.used(namespaceid.clone(), &id, &Chronicle::entity(&used).into());
+                model.used(namespaceid.clone(), &id, &EntityId::from_name(&used));
             }
         }
 
@@ -1228,14 +1241,14 @@ impl Store {
                 .filter(schema::entity_attribute::entity_id.eq(&id))
                 .load::<query::EntityAttribute>(connection)?;
 
-            let id: EntityId = Chronicle::entity(&name).into();
+            let id: EntityId = EntityId::from_name(&name);
             model.entities.insert(
                 (namespaceid.clone(), id.clone()),
                 Entity {
                     id,
                     namespaceid: namespaceid.clone(),
-                    name,
-                    domaintypeid: domaintype.map(|x| Chronicle::domaintype(&x).into()),
+                    name: name.into(),
+                    domaintypeid: domaintype.map(|x| DomaintypeId::from_name(&x)),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
@@ -1289,8 +1302,8 @@ impl Store {
     pub(crate) fn use_agent(
         &self,
         connection: &mut SqliteConnection,
-        name: String,
-        namespace: String,
+        name: &Name,
+        namespace: &Name,
     ) -> Result<(), StoreError> {
         let (_, nsid) = self.namespace_by_name(connection, &*namespace)?;
         use schema::agent::dsl;

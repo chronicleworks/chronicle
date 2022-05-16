@@ -9,14 +9,14 @@ use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
-use common::prov::DomaintypeId;
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId};
 use common::{
     attributes::Attributes,
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
         KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
     },
-    prov::{vocab::Chronicle, CompactionError},
+    prov::{CompactionError},
 };
 use custom_error::custom_error;
 use tokio::sync::broadcast::error::RecvError;
@@ -156,8 +156,7 @@ fn domain_type(args: &ArgMatches) -> Option<DomaintypeId> {
     if !args.is_present("domaintype") {
         None
     } else {
-        args.value_of("domaintype")
-            .map(|x| DomaintypeId::from(&Chronicle::domaintype(x)))
+        args.value_of("domaintype").map(DomaintypeId::from_name)
     }
 }
 
@@ -181,7 +180,7 @@ where
         options.subcommand_matches("namespace").and_then(|m| {
             m.subcommand_matches("create").map(|m| {
                 api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                    name: m.value_of("namespace").unwrap().to_owned(),
+                    name: m.value_of("namespace").unwrap().into(),
                 }))
             })
         }),
@@ -189,8 +188,8 @@ where
             vec![
                 m.subcommand_matches("create").map(|m| {
                     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        name: m.value_of("agent_name").unwrap().into(),
+                        namespace: m.value_of("namespace").unwrap().into(),
                         attributes: Attributes::type_only(domain_type(m)),
                     }))
                 }),
@@ -210,15 +209,15 @@ where
                     };
 
                     api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        id: AgentId::from_name(m.value_of("agent_name").unwrap()),
+                        namespace: m.value_of("namespace").unwrap().into(),
                         registration,
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {
                     api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-                        name: m.value_of("agent_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        id: AgentId::from_name(m.value_of("agent_name").unwrap()),
+                        namespace: m.value_of("namespace").unwrap().into(),
                     }))
                 }),
             ]
@@ -230,39 +229,39 @@ where
             vec![
                 m.subcommand_matches("create").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        name: m.value_of("activity_name").unwrap().into(),
+                        namespace: m.value_of("namespace").unwrap().into(),
                         attributes: Attributes::type_only(domain_type(m)),
                     }))
                 }),
                 m.subcommand_matches("start").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-                        name: m.value_of("activity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        id: ActivityId::from_name(m.value_of("activity_name").unwrap()),
+                        namespace: m.value_of("namespace").unwrap().into(),
                         time: None,
                         agent: None,
                     }))
                 }),
                 m.subcommand_matches("end").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-                        name: m.value_of("activity_name").map(|x| x.to_owned()),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
+                        id: m.value_of("activity_name").map(ActivityId::from_name),
+                        namespace: m.value_of("namespace").unwrap().into(),
                         time: None,
                         agent: None,
                     }))
                 }),
                 m.subcommand_matches("use").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-                        name: m.value_of("entity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
+                        id: EntityId::from_name(m.value_of("entity_name").unwrap()),
+                        namespace: m.value_of("namespace").unwrap().into(),
+                        activity: m.value_of("activity_name").map(ActivityId::from_name),
                     }))
                 }),
                 m.subcommand_matches("generate").map(|m| {
                     api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-                        name: m.value_of("entity_name").unwrap().to_owned(),
-                        namespace: m.value_of("namespace").unwrap().to_owned(),
-                        activity: m.value_of("activity_name").map(|x| x.to_owned()),
+                        id: EntityId::from_name(m.value_of("entity_name").unwrap()),
+                        namespace: m.value_of("namespace").unwrap().into(),
+                        activity: m.value_of("activity_name").map(ActivityId::from_name),
                     }))
                 }),
             ]
@@ -273,11 +272,11 @@ where
         options.subcommand_matches("entity").and_then(|m| {
             vec![m.subcommand_matches("attach").map(|m| {
                 api.dispatch(ApiCommand::Entity(EntityCommand::Attach {
-                    name: m.value_of("entity_name").unwrap().to_owned(),
-                    namespace: m.value_of("namespace").unwrap().to_owned(),
+                    id: EntityId::from_name(m.value_of("entity_name").unwrap()),
+                    namespace: m.value_of("namespace").unwrap().into(),
                     file: PathOrFile::Path(m.value_of_t::<PathBuf>("file").unwrap()),
                     locator: m.value_of("locator").map(|x| x.to_owned()),
-                    agent: m.value_of("agent").map(|x| x.to_owned()),
+                    agent: m.value_of("agent").map(AgentId::from_name),
                 }))
             })]
             .into_iter()

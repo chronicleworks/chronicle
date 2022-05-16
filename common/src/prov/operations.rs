@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::attributes::Attributes;
 
-use super::{ActivityId, AgentId, EntityId, IdentityId, NamespaceId};
+use super::{ActivityId, AgentId, EntityId, IdentityId, Name, NamespaceId};
 
 #[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[diesel(sql_type = Integer)]
@@ -67,15 +67,33 @@ impl DerivationType {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CreateNamespace {
     pub id: NamespaceId,
-    pub name: String,
+    pub name: Name,
     pub uuid: Uuid,
+}
+
+impl CreateNamespace {
+    pub fn new(id: NamespaceId, name: impl AsRef<str>, uuid: Uuid) -> Self {
+        Self {
+            id,
+            name: name.as_ref().into(),
+            uuid,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CreateAgent {
     pub namespace: NamespaceId,
-    pub name: String,
-    pub id: AgentId,
+    pub name: Name,
+}
+
+impl CreateAgent {
+    pub fn new(namespace: NamespaceId, name: impl AsRef<str>) -> Self {
+        Self {
+            namespace,
+            name: name.as_ref().into(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -91,14 +109,12 @@ pub struct RegisterKey {
     pub namespace: NamespaceId,
     pub id: AgentId,
     pub publickey: String,
-    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CreateActivity {
     pub namespace: NamespaceId,
-    pub id: ActivityId,
-    pub name: String,
+    pub name: Name,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -127,8 +143,7 @@ pub struct ActivityUses {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CreateEntity {
     pub namespace: NamespaceId,
-    pub id: EntityId,
-    pub name: String,
+    pub name: Name,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]

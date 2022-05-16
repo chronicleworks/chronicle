@@ -8,7 +8,7 @@ use derivative::*;
 use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
-use iref::IriBuf;
+
 use k256::ecdsa::{signature::Signer, Signature};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
@@ -28,8 +28,8 @@ use common::{
             CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
             GenerateEntity, RegisterKey, SetAttributes, StartActivity,
         },
-        vocab::Chronicle as ChronicleVocab,
-        ActivityId, AgentId, ChronicleTransactionId, EntityId, NamespaceId, ProvModel,
+        ActivityId, AgentId, ChronicleTransactionId, EntityId, IdentityId, Name, NamePart,
+        NamespaceId, ProvModel,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -287,7 +287,7 @@ where
     fn ensure_namespace(
         &mut self,
         connection: &mut SqliteConnection,
-        name: &str,
+        name: &Name,
     ) -> Result<(NamespaceId, Vec<ChronicleOperation>), ApiError> {
         let ns = self.store.namespace_by_name(connection, name);
 
@@ -295,15 +295,12 @@ where
             debug!(?ns, "Namespace does not exist, creating");
 
             let uuid = U::uuid();
-            let iri = ChronicleVocab::namespace(name, &uuid);
-            let id: NamespaceId = iri.into();
+            let id: NamespaceId = NamespaceId::from_name(name, uuid);
             Ok((
                 id.clone(),
-                vec![ChronicleOperation::CreateNamespace(CreateNamespace {
-                    id,
-                    name: name.to_owned(),
-                    uuid,
-                })],
+                vec![ChronicleOperation::CreateNamespace(CreateNamespace::new(
+                    id, name, uuid,
+                ))],
             ))
         } else {
             Ok((ns?.0, vec![]))
@@ -316,9 +313,9 @@ where
     #[instrument]
     async fn activity_generate(
         &self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
+        id: EntityId,
+        namespace: Name,
+        activity: Option<ActivityId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -326,30 +323,38 @@ where
 
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let activity = api
-                    .store
-                    .get_activity_by_name_or_last_started(connection, activity, &namespace)?;
+                let activity = api.store.get_activity_by_name_or_last_started(
+                    connection,
+                    activity.map(|x| x.name_part().clone()),
+                    namespace.clone(),
+                )?;
 
-                let entity = api
-                    .store
-                    .entity_by_entity_name_and_namespace(connection, &name, &namespace);
+                let entity = api.store.entity_by_entity_name_and_namespace(
+                    connection,
+                    id.name_part().clone(),
+                    namespace.clone(),
+                );
 
-                let name = {
+                let name: Name = {
                     if let Ok(existing) = entity {
                         debug!(?existing, "Use existing entity");
-                        existing.name
+                        existing.name.into()
                     } else {
-                        debug!(?name, "Need new entity");
-                        api.store
-                            .disambiguate_entity_name(connection, &name, &namespace)?
+                        debug!(?id, "Need new entity");
+                        api.store.disambiguate_entity_name(
+                            connection,
+                            id.name_part().clone(),
+                            namespace.clone(),
+                        )?
                     }
                 };
 
-                let id = ChronicleVocab::entity(&name);
+                let id = EntityId::from_name(&name);
+
                 let create = ChronicleOperation::GenerateEntity(GenerateEntity {
-                    namespace: namespace.clone(),
-                    id: id.clone().into(),
-                    activity: ChronicleVocab::activity(&activity.name).into(),
+                    namespace,
+                    id: id.clone(),
+                    activity: ActivityId::from_name(&activity.name),
                 });
 
                 to_apply.push(create);
@@ -372,9 +377,9 @@ where
     #[instrument]
     async fn activity_use(
         &self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
+        id: EntityId,
+        namespace: Name,
+        activity: Option<ActivityId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -383,31 +388,38 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api
-                        .store
-                        .get_activity_by_name_or_last_started(connection, activity, &namespace)?;
+                    let activity = api.store.get_activity_by_name_or_last_started(
+                        connection,
+                        activity.map(|x| x.name_part().clone()),
+                        namespace.clone(),
+                    )?;
 
-                    let entity = api
-                        .store
-                        .entity_by_entity_name_and_namespace(connection, &name, &namespace);
+                    let entity = api.store.entity_by_entity_name_and_namespace(
+                        connection,
+                        id.name_part().clone(),
+                        namespace.clone(),
+                    );
 
-                    let name = {
+                    let name: Name = {
                         if let Ok(existing) = entity {
                             debug!(?existing, "Use existing entity");
-                            existing.name
+                            existing.name.into()
                         } else {
-                            debug!(?name, "Need new entity");
-                            api.store
-                                .disambiguate_entity_name(connection, &name, &namespace)?
+                            debug!(?id, "Need new entity");
+                            api.store.disambiguate_entity_name(
+                                connection,
+                                id.name_part().clone(),
+                                namespace.clone(),
+                            )?
                         }
                     };
 
-                    let id = ChronicleVocab::entity(&name);
+                    let id = EntityId::from_name(&name);
 
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
-                        namespace: namespace.clone(),
-                        id: id.clone().into(),
-                        activity: ChronicleVocab::activity(&activity.name).into(),
+                        namespace,
+                        id: id.clone(),
+                        activity: ActivityId::from_name(&activity.name),
                     });
 
                     to_apply.push(create);
@@ -433,8 +445,8 @@ where
     #[instrument]
     async fn create_entity(
         &self,
-        name: String,
-        namespace: String,
+        name: Name,
+        namespace: Name,
         attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -444,71 +456,21 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name = api
-                    .store
-                    .disambiguate_entity_name(connection, &name, &namespace)?;
+                let name: Name =
+                    api.store
+                        .disambiguate_entity_name(connection, name, namespace.clone())?;
 
-                let iri = ChronicleVocab::entity(&name);
+                let id = EntityId::from_name(&name);
 
                 let create = ChronicleOperation::CreateEntity(CreateEntity {
-                    name: name.to_owned(),
-                    id: iri.clone().into(),
                     namespace: namespace.clone(),
+                    name: name.clone(),
                 });
 
                 to_apply.push(create);
 
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
-                    id: ChronicleVocab::agent(&name).into(),
-                    namespace,
-                    attributes,
-                });
-
-                to_apply.push(set_type);
-
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
-
-                Ok(ApiResponse::submission(
-                    iri,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
-            })
-        })
-        .await?
-    }
-
-    /// Submits operations [`CreateActivity`], and [`SetAttributes::Activity`]
-    ///
-    /// We use our local store to see if the activity already exists, disambiguating the URI if so
-    #[instrument]
-    async fn create_activity(
-        &self,
-        name: String,
-        namespace: String,
-        attributes: Attributes,
-    ) -> Result<ApiResponse, ApiError> {
-        let mut api = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut connection = api.store.connection()?;
-
-            connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-
-                let name = api
-                    .store
-                    .disambiguate_activity_name(connection, &name, &namespace)?;
-                let id = ChronicleVocab::activity(&name);
-                let create = ChronicleOperation::CreateActivity(CreateActivity {
-                    namespace: namespace.clone(),
-                    id: id.clone().into(),
-                    name,
-                });
-
-                to_apply.push(create);
-
-                let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
-                    id: id.clone().into(),
+                    id: EntityId::from_name(&name),
                     namespace,
                     attributes,
                 });
@@ -527,14 +489,14 @@ where
         .await?
     }
 
-    /// Submits operations [`CreateAgent`], and [`SetAttributes::Agent`]
+    /// Submits operations [`CreateActivity`], and [`SetAttributes::Activity`]
     ///
-    /// We use our local store to see if the agent already exists, disambiguating the URI if so
+    /// We use our local store to see if the activity already exists, disambiguating the URI if so
     #[instrument]
-    async fn create_agent(
+    async fn create_activity(
         &self,
-        name: String,
-        namespace: String,
+        name: Name,
+        namespace: Name,
         attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -544,22 +506,68 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name = api
+                let name: Name = api
+                    .store
+                    .disambiguate_activity_name(connection, &name, &namespace)?;
+
+                let create = ChronicleOperation::CreateActivity(CreateActivity {
+                    namespace: namespace.clone(),
+                    name: name.clone(),
+                });
+
+                to_apply.push(create);
+
+                let id = ActivityId::from_name(&name);
+                let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
+                    id: id.clone(),
+                    namespace,
+                    attributes,
+                });
+
+                to_apply.push(set_type);
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
+    /// Submits operations [`CreateAgent`], and [`SetAttributes::Agent`]
+    ///
+    /// We use our local store to see if the agent already exists, disambiguating the URI if so
+    #[instrument]
+    async fn create_agent(
+        &self,
+        name: Name,
+        namespace: Name,
+        attributes: Attributes,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let name: Name = api
                     .store
                     .disambiguate_agent_name(connection, &name, &namespace)?;
 
-                let iri = ChronicleVocab::agent(&name);
-
                 let create = ChronicleOperation::CreateAgent(CreateAgent {
                     name: name.to_owned(),
-                    id: iri.clone().into(),
                     namespace: namespace.clone(),
                 });
 
                 to_apply.push(create);
 
+                let id = AgentId::from_name(&name);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
-                    id: ChronicleVocab::agent(&name).into(),
+                    id: id.clone(),
                     namespace,
                     attributes,
                 });
@@ -569,7 +577,7 @@ where
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::submission(
-                    iri,
+                    id,
                     ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
@@ -579,7 +587,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
-    async fn create_namespace(&self, name: &str) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(&self, name: &Name) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let name = name.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -590,7 +598,7 @@ where
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
                 Ok(ApiResponse::submission(
-                    IriBuf::new(&*namespace).unwrap(),
+                    namespace,
                     ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
@@ -611,69 +619,69 @@ where
                 attributes,
             }) => self.create_agent(name, namespace, attributes).await,
             ApiCommand::Agent(AgentCommand::RegisterKey {
-                name,
+                id,
                 namespace,
                 registration,
-            }) => self.register_key(name, namespace, registration).await,
-            ApiCommand::Agent(AgentCommand::UseInContext { name, namespace }) => {
-                self.use_in_context(name, namespace).await
+            }) => self.register_key(id, namespace, registration).await,
+            ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }) => {
+                self.use_in_context(id, namespace).await
             }
             ApiCommand::Agent(AgentCommand::Delegate {
-                name,
+                id,
                 delegate,
                 activity,
                 namespace,
-            }) => self.delegate(namespace, name, delegate, activity).await,
+            }) => self.delegate(id, namespace, delegate, activity).await,
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
                 namespace,
                 attributes,
             }) => self.create_activity(name, namespace, attributes).await,
             ApiCommand::Activity(ActivityCommand::Start {
-                name,
+                id,
                 namespace,
                 time,
                 agent,
-            }) => self.start_activity(name, namespace, time, agent).await,
+            }) => self.start_activity(id, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::End {
-                name,
+                id,
                 namespace,
                 time,
                 agent,
-            }) => self.end_activity(name, namespace, time, agent).await,
+            }) => self.end_activity(id, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::Use {
-                name,
+                id,
                 namespace,
                 activity,
-            }) => self.activity_use(name, namespace, activity).await,
+            }) => self.activity_use(id, namespace, activity).await,
             ApiCommand::Entity(EntityCommand::Create {
                 name,
                 namespace,
                 attributes,
             }) => self.create_entity(name, namespace, attributes).await,
             ApiCommand::Activity(ActivityCommand::Generate {
-                name,
+                id,
                 namespace,
                 activity,
-            }) => self.activity_generate(name, namespace, activity).await,
+            }) => self.activity_generate(id, namespace, activity).await,
             ApiCommand::Entity(EntityCommand::Attach {
-                name,
+                id,
                 namespace,
                 file,
                 locator,
                 agent,
             }) => {
-                self.entity_attach(name, namespace, file.clone(), locator, agent)
+                self.entity_attach(id, namespace, file.clone(), locator, agent)
                     .await
             }
             ApiCommand::Entity(EntityCommand::Derive {
-                name,
+                id,
                 namespace,
                 activity,
                 used_entity,
                 derivation,
             }) => {
-                self.entity_derive(name, namespace, activity, used_entity, derivation)
+                self.entity_derive(id, namespace, activity, used_entity, derivation)
                     .await
             }
             ApiCommand::Query(query) => self.query(query).await,
@@ -683,10 +691,10 @@ where
     #[instrument]
     async fn delegate(
         &self,
-        namespace: String,
-        name: String,
-        delegate_name: String,
-        activity: Option<String>,
+        id: AgentId,
+        namespace: Name,
+        delegate_id: AgentId,
+        activity_id: Option<ActivityId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
 
@@ -696,16 +704,11 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let id = ChronicleVocab::agent(&name);
-                let delegate_id: AgentId = ChronicleVocab::agent(&delegate_name).into();
-                let activity_id: Option<ActivityId> =
-                    activity.map(|activity| ChronicleVocab::activity(&activity).into());
-
                 let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                     namespace,
-                    id: id.clone().into(),
-                    activity_id,
-                    delegate_id,
+                    id: id.clone(),
+                    activity_id: activity_id.to_owned(),
+                    delegate_id: delegate_id.to_owned(),
                 });
 
                 to_apply.push(tx);
@@ -724,10 +727,10 @@ where
     #[instrument]
     async fn entity_derive(
         &self,
-        name: String,
-        namespace: String,
-        activity: Option<String>,
-        used_entity: String,
+        id: EntityId,
+        namespace: Name,
+        activity_id: Option<ActivityId>,
+        used_id: EntityId,
         typ: Option<DerivationType>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -738,17 +741,12 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let id = ChronicleVocab::entity(&name);
-                let used_id: EntityId = ChronicleVocab::entity(&used_entity).into();
-                let activity_id: Option<ActivityId> =
-                    activity.map(|activity| ChronicleVocab::activity(&activity).into());
-
                 let tx = ChronicleOperation::EntityDerive(EntityDerive {
                     namespace,
+                    id: id.clone(),
+                    used_id: used_id.clone(),
+                    activity_id: activity_id.clone(),
                     typ,
-                    id: id.clone().into(),
-                    used_id,
-                    activity_id,
                 });
 
                 to_apply.push(tx);
@@ -771,11 +769,11 @@ where
     #[instrument]
     async fn entity_attach(
         &self,
-        name: String,
-        namespace: String,
+        id: EntityId,
+        namespace: Name,
         file: PathOrFile,
         locator: Option<String>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     ) -> Result<ApiResponse, ApiError> {
         // Do our file io in async context at least
         let buf = match file {
@@ -806,28 +804,26 @@ where
                     .map(|agent| {
                         api.store.agent_by_agent_name_and_namespace(
                             &mut connection,
-                            &agent,
-                            &namespace,
+                            agent.name_part().clone(),
+                            namespace.clone(),
                         )
                     })
                     .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
 
-                let id = ChronicleVocab::entity(&name);
-                let agentid = ChronicleVocab::agent(&agent.name).into();
+                let agent_id = AgentId::from_name(&agent.name);
 
-                let signer = api.keystore.agent_signing(&agentid)?;
+                let signer = api.keystore.agent_signing(&agent_id)?;
 
                 let signature: Signature = signer.sign(&*buf);
 
                 let tx = ChronicleOperation::EntityAttach(EntityAttach {
                     namespace,
-                    id: id.clone().into(),
-                    agent: agentid.clone(),
-                    identityid: ChronicleVocab::identity(
-                        &agentid,
+                    id: id.clone(),
+                    agent: agent_id.clone(),
+                    identityid: IdentityId::from_name(
+                        agent_id.name_part(),
                         &*hex::encode_upper(signer.to_bytes()),
-                    )
-                    .into(),
+                    ),
                     signature: hex::encode_upper(signature),
                     locator,
                     signature_time: Utc::now(),
@@ -854,7 +850,7 @@ where
 
             let (_id, _) = api
                 .store
-                .namespace_by_name(&mut connection, &query.namespace)?;
+                .namespace_by_name(&mut connection, &Name::from(&query.namespace))?;
             Ok(ApiResponse::query_reply(
                 api.store.prov_model_for_namespace(&mut connection, query)?,
             ))
@@ -886,8 +882,8 @@ where
     #[instrument]
     async fn register_key(
         &self,
-        name: String,
-        namespace: String,
+        id: AgentId,
+        namespace: Name,
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -896,32 +892,28 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let id = ChronicleVocab::agent(&name);
                 match registration {
                     KeyRegistration::Generate => {
-                        api.keystore.generate_agent(&id.clone().into())?;
+                        api.keystore.generate_agent(&id)?;
                     }
-                    KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => api
-                        .keystore
-                        .import_agent(&id.clone().into(), Some(&path), None)?,
-                    KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => api
-                        .keystore
-                        .store_agent(&id.clone().into(), Some(&buffer), None)?,
-                    KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => api
-                        .keystore
-                        .import_agent(&id.clone().into(), None, Some(&path))?,
-                    KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => api
-                        .keystore
-                        .store_agent(&id.clone().into(), None, Some(&buffer))?,
+                    KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => {
+                        api.keystore.import_agent(&id, Some(&path), None)?
+                    }
+                    KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => {
+                        api.keystore.store_agent(&id, Some(&buffer), None)?
+                    }
+                    KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => {
+                        api.keystore.import_agent(&id, None, Some(&path))?
+                    }
+                    KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => {
+                        api.keystore.store_agent(&id, None, Some(&buffer))?
+                    }
                 }
 
                 to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
-                    id: id.clone().into(),
-                    name,
+                    id: id.clone(),
                     namespace,
-                    publickey: hex::encode(
-                        api.keystore.agent_verifying(&id.clone().into())?.to_bytes(),
-                    ),
+                    publickey: hex::encode(api.keystore.agent_verifying(&id.clone())?.to_bytes()),
                 }));
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
@@ -940,10 +932,10 @@ where
     #[instrument]
     async fn start_activity(
         &self,
-        name: String,
-        namespace: String,
+        id: ActivityId,
+        namespace: Name,
         time: Option<DateTime<Utc>>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -952,8 +944,11 @@ where
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store
-                            .agent_by_agent_name_and_namespace(connection, &agent, &namespace)?
+                        api.store.agent_by_agent_name_and_namespace(
+                            connection,
+                            agent.name_part().clone(),
+                            namespace.clone(),
+                        )?
                     } else {
                         api.store
                             .get_current_agent(connection)
@@ -961,26 +956,31 @@ where
                     }
                 };
 
-                let activity = api
-                    .store
-                    .activity_by_activity_name_and_namespace(connection, &name, &namespace);
+                let activity = api.store.activity_by_activity_name_and_namespace(
+                    connection,
+                    id.name_part(),
+                    &namespace,
+                );
 
-                let name = {
+                let name: Name = {
                     if let Ok(existing) = activity {
                         debug!(?existing, "Use existing activity");
-                        existing.name
+                        existing.name.into()
                     } else {
-                        debug!(?name, "Need new activity");
-                        api.store
-                            .disambiguate_activity_name(connection, &name, &namespace)?
+                        debug!(?id, "Need new activity");
+                        api.store.disambiguate_activity_name(
+                            connection,
+                            id.name_part(),
+                            &namespace,
+                        )?
                     }
                 };
 
-                let id = ChronicleVocab::activity(&name);
+                let id = ActivityId::from_name(&name);
                 to_apply.push(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
-                    id: id.clone().into(),
-                    agent: ChronicleVocab::agent(&agent.name).into(),
+                    id: id.clone(),
+                    agent: AgentId::from_name(&agent.name),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
@@ -1000,11 +1000,10 @@ where
     #[instrument]
     async fn end_activity(
         &self,
-
-        name: Option<String>,
-        namespace: String,
+        id: Option<ActivityId>,
+        namespace: Name,
         time: Option<DateTime<Utc>>,
-        agent: Option<String>,
+        agent: Option<AgentId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1013,13 +1012,20 @@ where
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let activity = api
                     .store
-                    .get_activity_by_name_or_last_started(connection, name, &namespace)
+                    .get_activity_by_name_or_last_started(
+                        connection,
+                        id.map(|id| id.name_part().clone()),
+                        namespace.clone(),
+                    )
                     .map_err(|_| ApiError::NotCurrentActivity {})?;
 
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store
-                            .agent_by_agent_name_and_namespace(connection, &agent, &namespace)?
+                        api.store.agent_by_agent_name_and_namespace(
+                            connection,
+                            agent.name_part().clone(),
+                            namespace.clone(),
+                        )?
                     } else {
                         api.store
                             .get_current_agent(connection)
@@ -1027,11 +1033,11 @@ where
                     }
                 };
 
-                let id = ChronicleVocab::activity(&activity.name);
+                let id = ActivityId::from_name(&activity.name);
                 to_apply.push(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
-                    id: id.clone().into(),
-                    agent: ChronicleVocab::agent(&agent.name).into(),
+                    id: id.clone(),
+                    agent: AgentId::from_name(&agent.name),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
@@ -1048,17 +1054,13 @@ where
     }
 
     #[instrument]
-    async fn use_in_context(
-        &self,
-        name: String,
-        namespace: String,
-    ) -> Result<ApiResponse, ApiError> {
+    async fn use_in_context(&self, id: AgentId, namespace: Name) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                api.store.use_agent(connection, name, namespace)
+                api.store.use_agent(connection, id.name_part(), &namespace)
             })?;
 
             Ok(ApiResponse::Unit)
@@ -1076,8 +1078,8 @@ mod test {
         commands::{ApiResponse, EntityCommand, KeyImport},
         ledger::InMemLedger,
         prov::{
-            operations::DerivationType, vocab::Chronicle, ChronicleTransactionId, DomaintypeId,
-            ProvModel,
+            operations::DerivationType, ActivityId, AgentId, ChronicleTransactionId, DomaintypeId,
+            EntityId, ProvModel,
         },
     };
 
@@ -1184,7 +1186,7 @@ mod test {
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".to_owned(),
+            name: "testns".into(),
         }))
         .await
         .unwrap();
@@ -1197,10 +1199,10 @@ mod test {
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testagent".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1231,14 +1233,14 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 "#;
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".to_owned(),
+            name: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            id: AgentId::from_name("testagent"),
+            namespace: "testns".into(),
             registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
                 buffer: pk.as_bytes().into(),
             }),
@@ -1256,10 +1258,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testactivity".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1282,10 +1284,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testagent".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1301,15 +1303,15 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            id: AgentId::from_name("testagent"),
+            namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            name: "testactivity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: ActivityId::from_name("testactivity"),
+            namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
@@ -1324,10 +1326,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testagent".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1343,15 +1345,15 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            id: AgentId::from_name("testagent"),
+            namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            name: "testactivity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: ActivityId::from_name("testactivity"),
+            namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
@@ -1360,8 +1362,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
         // Should end the last opened activity
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            name: None,
-            namespace: "testns".to_owned(),
+            id: None,
+            namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
@@ -1376,10 +1378,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testagent".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1395,17 +1397,17 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            name: "testagent".to_owned(),
-            namespace: "testns".to_owned(),
+            id: AgentId::from_name("testagent"),
+            namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testactivity".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1421,18 +1423,18 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            name: "testentity".to_owned(),
-            namespace: "testns".to_owned(),
-            activity: Some("testactivity".to_owned()),
+            id: EntityId::from_name("testentity"),
+            namespace: "testns".into(),
+            activity: Some(ActivityId::from_name("testactivity")),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            name: None,
-            namespace: "testns".to_owned(),
+            id: None,
+            namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            agent: Some("testagent".to_string()),
+            agent: Some(AgentId::from_name("testagent")),
         }))
         .await
         .unwrap();
@@ -1445,10 +1447,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".to_owned(),
-            namespace: "testns".to_owned(),
+            name: "testactivity".into(),
+            namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                typ: Some(DomaintypeId::from_name("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1464,9 +1466,9 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            name: "testentity".to_owned(),
-            namespace: "testns".to_owned(),
-            activity: Some("testactivity".to_owned()),
+            id: EntityId::from_name("testentity"),
+            namespace: "testns".into(),
+            activity: Some(ActivityId::from_name("testactivity")),
         }))
         .await
         .unwrap();
@@ -1479,10 +1481,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            name: "testgeneratedentity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: EntityId::from_name("testgeneratedentity"),
+            namespace: "testns".into(),
             activity: None,
-            used_entity: "testusedentity".to_owned(),
+            used_entity: EntityId::from_name("testusedentity"),
             derivation: None,
         }))
         .await
@@ -1496,11 +1498,11 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            name: "testgeneratedentity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: EntityId::from_name("testgeneratedentity"),
+            namespace: "testns".into(),
             activity: None,
             derivation: Some(DerivationType::PrimarySource),
-            used_entity: "testusedentity".to_owned(),
+            used_entity: EntityId::from_name("testusedentity"),
         }))
         .await
         .unwrap();
@@ -1513,10 +1515,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            name: "testgeneratedentity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: EntityId::from_name("testgeneratedentity"),
+            namespace: "testns".into(),
             activity: None,
-            used_entity: "testusedentity".to_owned(),
+            used_entity: EntityId::from_name("testusedentity"),
             derivation: Some(DerivationType::Revision),
         }))
         .await
@@ -1530,10 +1532,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            name: "testgeneratedentity".to_owned(),
-            namespace: "testns".to_owned(),
+            id: EntityId::from_name("testgeneratedentity"),
+            namespace: "testns".into(),
             activity: None,
-            used_entity: "testusedentity".to_owned(),
+            used_entity: EntityId::from_name("testusedentity"),
             derivation: Some(DerivationType::Quotation),
         }))
         .await
@@ -1548,10 +1550,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
         for i in 0..100 {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                name: format!("testactivity{}", i),
-                namespace: "testns".to_owned(),
+                name: format!("testactivity{}", i).into(),
+                namespace: "testns".into(),
                 attributes: Attributes {
-                    typ: Some(DomaintypeId::from(Chronicle::domaintype("test"))),
+                    typ: Some(DomaintypeId::from_name("test")),
                     attributes: [(
                         "test".to_owned(),
                         Attribute {

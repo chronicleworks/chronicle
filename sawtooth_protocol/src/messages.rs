@@ -136,7 +136,7 @@ impl MessageBuilder {
 mod test {
     use common::prov::{
         operations::{ChronicleOperation, CreateNamespace},
-        vocab::Chronicle,
+        NamespaceId,
     };
     use k256::{ecdsa::SigningKey, SecretKey};
     use prost::Message;
@@ -155,8 +155,8 @@ mod test {
         let uuid = Uuid::new_v4();
 
         let batch = vec![ChronicleOperation::CreateNamespace(CreateNamespace {
-            id: Chronicle::namespace("t", &uuid).into(),
-            name: "t".to_owned(),
+            id: NamespaceId::from_name("t", uuid),
+            name: "t".into(),
             uuid,
         })];
 

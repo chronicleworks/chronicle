@@ -8,8 +8,8 @@ use async_graphql::connection::{Connection, EmptyFields};
 use async_graphql::*;
 use bootstrap::*;
 use chrono::{DateTime, Utc};
-use common::prov::vocab::{Chronicle, Prov};
-use common::prov::DomaintypeId;
+use common::prov::vocab::{Prov};
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId};
 use iref::Iri;
 
 #[derive(Default, InputObject)]
@@ -21,9 +21,7 @@ pub struct Attributes {
 impl From<Attributes> for common::attributes::Attributes {
     fn from(attributes: Attributes) -> Self {
         common::attributes::Attributes {
-            typ: attributes
-                .typ
-                .map(|typ| DomaintypeId::from(Chronicle::domaintype(&typ))),
+            typ: attributes.typ.map(|typ| DomaintypeId::from_name(&typ)),
             ..Default::default()
         }
     }
@@ -34,7 +32,7 @@ pub struct Activity(chronicle_graphql::Activity);
 #[Object]
 impl Activity {
     async fn id(&self) -> ID {
-        ID::from(Chronicle::activity(&*self.0.name).to_string())
+        ID::from(ActivityId::from_name(&*self.0.name))
     }
 
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
@@ -88,7 +86,7 @@ pub struct Entity(chronicle_graphql::Entity);
 #[Object]
 impl Entity {
     async fn id(&self) -> ID {
-        ID::from(Chronicle::entity(&*self.0.name).to_string())
+        ID::from(EntityId::from_name(&*self.0.name))
     }
 
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
@@ -164,7 +162,7 @@ pub struct Agent(chronicle_graphql::Agent);
 #[Object]
 impl Agent {
     async fn id(&self) -> ID {
-        ID::from(Chronicle::agent(&*self.0.name).to_string())
+        ID::from(AgentId::from_name(&*self.0.name))
     }
 
     async fn name(&self) -> &str {

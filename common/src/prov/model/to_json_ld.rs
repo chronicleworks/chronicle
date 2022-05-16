@@ -18,7 +18,7 @@ impl ProvModel {
 
         for (id, ns) in self.namespaces.iter() {
             doc.push(object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                     "@value": ns.name.as_str(),
@@ -28,7 +28,7 @@ impl ProvModel {
 
         for ((ns, id), identity) in self.identities.iter() {
             doc.push(object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Identity).as_str(),
                 "http://blockchaintp.com/chronicle/ns#publicKey": [{
                     "@value": identity.public_key.to_string(),
@@ -41,7 +41,7 @@ impl ProvModel {
 
         for ((ns, id), attachment) in self.attachments.iter() {
             let mut attachmentdoc = object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::HasAttachment).as_str(),
                 "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
                 "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
@@ -75,7 +75,7 @@ impl ProvModel {
             }
 
             let mut agentdoc = object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": agent.name.as_str(),
@@ -111,7 +111,7 @@ impl ProvModel {
                 let mut ids = json::Array::new();
 
                 for delegation in delegation.iter() {
-                    ids.push(object! {"@id": delegation.delegate_id.as_str()});
+                    ids.push(object! {"@id": delegation.delegate_id.to_string()});
                 }
 
                 agentdoc
@@ -141,7 +141,7 @@ impl ProvModel {
             }
 
             let mut activitydoc = object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
                    "@value": activity.name.as_str(),
@@ -170,7 +170,7 @@ impl ProvModel {
                 let mut ids = json::Array::new();
 
                 for asoc in asoc.iter() {
-                    ids.push(object! {"@id": asoc.agent_id.as_str()});
+                    ids.push(object! {"@id": asoc.agent_id.to_string()});
                 }
 
                 activitydoc
@@ -182,7 +182,7 @@ impl ProvModel {
                 let mut ids = json::Array::new();
 
                 for useage in useage.iter() {
-                    ids.push(object! {"@id": useage.entity_id.as_str()});
+                    ids.push(object! {"@id": useage.entity_id.to_string()});
                 }
 
                 activitydoc
@@ -212,10 +212,10 @@ impl ProvModel {
             }
 
             let mut entitydoc = object! {
-                "@id": (*id.as_str()),
+                "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": entity.name.clone()
+                   "@value": entity.name.as_str()
                 }]
             };
 
@@ -226,7 +226,7 @@ impl ProvModel {
                 let mut revision_ids = json::Array::new();
 
                 for derivation in derivation.iter() {
-                    let id = object! {"@id": derivation.used_id.as_str()};
+                    let id = object! {"@id": derivation.used_id.to_string()};
                     match derivation.typ {
                         Some(DerivationType::PrimarySource) => primary_ids.push(id),
                         Some(DerivationType::Quotation) => quotation_ids.push(id),
@@ -260,7 +260,7 @@ impl ProvModel {
                 let mut ids = json::Array::new();
 
                 for generation in generation.iter() {
-                    ids.push(object! {"@id": generation.activity_id.as_str()});
+                    ids.push(object! {"@id": generation.activity_id.to_string()});
                 }
 
                 entitydoc

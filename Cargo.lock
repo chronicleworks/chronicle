@@ -572,6 +572,7 @@ dependencies = [
  "json-ld",
  "k256",
  "lazy_static",
+ "percent-encoding",
  "pkcs8",
  "proptest",
  "rand",

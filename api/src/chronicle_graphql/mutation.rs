@@ -10,7 +10,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
         PathOrFile,
     },
-    prov::{operations::DerivationType, AgentId, EntityId},
+    prov::{operations::DerivationType, ActivityId, AgentId, EntityId},
 };
 
 use crate::ApiDispatch;
@@ -42,17 +42,17 @@ async fn derivation<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".into());
+    let namespace = namespace.unwrap_or_else(|| "default".into()).into();
 
-    let used_entity = EntityId::new(&**used_entity);
-    let generated_entity = EntityId::new(&**generated_entity);
+    let used_entity = EntityId::from_name(&**used_entity);
+    let generated_entity = EntityId::from_name(&**generated_entity);
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            name: generated_entity.decompose().to_string(),
+            id: generated_entity,
             namespace,
             activity: None,
-            used_entity: used_entity.decompose().to_string(),
+            used_entity,
             derivation,
         }))
         .await?;
@@ -72,8 +72,8 @@ pub async fn agent<'a>(
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name,
-            namespace: namespace.clone(),
+            name: name.into(),
+            namespace: namespace.into(),
             attributes,
         }))
         .await?;
@@ -93,8 +93,8 @@ pub async fn activity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name,
-            namespace: namespace.clone(),
+            name: name.into(),
+            namespace: namespace.into(),
             attributes,
         }))
         .await?;
@@ -114,14 +114,15 @@ pub async fn entity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Create {
-            name,
-            namespace: namespace.clone(),
+            name: name.into(),
+            namespace: namespace.into(),
             attributes,
         }))
         .await?;
 
     transaction_context(res, ctx).await
 }
+
 pub async fn acted_on_behalf_of<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
@@ -130,17 +131,17 @@ pub async fn acted_on_behalf_of<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
-    let responsible_id = AgentId::new(&**responsible);
-    let delegate_id = AgentId::new(&**delegate);
+    let responsible_id = AgentId::from_name(&**responsible);
+    let delegate_id = AgentId::from_name(&**delegate);
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::Delegate {
-            name: responsible_id.decompose().to_string(),
-            delegate: delegate_id.decompose().to_string(),
+            id: responsible_id,
+            delegate: delegate_id,
             activity: None,
-            namespace: namespace.clone(),
+            namespace,
         }))
         .await?;
 
@@ -209,12 +210,12 @@ pub async fn generate_key<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            name,
-            namespace: namespace.clone(),
+            id: AgentId::from_name(name),
+            namespace,
             registration: KeyRegistration::Generate,
         }))
         .await?;
@@ -231,14 +232,14 @@ pub async fn start_activity<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            name,
-            namespace: namespace.clone(),
+            id: ActivityId::from_name(name),
+            namespace,
             time,
-            agent: Some(agent),
+            agent: Some(AgentId::from_name(agent)),
         }))
         .await?;
 
@@ -254,14 +255,14 @@ pub async fn end_activity<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::End {
-            name: Some(name),
-            namespace: namespace.clone(),
+            id: Some(ActivityId::from_name(name)),
+            namespace,
             time,
-            agent: Some(agent),
+            agent: Some(AgentId::from_name(agent)),
         }))
         .await?;
 
@@ -276,13 +277,13 @@ pub async fn used<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            name,
-            namespace: namespace.clone(),
-            activity: Some(activity),
+            id: EntityId::from_name(name),
+            namespace,
+            activity: Some(ActivityId::from_name(activity)),
         }))
         .await?;
 
@@ -297,13 +298,13 @@ pub async fn was_generated_by<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            name,
-            namespace: namespace.clone(),
-            activity: Some(activity),
+            id: EntityId::from_name(name),
+            namespace,
+            activity: Some(ActivityId::from_name(activity)),
         }))
         .await?;
 
@@ -320,13 +321,13 @@ pub async fn has_attachment<'a>(
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned());
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Attach {
-            name,
-            namespace: namespace.clone(),
-            agent: Some(on_behalf_of_agent),
+            id: EntityId::from_name(name),
+            namespace,
+            agent: Some(AgentId::from_name(on_behalf_of_agent)),
             file: PathOrFile::File(Arc::new(Box::pin(attachment.value(ctx)?.into_async_read()))),
             locator: Some(locator),
         }))
