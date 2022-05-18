@@ -42,8 +42,10 @@ pub async fn acted_on_behalf_of<'a>(
     id: i32,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Agent>> {
-    use crate::persistence::schema::agent as agentdsl;
-    use crate::persistence::schema::delegation::{self, dsl};
+    use crate::persistence::schema::{
+        agent as agentdsl,
+        delegation::{self, dsl},
+    };
 
     let store = ctx.data_unchecked::<Store>();
 

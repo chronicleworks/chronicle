@@ -7,19 +7,18 @@ use uuid::Uuid;
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::*, vocab::Chronicle, AgentId, Association, Delegation, Derivation,
-        DomaintypeId, Generation, ProvModel, Useage,
+        operations::*, ActivityId, AgentId, Association, Delegation, Derivation, DomaintypeId,
+        EntityId, Generation, IdentityId, Name, NamePart, NamespaceId, ProvModel, Useage, UuidPart,
     },
 };
 
 use super::{
-    ActivityUses, ActsOnBehalfOf, CompactedJson, EntityAttach, EntityDerive, NamespaceId,
-    StartActivity,
+    ActivityUses, ActsOnBehalfOf, CompactedJson, EntityAttach, EntityDerive, StartActivity,
 };
 
 prop_compose! {
-    fn a_name()(name in "[-A-Za-z0-9+]+") -> String {
-        name
+    fn a_name()(name in ".*") -> Name {
+        Name::from(name)
     }
 }
 
@@ -38,7 +37,7 @@ prop_compose! {
 
 // Choose from a limited selection of names so that we get multiple references
 prop_compose! {
-    fn name()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> String {
+    fn name()(names in prop::collection::vec(a_name(), 5), index in (0..5usize)) -> Name {
         names.get(index).unwrap().to_owned()
     }
 }
@@ -46,7 +45,7 @@ prop_compose! {
 // Choose from a limited selection of domain types
 prop_compose! {
     fn domain_type_id()(names in prop::collection::vec(a_symbol(), 5), index in (0..5usize)) -> DomaintypeId {
-        Chronicle::domaintype(names.get(index).unwrap()).into()
+        DomaintypeId::from_name(&Name::from(names.get(index).unwrap()))
     }
 }
 
@@ -54,7 +53,8 @@ prop_compose! {
     fn a_namespace()
         (uuid in prop::collection::vec(0..255u8, 16),
          name in name()) -> NamespaceId {
-        Chronicle::namespace(&name,&Uuid::from_bytes(uuid.as_slice().try_into().unwrap())).into()
+
+        NamespaceId::from_name(&name,Uuid::from_bytes(uuid.as_slice().try_into().unwrap()))
     }
 }
 
@@ -67,10 +67,10 @@ prop_compose! {
 
 prop_compose! {
     fn create_namespace()(id in namespace()) -> CreateNamespace {
-        let (name,uuid) = id.decompose();
+        let (name,uuid) = (id.name_part(), id.uuid_part());
         CreateNamespace {
             id: id.clone(),
-            uuid,
+            uuid: *uuid,
             name: name.to_owned(),
         }
     }
@@ -78,21 +78,19 @@ prop_compose! {
 
 prop_compose! {
     fn create_agent() (name in name(),namespace in namespace()) -> CreateAgent {
-        let id = Chronicle::agent(&name).into();
+        let _id = AgentId::from_name(&name);
         CreateAgent {
             namespace,
             name,
-            id,
         }
     }
 }
 
 prop_compose! {
     fn register_key() (name in name(),namespace in namespace(), publickey in "[0-9a-f]{64}") -> RegisterKey {
-        let id = Chronicle::agent(&name).into();
+        let id = AgentId::from_name(&name);
         RegisterKey {
             namespace,
-            name,
             id,
             publickey
         }
@@ -101,11 +99,9 @@ prop_compose! {
 
 prop_compose! {
     fn create_activity() (name in name(),namespace in namespace()) -> CreateActivity {
-        let id = Chronicle::activity(&name).into();
         CreateActivity {
             namespace,
             name,
-            id,
         }
     }
 }
@@ -113,13 +109,13 @@ prop_compose! {
 // Create times for start between 2-1 years in the past, to ensure start <= end
 prop_compose! {
     fn start_activity() (name in name(),namespace in namespace(), offset in (0..10)) -> StartActivity {
-        let id = Chronicle::activity(&name).into();
+        let id = ActivityId::from_name(&name);
 
         let today = Utc::today().and_hms_micro(0, 0,0,0);
 
         StartActivity {
             namespace,
-            agent: Chronicle::agent(&name).into(),
+            agent: AgentId::from_name(&name),
             id,
             time: today - chrono::Duration::days(offset as _)
         }
@@ -129,13 +125,13 @@ prop_compose! {
 // Create times for start between 2-1 years in the past, to ensure start <= end
 prop_compose! {
     fn end_activity() (name in name(),namespace in namespace(), offset in (0..10)) -> EndActivity {
-        let id = Chronicle::activity(&name).into();
+        let id = ActivityId::from_name(&name);
 
         let today = Utc::today().and_hms_micro(0, 0,0,0);
 
         EndActivity {
             namespace,
-            agent: Chronicle::agent(&name).into(),
+            agent: AgentId::from_name(&name),
             id,
             time: today - chrono::Duration::days(offset as _)
         }
@@ -144,8 +140,8 @@ prop_compose! {
 
 prop_compose! {
     fn activity_uses() (activity_name in name(), entity_name in name(),namespace in namespace()) -> ActivityUses {
-        let activity = Chronicle::activity(&activity_name).into();
-        let id = Chronicle::entity(&entity_name).into();
+        let activity = ActivityId::from_name(&activity_name);
+        let id = EntityId::from_name(&entity_name);
 
         ActivityUses {
             namespace,
@@ -157,19 +153,17 @@ prop_compose! {
 
 prop_compose! {
     fn create_entity() (name in name(),namespace in namespace()) -> CreateEntity {
-        let id = Chronicle::entity(&name).into();
         CreateEntity {
             namespace,
             name,
-            id,
         }
     }
 }
 
 prop_compose! {
     fn generate_entity() (activity_name in name(), entity_name in name(),namespace in namespace()) -> GenerateEntity {
-        let activity = Chronicle::activity(&activity_name).into();
-        let id = Chronicle::entity(&entity_name).into();
+        let activity = ActivityId::from_name(&activity_name);
+        let id = EntityId::from_name(&entity_name);
 
 
         GenerateEntity {
@@ -190,9 +184,9 @@ prop_compose! {
         namespace in namespace(),
         public_key in "[0-9a-f]{64}",
     ) -> EntityAttach {
-        let id = Chronicle::entity(&name).into();
-        let agent: AgentId = Chronicle::agent(&agent_name).into();
-        let identityid = Chronicle::identity(&agent , &*public_key).into();
+        let id = EntityId::from_name(&name);
+        let agent: AgentId = AgentId::from_name(&agent_name);
+        let identityid = IdentityId::from_name(&agent_name , &*public_key);
 
         let signature_time = Utc::today().and_hms_micro(offset, 0,0,0);
 
@@ -214,8 +208,8 @@ prop_compose! {
         used in name(),
         namespace in namespace(),
     ) -> EntityDerive {
-        let id = Chronicle::entity(&name).into();
-        let used_id = Chronicle::entity(&used).into();
+        let id = EntityId::from_name(&name);
+        let used_id = EntityId::from_name(&used);
 
         EntityDerive {
             namespace,
@@ -260,8 +254,8 @@ prop_compose! {
     ) -> ActsOnBehalfOf {
 
         ActsOnBehalfOf {
-            id: Chronicle::agent(&name).into(),
-            delegate_id: Chronicle::agent(&delegate).into(),
+            id: AgentId::from_name(&name),
+            delegate_id: AgentId::from_name(&delegate),
             activity_id: None,
             namespace,
         }
@@ -277,7 +271,7 @@ prop_compose! {
     ) -> SetAttributes {
 
         SetAttributes::Entity{
-                id: Chronicle::entity(&name).into(),
+                id: EntityId::from_name(&name),
                 namespace,
                 attributes,
         }
@@ -291,7 +285,7 @@ prop_compose! {
         attributes in attributes(),
     ) -> SetAttributes {
         SetAttributes::Agent {
-                id: Chronicle::agent(&name).into(),
+                id: AgentId::from_name(&name),
                 namespace,
                 attributes,
         }
@@ -304,7 +298,7 @@ prop_compose! {
         attributes in attributes(),
     ) -> SetAttributes {
         SetAttributes::Activity{
-                id: Chronicle::activity(&name).into(),
+                id: ActivityId::from_name(&name),
                 namespace,
                 attributes,
         }
@@ -381,8 +375,8 @@ proptest! {
                     prop_assert_eq!(&ns.uuid, uuid);
                 },
                 ChronicleOperation::CreateAgent(
-                    CreateAgent { namespace, name, id }) => {
-                    let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
+                    CreateAgent { namespace, name}) => {
+                    let agent = &prov.agents.get(&(namespace.to_owned(),AgentId::from_name(name)));
                     prop_assert!(agent.is_some());
                     let agent = agent.unwrap();
                     prop_assert_eq!(&agent.name, name);
@@ -416,7 +410,7 @@ proptest! {
 
                 }
                 ChronicleOperation::RegisterKey(
-                    RegisterKey { namespace, name, id, publickey}) => {
+                    RegisterKey { namespace, id, publickey}) => {
                         let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
                         prop_assert!(agent.is_some());
                         let agent = agent.unwrap();
@@ -427,13 +421,13 @@ proptest! {
                         prop_assert!(identity.is_some());
                         let identity = identity.unwrap();
 
-                        prop_assert_eq!(&agent.name, &name.clone());
+                        prop_assert_eq!(&agent.name, id.name_part());
                         prop_assert_eq!(&agent.namespaceid, &namespace.clone());
                         prop_assert_eq!(&identity.public_key, &publickey.clone());
                 },
                 ChronicleOperation::CreateActivity(
-                    CreateActivity { namespace, id, name }) => {
-                    let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
+                    CreateActivity { namespace,  name }) => {
+                    let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_name(name)));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
                     prop_assert_eq!(&activity.name, name);
@@ -444,7 +438,7 @@ proptest! {
                     let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
-                    prop_assert_eq!(&activity.name, id.decompose());
+                    prop_assert_eq!(&activity.name, id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     prop_assert!(activity.started == Some(time.to_owned()));
@@ -464,7 +458,7 @@ proptest! {
                     let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
-                    prop_assert_eq!(&activity.name, id.decompose());
+                    prop_assert_eq!(&activity.name, id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     prop_assert!(activity.ended == Some(time.to_owned()));
@@ -485,13 +479,13 @@ proptest! {
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
-                    prop_assert_eq!(&entity.name, &id.decompose());
+                    prop_assert_eq!(&entity.name, id.name_part());
                     prop_assert_eq!(&entity.namespaceid, namespace);
 
                     let activity = &prov.activities.get(&(namespace.to_owned(),activity_id.to_owned()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
-                    prop_assert_eq!(&activity.name, &activity_id.decompose());
+                    prop_assert_eq!(&activity.name, activity_id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     let has_useage = prov.useage.get(&(namespace.to_owned(), activity_id.to_owned()))
@@ -505,8 +499,8 @@ proptest! {
                     prop_assert!(has_useage);
                 },
                 ChronicleOperation::CreateEntity(
-                    CreateEntity { namespace, name, id }) => {
-                    let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                    CreateEntity { namespace, name}) => {
+                    let entity = &prov.entities.get(&(namespace.to_owned(),EntityId::from_name(name)));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
                     prop_assert_eq!(&entity.name, name);
@@ -517,13 +511,13 @@ proptest! {
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
-                    prop_assert_eq!(&entity.name, &id.decompose());
+                    prop_assert_eq!(&entity.name, id.name_part());
                     prop_assert_eq!(&entity.namespaceid, namespace);
 
                     let activity = &prov.activities.get(&(namespace.to_owned(),activity.to_owned()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
-                    prop_assert_eq!(&activity.name, &activity_id.decompose());
+                    prop_assert_eq!(&activity.name, activity_id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     let has_generation = prov.generation.get(
@@ -550,13 +544,13 @@ proptest! {
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
-                    prop_assert_eq!(&entity.name, &id.decompose());
+                    prop_assert_eq!(&entity.name, id.name_part());
                     prop_assert_eq!(&entity.namespaceid, namespace);
 
                     let agent = &prov.agents.get(&(namespace.to_owned(),agent.to_owned()));
                     prop_assert!(agent.is_some());
                     let agent = agent.unwrap();
-                    prop_assert_eq!(&agent.name, agent_id.decompose());
+                    prop_assert_eq!(&agent.name, agent_id.name_part());
                     prop_assert_eq!(&agent.namespaceid, namespace);
                 },
                 ChronicleOperation::EntityDerive(EntityDerive {
@@ -611,7 +605,6 @@ proptest! {
 
         // Test that serialisation to and from JSON-LD is symmetric
         let lhs_json_expanded = prov.to_json().0;
-        println!("{}", json::stringify_pretty(lhs_json_expanded.clone(),2));
 
         let lhs_json = compact_json(&prov).0;
 

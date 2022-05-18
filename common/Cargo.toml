@@ -7,6 +7,13 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-graphql = { features = [
+  "opentelemetry",
+  "chrono",
+  "unblock",
+  "default",
+  "uuid",
+], version = "3.0.36" }
 async-trait = "0.1.53"
 chrono = { version = "0.4.19", features = ["serde"] }
 custom_error = "1.9.2"
@@ -33,6 +40,7 @@ k256 = { version = "0.10.4", features = [
   "pem",
 ] }
 lazy_static = "1.4.0"
+percent-encoding = "2.1.0"
 pkcs8 = { version = "0.8.0", features = ["alloc", "std"] }
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"

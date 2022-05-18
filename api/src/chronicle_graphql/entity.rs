@@ -10,8 +10,10 @@ pub async fn typed_derivation<'a>(
     ctx: &Context<'a>,
     typ: Option<DerivationType>,
 ) -> async_graphql::Result<Vec<Entity>> {
-    use crate::persistence::schema::derivation::{self, dsl};
-    use crate::persistence::schema::entity::{self as entitydsl};
+    use crate::persistence::schema::{
+        derivation::{self, dsl},
+        entity::{self as entitydsl},
+    };
 
     let store = ctx.data_unchecked::<Store>();
 
@@ -81,8 +83,10 @@ pub async fn was_derived_from<'a>(
     id: i32,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Entity>> {
-    use crate::persistence::schema::derivation::{self, dsl};
-    use crate::persistence::schema::entity::{self as entitydsl};
+    use crate::persistence::schema::{
+        derivation::{self, dsl},
+        entity::{self as entitydsl},
+    };
 
     let store = ctx.data_unchecked::<Store>();
 

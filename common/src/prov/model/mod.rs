@@ -16,18 +16,21 @@ use uuid::Uuid;
 use crate::attributes::{Attribute, Attributes};
 
 use super::{
+    id,
     operations::{
         ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
         CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
         GenerateEntity, RegisterKey, SetAttributes, StartActivity,
     },
-    vocab::Chronicle,
-    ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
+    ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, Name, NamePart,
+    NamespaceId, PublicKeyPart, UuidPart,
 };
 
 custom_error! {pub ProcessorError
     Compaction{source: CompactionError} = "Json Ld Error",
     Expansion{inner: String} = "Json Ld Error",
+    IRef{source: iref::Error} = "Invalid IRI",
+    NotAChronicleIrir{source: id::ParseIriError } = "Not a Chronicle IRI",
     Tokio{source: JoinError} = "Tokio Error",
     MissingId{object: JsonValue} = "Missing @id",
     MissingProperty{iri: String, object: JsonValue} = "Missing property",
@@ -103,12 +106,16 @@ impl ChronicleTransaction {
 pub struct Namespace {
     pub id: NamespaceId,
     pub uuid: Uuid,
-    pub name: String,
+    pub name: Name,
 }
 
 impl Namespace {
-    pub fn new(id: NamespaceId, uuid: Uuid, name: String) -> Self {
-        Self { id, uuid, name }
+    pub fn new(id: NamespaceId, uuid: Uuid, name: &Name) -> Self {
+        Self {
+            id,
+            uuid,
+            name: name.to_owned(),
+        }
     }
 }
 
@@ -116,7 +123,7 @@ impl Namespace {
 pub struct Agent {
     pub id: AgentId,
     pub namespaceid: NamespaceId,
-    pub name: String,
+    pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: HashMap<String, Attribute>,
 }
@@ -131,7 +138,7 @@ pub struct Identity {
 impl Identity {
     pub fn new(namespace: &NamespaceId, agent: &AgentId, public_key: &str) -> Self {
         Self {
-            id: Chronicle::identity(agent, public_key).into(),
+            id: IdentityId::from_name(agent.name_part(), public_key),
             namespaceid: namespace.clone(),
             public_key: public_key.to_owned(),
         }
@@ -160,7 +167,7 @@ impl Agent {
     pub fn exists(namespaceid: NamespaceId, id: AgentId) -> Self {
         Self {
             namespaceid,
-            name: id.decompose().to_string(),
+            name: id.name_part().to_owned(),
             id,
             domaintypeid: None,
             attributes: HashMap::new(),
@@ -172,7 +179,7 @@ impl Agent {
 pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
-    pub name: String,
+    pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: HashMap<String, Attribute>,
     pub started: Option<DateTime<Utc>>,
@@ -204,7 +211,7 @@ impl Activity {
     pub fn exists(namespaceid: NamespaceId, id: ActivityId) -> Self {
         Self {
             namespaceid,
-            name: id.decompose().to_string(),
+            name: id.name_part().to_owned(),
             id,
             started: None,
             ended: None,
@@ -234,7 +241,7 @@ impl Attachment {
         signature_time: DateTime<Utc>,
     ) -> Attachment {
         Self {
-            id: Chronicle::attachment(entity, signature).into(),
+            id: AttachmentId::from_name(entity.name_part(), signature),
             namespaceid: namespace,
             signature: signature.to_owned(),
             signer: signer.clone(),
@@ -248,7 +255,7 @@ impl Attachment {
 pub struct Entity {
     pub id: EntityId,
     pub namespaceid: NamespaceId,
-    pub name: String,
+    pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: HashMap<String, Attribute>,
 }
@@ -272,7 +279,7 @@ impl Entity {
 
     pub fn exists(namespaceid: NamespaceId, id: EntityId) -> Self {
         Self {
-            name: id.decompose().to_string(),
+            name: id.name_part().to_owned(),
             id,
             namespaceid,
             domaintypeid: None,
@@ -606,13 +613,13 @@ impl ProvModel {
     }
 
     pub fn namespace_context(&mut self, ns: &NamespaceId) {
-        let (namespacename, uuid) = ns.decompose();
+        let (namespacename, uuid) = (ns.name_part(), ns.uuid_part());
 
         self.namespaces.insert(
             ns.clone(),
             Namespace {
                 id: ns.clone(),
-                uuid,
+                uuid: uuid.to_owned(),
                 name: namespacename.to_owned(),
             },
         );
@@ -630,7 +637,10 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&id);
             }
-            ChronicleOperation::CreateAgent(CreateAgent { namespace, id, .. }) => {
+            ChronicleOperation::CreateAgent(CreateAgent {
+                namespace, name, ..
+            }) => {
+                let id = AgentId::from_name(&name);
                 self.namespace_context(&namespace);
                 self.agents.insert(
                     (namespace.clone(), id.clone()),
@@ -675,7 +685,10 @@ impl ProvModel {
                     .or_insert_with(|| Agent::exists(namespace.clone(), id.clone()));
                 self.new_identity(&namespace, &id, &publickey);
             }
-            ChronicleOperation::CreateActivity(CreateActivity { namespace, id, .. }) => {
+            ChronicleOperation::CreateActivity(CreateActivity {
+                namespace, name, ..
+            }) => {
+                let id = ActivityId::from_name(&name);
                 self.namespace_context(&namespace);
 
                 self.activities
@@ -765,7 +778,10 @@ impl ProvModel {
 
                 self.used(namespace, &activity, &id);
             }
-            ChronicleOperation::CreateEntity(CreateEntity { namespace, id, .. }) => {
+            ChronicleOperation::CreateEntity(CreateEntity {
+                namespace, name, ..
+            }) => {
+                let id = EntityId::from_name(&name);
                 self.namespace_context(&namespace);
                 self.entities.insert(
                     (namespace.clone(), id.clone()),
@@ -814,7 +830,7 @@ impl ProvModel {
 
                 if !self.identities.contains_key(&identity_key) {
                     let agent = self.agents.get(&agent_key).unwrap().id.clone();
-                    let (_, public_key) = identityid.decompose();
+                    let public_key = identityid.public_key_part();
                     self.add_identity(Identity::new(&namespace, &agent, public_key));
                     self.has_identity(namespace.clone(), &agent, &identityid);
                 }

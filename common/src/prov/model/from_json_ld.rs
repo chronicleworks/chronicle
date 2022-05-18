@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
-use iref::{AsIri, IriBuf};
+use iref::{AsIri, Iri, IriBuf};
 use json::JsonValue;
 use json_ld::{util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference};
 
@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::DerivationType,
         vocab::{Chronicle, Prov},
-        ActivityId, AgentId, AttachmentId, EntityId, IdentityId, NamespaceId,
+        ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
     },
 };
 
@@ -48,14 +48,14 @@ fn extract_scalar_prop<'a>(
 }
 
 fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
-    Ok(NamespaceId::new(
+    Ok(NamespaceId::try_from(Iri::from_str(
         extract_scalar_prop(&Chronicle::HasNamespace, agent)?
             .id()
             .ok_or(ProcessorError::MissingId {
                 object: agent.as_json(),
             })?
-            .to_string(),
-    ))
+            .as_str(),
+    )?)?)
 }
 
 impl ProvModel {
@@ -109,12 +109,12 @@ impl ProvModel {
             .types()
             .iter()
             .filter_map(|x| x.as_iri())
-            .filter(|x| x.as_str().contains("domaintype"))
-            .map(|x| x.into())
-            .next();
+            .find(|x| x.as_str().contains("domaintype"))
+            .map(|iri| Ok::<_, ProcessorError>(DomaintypeId::try_from(iri.as_iri())?))
+            .transpose();
 
         Ok(Attributes {
-            typ,
+            typ: typ?,
             attributes: node
                 .get(&Reference::Id(Chronicle::Value.as_iri().into()))
                 .map(|o| {
@@ -142,20 +142,20 @@ impl ProvModel {
             object: ns.as_json(),
         })?;
 
-        self.namespace_context(&NamespaceId::new(ns.as_str()));
+        self.namespace_context(&NamespaceId::try_from(Iri::from_str(ns.as_str())?)?);
 
         Ok(())
     }
 
     fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
-        let id = AgentId::new(
+        let id = AgentId::try_from(Iri::from_str(
             agent
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
                     object: agent.as_json(),
                 })?
-                .to_string(),
-        );
+                .as_str(),
+        )?)?;
 
         let namespaceid = extract_namespace(agent)?;
         self.namespace_context(&namespaceid);
@@ -164,23 +164,23 @@ impl ProvModel {
 
         for delegated in extract_reference_ids(&Prov::ActedOnBehalfOf, agent)?
             .into_iter()
-            .map(|id| AgentId::new(id.as_str()))
+            .map(|id| AgentId::try_from(id.as_iri()))
         {
-            self.acted_on_behalf_of(namespaceid.clone(), id.clone(), delegated, None);
+            self.acted_on_behalf_of(namespaceid.clone(), id.clone(), delegated?, None);
         }
 
         for identity in extract_reference_ids(&Chronicle::HasIdentity, agent)?
             .into_iter()
-            .map(|id| IdentityId::new(id.as_str()))
+            .map(|id| IdentityId::try_from(id.as_iri()))
         {
-            self.has_identity(namespaceid.clone(), &id, &identity);
+            self.has_identity(namespaceid.clone(), &id, &identity?);
         }
 
         for identity in extract_reference_ids(&Chronicle::HadIdentity, agent)?
             .into_iter()
-            .map(|id| IdentityId::new(id.as_str()))
+            .map(|id| IdentityId::try_from(id.as_iri()))
         {
-            self.had_identity(namespaceid.clone(), &id, &identity);
+            self.had_identity(namespaceid.clone(), &id, &identity?);
         }
 
         let agent = Agent::exists(namespaceid, id).has_attributes(attributes);
@@ -191,14 +191,14 @@ impl ProvModel {
     }
 
     fn apply_node_as_activity(&mut self, activity: &Node) -> Result<(), ProcessorError> {
-        let id = ActivityId::new(
+        let id = ActivityId::try_from(Iri::from_str(
             activity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
                     object: activity.as_json(),
                 })?
-                .to_string(),
-        );
+                .as_str(),
+        )?)?;
 
         let namespaceid = extract_namespace(activity)?;
         self.namespace_context(&namespaceid);
@@ -213,11 +213,13 @@ impl ProvModel {
 
         let used = extract_reference_ids(&Prov::Used, activity)?
             .into_iter()
-            .map(|id| EntityId::new(id.as_str()));
+            .map(|id| EntityId::try_from(id.as_iri()))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let wasassociatedwith = extract_reference_ids(&Prov::WasAssociatedWith, activity)?
             .into_iter()
-            .map(|id| AgentId::new(id.as_str()));
+            .map(|id| AgentId::try_from(id.as_iri()))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let attributes = Self::extract_attributes(activity)?;
 
@@ -247,14 +249,14 @@ impl ProvModel {
     fn apply_node_as_identity(&mut self, identity: &Node) -> Result<(), ProcessorError> {
         let namespaceid = extract_namespace(identity)?;
 
-        let id = IdentityId::new(
+        let id = IdentityId::try_from(Iri::from_str(
             identity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
                     object: identity.as_json(),
                 })?
-                .to_string(),
-        );
+                .as_str(),
+        )?)?;
 
         let public_key = extract_scalar_prop(&Chronicle::PublicKey, identity)
             .ok()
@@ -275,22 +277,23 @@ impl ProvModel {
 
     fn apply_node_as_attachment(&mut self, attachment: &Node) -> Result<(), ProcessorError> {
         let namespaceid = extract_namespace(attachment)?;
-        let id = AttachmentId::new(
+
+        let id = AttachmentId::try_from(Iri::from_str(
             attachment
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
                     object: attachment.as_json(),
                 })?
-                .to_string(),
-        );
+                .as_str(),
+        )?)?;
 
         let signer = extract_reference_ids(&Chronicle::SignedBy, attachment)?
             .into_iter()
-            .map(|id| IdentityId::new(id.as_str()))
             .next()
             .ok_or_else(|| ProcessorError::MissingId {
                 object: attachment.as_json(),
-            })?;
+            })
+            .map(|id| IdentityId::try_from(id.as_iri()))??;
 
         let signature = extract_scalar_prop(&Chronicle::Signature, attachment)
             .ok()
@@ -326,51 +329,52 @@ impl ProvModel {
     }
 
     fn apply_node_as_entity(&mut self, entity: &Node) -> Result<(), ProcessorError> {
-        let id = EntityId::new(
+        let id = EntityId::try_from(Iri::from_str(
             entity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
                     object: entity.as_json(),
                 })?
-                .to_string(),
-        );
+                .as_str(),
+        )?)?;
 
         let namespaceid = extract_namespace(entity)?;
         self.namespace_context(&namespaceid);
 
         let generatedby = extract_reference_ids(&Prov::WasGeneratedBy, entity)?
             .into_iter()
-            .map(|id| ActivityId::new(id.as_str()));
+            .map(|id| ActivityId::try_from(id.as_iri()))
+            .collect::<Result<Vec<_>, _>>()?;
 
         for attachment in extract_reference_ids(&Chronicle::HasAttachment, entity)?
             .into_iter()
-            .map(|id| AttachmentId::new(id.as_str()))
+            .map(|id| AttachmentId::try_from(id.as_iri()))
         {
-            self.has_attachment(namespaceid.clone(), id.clone(), &attachment);
+            self.has_attachment(namespaceid.clone(), id.clone(), &attachment?);
         }
 
         for attachment in extract_reference_ids(&Chronicle::HadAttachment, entity)?
             .into_iter()
-            .map(|id| AttachmentId::new(id.as_str()))
+            .map(|id| AttachmentId::try_from(id.as_iri()))
         {
-            self.had_attachment(namespaceid.clone(), id.clone(), &attachment);
+            self.had_attachment(namespaceid.clone(), id.clone(), &attachment?);
         }
 
         for derived in extract_reference_ids(&Prov::WasDerivedFrom, entity)?
             .into_iter()
-            .map(|id| EntityId::new(id.as_str()))
+            .map(|id| EntityId::try_from(id.as_iri()))
         {
-            self.was_derived_from(namespaceid.clone(), None, derived, id.clone(), None);
+            self.was_derived_from(namespaceid.clone(), None, derived?, id.clone(), None);
         }
 
         for derived in extract_reference_ids(&Prov::WasQuotedFrom, entity)?
             .into_iter()
-            .map(|id| EntityId::new(id.as_str()))
+            .map(|id| EntityId::try_from(id.as_iri()))
         {
             self.was_derived_from(
                 namespaceid.clone(),
                 Some(DerivationType::quotation()),
-                derived,
+                derived?,
                 id.clone(),
                 None,
             );
@@ -378,12 +382,12 @@ impl ProvModel {
 
         for derived in extract_reference_ids(&Prov::WasRevisionOf, entity)?
             .into_iter()
-            .map(|id| EntityId::new(id.as_str()))
+            .map(|id| EntityId::try_from(id.as_iri()))
         {
             self.was_derived_from(
                 namespaceid.clone(),
                 Some(DerivationType::revision()),
-                derived,
+                derived?,
                 id.clone(),
                 None,
             );
@@ -391,12 +395,12 @@ impl ProvModel {
 
         for derived in extract_reference_ids(&Prov::HadPrimarySource, entity)?
             .into_iter()
-            .map(|id| EntityId::new(id.as_str()))
+            .map(|id| EntityId::try_from(id.as_iri()))
         {
             self.was_derived_from(
                 namespaceid.clone(),
                 Some(DerivationType::primary_source()),
-                derived,
+                derived?,
                 id.clone(),
                 None,
             );

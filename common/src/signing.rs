@@ -13,7 +13,7 @@ use std::{
     string::FromUtf8Error,
 };
 
-use crate::prov::AgentId;
+use crate::prov::{AgentId, NamePart};
 
 custom_error! {pub SignerError
     InvalidValidatorAddress{source: url::ParseError}        = "Invalid validator address",
@@ -158,7 +158,7 @@ impl DirectoryStoredKeys {
     }
 
     fn agent_path(&self, agent: &AgentId) -> PathBuf {
-        Path::join(&self.base, Path::new(agent.decompose()))
+        Path::join(&self.base, Path::new(agent.name_part().as_str()))
     }
 
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {

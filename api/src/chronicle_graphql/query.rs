@@ -3,7 +3,7 @@ use async_graphql::{
     Context, ID,
 };
 
-use common::prov::{AgentId, EntityId};
+use common::prov::{AgentId, EntityId, NamePart};
 use diesel::prelude::*;
 
 use crate::chronicle_graphql::Store;
@@ -43,9 +43,10 @@ pub async fn agents_by_type<'a>(
         connection
     )
 }
+
 pub async fn agent_by_id<'a>(
     ctx: &Context<'a>,
-    id: ID,
+    id: AgentId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Agent>> {
     use crate::persistence::schema::{
@@ -57,11 +58,10 @@ pub async fn agent_by_id<'a>(
 
     let ns = namespace.unwrap_or_else(|| "default".into());
     let mut connection = store.pool.get()?;
-    let name = AgentId::new(&**id);
 
     Ok(agent::table
         .inner_join(nsdsl::namespace)
-        .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
         .select(Agent::as_select())
         .first::<Agent>(&mut connection)
         .optional()?)
@@ -69,7 +69,7 @@ pub async fn agent_by_id<'a>(
 
 pub async fn entity_by_id<'a>(
     ctx: &Context<'a>,
-    id: ID,
+    id: EntityId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Entity>> {
     use crate::persistence::schema::{
@@ -80,11 +80,10 @@ pub async fn entity_by_id<'a>(
     let store = ctx.data_unchecked::<Store>();
     let ns = namespace.unwrap_or_else(|| "default".into());
     let mut connection = store.pool.get()?;
-    let name = EntityId::new(&**id);
 
     Ok(entity::table
         .inner_join(nsdsl::namespace)
-        .filter(dsl::name.eq(name.decompose()).and(nsdsl::name.eq(&ns)))
+        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
         .select(Entity::as_select())
         .first::<Entity>(&mut connection)
         .optional()?)

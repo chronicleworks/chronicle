@@ -2,14 +2,17 @@
 //! We delegate to the underlying concrete, attributeless graphql objects in the api crate,
 //! wrapping those in our types here.
 #![cfg_attr(feature = "strict", deny(warnings))]
-use api::chronicle_graphql::{self, ChronicleGraphQl, Evidence, Namespace, Submission};
-use api::{self, chronicle_graphql::Identity};
-use async_graphql::connection::{Connection, EmptyFields};
-use async_graphql::*;
+use api::{
+    self,
+    chronicle_graphql::{self, ChronicleGraphQl, Evidence, Identity, Namespace, Submission},
+};
+use async_graphql::{
+    connection::{Connection, EmptyFields},
+    *,
+};
 use bootstrap::*;
 use chrono::{DateTime, Utc};
-use common::prov::vocab::{Chronicle, Prov};
-use common::prov::DomaintypeId;
+use common::prov::{vocab::Prov, ActivityId, AgentId, DomaintypeId, EntityId};
 use iref::Iri;
 
 #[derive(Default, InputObject)]
@@ -21,9 +24,7 @@ pub struct Attributes {
 impl From<Attributes> for common::attributes::Attributes {
     fn from(attributes: Attributes) -> Self {
         common::attributes::Attributes {
-            typ: attributes
-                .typ
-                .map(|typ| DomaintypeId::from(Chronicle::domaintype(&typ))),
+            typ: attributes.typ.map(|typ| DomaintypeId::from_name(&typ)),
             ..Default::default()
         }
     }
@@ -33,8 +34,8 @@ pub struct Activity(chronicle_graphql::Activity);
 
 #[Object]
 impl Activity {
-    async fn id(&self) -> ID {
-        ID::from(Chronicle::activity(&*self.0.name).to_string())
+    async fn id(&self) -> ActivityId {
+        ActivityId::from_name(&*self.0.name)
     }
 
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
@@ -87,8 +88,8 @@ pub struct Entity(chronicle_graphql::Entity);
 
 #[Object]
 impl Entity {
-    async fn id(&self) -> ID {
-        ID::from(Chronicle::entity(&*self.0.name).to_string())
+    async fn id(&self) -> EntityId {
+        EntityId::from_name(&*self.0.name)
     }
 
     async fn namespace<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Namespace> {
@@ -111,6 +112,7 @@ impl Entity {
     async fn evidence<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Option<Evidence>> {
         chronicle_graphql::entity::evidence(self.0.attachment_id, ctx).await
     }
+
     async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
@@ -150,6 +152,7 @@ impl Entity {
             .map(Entity)
             .collect())
     }
+
     async fn was_quoted_from<'a>(&self, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
         Ok(chronicle_graphql::entity::was_quoted_from(self.0.id, ctx)
             .await?
@@ -163,8 +166,8 @@ pub struct Agent(chronicle_graphql::Agent);
 
 #[Object]
 impl Agent {
-    async fn id(&self) -> ID {
-        ID::from(Chronicle::agent(&*self.0.name).to_string())
+    async fn id(&self) -> AgentId {
+        AgentId::from_name(&*self.0.name)
     }
 
     async fn name(&self) -> &str {
@@ -227,12 +230,13 @@ impl Mutation {
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::entity(ctx, name, namespace, attributes.into()).await
     }
+
     pub async fn acted_on_behalf_of<'a>(
         &self,
         ctx: &Context<'a>,
         namespace: Option<String>,
-        responsible: ID,
-        delegate: ID,
+        responsible: AgentId,
+        delegate: AgentId,
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
     }
@@ -241,8 +245,8 @@ impl Mutation {
         &self,
         ctx: &Context<'a>,
         namespace: Option<String>,
-        generated_entity: ID,
-        used_entity: ID,
+        generated_entity: EntityId,
+        used_entity: EntityId,
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::was_derived_from(ctx, namespace, generated_entity, used_entity)
             .await
@@ -252,18 +256,19 @@ impl Mutation {
         &self,
         ctx: &Context<'a>,
         namespace: Option<String>,
-        generated_entity: ID,
-        used_entity: ID,
+        generated_entity: EntityId,
+        used_entity: EntityId,
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::was_revision_of(ctx, namespace, generated_entity, used_entity)
             .await
     }
+
     pub async fn had_primary_source<'a>(
         &self,
         ctx: &Context<'a>,
         namespace: Option<String>,
-        generated_entity: ID,
-        used_entity: ID,
+        generated_entity: EntityId,
+        used_entity: EntityId,
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::had_primary_source(
             ctx,
@@ -273,12 +278,13 @@ impl Mutation {
         )
         .await
     }
+
     pub async fn was_quoted_from<'a>(
         &self,
         ctx: &Context<'a>,
         namespace: Option<String>,
-        generated_entity: ID,
-        used_entity: ID,
+        generated_entity: EntityId,
+        used_entity: EntityId,
     ) -> async_graphql::Result<Submission> {
         chronicle_graphql::mutation::was_quoted_from(ctx, namespace, generated_entity, used_entity)
             .await
@@ -287,73 +293,66 @@ impl Mutation {
     pub async fn generate_key<'a>(
         &self,
         ctx: &Context<'a>,
-        name: String,
+        id: AgentId,
         namespace: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::generate_key(ctx, name, namespace).await
+        chronicle_graphql::mutation::generate_key(ctx, id, namespace).await
     }
 
     pub async fn start_activity<'a>(
         &self,
         ctx: &Context<'a>,
-        name: String,
+        id: ActivityId,
         namespace: Option<String>,
-        agent: String,
+        agent: AgentId,
         time: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::start_activity(ctx, name, namespace, agent, time).await
+        chronicle_graphql::mutation::start_activity(ctx, id, namespace, agent, time).await
     }
 
     pub async fn end_activity<'a>(
         &self,
         ctx: &Context<'a>,
-        name: String,
+        id: ActivityId,
         namespace: Option<String>,
-        agent: String,
+        agent: AgentId,
         time: Option<DateTime<Utc>>,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::end_activity(ctx, name, namespace, agent, time).await
+        chronicle_graphql::mutation::end_activity(ctx, id, namespace, agent, time).await
     }
 
     pub async fn used<'a>(
         &self,
         ctx: &Context<'a>,
-        activity: String,
-        name: String,
+        activity: ActivityId,
+        id: EntityId,
         namespace: Option<String>,
         _typ: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::used(ctx, activity, name, namespace).await
+        chronicle_graphql::mutation::used(ctx, activity, id, namespace).await
     }
 
     pub async fn was_generated_by<'a>(
         &self,
         ctx: &Context<'a>,
-        activity: String,
-        name: String,
+        activity: ActivityId,
+        id: EntityId,
         namespace: Option<String>,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::was_generated_by(ctx, activity, name, namespace).await
+        chronicle_graphql::mutation::was_generated_by(ctx, activity, id, namespace).await
     }
 
     pub async fn has_attachment<'a>(
         &self,
         ctx: &Context<'a>,
-        name: String,
+        id: EntityId,
         namespace: Option<String>,
         attachment: Upload,
-        on_behalf_of_agent: String,
+        agent: AgentId,
         locator: String,
     ) -> async_graphql::Result<Submission> {
-        chronicle_graphql::mutation::has_attachment(
-            ctx,
-            name,
-            namespace,
-            attachment,
-            on_behalf_of_agent,
-            locator,
-        )
-        .await
+        chronicle_graphql::mutation::has_attachment(ctx, id, namespace, attachment, agent, locator)
+            .await
     }
 }
 
@@ -379,10 +378,11 @@ impl Query {
         .await?
         .map_node(Agent))
     }
+
     pub async fn agent_by_id<'a>(
         &self,
         ctx: &Context<'a>,
-        id: ID,
+        id: AgentId,
         namespace: Option<String>,
     ) -> async_graphql::Result<Option<Agent>> {
         Ok(chronicle_graphql::query::agent_by_id(ctx, id, namespace)
@@ -393,7 +393,7 @@ impl Query {
     pub async fn entity_by_id<'a>(
         &self,
         ctx: &Context<'a>,
-        id: ID,
+        id: EntityId,
         namespace: Option<String>,
     ) -> async_graphql::Result<Option<Entity>> {
         Ok(chronicle_graphql::query::entity_by_id(ctx, id, namespace)
@@ -414,8 +414,10 @@ mod test {
     use api::{Api, ConnectionOptions, UuidGen};
     use async_graphql::{Request, Schema};
     use common::ledger::InMemLedger;
-    use diesel::r2d2::Pool;
-    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use diesel::{
+        r2d2::{ConnectionManager, Pool},
+        SqliteConnection,
+    };
     use std::time::Duration;
     use tempfile::TempDir;
     use tracing::Level;
@@ -503,6 +505,8 @@ mod test {
                 r#"
             query {
                 agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                    id
+                    name
                     actedOnBehalfOf {
                         id
                     }
@@ -539,6 +543,8 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    id
+                    name
                     wasDerivedFrom {
                         id
                     }
@@ -575,6 +581,8 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    id
+                    name
                     wasDerivedFrom {
                         id
                     }
@@ -614,6 +622,8 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    id
+                    name
                     wasDerivedFrom {
                         id
                     }
@@ -653,6 +663,8 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                    id
+                    name
                     wasDerivedFrom {
                         id
                     }
