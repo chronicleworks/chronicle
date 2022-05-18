@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use async_graphql::{Context, Upload, ID};
+use async_graphql::{Context, Upload};
 use chrono::{DateTime, Utc};
 use common::{
     attributes::Attributes,
@@ -36,16 +36,13 @@ pub async fn transaction_context<'a>(
 async fn derivation<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    generated_entity: ID,
-    used_entity: ID,
+    generated_entity: EntityId,
+    used_entity: EntityId,
     derivation: Option<DerivationType>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
     let namespace = namespace.unwrap_or_else(|| "default".into()).into();
-
-    let used_entity = EntityId::from_name(&**used_entity);
-    let generated_entity = EntityId::from_name(&**generated_entity);
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Derive {
@@ -126,15 +123,12 @@ pub async fn entity<'a>(
 pub async fn acted_on_behalf_of<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    responsible: ID,
-    delegate: ID,
+    responsible_id: AgentId,
+    delegate_id: AgentId,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
     let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
-
-    let responsible_id = AgentId::from_name(&**responsible);
-    let delegate_id = AgentId::from_name(&**delegate);
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::Delegate {
@@ -151,8 +145,8 @@ pub async fn acted_on_behalf_of<'a>(
 pub async fn was_derived_from<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    generated_entity: ID,
-    used_entity: ID,
+    generated_entity: EntityId,
+    used_entity: EntityId,
 ) -> async_graphql::Result<Submission> {
     derivation(ctx, namespace, generated_entity, used_entity, None).await
 }
@@ -160,8 +154,8 @@ pub async fn was_derived_from<'a>(
 pub async fn was_revision_of<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    generated_entity: ID,
-    used_entity: ID,
+    generated_entity: EntityId,
+    used_entity: EntityId,
 ) -> async_graphql::Result<Submission> {
     derivation(
         ctx,
@@ -175,8 +169,8 @@ pub async fn was_revision_of<'a>(
 pub async fn had_primary_source<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    generated_entity: ID,
-    used_entity: ID,
+    generated_entity: EntityId,
+    used_entity: EntityId,
 ) -> async_graphql::Result<Submission> {
     derivation(
         ctx,
@@ -190,8 +184,8 @@ pub async fn had_primary_source<'a>(
 pub async fn was_quoted_from<'a>(
     ctx: &Context<'a>,
     namespace: Option<String>,
-    generated_entity: ID,
-    used_entity: ID,
+    generated_entity: EntityId,
+    used_entity: EntityId,
 ) -> async_graphql::Result<Submission> {
     derivation(
         ctx,
@@ -205,7 +199,7 @@ pub async fn was_quoted_from<'a>(
 
 pub async fn generate_key<'a>(
     ctx: &Context<'a>,
-    name: String,
+    id: AgentId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -214,7 +208,7 @@ pub async fn generate_key<'a>(
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            id: AgentId::from_name(name),
+            id,
             namespace,
             registration: KeyRegistration::Generate,
         }))
@@ -225,9 +219,9 @@ pub async fn generate_key<'a>(
 
 pub async fn start_activity<'a>(
     ctx: &Context<'a>,
-    name: String,
+    id: ActivityId,
     namespace: Option<String>,
-    agent: String,
+    agent: AgentId,
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -236,10 +230,10 @@ pub async fn start_activity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_name(name),
+            id,
             namespace,
             time,
-            agent: Some(AgentId::from_name(agent)),
+            agent: Some(agent),
         }))
         .await?;
 
@@ -248,9 +242,9 @@ pub async fn start_activity<'a>(
 
 pub async fn end_activity<'a>(
     ctx: &Context<'a>,
-    name: String,
+    id: ActivityId,
     namespace: Option<String>,
-    agent: String,
+    agent: AgentId,
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -259,10 +253,10 @@ pub async fn end_activity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: Some(ActivityId::from_name(name)),
+            id: Some(id),
             namespace,
             time,
-            agent: Some(AgentId::from_name(agent)),
+            agent: Some(agent),
         }))
         .await?;
 
@@ -271,8 +265,8 @@ pub async fn end_activity<'a>(
 
 pub async fn used<'a>(
     ctx: &Context<'a>,
-    activity: String,
-    name: String,
+    activity: ActivityId,
+    entity: EntityId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -281,9 +275,9 @@ pub async fn used<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            id: EntityId::from_name(name),
+            id: entity,
             namespace,
-            activity: Some(ActivityId::from_name(activity)),
+            activity: Some(activity),
         }))
         .await?;
 
@@ -292,8 +286,8 @@ pub async fn used<'a>(
 
 pub async fn was_generated_by<'a>(
     ctx: &Context<'a>,
-    activity: String,
-    name: String,
+    activity: ActivityId,
+    entity: EntityId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -302,9 +296,9 @@ pub async fn was_generated_by<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            id: EntityId::from_name(name),
+            id: entity,
             namespace,
-            activity: Some(ActivityId::from_name(activity)),
+            activity: Some(activity),
         }))
         .await?;
 
@@ -313,10 +307,10 @@ pub async fn was_generated_by<'a>(
 
 pub async fn has_attachment<'a>(
     ctx: &Context<'a>,
-    name: String,
+    entity: EntityId,
     namespace: Option<String>,
     attachment: Upload,
-    on_behalf_of_agent: String,
+    agent: AgentId,
     locator: String,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -325,9 +319,9 @@ pub async fn has_attachment<'a>(
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Attach {
-            id: EntityId::from_name(name),
+            id: entity,
             namespace,
-            agent: Some(AgentId::from_name(on_behalf_of_agent)),
+            agent: Some(agent),
             file: PathOrFile::File(Arc::new(Box::pin(attachment.value(ctx)?.into_async_read()))),
             locator: Some(locator),
         }))

@@ -1,7 +1,11 @@
 ---
 source: cli/src/main.rs
-assertion_line: 550
+assertion_line: 545
 expression: derived
 ---
+[data.entityById]
+id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+name = 'generated'
+
 [[data.entityById.wasDerivedFrom]]
 id = 'http://blockchaintp.com/chronicle/ns#entity:used'

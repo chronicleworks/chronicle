@@ -2,21 +2,21 @@ mod cli;
 mod config;
 pub mod telemetry;
 
-use api::chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer};
-use api::{Api, ApiDispatch};
-use api::{ApiError, ConnectionOptions, UuidGen};
+use api::{
+    chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer},
+    Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen,
+};
 use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId};
 use common::{
     attributes::Attributes,
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
         KeyRegistration, NamespaceCommand, PathOrFile, QueryCommand,
     },
-    prov::{CompactionError},
+    prov::{ActivityId, AgentId, CompactionError, DomaintypeId, EntityId},
 };
 use custom_error::custom_error;
 use tokio::sync::broadcast::error::RecvError;
@@ -33,8 +33,8 @@ use diesel::{
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::io;
 use std::{
+    io,
     net::SocketAddr,
     path::{Path, PathBuf},
     time::Duration,

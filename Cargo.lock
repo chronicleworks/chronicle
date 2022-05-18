@@ -558,6 +558,7 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "async-trait",
  "chrono",
  "custom_error",

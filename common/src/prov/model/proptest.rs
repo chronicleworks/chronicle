@@ -605,7 +605,6 @@ proptest! {
 
         // Test that serialisation to and from JSON-LD is symmetric
         let lhs_json_expanded = prov.to_json().0;
-        println!("{}", json::stringify_pretty(lhs_json_expanded.clone(),2));
 
         let lhs_json = compact_json(&prov).0;
 

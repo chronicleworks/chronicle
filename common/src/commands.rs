@@ -135,6 +135,7 @@ impl ActivityCommand {
             activity,
         }
     }
+
     pub fn generate(
         id: EntityId,
         namespace: impl AsRef<str>,

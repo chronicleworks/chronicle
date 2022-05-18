@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 api = { path = "../api" }
-async-graphql = "3.0.38"
+async-graphql = "3.0.36"
 bootstrap = { path = "../bootstrap" }
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "3.1.6"

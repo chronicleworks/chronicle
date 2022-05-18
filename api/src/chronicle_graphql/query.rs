@@ -43,9 +43,10 @@ pub async fn agents_by_type<'a>(
         connection
     )
 }
+
 pub async fn agent_by_id<'a>(
     ctx: &Context<'a>,
-    id: ID,
+    id: AgentId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Agent>> {
     use crate::persistence::schema::{
@@ -57,7 +58,6 @@ pub async fn agent_by_id<'a>(
 
     let ns = namespace.unwrap_or_else(|| "default".into());
     let mut connection = store.pool.get()?;
-    let id = AgentId::from_name(&**id);
 
     Ok(agent::table
         .inner_join(nsdsl::namespace)
@@ -69,7 +69,7 @@ pub async fn agent_by_id<'a>(
 
 pub async fn entity_by_id<'a>(
     ctx: &Context<'a>,
-    id: ID,
+    id: EntityId,
     namespace: Option<String>,
 ) -> async_graphql::Result<Option<Entity>> {
     use crate::persistence::schema::{
@@ -80,7 +80,6 @@ pub async fn entity_by_id<'a>(
     let store = ctx.data_unchecked::<Store>();
     let ns = namespace.unwrap_or_else(|| "default".into());
     let mut connection = store.pool.get()?;
-    let id = EntityId::from_name(&**id);
 
     Ok(entity::table
         .inner_join(nsdsl::namespace)

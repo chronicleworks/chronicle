@@ -1,8 +1,6 @@
-use diesel::prelude::*;
-use diesel::query_builder::*;
-use diesel::r2d2::ConnectionManager;
-use diesel::sql_types::BigInt;
-use diesel::sqlite::Sqlite;
+use diesel::{
+    prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt, sqlite::Sqlite,
+};
 use r2d2::PooledConnection;
 
 type Conn = PooledConnection<ConnectionManager<SqliteConnection>>;
@@ -18,10 +16,8 @@ pub struct CursorPosition<T> {
 
 macro_rules! gql_cursor {
     ($after:expr, $before: expr, $first: expr, $last: expr, $query:expr, $order:expr, $node_type:tt,$connection: expr) => {{
-        use crate::chronicle_graphql::cursor_query::Cursorise;
-        use crate::chronicle_graphql::GraphQlError;
-        use async_graphql::connection::query;
-        use async_graphql::connection::{Connection, Edge, EmptyFields};
+        use crate::chronicle_graphql::{cursor_query::Cursorise, GraphQlError};
+        use async_graphql::connection::{query, Connection, Edge, EmptyFields};
 
         query(
             $after,

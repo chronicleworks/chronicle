@@ -1,3 +1,6 @@
+mod graphlql_scalars;
+pub use graphlql_scalars::*;
+
 use std::fmt::Display;
 
 use diesel::{
