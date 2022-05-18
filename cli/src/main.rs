@@ -12,7 +12,8 @@ use async_graphql::{
 };
 use bootstrap::*;
 use chrono::{DateTime, Utc};
-use common::prov::{vocab::Prov, ActivityId, AgentId, DomaintypeId, EntityId};
+use common::prov::vocab::Prov;
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId};
 use iref::Iri;
 
 #[derive(Default, InputObject)]
