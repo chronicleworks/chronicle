@@ -31,16 +31,16 @@ stop:
 	docker-compose -f docker/chronicle.yaml down || true
 
 $(MARKERS)/build:
-	docker-compose -f docker-compose.yaml build
+	docker-compose -f docker/docker-compose.yaml build
 	touch $@
 
 clean_containers:
 	docker-compose -f docker/chronicle.yaml rm -f || true
-	docker-compose -f docker-compose.yaml rm -f || true
+	docker-compose -f docker/docker-compose.yaml rm -f || true
 
 clean_docker: stop
 	docker-compose -f docker/chronicle.yaml down -v --rmi all || true
-	docker-compose -f docker-compose.yaml down -v --rmi all || true
+	docker-compose -f docker/docker-compose.yaml down -v --rmi all || true
 
 clean_target:
 	rm -rf target
