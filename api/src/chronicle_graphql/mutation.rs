@@ -1,4 +1,4 @@
-//! Primative mutation operations that are not in terms of particular domain types
+//! Primitive mutation operations that are not in terms of particular domain types
 
 use std::sync::Arc;
 

@@ -70,7 +70,7 @@ services:
     environment: *rustenv
     image: *chronicleImage
     entrypoint: |
-      /bin/sh -xc "/usr/local/bin/chronicle \
+      /bin/sh -xc "/usr/local/bin/chronicle-untyped \
         -c /root/.chronicle/config.toml \
         --sawtooth tcp://validator:4004 --gql \
         --gql-interface 0.0.0.0:9982 \

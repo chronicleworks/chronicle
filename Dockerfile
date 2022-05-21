@@ -40,15 +40,15 @@ RUN cargo build --release
 
 FROM ubuntu:focal AS chronicle
 WORKDIR /
-COPY --from=application /app/target/release/chronicle /usr/local/bin
+COPY --from=application /app/target/release/chronicle-untyped /usr/local/bin
 COPY --from=application /app/target/release/chronicle_sawtooth_tp /usr/local/bin
 
 RUN apt-get update -yq \
-  && apt-get install --no-install-recommends -yq \
-      sqlite3 \
-  && apt-get upgrade -yq --no-install-recommends \
-  && apt-get autoremove -yq \
-  && apt-get autoclean -yq \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* \
-  && rm -rf /tmp/*
+    && apt-get install --no-install-recommends -yq \
+    sqlite3 \
+    && apt-get upgrade -yq --no-install-recommends \
+    && apt-get autoremove -yq \
+    && apt-get autoclean -yq \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/*

@@ -3,12 +3,11 @@
 members = [
   "common",
   "api",
-  "bootstrap",
-  "cli",
+  "chronicle",
+  "chronicle-example",
+  "chronicle-untyped",
   "sawtooth_protocol",
   "sawtooth_tp",
-  "meta-chronicle/impl",
-  "meta-chronicle/macro",
 ]
 
 

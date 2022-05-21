@@ -1,14 +1,16 @@
 [package]
 edition = "2021"
-name    = "bootstrap"
+name    = "chronicle"
 version = "0.1.0"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+Inflector = "0.11.4"
 api = { path = "../api" }
 async-graphql = "3.0.36"
+chrono = { version = "0.4.19", features = ["serde"] }
 clap = "3.1.6"
 clap_complete = "3.1.1"
 colored_json = "2.1.0"
@@ -22,6 +24,7 @@ diesel = { version = "2.0.0-rc.0", features = [
 ], git = "https://github.com/diesel-rs/diesel" }
 dotenv = "0.15.0"
 futures = "0.3.21"
+genco = "0.16.1"
 hex = "0.4.3"
 iref = "2.1.2"
 k256 = { version = "0.10.4", features = [
@@ -45,8 +48,9 @@ rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
 serde = "1.0.136"
 serde_derive = "1.0.136"
+serde_json = "1.0.81"
 shellexpand = "2.1.0"
-tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.18.2", features = ["time", "macros", "rt-multi-thread"] }
 toml = "0.5.8"
 tracing = "0.1.32"
 tracing-log = "0.1.2"

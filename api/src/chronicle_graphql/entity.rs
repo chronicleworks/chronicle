@@ -114,3 +114,28 @@ pub async fn was_revision_of<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::R
 pub async fn was_quoted_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
     typed_derivation(id, ctx, Some(DerivationType::Quotation)).await
 }
+
+pub async fn load_attribute<'a>(
+    id: i32,
+    name: &str,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Option<serde_json::Value>> {
+    use crate::persistence::schema::entity_attribute;
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+
+    Ok(entity_attribute::table
+        .filter(
+            entity_attribute::entity_id
+                .eq(id)
+                .and(entity_attribute::typename.eq(name)),
+        )
+        .select(entity_attribute::value)
+        .first::<String>(&mut connection)
+        .optional()?
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?)
+}
