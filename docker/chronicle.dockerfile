@@ -43,7 +43,7 @@ RUN cargo build --release ${BUILD_ARGS}
 
 FROM ubuntu:focal AS chronicle-untyped
 WORKDIR /
-COPY --from=application /app/target/release/chronicle /usr/local/bin
+COPY --from=application /app/target/release/chronicle-untyped /usr/local/bin
 COPY --from=application /app/target/release/chronicle_sawtooth_tp /usr/local/bin
 
 RUN apt-get update -yq \
