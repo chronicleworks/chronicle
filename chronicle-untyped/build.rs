@@ -7,9 +7,8 @@ fn main() {
 
     generate_chronicle_domain_schema(model, "src/main.rs");
 
-    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     Command::new("cargo")
-        .args(["fmt", &format!("{}cli/src/main.rs", dir)])
+        .args(["fmt", "--", "src/main.rs"])
         .output()
         .expect("formatting");
 }
