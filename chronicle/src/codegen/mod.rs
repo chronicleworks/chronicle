@@ -430,6 +430,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
         pub typ: Option<String>,
     }
 
+    #[allow(clippy::from_over_into)]
     impl From<ProvAgentAttributes> for #abstract_attributes {
         fn from(attributes: ProvAgentAttributes) -> Self {
             Self {
@@ -445,6 +446,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
         pub typ: Option<String>,
     }
 
+    #[allow(clippy::from_over_into)]
     impl From<ProvEntityAttributes> for #abstract_attributes {
         fn from(attributes: ProvEntityAttributes) -> Self {
             Self {
@@ -459,6 +461,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
         pub typ: Option<String>,
     }
 
+    #[allow(clippy::from_over_into)]
     impl From<ProvActivityAttributes> for #abstract_attributes {
         fn from(attributes: ProvActivityAttributes) -> Self {
             Self {
@@ -492,6 +495,8 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
             )
         }
 
+
+        #[allow(clippy::from_over_into)]
         impl From<#(typ.attributes_type_name())> for #abstract_attributes{
             fn from(attributes: #(typ.attributes_type_name())) -> Self {
                 #abstract_attributes {
@@ -843,7 +848,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     let chronicle_graphql = rust::import("chronicle::api::chronicle_graphql", "ChronicleGraphQl");
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
-    #(gen_type_enums(&domain))
+    #(gen_type_enums(domain))
     #(gen_abstract_prov_attributes())
     #(for agent in domain.agents.iter() => #(gen_attribute_definition(agent, &agent.attributes)))
     #(for activity in domain.activities.iter() => #(gen_attribute_definition(activity, &activity.attributes)))
