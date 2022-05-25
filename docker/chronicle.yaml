@@ -57,7 +57,7 @@ services:
     environment: &rustenv
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-    image: &chronicleImage chronicle:${ISOLATION_ID:-local}
+    image: &chronicleImage chronicle-untyped:${ISOLATION_ID:-local}
     entrypoint: |
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp \
         -C tcp://validator:4004 \
