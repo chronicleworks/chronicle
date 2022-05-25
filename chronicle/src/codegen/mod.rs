@@ -36,6 +36,71 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     }
 }
 
+fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
+    let graphql_enum = &rust::import("chronicle::async_graphql", "Enum");
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    quote! {
+
+        #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        pub enum AgentType {
+            ProvAgent,
+            #(for agent in domain.agents.iter() =>
+                #(agent.as_type_name()),
+            )
+        }
+
+        impl Into<Option<#domain_type_id>> for AgentType {
+            fn into(self) -> Option<#domain_type_id> {
+                match self {
+                #(for agent in domain.agents.iter() =>
+                AgentType::#(agent.as_type_name()) => Some(#domain_type_id::from_name(#_(#(agent.as_type_name())))),
+                )
+                AgentType::ProvAgent => None
+                }
+            }
+        }
+
+        #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        pub enum EntityType {
+            ProvEntity,
+            #(for entity in domain.entities.iter() =>
+                #(entity.as_type_name()),
+            )
+        }
+
+        impl Into<Option<#domain_type_id>> for EntityType {
+            fn into(self) -> Option<#domain_type_id> {
+                match self {
+                #(for entity in domain.entities.iter() =>
+                EntityType::#(entity.as_type_name()) => Some(#domain_type_id::from_name(#_(#(entity.as_type_name())))),
+                )
+                EntityType::ProvEntity => None
+                }
+            }
+        }
+
+        #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        pub enum ActivityType {
+            ProvActivity,
+            #(for activity in domain.activities.iter() =>
+                #(activity.as_type_name()),
+            )
+        }
+
+        impl Into<Option<#domain_type_id>> for ActivityType {
+            fn into(self) -> Option<#domain_type_id> {
+                match self {
+                #(for activity in domain.activities.iter() =>
+                ActivityType::#(activity.as_type_name()) => Some(#domain_type_id::from_name(#_(#(activity.as_type_name())))),
+                )
+                ActivityType::ProvActivity => None
+                }
+            }
+        }
+
+    }
+}
+
 fn gen_agent_union(agents: &Vec<AgentDef>) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
@@ -353,11 +418,63 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     }
 }
 
-fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> rust::Tokens {
+fn gen_abstract_prov_attributes() -> rust::Tokens {
+    let input_object = &rust::import("chronicle::async_graphql", "InputObject").qualified();
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    quote! {
+    #[derive(#input_object, Clone)]
+    pub struct ProvAgentAttributes {
+        #[graphql(name = "type")]
+        pub typ: Option<String>,
+    }
+
+    impl From<ProvAgentAttributes> for #abstract_attributes {
+        fn from(attributes: ProvAgentAttributes) -> Self {
+            Self {
+                typ: attributes.typ.map(#domain_type_id::from_name),
+                ..Default::default()
+            }
+        }
+    }
+
+    #[derive(#input_object, Clone)]
+    pub struct ProvEntityAttributes {
+        #[graphql(name = "type")]
+        pub typ: Option<String>,
+    }
+
+    impl From<ProvEntityAttributes> for #abstract_attributes {
+        fn from(attributes: ProvEntityAttributes) -> Self {
+            Self {
+                typ: attributes.typ.map(#domain_type_id::from_name),
+                ..Default::default()
+            }
+        }
+    }
+    #[derive(#input_object, Clone)]
+    pub struct ProvActivityAttributes {
+        #[graphql(name = "type")]
+        pub typ: Option<String>,
+    }
+
+    impl From<ProvActivityAttributes> for #abstract_attributes {
+        fn from(attributes: ProvActivityAttributes) -> Self {
+            Self {
+                typ: attributes.typ.map(#domain_type_id::from_name),
+                ..Default::default()
+            }
+        }
+    }
+    }
+}
+
+fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> rust::Tokens {
     let abstract_attribute =
         &rust::import("chronicle::common::attributes", "Attribute").qualified();
+    let abstract_attributes =
+        &rust::import("chronicle::common::attributes", "Attributes").qualified();
     let input_object = rust::import("chronicle::async_graphql", "InputObject").qualified();
     let domain_type_id = rust::import("chronicle::common::prov", "DomaintypeId");
     let serde_value = &rust::import("chronicle::serde_json", "Value");
@@ -365,10 +482,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
     quote! {
         #[derive(#input_object)]
         pub struct #(typ.attributes_type_name()) {
-            #[graphql(name = "type")]
-            pub typ: Option<String>,
             #(for attribute in attributes =>
-                #[graphql(name = #_(#(&attribute.as_type_name())))]
                 pub #(&attribute.as_property()): #(
                     match attribute.primitive_type {
                         PrimitiveType::String => String,
@@ -381,7 +495,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
         impl From<#(typ.attributes_type_name())> for #abstract_attributes{
             fn from(attributes: #(typ.attributes_type_name())) -> Self {
                 #abstract_attributes {
-                    typ: attributes.typ.map(|typ| #domain_type_id::from_name(&typ)),
+                    typ: Some(#domain_type_id::from_name(#_(#(typ.as_type_name())))),
                     attributes: vec![
                     #(for attribute in attributes =>
                         (#_(#(&attribute.as_type_name())).to_owned() ,
@@ -459,7 +573,7 @@ fn gen_query() -> rust::Tokens {
         pub async fn agents_by_type<'a>(
             &self,
             ctx: &#graphql_context<'a>,
-            agent_type: #graphql_id,
+            agent_type: AgentType,
             namespace: Option<#graphql_id>,
             after: Option<String>,
             before: Option<String>,
@@ -467,7 +581,7 @@ fn gen_query() -> rust::Tokens {
             last: Option<i32>,
         ) -> #graphql_result<#graphql_connection<i32, #(agent_union_type_name()), #empty_fields, #empty_fields>> {
             Ok(#query_impl::agents_by_type(
-                ctx, agent_type, namespace, after, before, first, last,
+                ctx, agent_type.into(), namespace, after, before, first, last,
             )
             .await?
             .map_node(map_agent_to_domain_type))
@@ -729,9 +843,8 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     let chronicle_graphql = rust::import("chronicle::api::chronicle_graphql", "ChronicleGraphQl");
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
-    #(gen_attribute_definition(&prov_agent,&prov_agent.attributes))
-    #(gen_attribute_definition(&prov_activity,&prov_activity.attributes))
-    #(gen_attribute_definition(&prov_entity,&prov_entity.attributes))
+    #(gen_type_enums(&domain))
+    #(gen_abstract_prov_attributes())
     #(for agent in domain.agents.iter() => #(gen_attribute_definition(agent, &agent.attributes)))
     #(for activity in domain.activities.iter() => #(gen_attribute_definition(activity, &activity.attributes)))
     #(for entity in domain.entities.iter() => #(gen_attribute_definition(entity, &entity.attributes)))

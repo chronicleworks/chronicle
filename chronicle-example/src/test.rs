@@ -306,11 +306,11 @@ mod test {
         let schema = test_schema().await;
 
         for i in 0..100 {
-            schema
+            let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                agent(name:"bobross{}", attributes: {{ type: "artist"}}) {{
+                friend(name:"bobross{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
                     context
                 }}
             }}
@@ -318,6 +318,8 @@ mod test {
                     i
                 )))
                 .await;
+
+            assert_eq!(res.errors, vec![]);
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -325,7 +327,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: "artist") {
+                agentsByType(agentType: FRIEND) {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -334,9 +336,15 @@ mod test {
                     }
                     edges {
                         node {
-                            id,
-                            name
-                        }
+                            __typename
+                            ... on Friend {
+                                id
+                                name
+                                stringAttribute
+                                intAttribute
+                                boolAttribute
+                            }
+                       }
                         cursor
                     }
                 }
@@ -351,7 +359,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: "artist", first: 20, after: "3") {
+                agentsByType(agentType: FRIEND, first: 20, after: "3") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -360,8 +368,14 @@ mod test {
                     }
                     edges {
                         node {
-                            id,
-                            name
+                            __typename
+                            ... on Friend {
+                                id
+                                name
+                                stringAttribute
+                                intAttribute
+                                boolAttribute
+                            }
                         }
                         cursor
                     }
@@ -377,7 +391,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: "artist", first: 20, after: "90") {
+                agentsByType(agentType: FRIEND, first: 20, after: "90") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -386,8 +400,14 @@ mod test {
                     }
                     edges {
                         node {
-                            id,
-                            name
+                            __typename
+                            ... on Friend {
+                                id
+                                name
+                                stringAttribute
+                                intAttribute
+                                boolAttribute
+                            }
                         }
                         cursor
                     }

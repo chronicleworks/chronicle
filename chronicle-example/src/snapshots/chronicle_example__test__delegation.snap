@@ -1,0 +1,7 @@
+---
+source: chronicle-example/src/test.rs
+assertion_line: 102
+expression: created
+---
+[data.actedOnBehalfOf]
+context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
