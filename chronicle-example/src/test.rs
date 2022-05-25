@@ -108,10 +108,14 @@ mod test {
                 r#"
             query {
                 agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
-                    id
-                    name
-                    actedOnBehalfOf {
+                    ... on ProvAgent {
                         id
+                        name
+                        actedOnBehalfOf {
+                            ... on ProvAgent {
+                                id
+                            }
+                        }
                     }
                 }
             }
@@ -146,10 +150,14 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
-                    id
-                    name
-                    wasDerivedFrom {
+                    ... on ProvEntity {
                         id
+                        name
+                        wasDerivedFrom {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
                     }
                 }
             }
@@ -184,13 +192,20 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
-                    id
-                    name
-                    wasDerivedFrom {
+
+                    ... on ProvEntity {
                         id
-                    }
-                    hadPrimarySource {
-                        id
+                        name
+                        wasDerivedFrom {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
+                        hadPrimarySource{
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
                     }
                 }
             }
@@ -225,13 +240,19 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
-                    id
-                    name
-                    wasDerivedFrom {
+                    ... on ProvEntity {
                         id
-                    }
-                    wasRevisionOf {
-                        id
+                        name
+                        wasDerivedFrom {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
+                        wasRevisionOf {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
                     }
                 }
             }
@@ -266,13 +287,19 @@ mod test {
                 r#"
             query {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
-                    id
-                    name
-                    wasDerivedFrom {
+                    ... on ProvEntity {
                         id
-                    }
-                    wasQuotedFrom {
-                        id
+                        name
+                        wasDerivedFrom {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
+                        wasQuotedFrom {
+                            ... on ProvEntity {
+                                id
+                            }
+                        }
                     }
                 }
             }

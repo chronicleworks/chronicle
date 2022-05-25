@@ -1,0 +1,118 @@
+---
+source: chronicle-example/src/test.rs
+assertion_line: 450
+expression: out_of_bound_cursor
+---
+{
+  "data": {
+    "agentsByType": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false,
+        "startCursor": "91",
+        "endCursor": "99"
+      },
+      "edges": [
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross91",
+            "name": "bobross91",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "91"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross92",
+            "name": "bobross92",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "92"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross93",
+            "name": "bobross93",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "93"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross94",
+            "name": "bobross94",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "94"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross95",
+            "name": "bobross95",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "95"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross96",
+            "name": "bobross96",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "96"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross97",
+            "name": "bobross97",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "97"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross98",
+            "name": "bobross98",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "98"
+        },
+        {
+          "node": {
+            "__typename": "Friend",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:bobross99",
+            "name": "bobross99",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false
+          },
+          "cursor": "99"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+---
+source: chronicle-example/src/test.rs
+assertion_line: 167
+expression: derived
+---
+[data.entityById]
+id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+name = 'generated'
+
+[[data.entityById.wasDerivedFrom]]
+id = 'http://blockchaintp.com/chronicle/ns#entity:used'
