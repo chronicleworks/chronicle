@@ -877,6 +877,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 pub fn generate_chronicle_domain_schema(domain: ChronicleDomainDef, path: impl AsRef<Path>) {
     let tokens = gen_graphql_type(&domain);
 
+    path.as_ref().parent().map(std::fs::create_dir_all);
     let mut f = std::fs::File::create(path).unwrap();
     f.write_all(tokens.to_file_string().unwrap().as_bytes())
         .unwrap();
