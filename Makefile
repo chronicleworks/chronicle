@@ -14,10 +14,10 @@ build: $(MARKERS)/build
 analyze: analyze_fossa
 
 publish: gh-create-draft-release
-	container_id=$$(docker create chronicle:${ISOLATION_ID}); \
-	  docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/ && \
+	container_id=$$(docker create chronicle-untyped:${ISOLATION_ID}); \
+	  docker cp $$container_id:/usr/local/bin/chronicle-untyped `pwd`/target/ && \
 	  docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/ && \
-		target/chronicle --export-schema > `pwd`/target/chronicle.graphql 2>&1 && \
+		target/chronicle-untyped --export-schema > `pwd`/target/chronicle.graphql 2>&1 && \
 		docker rm $$container_id
 	if [ "$(RELEASABLE)" = "yes" ]; then \
 	  $(GH_RELEASE) upload $(VERSION) target/* ; \

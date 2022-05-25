@@ -1,0 +1,26 @@
+[package]
+build   = "build.rs"
+edition = "2021"
+name    = "chronicle-untyped"
+version = "0.1.0"
+
+[[bin]]
+name = "chronicle-untyped"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chronicle = { path = "../chronicle" }
+
+[build-dependencies]
+chronicle = { path = "../chronicle" }
+
+[features]
+strict = []
+# Use an in memory stub ledger
+inmem = ["chronicle/inmem"]
+
+[dev-dependencies]
+insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+tempfile = "3.3.0"

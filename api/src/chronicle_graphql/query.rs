@@ -3,7 +3,7 @@ use async_graphql::{
     Context, ID,
 };
 
-use common::prov::{AgentId, EntityId, NamePart};
+use common::prov::{AgentId, DomaintypeId, EntityId, NamePart};
 use diesel::prelude::*;
 
 use crate::chronicle_graphql::Store;
@@ -13,7 +13,7 @@ use super::{Agent, Entity};
 #[allow(clippy::too_many_arguments)]
 pub async fn agents_by_type<'a>(
     ctx: &Context<'a>,
-    typ: ID,
+    typ: Option<DomaintypeId>,
     namespace: Option<ID>,
     after: Option<String>,
     before: Option<String>,
@@ -35,9 +35,11 @@ pub async fn agents_by_type<'a>(
         before,
         first,
         last,
-        agent::table
-            .inner_join(nsdsl::namespace)
-            .filter(nsdsl::name.eq(&**ns).and(agent::domaintype.eq(&**typ))),
+        agent::table.inner_join(nsdsl::namespace).filter(
+            nsdsl::name
+                .eq(&**ns)
+                .and(agent::domaintype.eq(typ.map(|x| x.name_part().to_owned())))
+        ),
         agent::name.asc(),
         Agent,
         connection

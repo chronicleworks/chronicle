@@ -1,7 +1,0 @@
----
-services:
-  chronicle:
-    image: chronicle:${ISOLATION_ID:-local}
-    build:
-      context: .
-      dockerfile: Dockerfile

@@ -10,6 +10,15 @@ pub struct Attribute {
     pub value: Value,
 }
 
+impl Attribute {
+    pub fn new(typ: impl AsRef<str>, value: Value) -> Self {
+        Self {
+            typ: typ.as_ref().to_owned(),
+            value,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Attributes {
     pub typ: Option<DomaintypeId>,

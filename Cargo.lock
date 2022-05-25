@@ -74,7 +74,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "user-error",
- "uuid",
+ "uuid 0.8.2",
  "warp",
 ]
 
@@ -126,7 +126,7 @@ dependencies = [
  "static_assertions",
  "tempfile",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -350,44 +350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bootstrap"
-version = "0.1.0"
-dependencies = [
- "api",
- "async-graphql",
- "clap",
- "clap_complete",
- "colored_json",
- "common",
- "custom_error",
- "diesel",
- "dotenv",
- "futures",
- "hex",
- "iref",
- "k256",
- "open",
- "opentelemetry",
- "opentelemetry-jaeger",
- "proto",
- "question",
- "rand",
- "rand_core",
- "serde",
- "serde_derive",
- "shellexpand",
- "tokio",
- "toml 0.5.8",
- "tracing",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "user-error",
- "uuid",
-]
-
-[[package]]
 name = "buf_redux"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -443,6 +405,71 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chronicle"
+version = "0.1.0"
+dependencies = [
+ "Inflector",
+ "api",
+ "async-graphql",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "colored_json",
+ "common",
+ "custom_error",
+ "diesel",
+ "dotenv",
+ "futures",
+ "genco",
+ "hex",
+ "iref",
+ "k256",
+ "open",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "proto",
+ "question",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "shellexpand",
+ "tokio",
+ "toml 0.5.8",
+ "tracing",
+ "tracing-log",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "user-error",
+ "uuid 0.8.2",
+]
+
+[[package]]
+name = "chronicle-example"
+version = "0.1.0"
+dependencies = [
+ "chronicle",
+ "diesel",
+ "insta",
+ "tempfile",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "uuid 1.0.0",
+]
+
+[[package]]
+name = "chronicle-untyped"
+version = "0.1.0"
+dependencies = [
+ "chronicle",
+ "insta",
+ "tempfile",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -488,48 +515,6 @@ checksum = "8e1b28c4a802ac3628604fd267cac62aaea74dc61af3410db6b1c44c03b42599"
 dependencies = [
  "clap",
  "clap_complete",
-]
-
-[[package]]
-name = "cli"
-version = "0.1.0"
-dependencies = [
- "api",
- "async-graphql",
- "bootstrap",
- "chrono",
- "clap",
- "clap_complete",
- "colored_json",
- "common",
- "custom_error",
- "diesel",
- "dotenv",
- "futures",
- "hex",
- "insta",
- "iref",
- "k256",
- "open",
- "opentelemetry",
- "opentelemetry-jaeger",
- "proto",
- "question",
- "rand",
- "rand_core",
- "serde",
- "serde_derive",
- "shellexpand",
- "tempfile",
- "tokio",
- "toml 0.5.8",
- "tracing",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "user-error",
- "uuid",
 ]
 
 [[package]]
@@ -585,7 +570,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -807,7 +792,7 @@ dependencies = [
  "diesel_derives",
  "libsqlite3-sys",
  "r2d2",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1123,6 +1108,28 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
+]
+
+[[package]]
+name = "genco"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e73b728f994f10e515d91589ab37cdd10fdecc0230d36c92fd6edc509fbc9af3"
+dependencies = [
+ "genco-macros",
+ "relative-path",
+ "smallvec",
+]
+
+[[package]]
+name = "genco-macros"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9aed40f098f9bef6450753581814393d36d992b143ae20e3992f371ee7ca2b9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1550,25 +1557,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "meta-chronicle-impl"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "meta-chronicle-macro"
-version = "0.1.0"
-dependencies = [
- "meta-chronicle-impl",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -2220,7 +2208,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "zmq",
 ]
 
@@ -2385,6 +2373,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
+name = "relative-path"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4e112eddc95bbf25365df3b5414354ad2fe7ee465eddb9965a515faf8c3b6d9"
+
+[[package]]
 name = "remove_dir_all"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2478,7 +2472,7 @@ dependencies = [
  "rand",
  "secp256k1",
  "sha2 0.10.2",
- "uuid",
+ "uuid 0.8.2",
  "zmq",
 ]
 
@@ -2519,7 +2513,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "zmq",
 ]
 
@@ -2928,15 +2922,16 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.17.0"
+version = "1.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2af73ac49756f3f7c01172e34a23e5d0216f6c32333757c2c61feb2bbff5a5ee"
+checksum = "4903bf0427cf68dddd5aa6a93220756f8be0c34fcfa9f5e6191e103e15a31395"
 dependencies = [
  "bytes",
  "libc",
  "memchr",
  "mio",
  "num_cpus",
+ "once_cell",
  "pin-project-lite",
  "socket2",
  "tokio-macros",
@@ -3029,9 +3024,9 @@ checksum = "360dfd1d6d30e05fda32ace2c8c70e9c0a9da713275777f5a4dbb8a1893930c6"
 
 [[package]]
 name = "tracing"
-version = "0.1.33"
+version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80b9fa4360528139bc96100c160b7ae879f5567f49f1782b0b02035b0358ebf3"
+checksum = "5d0ecdcb44a79f0fe9844f0c4f33a342cbcbb5117de8001e6ba0dc2351327d09"
 dependencies = [
  "cfg-if",
  "log",
@@ -3063,9 +3058,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-log"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6923477a48e41c1951f1999ef8bb5a3023eb723ceadafe78ffb65dc366761e3"
+checksum = "78ddad33d2d10b1ed7eb9d1f518a5674713876e97e5bb9b7345a7984fbb4f922"
 dependencies = [
  "lazy_static",
  "log",
@@ -3213,6 +3208,12 @@ dependencies = [
  "getrandom",
  "serde",
 ]
+
+[[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
 
 [[package]]
 name = "valuable"
