@@ -60,19 +60,19 @@ pub async fn load_attribute<'a>(
     name: &str,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
-    use crate::persistence::schema::agent_attribute;
+    use crate::persistence::schema::activity_attribute;
 
     let store = ctx.data_unchecked::<Store>();
 
     let mut connection = store.pool.get()?;
 
-    Ok(agent_attribute::table
+    Ok(activity_attribute::table
         .filter(
-            agent_attribute::agent_id
+            activity_attribute::activity_id
                 .eq(id)
-                .and(agent_attribute::typename.eq(name)),
+                .and(activity_attribute::typename.eq(name)),
         )
-        .select(agent_attribute::value)
+        .select(activity_attribute::value)
         .first::<String>(&mut connection)
         .optional()?
         .as_deref()

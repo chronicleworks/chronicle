@@ -647,6 +647,7 @@ impl Store {
         use schema::useage::dsl as link;
         diesel::insert_or_ignore_into(schema::useage::table)
             .values((
+                &link::offset.eq(offset as i32),
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
             ))

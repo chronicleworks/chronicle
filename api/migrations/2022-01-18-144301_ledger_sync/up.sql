@@ -113,7 +113,7 @@ create table association (
     activity_id integer not null,
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    primary key(offset,agent_id)
+    primary key(offset,agent_id, activity_id)
 );
 
 create table useage (
@@ -122,7 +122,7 @@ create table useage (
     entity_id integer not null,
     foreign key(entity_id) references entity(id),
     foreign key(activity_id) references activity(id),
-    primary key(offset,entity_id)
+    primary key(offset,activity_id,entity_id)
 );
 
 create table hadidentity (
