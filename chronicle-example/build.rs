@@ -34,6 +34,14 @@ fn main() {
                 .with_attribute("bool")
         })
         .unwrap()
+        .with_activity("swim about", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
         .with_agent("friends", |b| {
             b.with_attribute("string")
                 .unwrap()

@@ -17,6 +17,7 @@ mod test {
     use chronicle::api::chronicle_graphql::{Store, Subscription};
     use chronicle::api::{Api, ConnectionOptions, UuidGen};
     use chronicle::async_graphql::{Request, Schema};
+    use chronicle::chrono::{DateTime, NaiveDate, Utc};
     use chronicle::common::ledger::InMemLedger;
     use chronicle::tokio;
     use chronicle::uuid::Uuid;
@@ -326,6 +327,145 @@ mod test {
             .await;
 
         insta::assert_toml_snapshot!(create);
+    }
+
+    #[tokio::test]
+    async fn query_activity_timeline() {
+        let schema = test_schema().await;
+
+        let res = schema
+                .execute(Request::new(
+                    r#"
+            mutation {
+                friend(name:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                    context
+                }
+            }
+        "#,
+                ))
+                .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let res = schema
+                .execute(Request::new(
+                    r#"
+            mutation {
+                theSea(name:"coral", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                    context
+                }
+            }
+        "#,
+                ))
+                .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let from = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(1968, 9, 1).and_hms(0, 0, 0), Utc);
+
+        for i in 1..10 {
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                gardening(name:"gardening{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
+                    context
+                }}
+            }}
+        "#,
+                    i
+                )))
+                .await;
+            assert_eq!(res.errors, vec![]);
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                used(id: "http://blockchaintp.com/chronicle/ns#entity:coral", activity: "http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                    context
+                }}
+            }}
+        "#,
+                    i
+                )))
+                .await;
+            assert_eq!(res.errors, vec![]);
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                endActivity( time: "{}", agent: "http://blockchaintp.com/chronicle/ns#agent:ringo", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                    context
+                }}
+            }}
+        "#,
+                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() ,i
+                )))
+                .await;
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            assert_eq!(res.errors, vec![]);
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let default_cursor = schema
+            .execute(Request::new(
+                r#"
+                query {
+                activityTimeline(forEntity: ["http://blockchaintp.com/chronicle/ns#entity:coral"],
+                                from: "1968-01-01T00:00:00Z",
+                                to: "2030-01-01T00:00:00Z",
+                                activityTypes: [GARDENING],
+                                ) {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            __typename
+                            ... on Gardening {
+                                id
+                                name
+                                stringAttribute
+                                intAttribute
+                                boolAttribute
+                                wasAssociatedWith {
+                                    ... on Friend {
+                                        id
+                                        name
+                                    }
+                                }
+                                used {
+                                    ... on TheSea {
+                                        id
+                                        name
+                                    }
+                                }
+                            }
+                       }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(default_cursor);
     }
 
     #[tokio::test]

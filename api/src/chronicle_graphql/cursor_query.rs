@@ -18,13 +18,18 @@ macro_rules! gql_cursor {
     ($after:expr, $before: expr, $first: expr, $last: expr, $query:expr, $order:expr, $node_type:tt,$connection: expr) => {{
         use crate::chronicle_graphql::{cursor_query::Cursorise, GraphQlError};
         use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-
+        use diesel::{debug_query, sqlite::Sqlite};
+        use tracing::debug;
         query(
             $after,
             $before,
             $first,
             $last,
             |after, before, first, last| async move {
+                debug!(
+                    "Cursor query {}",
+                    debug_query::<Sqlite, _>(&$query).to_string()
+                );
                 let rx = $query
                     .order($order)
                     .select(<$node_type>::as_select())

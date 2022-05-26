@@ -574,44 +574,75 @@ fn gen_query() -> rust::Tokens {
 
     #[#graphql_object]
     impl Query {
-        #[allow(clippy::too_many_arguments)]
-        pub async fn agents_by_type<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            agent_type: AgentType,
-            namespace: Option<#graphql_id>,
-            after: Option<String>,
-            before: Option<String>,
-            first: Option<i32>,
-            last: Option<i32>,
-        ) -> #graphql_result<#graphql_connection<i32, #(agent_union_type_name()), #empty_fields, #empty_fields>> {
-            Ok(#query_impl::agents_by_type(
-                ctx, agent_type.into(), namespace, after, before, first, last,
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn activity_timeline<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        activity_types: Vec<ActivityType>,
+        for_entity: Vec<EntityId>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        namespace: Option<ID>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> #graphql_result<#graphql_connection<i32, #(activity_union_type_name()), #empty_fields, #empty_fields>> {
+            Ok(#query_impl::activity_timeline(
+                ctx,
+                activity_types.into_iter().filter_map(|x| x.into()).collect(),
+                for_entity,
+                from,
+                to,
+                namespace,
+                after,
+                before,
+                first,
+                last,
             )
             .await?
-            .map_node(map_agent_to_domain_type))
-        }
-        pub async fn agent_by_id<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            id: #agent_id,
-            namespace: Option<String>,
-        ) -> #graphql_result<Option<#(agent_union_type_name())>> {
-            Ok(#query_impl::agent_by_id(ctx, id, namespace)
-                .await?
-                .map(map_agent_to_domain_type))
-        }
+            .map_node(map_activity_to_domain_type))
+    }
 
-        pub async fn entity_by_id<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            id: #entity_id,
-            namespace: Option<String>,
-        ) -> #graphql_result<Option<#(entity_union_type_name())>> {
-            Ok(#query_impl::entity_by_id(ctx, id, namespace)
-                .await?
-                .map(map_entity_to_domain_type))
-        }
+    #[allow(clippy::too_many_arguments)]
+    pub async fn agents_by_type<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        agent_type: AgentType,
+        namespace: Option<#graphql_id>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> #graphql_result<#graphql_connection<i32, #(agent_union_type_name()), #empty_fields, #empty_fields>> {
+        Ok(#query_impl::agents_by_type(
+            ctx, agent_type.into(), namespace, after, before, first, last,
+        )
+        .await?
+        .map_node(map_agent_to_domain_type))
+    }
+    pub async fn agent_by_id<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        id: #agent_id,
+        namespace: Option<String>,
+    ) -> #graphql_result<Option<#(agent_union_type_name())>> {
+        Ok(#query_impl::agent_by_id(ctx, id, namespace)
+            .await?
+            .map(map_agent_to_domain_type))
+    }
+
+    pub async fn entity_by_id<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        id: #entity_id,
+        namespace: Option<String>,
+    ) -> #graphql_result<Option<#(entity_union_type_name())>> {
+        Ok(#query_impl::entity_by_id(ctx, id, namespace)
+            .await?
+            .map(map_entity_to_domain_type))
+    }
     }
     }
 }
@@ -797,7 +828,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             activity: #activity_id,
             id: #entity_id,
             namespace: Option<String>,
-            _typ: Option<String>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::used(ctx, activity, id, namespace).await
         }
