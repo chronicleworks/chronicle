@@ -26,6 +26,7 @@ mod test {
     use std::time::Duration;
     use tempfile::TempDir;
     use tracing::Level;
+    use tracing_log::log::LevelFilter;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -37,7 +38,7 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
+        tracing_log::LogTracer::init_with_filter(LevelFilter::Trace).ok();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
