@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "chronicle"
+name = "chronicle"
 version = "0.1.0"
 
 
@@ -9,7 +9,7 @@ version = "0.1.0"
 [dependencies]
 Inflector = "0.11.4"
 api = { path = "../api" }
-async-graphql = "3.0.36"
+async-graphql = "3.0.38"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "3.1.6"
 clap_complete = "3.1.1"
@@ -21,7 +21,7 @@ diesel = { version = "2.0.0-rc.0", features = [
   "uuid",
   "chrono",
   "r2d2",
-], git = "https://github.com/diesel-rs/diesel" }
+] }
 dotenv = "0.15.0"
 futures = "0.3.21"
 genco = "0.16.1"

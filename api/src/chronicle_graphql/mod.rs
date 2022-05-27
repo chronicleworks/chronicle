@@ -1,8 +1,9 @@
 use async_graphql::{
-    extensions::OpenTelemetry, Context, Error, ErrorExtensions, Object, ObjectType, Schema,
-    Subscription,
+    extensions::OpenTelemetry,
+    http::{playground_source, GraphQLPlaygroundConfig},
+    Context, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject, Subscription,
 };
-use async_graphql_warp::{graphql_subscription, GraphQLBadRequest};
+use async_graphql_poem::{GraphQL, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use custom_error::custom_error;
 use derivative::*;
@@ -12,10 +13,12 @@ use diesel::{
     Queryable, SqliteConnection,
 };
 use futures::Stream;
-use std::{convert::Infallible, net::SocketAddr, time::Duration};
+use poem::{
+    get, handler, listener::TcpListener, middleware::Cors, post, web::Html, EndpointExt,
+    IntoResponse, Route, Server,
+};
+use std::{net::SocketAddr, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
-
-use warp::{hyper::StatusCode, Filter, Rejection};
 
 use crate::ApiDispatch;
 #[macro_use]
@@ -26,7 +29,7 @@ pub mod entity;
 pub mod mutation;
 pub mod query;
 
-#[derive(Default, Queryable, Selectable)]
+#[derive(Default, Queryable, Selectable, SimpleObject)]
 #[diesel(table_name = crate::persistence::schema::agent)]
 pub struct Agent {
     pub id: i32,
@@ -52,7 +55,7 @@ impl Identity {
     }
 }
 
-#[derive(Default, Queryable, Selectable)]
+#[derive(Default, Queryable, Selectable, SimpleObject)]
 #[diesel(table_name = crate::persistence::schema::activity)]
 pub struct Activity {
     pub id: i32,
@@ -63,7 +66,7 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, SimpleObject)]
 #[diesel(table_name = crate::persistence::schema::entity)]
 pub struct Entity {
     pub id: i32,
@@ -266,6 +269,13 @@ where
     }
 }
 
+#[handler]
+async fn gql_playground() -> impl IntoResponse {
+    Html(playground_source(
+        GraphQLPlaygroundConfig::new("/").subscription_endpoint("/ws"),
+    ))
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -287,51 +297,23 @@ where
             .data(api)
             .finish();
 
-        let graphql_post = async_graphql_warp::graphql(schema.clone()).and_then(
-            |(schema, request): (
-                Schema<Query, Mutation, Subscription>,
-                async_graphql::Request,
-            )| async move {
-                Ok::<_, Infallible>(async_graphql_warp::GraphQLResponse::from(
-                    schema.execute(request).await,
-                ))
-            },
-        );
-
-        let routes =
-            graphql_subscription(schema)
-                .or(graphql_post)
-                .recover(|err: Rejection| async move {
-                    if let Some(GraphQLBadRequest(err)) = err.find() {
-                        return Ok::<_, Infallible>(warp::reply::with_status(
-                            err.to_string(),
-                            StatusCode::BAD_REQUEST,
-                        ));
-                    }
-
-                    Ok(warp::reply::with_status(
-                        "INTERNAL_SERVER_ERROR".to_string(),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    ))
-                });
-
         if open {
-            let allow_apollo_studio = warp::cors()
-                .allow_methods(vec!["GET", "POST"])
-                .allow_any_origin()
-                .allow_headers(vec!["Content-Type"])
-                .allow_credentials(true);
-
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(200)).await;
-                open::that("https://studio.apollographql.com/sandbox/explorer/").ok();
+                open::that(format!("http://{}", address)).ok();
             });
+            let app = Route::new()
+                .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
+                .at("/ws", get(GraphQLSubscription::new(schema.clone())))
+                .data(schema.clone());
 
-            warp::serve(routes.with(allow_apollo_studio))
-                .run(address)
-                .await;
+            Server::new(TcpListener::bind(address)).run(app).await.ok();
         } else {
-            warp::serve(routes).run(address).await;
+            let app = Route::new()
+                .at("/", post(GraphQL::new(schema.clone())))
+                .at("/ws", get(GraphQLSubscription::new(schema)));
+
+            Server::new(TcpListener::bind(address)).run(app).await.ok();
         }
     }
 }

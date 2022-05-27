@@ -1,7 +1,7 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "chronicle-example"
+name = "chronicle-example"
 version = "0.1.0"
 
 [[bin]]
@@ -17,7 +17,7 @@ diesel = { version = "2.0.0-rc.0", features = [
   "uuid",
   "chrono",
   "r2d2",
-], git = "https://github.com/diesel-rs/diesel" }
+] }
 tracing = "0.1.34"
 tracing-log = "0.1.3"
 tracing-subscriber = "0.3.11"
@@ -32,5 +32,5 @@ strict = []
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+insta = { version = "1.14.0", features = ["redactions", "toml"] }
 tempfile = "3.3.0"
