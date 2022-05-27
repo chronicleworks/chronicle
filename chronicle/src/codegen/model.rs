@@ -1,19 +1,24 @@
+use std::{collections::HashMap, path::Path};
+
 use inflector::cases::pascalcase::to_pascal_case;
 use inflector::cases::snakecase::to_snake_case;
 use inflector::string::singularize::to_singular;
+use serde::{Deserialize, Serialize};
 
 custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
+    ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
+    ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
 }
 
-#[derive(Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PrimitiveType {
     String,
     Bool,
     Int,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AttributeDef {
     typ: String,
     pub primitive_type: PrimitiveType,
@@ -65,7 +70,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AgentDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -86,7 +91,7 @@ impl AgentDef {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct EntityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -107,7 +112,7 @@ impl EntityDef {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ActivityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -128,7 +133,7 @@ impl ActivityDef {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ChronicleDomainDef {
     name: String,
     pub attributes: Vec<AttributeDef>,
@@ -280,5 +285,54 @@ impl Builder {
 
     pub fn build(self) -> ChronicleDomainDef {
         self.0
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct AttributeFileInput {
+    pub typ: PrimitiveType,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct DomainFileInput {
+    pub name: String,
+    pub attributes: HashMap<String, AttributeFileInput>,
+}
+
+impl ChronicleDomainDef {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
+        Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
+            &std::fs::read_to_string(path.as_ref())?,
+        )?)
+    }
+
+    fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
+        let mut builder = Builder::new(model.name);
+
+        for (name, attr) in model.attributes {
+            builder = builder.with_attribute_type(name, attr.typ)?;
+        }
+
+        Ok(builder.build())
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::{ChronicleDomainDef, DomainFileInput};
+
+    #[test]
+    pub fn from_yaml() {
+        let yaml = r#"
+name: "test"
+attributes:
+        testAttr:
+            typ: "String"
+"#;
+
+        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
+            serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
+        )
+        .unwrap());
     }
 }
