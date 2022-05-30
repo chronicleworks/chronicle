@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
+    ModelExtensionNotReadable = "JSON or YAML path extension not readable",
+    ModelExtensionInvalid = "Invalid path extension",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
+    ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -304,9 +307,21 @@ pub struct DomainFileInput {
 
 impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
-        Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
-            &std::fs::read_to_string(path.as_ref())?,
-        )?)
+        match path
+            .as_ref()
+            .extension()
+            .ok_or(ModelError::ModelExtensionNotReadable)?
+            .to_str()
+        {
+            Some("yaml") | Some("YAML") => Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
+                &std::fs::read_to_string(path.as_ref())?,
+            )?),
+            Some("json") | Some("JSON") => Self::from_file_model(serde_json::from_str::<DomainFileInput>(
+                &std::fs::read_to_string(path.as_ref())?,
+            )?),
+            Some(&_) => Err(ModelError::ModelExtensionInvalid),
+            None => Err(ModelError::ModelExtensionNotReadable),
+        }
     }
 
     fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
@@ -325,14 +340,72 @@ pub mod test {
     use super::{ChronicleDomainDef, DomainFileInput};
 
     #[test]
+    pub fn from_json() {
+        let json = r#" {
+            "name": "chronicle",
+            "attributes": {
+              "stringAttribute": {
+                "typ": "String"
+              }
+            },
+            "agents": {
+              "friend": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "entities": {
+              "octopi": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              },
+              "the sea": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "activities": {
+              "gardening": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            }
+          }          
+         "#;
+        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
+            serde_json::from_str::<DomainFileInput>(json).unwrap()
+        )
+        .unwrap());
+    }
+
+    #[test]
     pub fn from_yaml() {
         let yaml = r#"
-name: "test"
-attributes:
-        testAttr:
-            typ: "String"
-"#;
-
+        name: test
+        attributes:
+            stringAttribute:
+                typ: String
+        agents:
+            friend:
+                stringAttribute:
+                    typ: String
+        entities:
+            octopi:
+                stringAttribute:
+                    typ: String
+            the sea:
+                stringAttribute:
+                    typ: String
+        activities:
+            gardening:
+                stringAttribute:
+                    typ: String
+      "#;
+      
         insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
             serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
         )
