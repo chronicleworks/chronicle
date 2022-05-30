@@ -307,21 +307,23 @@ pub struct DomainFileInput {
 
 impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
-        match path
-            .as_ref()
+        let path = path.as_ref();
+        let extension = path
             .extension()
-            .ok_or(ModelError::ModelExtensionNotReadable)?
-            .to_str()
-        {
-            Some("yaml") | Some("YAML") => Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
-                &std::fs::read_to_string(path.as_ref())?,
-            )?),
-            Some("json") | Some("JSON") => Self::from_file_model(serde_json::from_str::<DomainFileInput>(
-                &std::fs::read_to_string(path.as_ref())?,
-            )?),
-            Some(&_) => Err(ModelError::ModelExtensionInvalid),
-            None => Err(ModelError::ModelExtensionNotReadable),
-        }
+            .and_then(|s| s.to_str())
+            .ok_or(ModelError::ModelExtensionNotReadable)?;
+
+        let model = match extension {
+            "yaml" => serde_yaml::from_str::<DomainFileInput>(
+                &std::fs::read_to_string(path)?,
+            )?,
+            "json" => serde_json::from_str::<DomainFileInput>(
+                &std::fs::read_to_string(path)?,
+            )?,
+            _ => return Err(ModelError::ModelExtensionInvalid),
+        };
+
+        Self::from_file_model(model)
     }
 
     fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
@@ -405,7 +407,7 @@ pub mod test {
                 stringAttribute:
                     typ: String
       "#;
-      
+
         insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
             serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
         )
