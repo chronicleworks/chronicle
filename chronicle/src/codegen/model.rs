@@ -136,21 +136,6 @@ impl ActivityDef {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ChronicleDomainDef {
-    name: String,
-    pub attributes: Vec<AttributeDef>,
-    pub agents: Vec<AgentDef>,
-    pub entities: Vec<EntityDef>,
-    pub activities: Vec<ActivityDef>,
-}
-
-impl ChronicleDomainDef {
-    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
-        self.attributes.iter().find(|a| a.typ == attr).cloned()
-    }
-}
-
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
 
 impl<'a> AgentBuilder<'a> {
@@ -305,7 +290,20 @@ pub struct DomainFileInput {
     pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ChronicleDomainDef {
+    name: String,
+    pub attributes: Vec<AttributeDef>,
+    pub agents: Vec<AgentDef>,
+    pub entities: Vec<EntityDef>,
+    pub activities: Vec<ActivityDef>,
+}
+
 impl ChronicleDomainDef {
+    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
+        self.attributes.iter().find(|a| a.typ == attr).cloned()
+    }
+
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
         let extension = path
