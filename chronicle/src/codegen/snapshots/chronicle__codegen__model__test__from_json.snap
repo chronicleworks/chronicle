@@ -10,7 +10,17 @@ ChronicleDomainDef {
             primitive_type: String,
         },
     ],
-    agents: [],
+    agents: [
+        AgentDef {
+            name: "friend",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
     entities: [],
     activities: [],
 }
