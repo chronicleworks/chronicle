@@ -335,14 +335,71 @@ pub mod test {
     use super::{ChronicleDomainDef, DomainFileInput};
 
     #[test]
+    pub fn from_json() {
+        let json = r#" {
+            "name": "chronicle",
+            "attributes": {
+              "stringAttribute": {
+                "typ": "String"
+              }
+            },
+            "agents": {
+              "friend": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "entities": {
+              "octopi": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              },
+              "the sea": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "activities": {
+              "gardening": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            }
+          }
+         "#;
+        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
+            serde_json::from_str::<DomainFileInput>(json).unwrap()
+        )
+        .unwrap());
+    }
+
+    #[test]
     pub fn from_yaml() {
         let yaml = r#"
-name: "test"
-attributes:
-        testAttr:
+        name: "test"
+        attributes:
+          stringAttribute:
             typ: "String"
-"#;
-
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+          the sea:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#;
         insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
             serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
         )
