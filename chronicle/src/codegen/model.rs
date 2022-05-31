@@ -300,6 +300,9 @@ pub struct AttributeFileInput {
 pub struct DomainFileInput {
     pub name: String,
     pub attributes: HashMap<String, AttributeFileInput>,
+    pub agents: HashMap<String, HashMap<String, AttributeFileInput>>,
+    pub entities: HashMap<String, HashMap<String, AttributeFileInput>>,
+    pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
 }
 
 impl ChronicleDomainDef {
