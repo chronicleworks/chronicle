@@ -7,8 +7,11 @@ use serde::{Deserialize, Serialize};
 
 custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
+    FileExtensionInvalid = "Invalid path extension",
+    FileExtensionNotReadable = "JSON or YAML path extension not readable",
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
+    ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -301,9 +304,19 @@ pub struct DomainFileInput {
 
 impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
-        Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
-            &std::fs::read_to_string(path.as_ref())?,
-        )?)
+        let path = path.as_ref();
+        let extension = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or(ModelError::FileExtensionNotReadable)?;
+
+        let model = match extension {
+            "yaml" => serde_yaml::from_str::<DomainFileInput>(&std::fs::read_to_string(path)?)?,
+            "json" => serde_json::from_str::<DomainFileInput>(&std::fs::read_to_string(path)?)?,
+            _ => return Err(ModelError::FileExtensionInvalid),
+        };
+
+        Self::from_file_model(model)
     }
 
     fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
