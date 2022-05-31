@@ -327,6 +327,12 @@ impl ChronicleDomainDef {
             builder = builder.with_attribute_type(name, attr.typ)?;
         }
 
+        for (name, attributes) in model.agents {
+            for (attr, _) in attributes {
+                builder = builder.with_agent(&name, |agent| agent.with_attribute(attr))?;
+            }
+        }
+
         Ok(builder.build())
     }
 }
