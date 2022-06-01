@@ -300,7 +300,7 @@ pub struct ChronicleDomainDef {
 }
 
 impl ChronicleDomainDef {
-    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
+    pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
