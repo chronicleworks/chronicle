@@ -333,13 +333,41 @@ impl ChronicleDomainDef {
             }
         }
 
+        for (name, attributes) in model.entities {
+            for (attr, _) in attributes {
+                builder = builder.with_entity(&name, |entity| entity.with_attribute(attr))?;
+            }
+        }
+
         Ok(builder.build())
     }
 }
 
 #[cfg(test)]
 pub mod test {
-    use super::{ChronicleDomainDef, DomainFileInput};
+    use super::{ChronicleDomainDef, DomainFileInput, EntityDef};
+
+    use std::cmp::Ordering;
+
+    impl PartialEq for EntityDef {
+        fn eq(&self, other: &Self) -> bool {
+            self.name == other.name
+        }
+    }
+
+    impl Eq for EntityDef {}
+
+    impl PartialOrd for EntityDef {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for EntityDef {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.name.cmp(&other.name)
+        }
+    }
 
     #[test]
     pub fn from_json() {
@@ -378,10 +406,15 @@ pub mod test {
             }
           }
          "#;
-        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
-            serde_json::from_str::<DomainFileInput>(json).unwrap()
+
+        let mut domain = ChronicleDomainDef::from_file_model(
+            serde_json::from_str::<DomainFileInput>(json).unwrap(),
         )
-        .unwrap());
+        .unwrap();
+
+        domain.entities.sort();
+
+        insta::assert_debug_snapshot!(domain);
     }
 
     #[test]
@@ -407,9 +440,14 @@ pub mod test {
             stringAttribute:
               typ: "String"
          "#;
-        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
-            serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
+
+        let mut domain = ChronicleDomainDef::from_file_model(
+            serde_yaml::from_str::<DomainFileInput>(yaml).unwrap(),
         )
-        .unwrap());
+        .unwrap();
+
+        domain.entities.sort();
+
+        insta::assert_debug_snapshot!(domain);
     }
 }

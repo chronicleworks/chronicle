@@ -21,6 +21,25 @@ ChronicleDomainDef {
             ],
         },
     ],
-    entities: [],
+    entities: [
+        EntityDef {
+            name: "octopi",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+        EntityDef {
+            name: "the sea",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
     activities: [],
 }
