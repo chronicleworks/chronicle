@@ -3,7 +3,7 @@ source: chronicle/src/codegen/model.rs
 expression: domain
 ---
 ChronicleDomainDef {
-    name: "test",
+    name: "chronicle",
     attributes: [
         AttributeDef {
             typ: "stringAttribute",

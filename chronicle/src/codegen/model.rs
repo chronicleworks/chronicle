@@ -358,7 +358,7 @@ impl ChronicleDomainDef {
 
 #[cfg(test)]
 pub mod test {
-    use super::{ChronicleDomainDef, DomainFileInput, EntityDef};
+    use super::{ChronicleDomainDef, EntityDef};
 
     use std::cmp::Ordering;
 
@@ -382,9 +382,13 @@ pub mod test {
         }
     }
 
+    use assert_fs::prelude::*;
+
     #[test]
-    pub fn test_from_json() {
-        let json = r#" {
+    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.json")?;
+        file.write_str(
+            r#" {
             "name": "chronicle",
             "attributes": {
               "stringAttribute": {
@@ -418,18 +422,22 @@ pub mod test {
               }
             }
           }
-         "#;
+         "#,
+        )?;
 
-        let mut domain = ChronicleDomainDef::from_json(&json).unwrap();
+        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
 
         domain.entities.sort();
 
         insta::assert_debug_snapshot!(domain);
+
+        Ok(())
     }
 
-    #[test]
-    pub fn test_from_yaml() {
-        let yaml = r#"
+    fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
         name: "test"
         attributes:
           stringAttribute:
@@ -449,12 +457,15 @@ pub mod test {
           gardening:
             stringAttribute:
               typ: "String"
-         "#;
+         "#,
+        )?;
 
-        let mut domain = ChronicleDomainDef::from_yaml(&yaml).unwrap();
+        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
 
         domain.entities.sort();
 
         insta::assert_debug_snapshot!(domain);
+
+        Ok(())
     }
 }
