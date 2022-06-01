@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
-    FileExtensionInvalid = "Invalid path extension",
-    FileExtensionNotReadable = "JSON or YAML path extension not readable",
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
     ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
