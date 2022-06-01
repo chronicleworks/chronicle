@@ -306,17 +306,19 @@ impl ChronicleDomainDef {
 
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
-        let extension = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .ok_or(ModelError::FileExtensionNotReadable)?;
-
-        let model = match extension {
-            "yaml" => serde_yaml::from_str::<DomainFileInput>(&std::fs::read_to_string(path)?)?,
-            "json" => serde_json::from_str::<DomainFileInput>(&std::fs::read_to_string(path)?)?,
-            _ => return Err(ModelError::FileExtensionInvalid),
+        let file: String = std::fs::read_to_string(&path)?;
+        let model = {
+            match path.extension().and_then(|s| s.to_str()) {
+                Some("json") => match serde_json::from_str::<DomainFileInput>(&file) {
+                    Err(source) => return Err(ModelError::ModelFileInvalidJson { source }),
+                    Ok(result) => result,
+                },
+                _ => match serde_yaml::from_str::<DomainFileInput>(&file) {
+                    Err(source) => return Err(ModelError::ModelFileInvalidYaml { source }),
+                    Ok(result) => result,
+                },
+            }
         };
-
         Self::from_file_model(model)
     }
 
