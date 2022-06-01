@@ -304,22 +304,27 @@ impl ChronicleDomainDef {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
+    fn from_json(file: &str) -> Result<Self, ModelError> {
+        match serde_json::from_str::<DomainFileInput>(file) {
+            Err(source) => Err(ModelError::ModelFileInvalidJson { source }),
+            Ok(model) => Self::from_model(model),
+        }
+    }
+
+    fn from_yaml(file: &str) -> Result<Self, ModelError> {
+        match serde_yaml::from_str::<DomainFileInput>(file) {
+            Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
+            Ok(model) => Self::from_model(model),
+        }
+    }
+
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
         let file: String = std::fs::read_to_string(&path)?;
-        let model = {
-            match path.extension().and_then(|s| s.to_str()) {
-                Some("json") => match serde_json::from_str::<DomainFileInput>(&file) {
-                    Err(source) => return Err(ModelError::ModelFileInvalidJson { source }),
-                    Ok(result) => result,
-                },
-                _ => match serde_yaml::from_str::<DomainFileInput>(&file) {
-                    Err(source) => return Err(ModelError::ModelFileInvalidYaml { source }),
-                    Ok(result) => result,
-                },
-            }
-        };
-        Self::from_model(model)
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("json") => Self::from_json(&file),
+            _ => Self::from_yaml(&file),
+        }
     }
 
     fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
@@ -378,7 +383,7 @@ pub mod test {
     }
 
     #[test]
-    pub fn from_json() {
+    pub fn test_from_json() {
         let json = r#" {
             "name": "chronicle",
             "attributes": {
@@ -415,9 +420,7 @@ pub mod test {
           }
          "#;
 
-        let mut domain =
-            ChronicleDomainDef::from_model(serde_json::from_str::<DomainFileInput>(json).unwrap())
-                .unwrap();
+        let mut domain = ChronicleDomainDef::from_json(&json).unwrap();
 
         domain.entities.sort();
 
@@ -425,7 +428,7 @@ pub mod test {
     }
 
     #[test]
-    pub fn from_yaml() {
+    pub fn test_from_yaml() {
         let yaml = r#"
         name: "test"
         attributes:
@@ -448,9 +451,7 @@ pub mod test {
               typ: "String"
          "#;
 
-        let mut domain =
-            ChronicleDomainDef::from_model(serde_yaml::from_str::<DomainFileInput>(yaml).unwrap())
-                .unwrap();
+        let mut domain = ChronicleDomainDef::from_yaml(&yaml).unwrap();
 
         domain.entities.sort();
 
