@@ -1,6 +1,6 @@
 ---
 source: chronicle/src/codegen/model.rs
-expression: "ChronicleDomainDef::from_file_model(serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()).unwrap()"
+expression: domain
 ---
 ChronicleDomainDef {
     name: "test",
@@ -21,6 +21,25 @@ ChronicleDomainDef {
             ],
         },
     ],
-    entities: [],
+    entities: [
+        EntityDef {
+            name: "octopi",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+        EntityDef {
+            name: "the sea",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
     activities: [],
 }
