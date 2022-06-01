@@ -319,10 +319,10 @@ impl ChronicleDomainDef {
                 },
             }
         };
-        Self::from_file_model(model)
+        Self::from_model(model)
     }
 
-    fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
+    fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
         let mut builder = Builder::new(model.name);
 
         for (name, attr) in model.attributes {
@@ -415,10 +415,9 @@ pub mod test {
           }
          "#;
 
-        let mut domain = ChronicleDomainDef::from_file_model(
-            serde_json::from_str::<DomainFileInput>(json).unwrap(),
-        )
-        .unwrap();
+        let mut domain =
+            ChronicleDomainDef::from_model(serde_json::from_str::<DomainFileInput>(json).unwrap())
+                .unwrap();
 
         domain.entities.sort();
 
@@ -449,10 +448,9 @@ pub mod test {
               typ: "String"
          "#;
 
-        let mut domain = ChronicleDomainDef::from_file_model(
-            serde_yaml::from_str::<DomainFileInput>(yaml).unwrap(),
-        )
-        .unwrap();
+        let mut domain =
+            ChronicleDomainDef::from_model(serde_yaml::from_str::<DomainFileInput>(yaml).unwrap())
+                .unwrap();
 
         domain.entities.sort();
 
