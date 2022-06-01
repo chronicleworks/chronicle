@@ -1,6 +1,6 @@
 ---
 source: chronicle/src/codegen/model.rs
-expression: "ChronicleDomainDef::from_file_model(serde_json::from_str::<DomainFileInput>(json).unwrap()).unwrap()"
+expression: domain
 ---
 ChronicleDomainDef {
     name: "chronicle",
@@ -41,5 +41,15 @@ ChronicleDomainDef {
             ],
         },
     ],
-    activities: [],
+    activities: [
+        ActivityDef {
+            name: "gardening",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
 }
