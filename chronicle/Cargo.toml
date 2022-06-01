@@ -74,4 +74,5 @@ inmem = []
 [build-dependencies]
 
 [dev-dependencies]
+assert_fs = "1.0"
 insta = "1.14.0"
