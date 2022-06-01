@@ -339,6 +339,12 @@ impl ChronicleDomainDef {
             }
         }
 
+        for (name, attributes) in model.activities {
+            for (attr, _) in attributes {
+                builder = builder.with_activity(&name, |activity| activity.with_attribute(attr))?;
+            }
+        }
+
         Ok(builder.build())
     }
 }

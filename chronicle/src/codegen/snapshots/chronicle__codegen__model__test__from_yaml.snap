@@ -41,5 +41,15 @@ ChronicleDomainDef {
             ],
         },
     ],
-    activities: [],
+    activities: [
+        ActivityDef {
+            name: "gardening",
+            attributes: [
+                AttributeDef {
+                    typ: "stringAttribute",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
 }
