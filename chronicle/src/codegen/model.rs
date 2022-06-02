@@ -9,6 +9,7 @@ custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
+    ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -130,21 +131,6 @@ impl ActivityDef {
             name: name.as_ref().to_string(),
             attributes,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ChronicleDomainDef {
-    name: String,
-    pub attributes: Vec<AttributeDef>,
-    pub agents: Vec<AgentDef>,
-    pub entities: Vec<EntityDef>,
-    pub activities: Vec<ActivityDef>,
-}
-
-impl ChronicleDomainDef {
-    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
-        self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 }
 
@@ -297,20 +283,71 @@ pub struct AttributeFileInput {
 pub struct DomainFileInput {
     pub name: String,
     pub attributes: HashMap<String, AttributeFileInput>,
+    pub agents: HashMap<String, HashMap<String, AttributeFileInput>>,
+    pub entities: HashMap<String, HashMap<String, AttributeFileInput>>,
+    pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChronicleDomainDef {
+    name: String,
+    pub attributes: Vec<AttributeDef>,
+    pub agents: Vec<AgentDef>,
+    pub entities: Vec<EntityDef>,
+    pub activities: Vec<ActivityDef>,
 }
 
 impl ChronicleDomainDef {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
-        Self::from_file_model(serde_yaml::from_str::<DomainFileInput>(
-            &std::fs::read_to_string(path.as_ref())?,
-        )?)
+    pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
+        self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
-    fn from_file_model(model: DomainFileInput) -> Result<Self, ModelError> {
+    fn from_json(file: &str) -> Result<Self, ModelError> {
+        match serde_json::from_str::<DomainFileInput>(file) {
+            Err(source) => Err(ModelError::ModelFileInvalidJson { source }),
+            Ok(model) => Self::from_model(model),
+        }
+    }
+
+    fn from_yaml(file: &str) -> Result<Self, ModelError> {
+        match serde_yaml::from_str::<DomainFileInput>(file) {
+            Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
+            Ok(model) => Self::from_model(model),
+        }
+    }
+
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
+        let path = path.as_ref();
+        let file: String = std::fs::read_to_string(&path)?;
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("json") => Self::from_json(&file),
+            _ => Self::from_yaml(&file),
+        }
+    }
+
+    fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
         let mut builder = Builder::new(model.name);
 
         for (name, attr) in model.attributes {
             builder = builder.with_attribute_type(name, attr.typ)?;
+        }
+
+        for (name, attributes) in model.agents {
+            for (attr, _) in attributes {
+                builder = builder.with_agent(&name, |agent| agent.with_attribute(attr))?;
+            }
+        }
+
+        for (name, attributes) in model.entities {
+            for (attr, _) in attributes {
+                builder = builder.with_entity(&name, |entity| entity.with_attribute(attr))?;
+            }
+        }
+
+        for (name, attributes) in model.activities {
+            for (attr, _) in attributes {
+                builder = builder.with_activity(&name, |activity| activity.with_attribute(attr))?;
+            }
         }
 
         Ok(builder.build())
@@ -319,20 +356,114 @@ impl ChronicleDomainDef {
 
 #[cfg(test)]
 pub mod test {
-    use super::{ChronicleDomainDef, DomainFileInput};
+    use super::{ChronicleDomainDef, EntityDef};
+
+    use std::cmp::Ordering;
+
+    impl PartialEq for EntityDef {
+        fn eq(&self, other: &Self) -> bool {
+            self.name == other.name
+        }
+    }
+
+    impl Eq for EntityDef {}
+
+    impl PartialOrd for EntityDef {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for EntityDef {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.name.cmp(&other.name)
+        }
+    }
+
+    use assert_fs::prelude::*;
 
     #[test]
-    pub fn from_yaml() {
-        let yaml = r#"
-name: "test"
-attributes:
-        testAttr:
-            typ: "String"
-"#;
+    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.json")?;
+        file.write_str(
+            r#" {
+            "name": "chronicle",
+            "attributes": {
+              "stringAttribute": {
+                "typ": "String"
+              }
+            },
+            "agents": {
+              "friend": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "entities": {
+              "octopi": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              },
+              "the sea": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            },
+            "activities": {
+              "gardening": {
+                "stringAttribute": {
+                  "typ": "String"
+                }
+              }
+            }
+          }
+         "#,
+        )?;
 
-        insta::assert_debug_snapshot!(ChronicleDomainDef::from_file_model(
-            serde_yaml::from_str::<DomainFileInput>(yaml).unwrap()
-        )
-        .unwrap());
+        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
+
+        domain.entities.sort();
+
+        insta::assert_debug_snapshot!(domain);
+
+        Ok(())
+    }
+
+    fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+        name: "test"
+        attributes:
+          stringAttribute:
+            typ: "String"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+          the sea:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#,
+        )?;
+
+        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
+
+        domain.entities.sort();
+
+        insta::assert_debug_snapshot!(domain);
+
+        Ok(())
     }
 }
