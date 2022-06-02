@@ -1,8 +1,60 @@
-use clap::*;
+use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
-use crate::codegen::{
-    ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, CliName, EntityDef, TypeName,
+use api::ApiError;
+use clap::*;
+use common::{
+    attributes::{Attribute, Attributes},
+    commands::{
+        ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
+        PathOrFile,
+    },
+    prov::{
+        ActivityId, AgentId, CompactionError, DomaintypeId, EntityId, Name, NamePart, ParseIriError,
+    },
+    signing::SignerError,
 };
+use iref::Iri;
+use tokio::sync::broadcast::error::RecvError;
+use user_error::UFE;
+
+use crate::{
+    codegen::{
+        ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, CliName, EntityDef, TypeName,
+    },
+    PrimitiveType,
+};
+
+custom_error::custom_error! {pub CliError
+    MissingArgument{arg: String}                    = "Missing argument {}",
+    InvalidArgument{arg: String, expected: String, got: String } = "Invalid argument {} expected {} got {}",
+    ArgumentParsing{source: clap::Error}            = "Bad argument",
+    InvalidIri{source: iref::Error}                 = "Invalid IRI",
+    InvalidChronicleIri{source: ParseIriError}      = "Invalid chronicle IRI",
+    InvalidJson{source: serde_json::Error}          = "Invalid JSON",
+    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp",
+    InvalidCoercion{arg: String}                    = "Invalid coercion {}",
+    ApiError{source: ApiError}                      = "Api failure",
+    Keys{source: SignerError}                       = "Key storage",
+    FileSystem{source: std::io::Error}              = "Cannot locate configuration file",
+    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file",
+    InvalidPath                                     = "Invalid path", //TODO - the path, you know how annoying this is
+    Ld{source: CompactionError}                     = "Invalid Json LD",
+    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream",
+}
+
+/// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+impl From<Infallible> for CliError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
+    }
+}
+
+impl UFE for CliError {}
+
+pub(crate) trait SubCommand {
+    fn as_cmd(&self) -> Command;
+    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError>;
+}
 
 pub struct AttributeCliModel {
     pub attribute: AttributeDef,
@@ -21,6 +73,7 @@ impl AttributeCliModel {
 
     pub fn as_arg(&self) -> Arg {
         Arg::new(&*self.attribute_name)
+            .long(&*self.attribute_name)
             .help(&*self.attribute_help)
             .takes_value(true)
             .required(true)
@@ -50,8 +103,150 @@ impl AgentCliModel {
             define_about: format!("Define an agent of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", agent.as_type_name())
         }
     }
+}
 
-    pub fn as_cmd(&self) -> Command {
+fn name_from<'a, Id>(
+    args: &'a ArgMatches,
+    name_param: &str,
+    id_param: &str,
+) -> Result<Name, CliError>
+where
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+{
+    if let Some(name) = args.value_of(name_param) {
+        Ok(Name::from(name))
+    } else if let Some(id) = args.value_of(id_param) {
+        let iri = Iri::from_str(id)?;
+        let id = Id::try_from(iri)?;
+        Ok(id.name_part().to_owned())
+    } else {
+        Err(CliError::MissingArgument {
+            arg: format!("Missing {} and {}", name_param, id_param),
+        })
+    }
+}
+
+fn id_from<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Id, CliError>
+where
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+{
+    if let Some(id) = args.value_of(id_param) {
+        Ok(Id::try_from(Iri::from_str(id)?)?)
+    } else {
+        Err(CliError::MissingArgument {
+            arg: format!("Missing {} ", id_param),
+        })
+    }
+}
+
+fn id_from_option<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Option<Id>, CliError>
+where
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+{
+    match id_from(args, id_param) {
+        Err(CliError::MissingArgument { .. }) => Ok(None),
+        Err(e) => Err(e),
+        Ok(id) => Ok(Some(id)),
+    }
+}
+
+fn namespace_from(args: &ArgMatches) -> Result<Name, CliError> {
+    if let Some(namespace) = args.value_of("namespace") {
+        Ok(Name::from(namespace))
+    } else {
+        Err(CliError::MissingArgument {
+            arg: "namespace".to_owned(),
+        })
+    }
+}
+
+/// Deserialize to a JSON value and ensure that it matches the specified primitive type, we need to force any bare literal text to be quoted
+/// use of coercion afterwards will produce a proper json value type for non strings
+fn attribute_value_from_param(
+    arg: &str,
+    value: &str,
+    typ: PrimitiveType,
+) -> Result<serde_json::Value, CliError> {
+    let value = {
+        if !value.contains('"') {
+            format!(r#""{}""#, value)
+        } else {
+            value.to_owned()
+        }
+    };
+
+    let mut value = serde_json::from_str(&*value)?;
+    match typ {
+        PrimitiveType::Bool => {
+            if let Some(coerced) = valico::json_dsl::boolean()
+                .coerce(&mut value, ".")
+                .map_err(|_e| CliError::InvalidCoercion {
+                    arg: arg.to_owned(),
+                })?
+            {
+                Ok(coerced)
+            } else {
+                Ok(value)
+            }
+        }
+        PrimitiveType::String => {
+            if let Some(coerced) =
+                valico::json_dsl::string()
+                    .coerce(&mut value, ".")
+                    .map_err(|_e| CliError::InvalidCoercion {
+                        arg: arg.to_owned(),
+                    })?
+            {
+                Ok(coerced)
+            } else {
+                Ok(value)
+            }
+        }
+        PrimitiveType::Int => {
+            if let Some(coerced) =
+                valico::json_dsl::i64()
+                    .coerce(&mut value, ".")
+                    .map_err(|_e| CliError::InvalidCoercion {
+                        arg: arg.to_owned(),
+                    })?
+            {
+                Ok(coerced)
+            } else {
+                Ok(value)
+            }
+        }
+    }
+}
+
+fn attributes_from(
+    args: &ArgMatches,
+    typ: impl AsRef<str>,
+    attributes: &[AttributeCliModel],
+) -> Result<Attributes, CliError> {
+    Ok(Attributes {
+        typ: Some(DomaintypeId::from_name(typ)),
+        attributes: attributes
+            .iter()
+            .map(|attr| {
+                let value = attribute_value_from_param(
+                    &attr.attribute_name,
+                    &*args.value_of(&attr.attribute_name).unwrap(),
+                    attr.attribute.primitive_type,
+                )?;
+                Ok::<_, CliError>((
+                    attr.attribute.as_type_name(),
+                    Attribute {
+                        typ: attr.attribute.as_type_name(),
+                        value,
+                    },
+                ))
+            })
+            .collect::<Result<HashMap<_, _>, _>>()?,
+    })
+}
+
+impl SubCommand for AgentCliModel {
+    fn as_cmd(&self) -> Command {
         let cmd = Command::new(&*self.name).about(&*self.about);
 
         let mut define = Command::new("define")
@@ -61,6 +256,7 @@ impl AgentCliModel {
                             .takes_value(true))
                         .arg(Arg::new("id")
                             .help("A valid chronicle agent IRI")
+                            .long("id")
                             .takes_value(true))
                         .group(ArgGroup::new("identifier")
                                     .args(&["name","id"])
@@ -72,78 +268,109 @@ impl AgentCliModel {
                                 .default_value("default")
                                 .required(false)
                                 .takes_value(true),
-                            );
+                        );
 
         for attr in &self.attributes {
             define = define.arg(attr.as_arg());
         }
 
         cmd.subcommand(define)
-                            .subcommand(Command::new("register-key")
-                                .about("Register a key pair, or a public key with an agent")
-                                .arg(Arg::new("name")
-                                    .help("An externally meaningful identifier for the agent, e.g. a URI or relational id")
-                                    .takes_value(true))
-                                .arg(Arg::new("id")
-                                    .help("A valid chronicle agent IRI")
-                                    .takes_value(true))
-                                .group(ArgGroup::new("identifier")
-                                            .args(&["name","id"])
-                                            .required(true))
-                                .arg(
-                                    Arg::new("namespace")
-                                        .short('n')
-                                        .long("namespace")
-                                        .default_value("default")
-                                        .required(false)
-                                        .takes_value(true),
-                                )
-                                .arg(Arg::new("generate")
-                                    .help("Automatically generate a signing key for this agent and store it in the configured key store")
-                                    .required_unless_present_any(vec!["publickey", "privatekey"])
-                                    .short('g')
-                                    .long("generate")
-                                    .takes_value(false),
-                                )
-                                .arg(
-                                    Arg::new("publickey")
-                                        .help("Import the public key at this location to the configured key store")
-                                        .short('p')
-                                        .long("publickey")
-                                        .value_hint(ValueHint::FilePath)
-                                        .required_unless_present_any(vec!["generate","privatekey"])
-                                        .takes_value(true),
-                                )
-                                .arg(
-                                    Arg::new("privatekey")
-                                        .help("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
-                                        .short('k')
-                                        .long("privatekey")
-                                        .required_unless_present_any(vec!["generate","publickey"])
-                                        .value_hint(ValueHint::FilePath)
-                                        .required(false)
-                                        .takes_value(true),
-                                ))
-                            .subcommand(Command::new("use")
-                                .about("Make the specified agent the context for activities and entities")
-                                .arg(Arg::new("name")
-                                    .help("An externally meaningful identifier for the agent, e.g. a URI or relational id")
-                                    .takes_value(true))
-                                .arg(Arg::new("id")
-                                    .help("A valid chronicle agent IRI")
-                                    .takes_value(true))
-                                .group(ArgGroup::new("identifier")
-                                            .args(&["name","id"])
-                                            .required(true))
-                                .arg(
-                                    Arg::new("namespace")
-                                        .short('n')
-                                        .long("namespace")
-                                        .default_value("default")
-                                        .required(false)
-                                        .takes_value(true),
-                                ),
-                        )
+        .subcommand(Command::new("register-key")
+            .about("Register a key pair, or a public key with an agent")
+            .arg(Arg::new("id")
+                .help("A valid chronicle agent IRI")
+                .required(true)
+                .takes_value(true))
+            .arg(
+                Arg::new("namespace")
+                    .short('n')
+                    .long("namespace")
+                    .default_value("default")
+                    .required(false)
+                    .takes_value(true),
+            )
+            .arg(Arg::new("generate")
+                .help("Automatically generate a signing key for this agent and store it in the configured key store")
+                .required_unless_present_any(vec!["publickey", "privatekey"])
+                .short('g')
+                .long("generate")
+                .takes_value(false),
+            )
+            .arg(
+                Arg::new("publickey")
+                    .help("Import the public key at this location to the configured key store")
+                    .short('p')
+                    .long("publickey")
+                    .value_hint(ValueHint::FilePath)
+                    .required_unless_present_any(vec!["generate","privatekey"])
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("privatekey")
+                    .help("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
+                    .short('k')
+                    .long("privatekey")
+                    .required_unless_present_any(vec!["generate","publickey"])
+                    .value_hint(ValueHint::FilePath)
+                    .required(false)
+                    .takes_value(true),
+            ))
+        .subcommand(Command::new("use")
+            .about("Make the specified agent the context for activities and entities")
+            .arg(Arg::new("id")
+                .help("A valid chronicle agent IRI")
+                .required(true)
+                .takes_value(true))
+            .arg(
+                Arg::new("namespace")
+                    .short('n')
+                    .long("namespace")
+                    .default_value("default")
+                    .required(false)
+                    .takes_value(true),
+            ),
+    )
+    }
+
+    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+        if let Some(matches) = matches.subcommand_matches(&self.name) {
+            if let Some(matches) = matches.subcommand_matches("define") {
+                return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
+                    name: name_from::<AgentId>(matches, "name", "id")?,
+                    namespace: namespace_from(matches)?,
+                    attributes: attributes_from(matches, &self.agent.name, &self.attributes)?,
+                })));
+            }
+            if let Some(matches) = matches.subcommand_matches("register-key") {
+                let registration = {
+                    if matches.is_present("generate") {
+                        KeyRegistration::Generate
+                    } else if matches.is_present("privatekey") {
+                        KeyRegistration::ImportSigning(KeyImport::FromPath {
+                            path: matches.value_of_t::<PathBuf>("privatekey").unwrap(),
+                        })
+                    } else {
+                        KeyRegistration::ImportVerifying(KeyImport::FromPath {
+                            path: matches.value_of_t::<PathBuf>("privatekey").unwrap(),
+                        })
+                    }
+                };
+                return Ok(Some(ApiCommand::Agent(AgentCommand::RegisterKey {
+                    id: id_from(matches, "id")?,
+                    namespace: namespace_from(matches)?,
+                    registration,
+                })));
+            }
+
+            if let Some(matches) = matches.subcommand_matches("use") {
+                return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
+                    id: id_from(matches, "id")?,
+                    namespace: namespace_from(matches)?,
+                })));
+            };
+        }
+
+        Ok(None)
     }
 }
 
@@ -163,107 +390,138 @@ impl ActivityCliModel {
             .map(|attr| AttributeCliModel::new(attr.clone()))
             .collect();
         Self {
-                                activity: activity.clone(),
-                                attributes,
-                                name: activity.as_cli_name(),
-                                about: format!("Operations on {} activities", activity.as_type_name()),
-                                define_about: format!("Define an activity of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", activity.as_type_name()),
-                            }
+            activity: activity.clone(),
+            attributes,
+            name: activity.as_cli_name(),
+            about: format!("Operations on {} activities", activity.as_type_name()),
+            define_about: format!("Define an activity of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", activity.as_type_name()),
+        }
     }
+}
 
+impl SubCommand for ActivityCliModel {
     fn as_cmd(&self) -> Command {
         let cmd = Command::new(&*self.name).about(&*self.about);
 
         let mut define =
-                                        Command::new("define")
-                                            .about(&*self.define_about)
-                                            .arg(Arg::new("name")
-                                                .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                                                .takes_value(true))
-                                            .arg(Arg::new("id")
-                                                .help("A valid chronicle activity IRI")
-                                                .takes_value(true))
-                                            .group(ArgGroup::new("identifier")
-                                                        .args(&["name","id"])
-                                                        .required(true))
-                                            .arg(
-                                                Arg::new("namespace")
-                                                    .short('n')
-                                                    .long("namespace")
-                                                    .default_value("default")
-                                                    .required(false)
-                                                    .takes_value(true),
-                                                );
+                    Command::new("define")
+                        .about(&*self.define_about)
+
+                        .arg(Arg::new("name")
+                            .help("An externally meaningful identifier for the activity , e.g. a URI or relational id")
+                            .takes_value(true))
+                        .arg(Arg::new("id")
+                            .long("id")
+                            .help("A valid chronicle activity IRI")
+                            .takes_value(true))
+                        .group(ArgGroup::new("identifier")
+                                    .args(&["name","id"])
+                                    .required(true))
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        );
 
         for attr in &self.attributes {
             define = define.arg(attr.as_arg());
         }
 
         cmd.subcommand(define)
-                                .subcommand(
-                                        Command::new("start")
-                                            .about("Record this activity as started at the current time")
-
-                                            .arg(Arg::new("name")
-                                        .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                                        .takes_value(true))
-                                    .arg(Arg::new("id")
-                                        .help("A valid chronicle activity IRI")
-                                        .takes_value(true))
-                                    .group(ArgGroup::new("identifier")
-                                                .args(&["name","id"])
-                                                .required(true))
-                                    .arg(
-                                        Arg::new("namespace")
-                                            .short('n')
-                                            .long("namespace")
-                                            .default_value("default")
-                                            .required(false)
-                                            .takes_value(true),
-                                    ),
-                                )
-                                .subcommand(
-                                    Command::new("end")
-                                        .about("Record this activity as ended at the current time")
-                                        .arg(Arg::new("name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
+           .subcommand(
+                    Command::new("start")
+                        .about("Record this activity as started, optionally specifying the time and agent. If no agent is specified the agent context set via use will be used")
                         .arg(Arg::new("id")
                             .help("A valid chronicle activity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["name","id"])
-                                    .required(true))
-                                    .arg(
-                                        Arg::new("namespace")
-                                            .short('n')
-                                            .long("namespace")
+                            .takes_value(true)
+                            .required(true)
+                        )
+                        .arg(Arg::new("agent_id")
+                            .help("A valid chronicle agent IRI")
+                            .takes_value(true)
+                            .required(false)
+                        )
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
                                 .default_value("default")
                                 .required(false)
                                 .takes_value(true),
-                        ),
+                        )
+                        .arg(
+                            Arg::new("time")
+                                .help("A valid RFC3339 timestamp")
+                                .required(false)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    Command::new("end")
+                        .about("Record this activity as ended at the current time")
+                        .arg(Arg::new("id")
+                            .help("A valid chronicle activity IRI")
+                            .takes_value(true)
+                            .required(true)
+                        )
+                        .arg(Arg::new("agent_id")
+                            .help("A valid chronicle agent IRI")
+                            .takes_value(true)
+                            .required(false)
+                        )
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("time")
+                                .help("A valid RFC3339 timestamp")
+                                .required(false)
+                                .takes_value(true)
+                        )
                 )
                 .subcommand(
                     Command::new("use")
                         .about("Record this activity as having used the specified entity, creating it if required")
-                        .arg(Arg::new("entity_name")
-                            .help("An externally meaningful identifier for the entity, e.g. a URI or relational id")
-                            .takes_value(true))
+                        .arg(Arg::new("entity_id")
+                            .help("A valid chronicle entity IRI")
+                            .takes_value(true)
+                            .required(true)
+                        )
+                        .arg(Arg::new("activity_id")
+                            .help("A valid chronicle activity IRI")
+                            .takes_value(true)
+                            .required(true)
+                        )
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                )
+                .subcommand(
+                    Command::new("generate")
+                        .about("Records this activity as having generated the specified entity, creating it if required")
                         .arg(Arg::new("entity id")
                             .help("A valid chronicle entity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["entity_name","entity_id"])
-                                    .required(true))
-                        .arg(Arg::new("activity_name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
+                            .takes_value(true)
+                            .required(true)
+                        )
                         .arg(Arg::new("activity id")
                             .help("A valid chronicle activity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["activity_name","activity_id"])
-                                    .required(true))
+                            .takes_value(true)
+                            .required(true)
+                        )
                         .arg(
                             Arg::new("namespace")
                                 .short('n')
@@ -273,36 +531,54 @@ impl ActivityCliModel {
                                 .takes_value(true),
                         )
                     )
-                    .subcommand(
-                        Command::new("generate")
-                            .about("Records this activity as having generated the specified entity, creating it if required")
-                            .arg(Arg::new("entity_name")
-                            .help("An externally meaningful identifier for the entity, e.g. a URI or relational id")
-                            .takes_value(true))
-                        .arg(Arg::new("entity id")
-                            .help("A valid chronicle entity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["entity_name","entity_id"])
-                                    .required(true))
-                        .arg(Arg::new("activity_name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
-                        .arg(Arg::new("activity id")
-                            .help("A valid chronicle activity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["activity_name","activity_id"])
-                                    .required(true))
-                        .arg(
-                            Arg::new("namespace")
-                                .short('n')
-                                .long("namespace")
-                                .default_value("default")
-                                .required(false)
-                                .takes_value(true),
-                        )
-                    )
+    }
+
+    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+        if let Some(matches) = matches.subcommand_matches(&self.name) {
+            if let Some(matches) = matches.subcommand_matches("define") {
+                return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
+                    name: name_from::<ActivityId>(matches, "name", "id")?,
+                    namespace: namespace_from(matches)?,
+                    attributes: attributes_from(matches, &self.activity.name, &self.attributes)?,
+                })));
+            }
+
+            if let Some(matches) = matches.subcommand_matches("start") {
+                return Ok(Some(ApiCommand::Activity(ActivityCommand::Start {
+                    id: id_from(matches, "id")?,
+                    namespace: namespace_from(matches)?,
+                    time: matches.value_of("time").map(|t| t.parse()).transpose()?,
+                    agent: id_from_option(matches, "agent_id")?,
+                })));
+            };
+
+            if let Some(matches) = matches.subcommand_matches("end") {
+                return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
+                    id: id_from_option(matches, "id")?,
+                    namespace: namespace_from(matches)?,
+                    time: matches.value_of("time").map(|t| t.parse()).transpose()?,
+                    agent: id_from_option(matches, "agent_id")?,
+                })));
+            };
+
+            if let Some(matches) = matches.subcommand_matches("use") {
+                return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
+                    id: id_from(matches, "entity_id")?,
+                    namespace: namespace_from(matches)?,
+                    activity: id_from_option(matches, "activity_id")?,
+                })));
+            };
+
+            if let Some(matches) = matches.subcommand_matches("generate") {
+                return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
+                    id: id_from(matches, "entity_id")?,
+                    namespace: namespace_from(matches)?,
+                    activity: id_from_option(matches, "activity_id")?,
+                })));
+            };
+        }
+
+        Ok(None)
     }
 }
 
@@ -329,8 +605,10 @@ impl EntityCliModel {
             define_about: format!("Define an entity of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", entity.as_type_name()),
         }
     }
+}
 
-    pub fn as_cmd(&self) -> Command {
+impl SubCommand for EntityCliModel {
+    fn as_cmd(&self) -> Command {
         let cmd = Command::new(&self.name).about(&*self.about);
 
         let mut define =
@@ -340,6 +618,7 @@ impl EntityCliModel {
                            .help("An externally meaningful identifier for the entity, e.g. a URI or relational id")
                             .takes_value(true))
                         .arg(Arg::new("id")
+                            .long("id")
                             .help("A valid chronicle entity IRI")
                             .takes_value(true))
                         .group(ArgGroup::new("identifier")
@@ -352,16 +631,17 @@ impl EntityCliModel {
                                 .default_value("default")
                                 .required(false)
                                 .takes_value(true),
-                            );
+                        );
 
         for attr in &self.attributes {
             define = define.arg(attr.as_arg());
         }
 
-        cmd.subcommand(
-                                        Command::new("attach")
-                                            .about("Sign the input file and record it against the entity")
-                                            .arg(Arg::new("entity_name")
+        cmd.subcommand(define)
+           .subcommand(
+                    Command::new("attach")
+                        .about("Sign the input file and record it against the entity")
+                        .arg(Arg::new("entity_name")
                             .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
                             .takes_value(true))
                         .arg(Arg::new("entity_id")
@@ -396,26 +676,38 @@ impl EntityCliModel {
                                 .required(false)
                                 .takes_value(true),
                         )
-
-                        .arg(Arg::new("agent_name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
                         .arg(Arg::new("agent_id")
-                            .help("A valid chronicle activity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["agent_name","entity_id"])
-                                    .required(false))
-                        .arg(Arg::new("activity_name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
-                        .arg(Arg::new("activity_id")
-                            .help("A valid chronicle activity IRI")
-                            .takes_value(true))
+                            .help("A valid chronicle agent IRI")
+                            .takes_value(true)
+                        )
                         .group(ArgGroup::new("identifier")
                                     .args(&["activity_name","entity_id"])
                                     .required(true))
                 )
+    }
+
+    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+        if let Some(matches) = matches.subcommand_matches(&self.name) {
+            if let Some(matches) = matches.subcommand_matches("define") {
+                return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
+                    name: name_from::<EntityId>(matches, "name", "id")?,
+                    namespace: namespace_from(matches)?,
+                    attributes: attributes_from(matches, &self.entity.name, &self.attributes)?,
+                })));
+            }
+        }
+
+        if let Some(matches) = matches.subcommand_matches("attach") {
+            return Ok(Some(ApiCommand::Entity(EntityCommand::Attach {
+                id: id_from(matches, "entity_id")?,
+                namespace: namespace_from(matches)?,
+                file: PathOrFile::Path(matches.value_of_t::<PathBuf>("file")?),
+                agent: id_from_option(matches, "agent_id")?,
+                locator: matches.value_of("locator").map(|x| x.to_owned()),
+            })));
+        }
+
+        Ok(None)
     }
 }
 
@@ -437,8 +729,8 @@ impl From<ChronicleDomainDef> for CliModel {
     }
 }
 
-impl CliModel {
-    pub fn as_cmd(&self) -> Command {
+impl SubCommand for CliModel {
+    fn as_cmd(&self) -> Command {
         let mut app = Command::new("chronicle")
             .version("1.0")
             .author("Blockchain technology partners")
@@ -454,12 +746,6 @@ impl CliModel {
                     .takes_value(true),
             )
             .arg(
-                Arg::new("completions")
-                    .long("completions")
-                    .value_name("completions")
-                    .help("Generate shell completions and exit"),
-            )
-            .arg(
                 Arg::new("instrument")
                     .short('i')
                     .long("instrument")
@@ -471,33 +757,35 @@ impl CliModel {
             .arg(Arg::new("console-logging").long("console-logging").help(
                 "Instrument using RUST_LOG environment, writing in human readable format to stdio",
             ))
-            .arg(
-                Arg::new("export-schema")
-                    .long("export-schema")
-                    .takes_value(false)
-                    .help("Print SDL and exit"),
+            .subcommand(
+                Command::new("completions")
+                    .about("Generate shell completions and exit")
+                    .arg(
+                        Arg::new("shell")
+                            .possible_values(&["bash", "zsh", "fish"])
+                            .default_value("bash")
+                            .help("Shell to generate completions for"),
+                    ),
             )
-            .arg(
-                Arg::new("gql")
-                    .long("gql")
-                    .required(false)
-                    .takes_value(false)
-                    .help("Start the graphql server"),
-            )
-            .arg(
-                Arg::new("open")
-                    .long("open")
-                    .required(false)
-                    .takes_value(false)
-                    .help("Open apollo studio sandbox"),
-            )
-            .arg(
-                Arg::new("gql-interface")
-                    .long("gql-interface")
-                    .required(false)
-                    .takes_value(true)
-                    .default_value("127.0.0.1:9982")
-                    .help("The graphql server address"),
+            .subcommand(Command::new("export-schema").about("Print SDL and exit"))
+            .subcommand(
+                Command::new("serve-graphql")
+                    .about("Start a graphql server")
+                    .arg(
+                        Arg::new("open")
+                            .long("open")
+                            .required(false)
+                            .takes_value(false)
+                            .help("Open apollo studio sandbox"),
+                    )
+                    .arg(
+                        Arg::new("interface")
+                            .long("interface")
+                            .required(false)
+                            .takes_value(true)
+                            .default_value("127.0.0.1:9982")
+                            .help("The graphql server address (default 127.0.0.1:9982)"),
+                    ),
             );
 
         for agent in self.agents.iter() {
@@ -526,6 +814,26 @@ impl CliModel {
         {
             app
         }
+    }
+
+    /// Iterate our possible subcommands via model and short circuit with the first one that matches
+    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+        for agent in self.agents.iter() {
+            if let Some(matches) = agent.matches(matches)? {
+                return Ok(Some(matches));
+            }
+        }
+        for activity in self.activities.iter() {
+            if let Some(matches) = activity.matches(matches)? {
+                return Ok(Some(matches));
+            }
+        }
+        for entity in self.entities.iter() {
+            if let Some(matches) = entity.matches(matches)? {
+                return Ok(Some(matches));
+            }
+        }
+        Ok(None)
     }
 }
 

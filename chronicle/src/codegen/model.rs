@@ -1,5 +1,3 @@
-use std::{collections::HashMap, path::Path, str::FromStr};
-
 use inflector::cases::kebabcase::to_kebab_case;
 use inflector::cases::pascalcase::to_pascal_case;
 use inflector::cases::snakecase::to_snake_case;
@@ -48,6 +46,11 @@ impl AttributeDef {
             primitive_type: attr.typ,
         }
     }
+}
+
+/// A name formatted for CLI use - kebab-case, singular, lowercase
+pub trait CliName {
+    fn as_cli_name(&self) -> String;
 }
 
 /// A name formatted for CLI use - kebab-case, singular, lowercase
