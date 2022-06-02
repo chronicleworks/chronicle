@@ -1,6 +1,7 @@
 use chronicle::codegen::ChronicleDomainDef;
 use chronicle::tokio;
 use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
+use chronicle::{tokio, Builder, PrimitiveType};
 use main::{Mutation, Query};
 
 #[allow(dead_code)]

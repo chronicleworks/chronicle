@@ -379,7 +379,7 @@ pub async fn bootstrap<Query, Mutation>(
     Query: ObjectType + 'static + Copy,
     Mutation: ObjectType + 'static + Copy,
 {
-    let matches = cli(domain.clone()).get_matches();
+    let matches = cli(domain.clone()).as_cmd().get_matches();
 
     if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
         eprintln!("Generating completion file for {}...", generator);
