@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v0.1.6
+
+* Quieten RUSTSEC for now [view commit](https://github.com/catenasys/chronicle/commit/5128d9c04639856c1b7b6f53fcffc58c5c6192e0)
+* Swap http for poem and restore gql studio [view commit](https://github.com/catenasys/chronicle/commit/2688929eb14821bef4eb587874a624e9dd806eb3)
+* feat: Activity timeline [view commit](https://github.com/catenasys/chronicle/commit/3c94ea0aeaed371e953df86d9198dbd0d49c7cb0)
+* fix: COPY [view commit](https://github.com/catenasys/chronicle/commit/5f495b7264e8e94169c5f72fbe152d3b831e06b1)
+* Fix: container names etc [view commit](https://github.com/catenasys/chronicle/commit/41c27fa90f5b222b30a997b1e8fdabda4eab99ce)
+* Fix: formatting post generation [view commit](https://github.com/catenasys/chronicle/commit/892337363af436ea07872be016108eba9232969a)
+* Fix: create path to generated file [view commit](https://github.com/catenasys/chronicle/commit/dcbbe26a16050aac3d5ef52e405f7a38f6f48725)
+* fix: Don't need these tests here [view commit](https://github.com/catenasys/chronicle/commit/c0e6570892fb980764a0673d2ac0aeea2938f19c)
+* Fix: snapshots and union query [view commit](https://github.com/catenasys/chronicle/commit/ffe193c9aacde11c809143b01de0327d4220602d)
+* fix: Generated from clippy complaints [view commit](https://github.com/catenasys/chronicle/commit/e98809c527e3752faec3424f0f1e3e79428779b1)
+* Tests, strongly type entity / activity / agent types for queries [view commit](https://github.com/catenasys/chronicle/commit/5ac22820895f4eece3b8711a6a99d5a0dd8ae8eb)
+* WIP: GraphQL server generation from domain model [view commit](https://github.com/catenasys/chronicle/commit/58e35d0f616cbaa8055184d713754fd022fd6018)
+* feat: Add GraphQL scalars [view commit](https://github.com/catenasys/chronicle/commit/6272cdea1dc6d019c9c2db46d396f65c82bc6cb6)
+* build(docker): add an inmem docker image and Dockerfile [view commit](https://github.com/catenasys/chronicle/commit/ee96b1451de4920fb4c5534dc2bdeb55c567e979)
+* feat: Add GraphQL scalars [view commit](https://github.com/catenasys/chronicle/commit/b755319b1f87d0c1424bfecfa37e29cd96e2f7df)
+* fix: Iri conversions and usage [view commit](https://github.com/catenasys/chronicle/commit/074e6c7dc6b60fd90e77d45c66a5d96b897f2e97)
+
+## v0.1.5
+
+* Fix: use sdl rather than federated sdl, as it doesn't include subscriptions [view commit](https://github.com/catenasys/chronicle/commit/67e2c37666dd9e9af78f4236e8b0ae73a93b82a3)
+* fix(docker): correct docker-compose run plan [view commit](https://github.com/catenasys/chronicle/commit/5abfb7e327045f5b5c7bbdb409aed917fa7583b6)
+* build(docker): add libsqlite3-dev [view commit](https://github.com/catenasys/chronicle/commit/0d70588b9c7444557bf0bab01146a8211d5251ac)
+* build: clean up some support items [view commit](https://github.com/catenasys/chronicle/commit/f0f235d43e8afc360ea47f8bbb0336e8c90c6284)
+
 ## v0.1.4
 
 * fix: Doctest for ambiguous bootstrap export [view commit](https://github.com/catenasys/chronicle/commit/9938adc796ab9b70189a92f4618a1cc5a92f621e)
