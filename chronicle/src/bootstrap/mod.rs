@@ -163,7 +163,7 @@ fn domain_type(args: &ArgMatches) -> Option<DomaintypeId> {
 }
 
 #[instrument(skip(gql))]
-async fn execute_arguments<Query, Mutation>(
+async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
     config: Config,
     options: &ArgMatches,
@@ -179,13 +179,6 @@ where
     let ret_api = api.clone();
 
     let execution = vec![
-        options.subcommand_matches("namespace").and_then(|m| {
-            m.subcommand_matches("create").map(|m| {
-                api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                    name: m.value_of("namespace").unwrap().into(),
-                }))
-            })
-        }),
         options.subcommand_matches("agent").and_then(|m| {
             vec![
                 m.subcommand_matches("create").map(|m| {
@@ -321,15 +314,15 @@ impl UFE for CliError {}
 
 async fn config_and_exec<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
-    matches: &ArgMatches,
+    model: CliModel,
 ) -> Result<(), CliError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
     use colored_json::prelude::*;
-    let config = handle_config_and_init(matches)?;
-    let response = execute_arguments(gql, config, matches).await?;
+    let config = handle_config_and_init(&model)?;
+    let response = execute_subcommand(gql, config, &model).await?;
 
     match response {
         (

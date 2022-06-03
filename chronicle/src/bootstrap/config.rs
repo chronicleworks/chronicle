@@ -1,4 +1,4 @@
-use super::CliError;
+use super::{CliError, CliModel};
 use clap::ArgMatches;
 use common::signing::DirectoryStoredKeys;
 use serde_derive::{Deserialize, Serialize};
@@ -30,8 +30,13 @@ pub struct Config {
     pub validator: ValidatorConfig,
 }
 
-pub fn handle_config_and_init(matches: &ArgMatches) -> Result<Config, CliError> {
-    let path = matches.value_of("config").unwrap().to_owned();
+pub fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
+    let path = model
+        .as_cmd()
+        .get_matches()
+        .value_of("config")
+        .unwrap()
+        .to_owned();
     let path = shellexpand::tilde(&path);
     let path = PathBuf::from(&*path);
 
