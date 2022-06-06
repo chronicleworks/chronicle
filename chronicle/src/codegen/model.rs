@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, str::FromStr};
 
 use inflector::cases::kebabcase::to_kebab_case;
 use inflector::cases::pascalcase::to_pascal_case;
@@ -11,6 +11,7 @@ custom_error::custom_error! {pub ModelError
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
     ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
+    ParseDomainError = "Domain not parsable",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -371,6 +372,20 @@ impl ChronicleDomainDef {
     }
 }
 
+impl FromStr for ChronicleDomainDef {
+    type Err = ModelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match Self::from_yaml(s) {
+            Err(_) => match Self::from_json(s) {
+                Err(_) => Err(ModelError::ParseDomainError),
+                Ok(domain) => Ok(domain),
+            },
+            Ok(domain) => Ok(domain),
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use super::{ChronicleDomainDef, EntityDef};
@@ -449,6 +464,7 @@ pub mod test {
         Ok(())
     }
 
+    #[test]
     fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = assert_fs::NamedTempFile::new("test.yml")?;
         file.write_str(
@@ -476,6 +492,46 @@ pub mod test {
         )?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
+
+        domain.entities.sort();
+
+        insta::assert_debug_snapshot!(domain);
+
+        Ok(())
+    }
+
+    use std::str::FromStr;
+
+    #[test]
+    fn test_from_str() -> Result<(), Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+        name: "test"
+        attributes:
+          stringAttribute:
+            typ: "String"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+          the sea:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#,
+        )?;
+
+        let s: String = std::fs::read_to_string(&file.path())?;
+
+        let mut domain = ChronicleDomainDef::from_str(&s)?;
 
         domain.entities.sort();
 
