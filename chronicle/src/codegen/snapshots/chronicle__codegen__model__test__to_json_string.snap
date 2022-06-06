@@ -1,0 +1,5 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: "format!(\"{}\", domain.to_json_string().unwrap())"
+---
+"{\"name\":\"test\",\"attributes\":[{\"typ\":\"stringAttribute\",\"primitive_type\":\"String\"}],\"agents\":[{\"name\":\"friend\",\"attributes\":[{\"typ\":\"stringAttribute\",\"primitive_type\":\"String\"}]}],\"entities\":[{\"name\":\"octopi\",\"attributes\":[{\"typ\":\"stringAttribute\",\"primitive_type\":\"String\"}]}],\"activities\":[{\"name\":\"gardening\",\"attributes\":[{\"typ\":\"stringAttribute\",\"primitive_type\":\"String\"}]}]}"

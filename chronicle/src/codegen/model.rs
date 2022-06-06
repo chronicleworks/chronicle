@@ -9,9 +9,11 @@ use serde::{Deserialize, Serialize};
 custom_error::custom_error! {pub ModelError
     AttributeNotDefined{attr: String} = "Attribute not defined",
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
-    ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
     ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
+    ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
     ParseDomainError = "Domain not parsable",
+    SerializeJsonError = "Model not serializable to JSON",
+    SerializeYamlError = "Model not serializable to YAML",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -21,7 +23,7 @@ pub enum PrimitiveType {
     Int,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AttributeDef {
     typ: String,
     pub primitive_type: PrimitiveType,
@@ -89,7 +91,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AgentDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -110,7 +112,7 @@ impl AgentDef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EntityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -131,7 +133,7 @@ impl EntityDef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ActivityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -306,7 +308,7 @@ pub struct DomainFileInput {
     pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ChronicleDomainDef {
     name: String,
     pub attributes: Vec<AttributeDef>,
@@ -369,6 +371,30 @@ impl ChronicleDomainDef {
         }
 
         Ok(builder.build())
+    }
+
+    fn to_string(&self) -> Result<String, ModelError> {
+        if let Ok(s) = serde_json::to_string(&self) {
+            Ok(s)
+        } else {
+            Err(ModelError::SerializeJsonError)
+        }
+    }
+
+    fn to_json_string(&self) -> Result<String, ModelError> {
+        if let Ok(s) = serde_json::to_string(&self) {
+            Ok(s)
+        } else {
+            Err(ModelError::SerializeJsonError)
+        }
+    }
+
+    fn to_yaml_string(&self) -> Result<String, ModelError> {
+        if let Ok(s) = serde_yaml::to_string(&self) {
+            Ok(s)
+        } else {
+            Err(ModelError::SerializeYamlError)
+        }
     }
 }
 
@@ -534,8 +560,94 @@ pub mod test {
         let mut domain = ChronicleDomainDef::from_str(&s)?;
 
         domain.entities.sort();
-
         insta::assert_debug_snapshot!(domain);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_json_string() -> Result<(), Box<dyn std::error::Error>> {
+        let s = r#"
+        name: "test"
+        attributes:
+          stringAttribute:
+            typ: "String"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#
+        .to_string();
+
+        let domain = ChronicleDomainDef::from_str(&s)?;
+        eprintln!("{}", domain.to_json_string().unwrap());
+        insta::assert_debug_snapshot!(format!("{}", domain.to_json_string().unwrap()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
+        let s = r#"
+        name: "test"
+        attributes:
+          stringAttribute:
+            typ: "String"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#
+        .to_string();
+
+        let domain = ChronicleDomainDef::from_str(&s)?;
+        eprintln!("{}", domain.to_yaml_string().unwrap());
+        insta::assert_debug_snapshot!(format!("{}", domain.to_yaml_string().unwrap()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_string() -> Result<(), Box<dyn std::error::Error>> {
+        let s = r#"
+        name: "test"
+        attributes:
+          stringAttribute:
+            typ: "String"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            stringAttribute:
+              typ: "String"
+        activities:
+          gardening:
+            stringAttribute:
+              typ: "String"
+         "#
+        .to_string();
+
+        let domain = ChronicleDomainDef::from_str(&s)?;
+        eprintln!("{}", domain.to_string().unwrap());
+        insta::assert_debug_snapshot!(format!("{}", domain.to_string().unwrap()));
 
         Ok(())
     }
