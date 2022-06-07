@@ -294,6 +294,18 @@ impl Builder {
     }
 }
 
+impl FromStr for Builder {
+    type Err = ModelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(domain) = ChronicleDomainDef::from_str(s) {
+            Ok(Builder(domain))
+        } else {
+            Err(ModelError::ParseDomainError)
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct AttributeFileInput {
     pub typ: PrimitiveType,
@@ -374,27 +386,43 @@ impl ChronicleDomainDef {
     }
 
     fn to_string(&self) -> Result<String, ModelError> {
-        if let Ok(s) = serde_json::to_string(&self) {
-            Ok(s)
-        } else {
-            Err(ModelError::SerializeJsonError)
-        }
-    }
+        let mut v: Vec<String> = Vec::new();
+        let name = format!("\"name\":\"{}\"", self.name);
+        v.push(name);
 
-    fn to_json_string(&self) -> Result<String, ModelError> {
-        if let Ok(s) = serde_json::to_string(&self) {
-            Ok(s)
-        } else {
-            Err(ModelError::SerializeJsonError)
-        }
-    }
+        let attributes: String = {
+            let mut a: Vec<String> = Vec::new();
+            for attr in &self.attributes {
+                let s = format!("\"{}\":{{\"typ\":\"{}\"}}", attr.typ, attr.as_type_name());
+                a.push(s);
+            }
+            let attributes: String = a.join(",");
+            let attributes = format!("\"attributes\":{{{}}}", attributes);
+            attributes
+        };
+        v.push(attributes);
 
-    fn to_yaml_string(&self) -> Result<String, ModelError> {
-        if let Ok(s) = serde_yaml::to_string(&self) {
-            Ok(s)
-        } else {
-            Err(ModelError::SerializeYamlError)
-        }
+        let agents: String = {
+            let mut agents = String::new();
+            for agent in &self.agents {
+                let mut agent_s: String = format!("\"{}\":", agent.name);
+                let mut attributes: Vec<String> = Vec::new();
+                for attr in &agent.attributes {
+                    let s = format!("\"{}\":{{\"typ\":\"{}\"}}", attr.typ, attr.as_type_name());
+                    attributes.push(s);
+                }
+                let attributes = attributes.join(",");
+                let attributes = format!("{{{}}}", attributes);
+                agent_s.push_str(&attributes);
+                agents.push_str(&agent_s);
+            }
+            let s = format!("\"agents\":{{{}}}", agents);
+            s
+        };
+        v.push(agents);
+        let s: String = v.join(",");
+        let s = format!("{{{}}}}}", s);
+        Ok(s)
     }
 }
 
@@ -447,32 +475,32 @@ pub mod test {
             r#" {
             "name": "chronicle",
             "attributes": {
-              "stringAttribute": {
+              "string": {
                 "typ": "String"
               }
             },
             "agents": {
               "friend": {
-                "stringAttribute": {
+                "string": {
                   "typ": "String"
                 }
               }
             },
             "entities": {
               "octopi": {
-                "stringAttribute": {
+                "string": {
                   "typ": "String"
                 }
               },
               "the sea": {
-                "stringAttribute": {
+                "string": {
                   "typ": "String"
                 }
               }
             },
             "activities": {
               "gardening": {
-                "stringAttribute": {
+                "string": {
                   "typ": "String"
                 }
               }
@@ -535,28 +563,28 @@ pub mod test {
             r#"
         name: "test"
         attributes:
-          stringAttribute:
+          string:
             typ: "String"
         agents:
           friend:
-            stringAttribute:
+            string:
               typ: "String"
         entities:
           octopi:
-            stringAttribute:
+            string:
               typ: "String"
           the sea:
-            stringAttribute:
+            string:
               typ: "String"
         activities:
           gardening:
-            stringAttribute:
+            string:
               typ: "String"
          "#,
         )?;
 
         let s: String = std::fs::read_to_string(&file.path())?;
-
+        eprintln!("{}", s);
         let mut domain = ChronicleDomainDef::from_str(&s)?;
 
         domain.entities.sort();
@@ -566,81 +594,23 @@ pub mod test {
     }
 
     #[test]
-    fn test_to_json_string() -> Result<(), Box<dyn std::error::Error>> {
-        let s = r#"
-        name: "test"
-        attributes:
-          stringAttribute:
-            typ: "String"
-        agents:
-          friend:
-            stringAttribute:
-              typ: "String"
-        entities:
-          octopi:
-            stringAttribute:
-              typ: "String"
-        activities:
-          gardening:
-            stringAttribute:
-              typ: "String"
-         "#
-        .to_string();
-
-        let domain = ChronicleDomainDef::from_str(&s)?;
-        eprintln!("{}", domain.to_json_string().unwrap());
-        insta::assert_debug_snapshot!(format!("{}", domain.to_json_string().unwrap()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
-        let s = r#"
-        name: "test"
-        attributes:
-          stringAttribute:
-            typ: "String"
-        agents:
-          friend:
-            stringAttribute:
-              typ: "String"
-        entities:
-          octopi:
-            stringAttribute:
-              typ: "String"
-        activities:
-          gardening:
-            stringAttribute:
-              typ: "String"
-         "#
-        .to_string();
-
-        let domain = ChronicleDomainDef::from_str(&s)?;
-        eprintln!("{}", domain.to_yaml_string().unwrap());
-        insta::assert_debug_snapshot!(format!("{}", domain.to_yaml_string().unwrap()));
-
-        Ok(())
-    }
-
-    #[test]
     fn test_to_string() -> Result<(), Box<dyn std::error::Error>> {
         let s = r#"
-        name: "test"
+        name: "chronicle"
         attributes:
-          stringAttribute:
+          string:
             typ: "String"
         agents:
           friend:
-            stringAttribute:
+            string:
               typ: "String"
         entities:
           octopi:
-            stringAttribute:
+            string:
               typ: "String"
         activities:
           gardening:
-            stringAttribute:
+            string:
               typ: "String"
          "#
         .to_string();

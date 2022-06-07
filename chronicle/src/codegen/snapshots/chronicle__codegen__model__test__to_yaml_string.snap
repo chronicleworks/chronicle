@@ -1,5 +1,0 @@
----
-source: chronicle/src/codegen/model.rs
-expression: "format!(\"{}\", domain.to_yaml_string().unwrap())"
----
-"---\nname: test\nattributes:\n  - typ: stringAttribute\n    primitive_type: String\nagents:\n  - name: friend\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nentities:\n  - name: octopi\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nactivities:\n  - name: gardening\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\n"

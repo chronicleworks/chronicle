@@ -899,6 +899,63 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
+        /*
+        let model = #builder::from_str(#(
+
+            r#"---\nname: chronicle\nattributes:\n  - typ: stringAttribute\n    primitive_type: String\nagents:\n  - name: friend\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nentities:\n  - name: octopi\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nactivities:\n  - name: gardening\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\n"
+            r#"
+            name: "chronicle"
+        attributes:
+          string:
+            typ: "String"
+          int:
+            typ: "Int"
+          bool:
+            typ: "Bool"
+        agents:
+          friend:
+            stringAttribute:
+              typ: "String"
+        entities:
+          octopi:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+          the sea:
+            string:
+                typ: "String"
+            int:
+                typ: "Int"
+            bool:
+                typ: "Bool"
+        activities:
+          gardening:
+            string:
+                typ: "String"
+            int:
+                typ: "Int"
+            bool:
+                typ: "Bool"
+          swim about:
+            string:
+                typ: "String"
+            int:
+                typ: "Int"
+            bool:
+                typ: "Bool"
+          friends:
+            string:
+                typ: "String"
+            int:
+                typ: "Int"
+            bool:
+                typ: "Bool"
+            "#
+        ));
+        */
         let model = #builder::new("chronicle")
         .with_attribute_type("string", #primitive_type::String)
         .unwrap()
