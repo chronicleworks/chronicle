@@ -16,6 +16,18 @@ DomainFileInput {
             },
         },
     },
-    entities: {},
-    activities: {},
+    entities: {
+        "octopi": {
+            "string": AttributeFileInput {
+                typ: String,
+            },
+        },
+    },
+    activities: {
+        "gardening": {
+            "string": AttributeFileInput {
+                typ: String,
+            },
+        },
+    },
 }

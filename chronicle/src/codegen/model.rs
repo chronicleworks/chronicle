@@ -343,10 +343,12 @@ impl DomainFileInput {
 impl From<ChronicleDomainDef> for DomainFileInput {
     fn from(domain: ChronicleDomainDef) -> Self {
         let mut file = Self::new(domain.name);
+
         for attr in domain.attributes {
             let name = attr.typ.clone();
             file.attributes.insert(name, attr.into());
         }
+
         for agent in domain.agents {
             let name = agent.name;
             let mut input_attributes = HashMap::new();
@@ -356,6 +358,27 @@ impl From<ChronicleDomainDef> for DomainFileInput {
             }
             file.agents.insert(name, input_attributes);
         }
+
+        for entity in domain.entities {
+            let name = entity.name;
+            let mut input_attributes = HashMap::new();
+            for attr in entity.attributes {
+                let name = attr.typ.clone();
+                input_attributes.insert(name, AttributeFileInput::from(attr));
+            }
+            file.entities.insert(name, input_attributes);
+        }
+
+        for activity in domain.activities {
+            let name = activity.name;
+            let mut input_attributes = HashMap::new();
+            for attr in activity.attributes {
+                let name = attr.typ.clone();
+                input_attributes.insert(name, AttributeFileInput::from(attr));
+            }
+            file.activities.insert(name, input_attributes);
+        }
+
         file
     }
 }
