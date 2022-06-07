@@ -400,9 +400,27 @@ pub struct ChronicleDomainDef {
     pub activities: Vec<ActivityDef>,
 }
 
+impl FromStr for ChronicleDomainDef {
+    type Err = ModelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match Self::from_yaml(s) {
+            Err(_) => match Self::from_json(s) {
+                Err(_) => Err(ModelError::ParseDomainError),
+                Ok(domain) => Ok(domain),
+            },
+            Ok(domain) => Ok(domain),
+        }
+    }
+}
+
 impl ChronicleDomainDef {
     pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
+    }
+
+    pub fn from_input_string(s: &str) -> Result<Self, ModelError> {
+        ChronicleDomainDef::from_str(s)
     }
 
     pub fn from_json(file: &str) -> Result<Self, ModelError> {
@@ -412,7 +430,7 @@ impl ChronicleDomainDef {
         }
     }
 
-    fn from_yaml(file: &str) -> Result<Self, ModelError> {
+    pub fn from_yaml(file: &str) -> Result<Self, ModelError> {
         match serde_yaml::from_str::<DomainFileInput>(file) {
             Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
             Ok(model) => Self::from_model(model),
@@ -422,10 +440,8 @@ impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
         let file: String = std::fs::read_to_string(&path)?;
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("json") => Self::from_json(&file),
-            _ => Self::from_yaml(&file),
-        }
+
+        Self::from_str(&file)
     }
 
     fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
@@ -461,19 +477,11 @@ impl ChronicleDomainDef {
         let json = serde_json::to_string(&input)?;
         Ok(json)
     }
-}
 
-impl FromStr for ChronicleDomainDef {
-    type Err = ModelError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match Self::from_yaml(s) {
-            Err(_) => match Self::from_json(s) {
-                Err(_) => Err(ModelError::ParseDomainError),
-                Ok(domain) => Ok(domain),
-            },
-            Ok(domain) => Ok(domain),
-        }
+    pub fn to_yaml_string(&self) -> Result<String, ModelError> {
+        let input: DomainFileInput = self.into();
+        let yaml = serde_yaml::to_string(&input)?;
+        Ok(yaml)
     }
 }
 
@@ -602,7 +610,7 @@ pub mod test {
     }
 
     #[test]
-    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_json_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_json_file()?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
@@ -615,7 +623,7 @@ pub mod test {
     }
 
     #[test]
-    fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
@@ -630,7 +638,7 @@ pub mod test {
     use std::str::FromStr;
 
     #[test]
-    fn test_from_str() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_chronicle_domain_def_from_str() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
         let s: String = std::fs::read_to_string(&file.path())?;
         let mut domain = ChronicleDomainDef::from_str(&s)?;
@@ -672,6 +680,17 @@ pub mod test {
         let domain = ChronicleDomainDef::from_str(&s)?;
 
         insta::assert_debug_snapshot!(domain.to_json_string().unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+
+        insta::assert_debug_snapshot!(domain.to_yaml_string().unwrap());
 
         Ok(())
     }

@@ -899,7 +899,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
-        let model = #chronicledomaindef::from_json(#_(&domain.to_json_string().unwrap())).unwrap();
+        let model = #chronicledomaindef::from_input_string(#_(#(&domain.to_json_string().unwrap()))).unwrap();
 
         // let model = #builder::new("chronicle")
         // .with_attribute_type("string", #primitive_type::String)
