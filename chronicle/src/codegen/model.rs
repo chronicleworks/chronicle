@@ -311,8 +311,8 @@ pub struct AttributeFileInput {
     pub typ: PrimitiveType,
 }
 
-impl From<AttributeDef> for AttributeFileInput {
-    fn from(attr: AttributeDef) -> Self {
+impl From<&AttributeDef> for AttributeFileInput {
+    fn from(attr: &AttributeDef) -> Self {
         Self {
             typ: attr.primitive_type,
         }
@@ -343,48 +343,48 @@ impl DomainFileInput {
         Ok(serde_json::to_string(&self)?)
     }
 
-    pub fn to_yaml_string(self) -> Result<String, ModelError> {
+    pub fn to_yaml_string(&self) -> Result<String, ModelError> {
         Ok(serde_yaml::to_string(&self)?)
     }
 }
 
-impl From<ChronicleDomainDef> for DomainFileInput {
-    fn from(domain: ChronicleDomainDef) -> Self {
-        let mut file = Self::new(domain.name);
+impl From<&ChronicleDomainDef> for DomainFileInput {
+    fn from(domain: &ChronicleDomainDef) -> Self {
+        let mut file = Self::new(&domain.name);
 
-        for attr in domain.attributes {
-            let name = attr.typ.clone();
+        for attr in &domain.attributes {
+            let name = attr.typ.to_string();
             file.attributes.insert(name, attr.into());
         }
 
-        for agent in domain.agents {
-            let name = agent.name;
+        for agent in &domain.agents {
+            let name = &agent.name;
             let mut input_attributes = HashMap::new();
-            for attr in agent.attributes {
-                let name = attr.typ.clone();
+            for attr in &agent.attributes {
+                let name = attr.typ.to_string();
                 input_attributes.insert(name, AttributeFileInput::from(attr));
             }
-            file.agents.insert(name, input_attributes);
+            file.agents.insert(name.to_string(), input_attributes);
         }
 
-        for entity in domain.entities {
-            let name = entity.name;
+        for entity in &domain.entities {
+            let name = &entity.name;
             let mut input_attributes = HashMap::new();
-            for attr in entity.attributes {
-                let name = attr.typ.clone();
+            for attr in &entity.attributes {
+                let name = attr.typ.to_string();
                 input_attributes.insert(name, AttributeFileInput::from(attr));
             }
-            file.entities.insert(name, input_attributes);
+            file.entities.insert(name.to_string(), input_attributes);
         }
 
-        for activity in domain.activities {
-            let name = activity.name;
+        for activity in &domain.activities {
+            let name = &activity.name;
             let mut input_attributes = HashMap::new();
-            for attr in activity.attributes {
-                let name = attr.typ.clone();
+            for attr in &activity.attributes {
+                let name = attr.typ.to_string();
                 input_attributes.insert(name, AttributeFileInput::from(attr));
             }
-            file.activities.insert(name, input_attributes);
+            file.activities.insert(name.to_string(), input_attributes);
         }
 
         file
@@ -393,7 +393,7 @@ impl From<ChronicleDomainDef> for DomainFileInput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChronicleDomainDef {
-    name: String,
+    pub name: String,
     pub attributes: Vec<AttributeDef>,
     pub agents: Vec<AgentDef>,
     pub entities: Vec<EntityDef>,
@@ -405,7 +405,7 @@ impl ChronicleDomainDef {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
-    fn from_json(file: &str) -> Result<Self, ModelError> {
+    pub fn from_json(file: &str) -> Result<Self, ModelError> {
         match serde_json::from_str::<DomainFileInput>(file) {
             Err(source) => Err(ModelError::ModelFileInvalidJson { source }),
             Ok(model) => Self::from_model(model),
@@ -456,14 +456,10 @@ impl ChronicleDomainDef {
         Ok(builder.build())
     }
 
-    pub fn to_json_string(self) -> Result<String, ModelError> {
+    pub fn to_json_string(&self) -> Result<String, ModelError> {
         let input: DomainFileInput = self.into();
-        Ok(serde_json::to_string(&input)?)
-    }
-
-    pub fn to_yaml_string(self) -> Result<String, ModelError> {
-        let input: DomainFileInput = self.into();
-        Ok(serde_yaml::to_string(&input)?)
+        let json = serde_json::to_string(&input)?;
+        Ok(json)
     }
 }
 
@@ -650,7 +646,7 @@ pub mod test {
         let file = create_test_yaml_file_single_entity()?;
         let s: String = std::fs::read_to_string(&file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
-        let input: DomainFileInput = domain.into();
+        let input = DomainFileInput::from(&domain);
 
         insta::assert_debug_snapshot!(input);
 
@@ -665,7 +661,7 @@ pub mod test {
             typ: "string".to_string(),
             primitive_type: PrimitiveType::String,
         };
-        let input = AttributeFileInput::from(attr);
+        let input = AttributeFileInput::from(&attr);
         insta::assert_debug_snapshot!(input);
     }
 
@@ -676,17 +672,6 @@ pub mod test {
         let domain = ChronicleDomainDef::from_str(&s)?;
 
         insta::assert_debug_snapshot!(domain.to_json_string().unwrap());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
-        let file = create_test_yaml_file_single_entity()?;
-        let s: String = std::fs::read_to_string(&file.path())?;
-        let domain = ChronicleDomainDef::from_str(&s)?;
-
-        insta::assert_debug_snapshot!(domain.to_yaml_string().unwrap());
 
         Ok(())
     }

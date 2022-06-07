@@ -8,16 +8,6 @@ mod main;
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
 pub async fn main() {
-    /*
-    > "needs to become something like":
-        `#chronicledomain::from_str(“{name: “bob”,
-                                      entities: {} …“)`
-    > "the syntax for a correctly quoted (hopefully)
-       string in genco is":
-        `#_(#(model.to_string()))`
-    > "obviously we are not using Display to do it,
-       but that’s the general idea"
-    */
     let model = Builder::new("chronicle")
         .with_attribute_type("string", PrimitiveType::String)
         .unwrap()

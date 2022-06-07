@@ -871,12 +871,12 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
         attributes: vec![],
     };
 
-    let builder = &rust::import("chronicle::codegen", "Builder");
-    let primitive_type = &rust::import("chronicle::codegen", "PrimitiveType");
+    let chronicledomaindef = &rust::import("chronicle::codegen", "ChronicleDomainDef");
     let tokio = &rust::import("chronicle", "tokio");
 
     let bootstrap = rust::import("chronicle::bootstrap", "bootstrap");
     let chronicle_graphql = rust::import("chronicle::api::chronicle_graphql", "ChronicleGraphQl");
+
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
     #(gen_type_enums(domain))
@@ -899,111 +899,56 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
-        /*
-        let model = #builder::from_str(#(
+        let model = #chronicledomaindef::from_json(#_(&domain.to_json_string().unwrap())).unwrap();
 
-            r#"---\nname: chronicle\nattributes:\n  - typ: stringAttribute\n    primitive_type: String\nagents:\n  - name: friend\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nentities:\n  - name: octopi\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\nactivities:\n  - name: gardening\n    attributes:\n      - typ: stringAttribute\n        primitive_type: String\n"
-            r#"
-            name: "chronicle"
-        attributes:
-          string:
-            typ: "String"
-          int:
-            typ: "Int"
-          bool:
-            typ: "Bool"
-        agents:
-          friend:
-            stringAttribute:
-              typ: "String"
-        entities:
-          octopi:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-          the sea:
-            string:
-                typ: "String"
-            int:
-                typ: "Int"
-            bool:
-                typ: "Bool"
-        activities:
-          gardening:
-            string:
-                typ: "String"
-            int:
-                typ: "Int"
-            bool:
-                typ: "Bool"
-          swim about:
-            string:
-                typ: "String"
-            int:
-                typ: "Int"
-            bool:
-                typ: "Bool"
-          friends:
-            string:
-                typ: "String"
-            int:
-                typ: "Int"
-            bool:
-                typ: "Bool"
-            "#
-        ));
-        */
-        let model = #builder::new("chronicle")
-        .with_attribute_type("string", #primitive_type::String)
-        .unwrap()
-        .with_attribute_type("int", #primitive_type::Int)
-        .unwrap()
-        .with_attribute_type("bool", #primitive_type::Bool)
-        .unwrap()
-        .with_entity("octopi", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_entity("the sea", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("gardening", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("swim about", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_agent("friends", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .build();
+        // let model = #builder::new("chronicle")
+        // .with_attribute_type("string", #primitive_type::String)
+        // .unwrap()
+        // .with_attribute_type("int", #primitive_type::Int)
+        // .unwrap()
+        // .with_attribute_type("bool", #primitive_type::Bool)
+        // .unwrap()
+        // .with_entity("octopi", |b| {
+        //     b.with_attribute("string")
+        //         .unwrap()
+        //         .with_attribute("int")
+        //         .unwrap()
+        //         .with_attribute("bool")
+        // })
+        // .unwrap()
+        // .with_entity("the sea", |b| {
+        //     b.with_attribute("string")
+        //         .unwrap()
+        //         .with_attribute("int")
+        //         .unwrap()
+        //         .with_attribute("bool")
+        // })
+        // .unwrap()
+        // .with_activity("gardening", |b| {
+        //     b.with_attribute("string")
+        //         .unwrap()
+        //         .with_attribute("int")
+        //         .unwrap()
+        //         .with_attribute("bool")
+        // })
+        // .unwrap()
+        // .with_activity("swim about", |b| {
+        //     b.with_attribute("string")
+        //         .unwrap()
+        //         .with_attribute("int")
+        //         .unwrap()
+        //         .with_attribute("bool")
+        // })
+        // .unwrap()
+        // .with_agent("friends", |b| {
+        //     b.with_attribute("string")
+        //         .unwrap()
+        //         .with_attribute("int")
+        //         .unwrap()
+        //         .with_attribute("bool")
+        // })
+        // .unwrap()
+        // .build();
 
 
 
