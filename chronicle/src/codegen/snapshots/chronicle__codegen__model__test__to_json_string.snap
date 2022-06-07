@@ -1,0 +1,5 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: input.to_json_string().unwrap()
+---
+"{\"name\":\"test\",\"attributes\":{\"string\":{\"typ\":\"String\"}},\"agents\":{\"friend\":{\"string\":{\"typ\":\"String\"}}},\"entities\":{\"octopi\":{\"string\":{\"typ\":\"String\"}}},\"activities\":{\"gardening\":{\"string\":{\"typ\":\"String\"}}}}"

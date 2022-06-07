@@ -338,6 +338,14 @@ impl DomainFileInput {
             activities: HashMap::new(),
         }
     }
+
+    pub fn to_json_string(&self) -> Result<String, ModelError> {
+        Ok(serde_json::to_string(&self)?)
+    }
+
+    pub fn to_yaml_string(self) -> Result<String, ModelError> {
+        Ok(serde_yaml::to_string(&self)?)
+    }
 }
 
 impl From<ChronicleDomainDef> for DomainFileInput {
@@ -446,6 +454,16 @@ impl ChronicleDomainDef {
         }
 
         Ok(builder.build())
+    }
+
+    pub fn to_json_string(self) -> Result<String, ModelError> {
+        let input: DomainFileInput = self.into();
+        Ok(serde_json::to_string(&input)?)
+    }
+
+    pub fn to_yaml_string(self) -> Result<String, ModelError> {
+        let input: DomainFileInput = self.into();
+        Ok(serde_yaml::to_string(&input)?)
     }
 }
 
@@ -638,6 +656,7 @@ pub mod test {
 
         Ok(())
     }
+
     use super::{AttributeDef, AttributeFileInput, PrimitiveType};
 
     #[test]
@@ -648,5 +667,27 @@ pub mod test {
         };
         let input = AttributeFileInput::from(attr);
         insta::assert_debug_snapshot!(input);
+    }
+
+    #[test]
+    fn test_to_json_string() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+
+        insta::assert_debug_snapshot!(domain.to_json_string().unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+
+        insta::assert_debug_snapshot!(domain.to_yaml_string().unwrap());
+
+        Ok(())
     }
 }

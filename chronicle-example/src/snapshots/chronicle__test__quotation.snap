@@ -1,7 +1,0 @@
----
-source: cli/src/main.rs
-assertion_line: 648
-expression: created
----
-[data.wasQuotedFrom]
-context = 'http://blockchaintp.com/chronicle/ns#entity:generated'

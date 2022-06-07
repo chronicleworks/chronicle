@@ -1,5 +1,0 @@
----
-source: chronicle/src/codegen/model.rs
-expression: "format!(\"{}\", domain.to_string().unwrap())"
----
-"{\"name\":\"chronicle\",\"attributes\":{\"string\":{\"typ\":\"String\"}},\"agents\":{\"friend\":{\"string\":{\"typ\":\"String\"}}}}}"
