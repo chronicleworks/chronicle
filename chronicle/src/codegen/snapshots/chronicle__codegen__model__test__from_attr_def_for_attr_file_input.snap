@@ -1,0 +1,7 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: input
+---
+AttributeFileInput {
+    typ: String,
+}

@@ -311,6 +311,14 @@ pub struct AttributeFileInput {
     pub typ: PrimitiveType,
 }
 
+impl From<AttributeDef> for AttributeFileInput {
+    fn from(attr: AttributeDef) -> Self {
+        Self {
+            typ: attr.primitive_type,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct DomainFileInput {
     pub name: String,
@@ -318,6 +326,38 @@ pub struct DomainFileInput {
     pub agents: HashMap<String, HashMap<String, AttributeFileInput>>,
     pub entities: HashMap<String, HashMap<String, AttributeFileInput>>,
     pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
+}
+
+impl DomainFileInput {
+    pub fn new(name: impl AsRef<str>) -> Self {
+        DomainFileInput {
+            name: name.as_ref().to_string(),
+            attributes: HashMap::new(),
+            agents: HashMap::new(),
+            entities: HashMap::new(),
+            activities: HashMap::new(),
+        }
+    }
+}
+
+impl From<ChronicleDomainDef> for DomainFileInput {
+    fn from(domain: ChronicleDomainDef) -> Self {
+        let mut file = Self::new(domain.name);
+        for attr in domain.attributes {
+            let name = attr.typ.clone();
+            file.attributes.insert(name, attr.into());
+        }
+        for agent in domain.agents {
+            let name = agent.name;
+            let mut input_attributes = HashMap::new();
+            for attr in agent.attributes {
+                let name = attr.typ.clone();
+                input_attributes.insert(name, AttributeFileInput::from(attr));
+            }
+            file.agents.insert(name, input_attributes);
+        }
+        file
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -384,46 +424,6 @@ impl ChronicleDomainDef {
 
         Ok(builder.build())
     }
-
-    fn to_string(&self) -> Result<String, ModelError> {
-        let mut v: Vec<String> = Vec::new();
-        let name = format!("\"name\":\"{}\"", self.name);
-        v.push(name);
-
-        let attributes: String = {
-            let mut a: Vec<String> = Vec::new();
-            for attr in &self.attributes {
-                let s = format!("\"{}\":{{\"typ\":\"{}\"}}", attr.typ, attr.as_type_name());
-                a.push(s);
-            }
-            let attributes: String = a.join(",");
-            let attributes = format!("\"attributes\":{{{}}}", attributes);
-            attributes
-        };
-        v.push(attributes);
-
-        let agents: String = {
-            let mut agents = String::new();
-            for agent in &self.agents {
-                let mut agent_s: String = format!("\"{}\":", agent.name);
-                let mut attributes: Vec<String> = Vec::new();
-                for attr in &agent.attributes {
-                    let s = format!("\"{}\":{{\"typ\":\"{}\"}}", attr.typ, attr.as_type_name());
-                    attributes.push(s);
-                }
-                let attributes = attributes.join(",");
-                let attributes = format!("{{{}}}", attributes);
-                agent_s.push_str(&attributes);
-                agents.push_str(&agent_s);
-            }
-            let s = format!("\"agents\":{{{}}}", agents);
-            s
-        };
-        v.push(agents);
-        let s: String = v.join(",");
-        let s = format!("{{{}}}}}", s);
-        Ok(s)
-    }
 }
 
 impl FromStr for ChronicleDomainDef {
@@ -442,7 +442,7 @@ impl FromStr for ChronicleDomainDef {
 
 #[cfg(test)]
 pub mod test {
-    use super::{ChronicleDomainDef, EntityDef};
+    use super::{ChronicleDomainDef, DomainFileInput, EntityDef};
 
     use std::cmp::Ordering;
 
@@ -468,46 +468,105 @@ pub mod test {
 
     use assert_fs::prelude::*;
 
-    #[test]
-    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+    fn create_test_yaml_file() -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+        name: "test"
+        attributes:
+          string:
+            typ: "String"
+        agents:
+          friend:
+            string:
+              typ: "String"
+        entities:
+          octopi:
+            string:
+              typ: "String"
+          the sea:
+            string:
+              typ: "String"
+        activities:
+          gardening:
+            string:
+              typ: "String"
+         "#,
+        )?;
+        Ok(file)
+    }
+
+    fn create_test_yaml_file_single_entity(
+    ) -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+        name: "test"
+        attributes:
+          string:
+            typ: "String"
+        agents:
+          friend:
+            string:
+              typ: "String"
+        entities:
+          octopi:
+            string:
+              typ: "String"
+        activities:
+          gardening:
+            string:
+              typ: "String"
+         "#,
+        )?;
+        Ok(file)
+    }
+
+    fn create_test_json_file() -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
         let file = assert_fs::NamedTempFile::new("test.json")?;
         file.write_str(
             r#" {
-            "name": "chronicle",
-            "attributes": {
-              "string": {
-                "typ": "String"
-              }
-            },
-            "agents": {
-              "friend": {
-                "string": {
-                  "typ": "String"
+                "name": "chronicle",
+                "attributes": {
+                  "string": {
+                    "typ": "String"
+                  }
+                },
+                "agents": {
+                  "friend": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
+                },
+                "entities": {
+                  "octopi": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  },
+                  "the sea": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
+                },
+                "activities": {
+                  "gardening": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
                 }
               }
-            },
-            "entities": {
-              "octopi": {
-                "string": {
-                  "typ": "String"
-                }
-              },
-              "the sea": {
-                "string": {
-                  "typ": "String"
-                }
-              }
-            },
-            "activities": {
-              "gardening": {
-                "string": {
-                  "typ": "String"
-                }
-              }
-            }
-          }
-         "#,
+             "#,
         )?;
+        Ok(file)
+    }
+
+    #[test]
+    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_json_file()?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
 
@@ -520,30 +579,7 @@ pub mod test {
 
     #[test]
     fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
-        let file = assert_fs::NamedTempFile::new("test.yml")?;
-        file.write_str(
-            r#"
-        name: "test"
-        attributes:
-          stringAttribute:
-            typ: "String"
-        agents:
-          friend:
-            stringAttribute:
-              typ: "String"
-        entities:
-          octopi:
-            stringAttribute:
-              typ: "String"
-          the sea:
-            stringAttribute:
-              typ: "String"
-        activities:
-          gardening:
-            stringAttribute:
-              typ: "String"
-         "#,
-        )?;
+        let file = create_test_yaml_file()?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
 
@@ -558,33 +594,8 @@ pub mod test {
 
     #[test]
     fn test_from_str() -> Result<(), Box<dyn std::error::Error>> {
-        let file = assert_fs::NamedTempFile::new("test.yml")?;
-        file.write_str(
-            r#"
-        name: "test"
-        attributes:
-          string:
-            typ: "String"
-        agents:
-          friend:
-            string:
-              typ: "String"
-        entities:
-          octopi:
-            string:
-              typ: "String"
-          the sea:
-            string:
-              typ: "String"
-        activities:
-          gardening:
-            string:
-              typ: "String"
-         "#,
-        )?;
-
+        let file = create_test_yaml_file()?;
         let s: String = std::fs::read_to_string(&file.path())?;
-        eprintln!("{}", s);
         let mut domain = ChronicleDomainDef::from_str(&s)?;
 
         domain.entities.sort();
@@ -594,31 +605,25 @@ pub mod test {
     }
 
     #[test]
-    fn test_to_string() -> Result<(), Box<dyn std::error::Error>> {
-        let s = r#"
-        name: "chronicle"
-        attributes:
-          string:
-            typ: "String"
-        agents:
-          friend:
-            string:
-              typ: "String"
-        entities:
-          octopi:
-            string:
-              typ: "String"
-        activities:
-          gardening:
-            string:
-              typ: "String"
-         "#
-        .to_string();
-
+    fn test_from_domain_for_file_input() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
-        eprintln!("{}", domain.to_string().unwrap());
-        insta::assert_debug_snapshot!(format!("{}", domain.to_string().unwrap()));
+        let input: DomainFileInput = domain.into();
+
+        insta::assert_debug_snapshot!(input);
 
         Ok(())
+    }
+    use super::{AttributeDef, AttributeFileInput, PrimitiveType};
+
+    #[test]
+    fn test_from_attribute_def_for_attribute_file_input() {
+        let attr = AttributeDef {
+            typ: "string".to_string(),
+            primitive_type: PrimitiveType::String,
+        };
+        let input = AttributeFileInput::from(attr);
+        insta::assert_debug_snapshot!(input);
     }
 }
