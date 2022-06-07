@@ -1,9 +1,7 @@
-use super::{CliError, CliModel};
-use clap::ArgMatches;
+use super::{CliError, CliModel, SubCommand};
 use common::signing::DirectoryStoredKeys;
-use serde_derive::{Deserialize, Serialize};
-
 use question::{Answer, Question};
+use serde_derive::{Deserialize, Serialize};
 
 use std::path::{Path, PathBuf};
 use url::Url;
