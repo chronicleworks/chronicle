@@ -1,58 +1,60 @@
 use std::process::Command;
 
+use chronicle::codegen::ChronicleDomainDef;
 use chronicle::{generate_chronicle_domain_schema, Builder, PrimitiveType};
 
 fn main() {
-    let model = Builder::new("chronicle")
-        .with_attribute_type("string", PrimitiveType::String)
-        .unwrap()
-        .with_attribute_type("int", PrimitiveType::Int)
-        .unwrap()
-        .with_attribute_type("bool", PrimitiveType::Bool)
-        .unwrap()
-        .with_entity("octopi", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_entity("the sea", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_entity("shade", |b| Ok(b))
-        .unwrap()
-        .with_activity("gardening", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("swim about", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_agent("friends", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .build();
+    let s = r#"
+    name: "chronicle"
+    attributes:
+      string:
+        typ: "String"
+      int:
+        typ: "Int"
+      bool:
+        typ: "Bool"
+    agents:
+      pals:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    entities:
+      octopi:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      the sea:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    activities:
+      gardening:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      swim about:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+     "#
+    .to_string();
+
+    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
     generate_chronicle_domain_schema(model, "src/main.rs");
 

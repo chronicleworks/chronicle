@@ -10,12 +10,12 @@ ChronicleDomainDef {
             primitive_type: Bool,
         },
         AttributeDef {
-            typ: "string",
-            primitive_type: String,
-        },
-        AttributeDef {
             typ: "int",
             primitive_type: Int,
+        },
+        AttributeDef {
+            typ: "string",
+            primitive_type: String,
         },
     ],
     agents: [
@@ -27,12 +27,12 @@ ChronicleDomainDef {
                     primitive_type: String,
                 },
                 AttributeDef {
-                    typ: "int",
-                    primitive_type: Int,
-                },
-                AttributeDef {
                     typ: "bool",
                     primitive_type: Bool,
+                },
+                AttributeDef {
+                    typ: "int",
+                    primitive_type: Int,
                 },
             ],
         },
@@ -42,12 +42,12 @@ ChronicleDomainDef {
             name: "octopi",
             attributes: [
                 AttributeDef {
-                    typ: "string",
-                    primitive_type: String,
-                },
-                AttributeDef {
                     typ: "int",
                     primitive_type: Int,
+                },
+                AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
                 },
                 AttributeDef {
                     typ: "bool",
@@ -59,16 +59,16 @@ ChronicleDomainDef {
             name: "the sea",
             attributes: [
                 AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
+                },
+                AttributeDef {
                     typ: "int",
                     primitive_type: Int,
                 },
                 AttributeDef {
                     typ: "bool",
                     primitive_type: Bool,
-                },
-                AttributeDef {
-                    typ: "string",
-                    primitive_type: String,
                 },
             ],
         },
@@ -78,12 +78,12 @@ ChronicleDomainDef {
             name: "swim about",
             attributes: [
                 AttributeDef {
-                    typ: "bool",
-                    primitive_type: Bool,
-                },
-                AttributeDef {
                     typ: "string",
                     primitive_type: String,
+                },
+                AttributeDef {
+                    typ: "bool",
+                    primitive_type: Bool,
                 },
                 AttributeDef {
                     typ: "int",
@@ -95,12 +95,12 @@ ChronicleDomainDef {
             name: "gardening",
             attributes: [
                 AttributeDef {
-                    typ: "bool",
-                    primitive_type: Bool,
-                },
-                AttributeDef {
                     typ: "int",
                     primitive_type: Int,
+                },
+                AttributeDef {
+                    typ: "bool",
+                    primitive_type: Bool,
                 },
                 AttributeDef {
                     typ: "string",
