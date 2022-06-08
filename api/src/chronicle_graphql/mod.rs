@@ -14,8 +14,7 @@ use diesel::{
 };
 use futures::Stream;
 use poem::{
-    get, handler, listener::TcpListener, middleware::Cors, post, web::Html, EndpointExt,
-    IntoResponse, Route, Server,
+    get, handler, listener::TcpListener, post, web::Html, EndpointExt, IntoResponse, Route, Server,
 };
 use std::{net::SocketAddr, time::Duration};
 use tokio::sync::broadcast::error::RecvError;

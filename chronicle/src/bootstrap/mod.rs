@@ -80,9 +80,7 @@ fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
-    if !options.is_present("gql") {
-        Ok(None)
-    } else if let Some(addr) = options.value_of("gql-interface") {
+    if let Some(addr) = options.value_of("interface") {
         Ok(Some(addr.parse()?))
     } else {
         Ok(None)
@@ -165,16 +163,13 @@ where
 
     let api = api.clone();
 
-    let execution = { cli.matches(&matches)?.map(|cmd| api.dispatch(cmd)) };
+    if let Some(matches) = matches.subcommand_matches("serve-graphql") {
+        graphql_server(&api, &pool, gql, matches, matches.is_present("open")).await?;
 
-    // If we actually execute a command, then do not run the api
-    if let Some(execution) = execution {
-        let exresult = execution.await;
-
-        Ok((exresult?, ret_api))
+        Ok((ApiResponse::Unit, ret_api))
+    } else if let Some(cmd) = cli.matches(&matches)? {
+        Ok((api.dispatch(cmd).await?, ret_api))
     } else {
-        graphql_server(&api, &pool, gql, &matches, matches.is_present("open")).await?;
-
         Ok((ApiResponse::Unit, ret_api))
     }
 }

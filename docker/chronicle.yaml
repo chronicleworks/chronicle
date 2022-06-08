@@ -74,7 +74,7 @@ services:
         -c /root/.chronicle/config.toml \
         --sawtooth tcp://validator:4004
         --instrument http://jaeger:14268/api/traces"
-        --serve-gql \
+        serve-graphql \
         --interface 0.0.0.0:9982 \
     expose:
       - 9982
