@@ -383,14 +383,18 @@ impl ChronicleDomainDef {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
-    fn from_json(file: &str) -> Result<Self, ModelError> {
+    pub fn from_input_string(s: &str) -> Result<Self, ModelError> {
+        ChronicleDomainDef::from_str(s)
+    }
+
+    pub fn from_json(file: &str) -> Result<Self, ModelError> {
         match serde_json::from_str::<DomainFileInput>(file) {
             Err(source) => Err(ModelError::ModelFileInvalidJson { source }),
             Ok(model) => Self::from_model(model),
         }
     }
 
-    fn from_yaml(file: &str) -> Result<Self, ModelError> {
+    pub fn from_yaml(file: &str) -> Result<Self, ModelError> {
         match serde_yaml::from_str::<DomainFileInput>(file) {
             Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
             Ok(model) => Self::from_model(model),
@@ -400,10 +404,7 @@ impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
         let file: String = std::fs::read_to_string(&path)?;
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("json") => Self::from_json(&file),
-            _ => Self::from_yaml(&file),
-        }
+        Self::from_str(&file)
     }
 
     fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
@@ -432,6 +433,18 @@ impl ChronicleDomainDef {
         }
 
         Ok(builder.build())
+    }
+
+    pub fn to_json_string(&self) -> Result<String, ModelError> {
+        let input: DomainFileInput = self.into();
+        let json = serde_json::to_string(&input)?;
+        Ok(json)
+    }
+
+    pub fn to_yaml_string(&self) -> Result<String, ModelError> {
+        let input: DomainFileInput = self.into();
+        let yaml = serde_yaml::to_string(&input)?;
+        Ok(yaml)
     }
 }
 
@@ -532,46 +545,51 @@ pub mod test {
         Ok(file)
     }
 
-    #[test]
-    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+    fn create_test_json_file() -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
         let file = assert_fs::NamedTempFile::new("test.json")?;
         file.write_str(
             r#" {
-            "name": "chronicle",
-            "attributes": {
-              "stringAttribute": {
-                "typ": "String"
-              }
-            },
-            "agents": {
-              "friend": {
-                "stringAttribute": {
-                  "typ": "String"
+                "name": "chronicle",
+                "attributes": {
+                  "string": {
+                    "typ": "String"
+                  }
+                },
+                "agents": {
+                  "friend": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
+                },
+                "entities": {
+                  "octopi": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  },
+                  "the sea": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
+                },
+                "activities": {
+                  "gardening": {
+                    "string": {
+                      "typ": "String"
+                    }
+                  }
                 }
               }
-            },
-            "entities": {
-              "octopi": {
-                "stringAttribute": {
-                  "typ": "String"
-                }
-              },
-              "the sea": {
-                "stringAttribute": {
-                  "typ": "String"
-                }
-              }
-            },
-            "activities": {
-              "gardening": {
-                "stringAttribute": {
-                  "typ": "String"
-                }
-              }
-            }
-          }
-         "#,
+             "#,
         )?;
+        Ok(file)
+    }
+
+    #[test]
+    fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_json_file()?;
 
         let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
 
@@ -630,5 +648,27 @@ pub mod test {
         };
         let input = AttributeFileInput::from(&attr);
         insta::assert_debug_snapshot!(input);
+    }
+
+    #[test]
+    fn test_to_json_string() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+
+        insta::assert_debug_snapshot!(domain.to_json_string().unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_single_entity()?;
+        let s: String = std::fs::read_to_string(&file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+
+        insta::assert_debug_snapshot!(domain.to_yaml_string().unwrap());
+
+        Ok(())
     }
 }
