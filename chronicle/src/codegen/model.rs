@@ -184,7 +184,6 @@ impl ActivityDef {
             attributes,
         }
     }
-
     pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
         let mut v = Vec::new();
         for (attr, attr_def) in attributes {
@@ -195,6 +194,30 @@ impl ActivityDef {
             name,
             attributes: v,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct ChronicleDomainDef {
+    name: String,
+    pub attributes: Vec<AttributeDef>,
+    pub agents: Vec<AgentDef>,
+    pub entities: Vec<EntityDef>,
+    pub activities: Vec<ActivityDef>,
+}
+
+impl ChronicleDomainDef {
+    pub fn build(name: &str) -> Builder {
+        Builder(ChronicleDomainDef {
+            name: name.to_string(),
+            attributes: vec![],
+            agents: vec![],
+            activities: vec![],
+            entities: vec![],
+        })
+    }
+    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
+        self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 }
 

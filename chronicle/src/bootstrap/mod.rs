@@ -274,3 +274,171 @@ pub async fn bootstrap<Query, Mutation>(
 
     std::process::exit(0);
 }
+
+/// We can only sensibly test subcommand parsing for the CLI's PROV actions,
+/// configuration + server execution would get a little tricky in the context of a unit test.
+#[cfg(test)]
+pub mod test {
+    use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
+
+    use common::{
+        commands::{ApiCommand, ApiResponse},
+        ledger::InMemLedger,
+        prov::{ChronicleTransactionId, ProvModel},
+    };
+
+    use diesel::{
+        r2d2::{ConnectionManager, Pool},
+        SqliteConnection,
+    };
+    use tempfile::TempDir;
+    use tracing::Level;
+    use uuid::Uuid;
+
+    use crate::codegen::ChronicleDomainDef;
+
+    use super::{CliModel, SubCommand};
+
+    #[derive(Clone)]
+    struct TestDispatch(ApiDispatch, ProvModel);
+
+    impl TestDispatch {
+        pub async fn dispatch(
+            &mut self,
+            command: ApiCommand,
+        ) -> Result<Option<(ProvModel, ChronicleTransactionId)>, ApiError> {
+            // We can sort of get final on chain state here by using a map of subject to model
+            if let ApiResponse::Submission { prov, .. } = self.0.dispatch(command).await? {
+                self.1.merge(*prov);
+
+                Ok(Some(self.0.notify_commit.subscribe().recv().await.unwrap()))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct SameUuid;
+
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    async fn test_api() -> TestDispatch {
+        tracing_log::LogTracer::init_with_filter(tracing::log::LevelFilter::Trace).ok();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_max_level(Level::TRACE)
+            .try_init()
+            .ok();
+
+        let secretpath = TempDir::new().unwrap();
+        // We need to use a real file for sqlite, as in mem either re-creates between
+        // macos temp dir permissions don't work with sqlite
+        std::fs::create_dir("./sqlite_test").ok();
+        let dbid = Uuid::new_v4();
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+
+        let pool = Pool::builder()
+            .connection_customizer(Box::new(ConnectionOptions {
+                enable_wal: true,
+                enable_foreign_keys: true,
+                busy_timeout: Some(std::time::Duration::from_secs(2)),
+            }))
+            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+                "./sqlite_test/db{}.sqlite",
+                dbid
+            )))
+            .unwrap();
+
+        let dispatch = Api::new(pool, ledger, reader, &secretpath.into_path(), SameUuid)
+            .await
+            .unwrap();
+
+        TestDispatch(dispatch, ProvModel::default())
+    }
+
+    macro_rules! assert_json_ld {
+        ($x:expr) => {
+            let mut v: serde_json::Value =
+                serde_json::from_str(&*$x.await.to_json().compact().await.unwrap().to_string())
+                    .unwrap();
+
+            // Sort @graph by //@id, as objects are unordered
+            if let Some(v) = v.pointer_mut("/@graph") {
+                v.as_array_mut().unwrap().sort_by(|l, r| {
+                    l.as_object()
+                        .unwrap()
+                        .get("@id")
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+                });
+            }
+
+            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
+        };
+    }
+
+    async fn parse_and_execute(command_line: &str, cli: CliModel) -> ProvModel {
+        let mut api = test_api().await;
+
+        let matches = cli
+            .as_cmd()
+            .get_matches_from(command_line.split_whitespace());
+
+        let cmd = cli.matches(&matches).unwrap().unwrap();
+
+        api.dispatch(cmd).await.unwrap().unwrap().0
+    }
+
+    fn test_cli_model() -> CliModel {
+        CliModel::from(
+            ChronicleDomainDef::build("test")
+                .with_attribute_type("testString", crate::PrimitiveType::String)
+                .unwrap()
+                .with_attribute_type("testBool", crate::PrimitiveType::Bool)
+                .unwrap()
+                .with_attribute_type("testInt", crate::PrimitiveType::Int)
+                .unwrap()
+                .with_activity("testActivity", |b| {
+                    b.with_attribute("testString")
+                        .unwrap()
+                        .with_attribute("testBool")
+                        .unwrap()
+                        .with_attribute("testInt")
+                })
+                .unwrap()
+                .with_agent("testAgent", |b| {
+                    b.with_attribute("testString")
+                        .unwrap()
+                        .with_attribute("testBool")
+                        .unwrap()
+                        .with_attribute("testInt")
+                })
+                .unwrap()
+                .with_entity("testEntity", |b| {
+                    b.with_attribute("testString")
+                        .unwrap()
+                        .with_attribute("testBool")
+                        .unwrap()
+                        .with_attribute("testInt")
+                })
+                .unwrap()
+                .build(),
+        )
+    }
+
+    #[tokio::test]
+    async fn agent_define() {
+        assert_json_ld!(parse_and_execute(
+            r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            test_cli_model()
+        ));
+    }
+}

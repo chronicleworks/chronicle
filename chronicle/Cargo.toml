@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "chronicle"
+name    = "chronicle"
 version = "0.1.0"
 
 
@@ -64,6 +64,7 @@ tracing-subscriber = { version = "0.3.9", features = [
 url = { version = "2.2.2", features = ["serde"] }
 user-error = "1.2.8"
 uuid = "0.8.2"
+valico = "3.6.0"
 
 
 [features]
@@ -75,4 +76,5 @@ inmem = []
 
 [dev-dependencies]
 assert_fs = "1.0"
-insta = "1.14.0"
+insta     = "1.14.1"
+tempfile  = "3.3.0"
