@@ -1,0 +1,55 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: domain
+---
+ChronicleDomainDef {
+    name: "test",
+    attributes: [
+        AttributeDef {
+            typ: "string",
+            primitive_type: String,
+        },
+    ],
+    agents: [
+        AgentDef {
+            name: "friend",
+            attributes: [
+                AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
+    entities: [
+        EntityDef {
+            name: "octopi",
+            attributes: [
+                AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
+                },
+            ],
+        },
+        EntityDef {
+            name: "the sea",
+            attributes: [
+                AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
+    activities: [
+        ActivityDef {
+            name: "gardening",
+            attributes: [
+                AttributeDef {
+                    typ: "string",
+                    primitive_type: String,
+                },
+            ],
+        },
+    ],
+}
