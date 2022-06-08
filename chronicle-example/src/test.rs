@@ -1,5 +1,6 @@
+use chronicle::codegen::ChronicleDomainDef;
+use chronicle::tokio;
 use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
-use chronicle::{tokio, Builder, PrimitiveType};
 use main::{Mutation, Query};
 
 #[allow(dead_code)]
@@ -8,54 +9,58 @@ mod main;
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
 pub async fn main() {
-    let model = Builder::new("chronicle")
-        .with_attribute_type("string", PrimitiveType::String)
-        .unwrap()
-        .with_attribute_type("int", PrimitiveType::Int)
-        .unwrap()
-        .with_attribute_type("bool", PrimitiveType::Bool)
-        .unwrap()
-        .with_entity("octopi", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_entity("the sea", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("gardening", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("swim about", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_agent("friends", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .build();
+    let test_yaml = r#"
+    name: "chronicle"
+    attributes:
+      string:
+        typ: "String"
+      int:
+        typ: "Int"
+      bool:
+        typ: "Bool"
+    agents:
+      friends:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    entities:
+      octopi:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      the sea:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    activities:
+      gardening:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      swim about:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+     "#
+    .to_string();
+
+    let model = ChronicleDomainDef::from_input_string(&test_yaml).unwrap();
+
     bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
 }
 
