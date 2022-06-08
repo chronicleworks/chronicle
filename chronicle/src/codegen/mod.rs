@@ -871,8 +871,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
         attributes: vec![],
     };
 
-    let builder = &rust::import("chronicle::codegen", "Builder");
-    let primitive_type = &rust::import("chronicle::codegen", "PrimitiveType");
+    let chronicledomaindef = &rust::import("chronicle::codegen", "ChronicleDomainDef");
     let tokio = &rust::import("chronicle", "tokio");
 
     let bootstrap = rust::import("chronicle::bootstrap", "bootstrap");
@@ -900,54 +899,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
-        let model = #builder::new("chronicle")
-        .with_attribute_type("string", #primitive_type::String)
-        .unwrap()
-        .with_attribute_type("int", #primitive_type::Int)
-        .unwrap()
-        .with_attribute_type("bool", #primitive_type::Bool)
-        .unwrap()
-        .with_entity("octopi", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_entity("the sea", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("gardening", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_activity("swim about", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .with_agent("friends", |b| {
-            b.with_attribute("string")
-                .unwrap()
-                .with_attribute("int")
-                .unwrap()
-                .with_attribute("bool")
-        })
-        .unwrap()
-        .build();
+        let model = #chronicledomaindef::from_input_string(#_(#(&domain.to_json_string().unwrap()))).unwrap();
 
         #bootstrap(model, #chronicle_graphql::new(Query, Mutation)).await
     }
