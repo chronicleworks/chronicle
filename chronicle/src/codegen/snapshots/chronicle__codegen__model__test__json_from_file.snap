@@ -6,7 +6,7 @@ ChronicleDomainDef {
     name: "chronicle",
     attributes: [
         AttributeDef {
-            typ: "stringAttribute",
+            typ: "string",
             primitive_type: String,
         },
     ],
@@ -15,7 +15,7 @@ ChronicleDomainDef {
             name: "friend",
             attributes: [
                 AttributeDef {
-                    typ: "stringAttribute",
+                    typ: "string",
                     primitive_type: String,
                 },
             ],
@@ -26,7 +26,7 @@ ChronicleDomainDef {
             name: "octopi",
             attributes: [
                 AttributeDef {
-                    typ: "stringAttribute",
+                    typ: "string",
                     primitive_type: String,
                 },
             ],
@@ -35,7 +35,7 @@ ChronicleDomainDef {
             name: "the sea",
             attributes: [
                 AttributeDef {
-                    typ: "stringAttribute",
+                    typ: "string",
                     primitive_type: String,
                 },
             ],
@@ -46,7 +46,7 @@ ChronicleDomainDef {
             name: "gardening",
             attributes: [
                 AttributeDef {
-                    typ: "stringAttribute",
+                    typ: "string",
                     primitive_type: String,
                 },
             ],

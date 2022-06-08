@@ -1,0 +1,5 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: domain.to_yaml_string().unwrap()
+---
+"---\nname: test\nattributes:\n  string:\n    typ: String\nagents:\n  friend:\n    string:\n      typ: String\nentities:\n  octopi:\n    string:\n      typ: String\nactivities:\n  gardening:\n    string:\n      typ: String\n"
