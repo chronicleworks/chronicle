@@ -9,7 +9,7 @@ mod main;
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
 pub async fn main() {
-    let test_yaml = r#"
+    let s = r#"
     name: "chronicle"
     attributes:
       string:
@@ -19,7 +19,7 @@ pub async fn main() {
       bool:
         typ: "Bool"
     agents:
-      friends:
+      pals:
         string:
           typ: "String"
         int:
@@ -59,7 +59,7 @@ pub async fn main() {
      "#
     .to_string();
 
-    let model = ChronicleDomainDef::from_input_string(&test_yaml).unwrap();
+    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
     bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
 }

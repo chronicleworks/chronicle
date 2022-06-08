@@ -41,6 +41,13 @@ impl AttributeDef {
     pub fn as_property(&self) -> String {
         to_snake_case(&to_singular(&format!("{}Attribute", self.typ)))
     }
+
+    pub fn from_attribute_file_input(name: String, attr: AttributeFileInput) -> Self {
+        AttributeDef {
+            typ: name,
+            primitive_type: attr.typ,
+        }
+    }
 }
 
 /// A name formatted for CLI use - kebab-case, singular, lowercase
@@ -108,6 +115,18 @@ impl AgentDef {
             attributes,
         }
     }
+
+    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+        let mut v = Vec::new();
+        for (attr, attr_def) in attributes {
+            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
+            v.push(a);
+        }
+        AgentDef {
+            name,
+            attributes: v,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +148,18 @@ impl EntityDef {
             attributes,
         }
     }
+
+    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+        let mut v = Vec::new();
+        for (attr, attr_def) in attributes {
+            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
+            v.push(a);
+        }
+        EntityDef {
+            name,
+            attributes: v,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +179,18 @@ impl ActivityDef {
         Self {
             name: name.as_ref().to_string(),
             attributes,
+        }
+    }
+
+    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+        let mut v = Vec::new();
+        for (attr, attr_def) in attributes {
+            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
+            v.push(a);
+        }
+        ActivityDef {
+            name,
+            attributes: v,
         }
     }
 }
@@ -326,6 +369,20 @@ impl DomainFileInput {
     }
 }
 
+impl FromStr for DomainFileInput {
+    type Err = ModelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match serde_json::from_str::<DomainFileInput>(s) {
+            Err(_) => match serde_yaml::from_str::<DomainFileInput>(s) {
+                Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
+                Ok(domain) => Ok(domain),
+            },
+            Ok(domain) => Ok(domain),
+        }
+    }
+}
+
 impl From<&ChronicleDomainDef> for DomainFileInput {
     fn from(domain: &ChronicleDomainDef) -> Self {
         let mut file = Self::new(&domain.name);
@@ -340,7 +397,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
             let mut input_attributes = HashMap::new();
             for attr in &agent.attributes {
                 let name = attr.typ.to_string();
-                input_attributes.insert(name, AttributeFileInput::from(attr));
+                input_attributes.insert(name, attr.into());
             }
             file.agents.insert(name.to_string(), input_attributes);
         }
@@ -350,7 +407,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
             let mut input_attributes = HashMap::new();
             for attr in &entity.attributes {
                 let name = attr.typ.to_string();
-                input_attributes.insert(name, AttributeFileInput::from(attr));
+                input_attributes.insert(name, attr.into());
             }
             file.entities.insert(name.to_string(), input_attributes);
         }
@@ -415,21 +472,24 @@ impl ChronicleDomainDef {
         }
 
         for (name, attributes) in model.agents {
-            for (attr, _) in attributes {
-                builder = builder.with_agent(&name, |agent| agent.with_attribute(attr))?;
-            }
+            builder
+                .0
+                .agents
+                .push(AgentDef::from_input(name, attributes))
         }
 
         for (name, attributes) in model.entities {
-            for (attr, _) in attributes {
-                builder = builder.with_entity(&name, |entity| entity.with_attribute(attr))?;
-            }
+            builder
+                .0
+                .entities
+                .push(EntityDef::from_input(name, attributes))
         }
 
         for (name, attributes) in model.activities {
-            for (attr, _) in attributes {
-                builder = builder.with_activity(&name, |activity| activity.with_attribute(attr))?;
-            }
+            builder
+                .0
+                .activities
+                .push(ActivityDef::from_input(name, attributes))
         }
 
         Ok(builder.build())
@@ -494,26 +554,53 @@ pub mod test {
         let file = assert_fs::NamedTempFile::new("test.yml")?;
         file.write_str(
             r#"
-            name: "test"
-            attributes:
-              string:
-                typ: "String"
-            agents:
-              friend:
-                string:
-                  typ: "String"
-            entities:
-              octopi:
-                string:
-                  typ: "String"
-              the sea:
-                string:
-                  typ: "String"
-            activities:
-              gardening:
-                string:
-                  typ: "String"
-             "#,
+    name: "chronicle"
+    attributes:
+      string:
+        typ: "String"
+      int:
+        typ: "Int"
+      bool:
+        typ: "Bool"
+    agents:
+      friends:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    entities:
+      octopi:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      the sea:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    activities:
+      gardening:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      swim about:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+     "#,
         )?;
         Ok(file)
     }
@@ -588,6 +675,63 @@ pub mod test {
     }
 
     #[test]
+    fn from_str_for_domain_input() -> Result<(), Box<dyn std::error::Error>> {
+        let s = r#"
+        name: "chronicle"
+        attributes:
+          string:
+            typ: "String"
+          int:
+            typ: "Int"
+          bool:
+            typ: "Bool"
+        agents:
+          friends:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+        entities:
+          octopi:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+          the sea:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+        activities:
+          gardening:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+          swim about:
+            string:
+              typ: "String"
+            int:
+              typ: "Int"
+            bool:
+              typ: "Bool"
+         "#;
+        let input = DomainFileInput::from_str(s);
+
+        insta::assert_debug_snapshot!(input);
+
+        Ok(())
+    }
+
+    #[test]
     fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_json_file()?;
 
@@ -600,6 +744,7 @@ pub mod test {
         Ok(())
     }
 
+    #[test]
     fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
 

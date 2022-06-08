@@ -1,0 +1,81 @@
+---
+source: chronicle/src/codegen/model.rs
+expression: input
+---
+Ok(
+    DomainFileInput {
+        name: "chronicle",
+        attributes: {
+            "int": AttributeFileInput {
+                typ: Int,
+            },
+            "string": AttributeFileInput {
+                typ: String,
+            },
+            "bool": AttributeFileInput {
+                typ: Bool,
+            },
+        },
+        agents: {
+            "friends": {
+                "string": AttributeFileInput {
+                    typ: String,
+                },
+                "bool": AttributeFileInput {
+                    typ: Bool,
+                },
+                "int": AttributeFileInput {
+                    typ: Int,
+                },
+            },
+        },
+        entities: {
+            "the sea": {
+                "bool": AttributeFileInput {
+                    typ: Bool,
+                },
+                "string": AttributeFileInput {
+                    typ: String,
+                },
+                "int": AttributeFileInput {
+                    typ: Int,
+                },
+            },
+            "octopi": {
+                "bool": AttributeFileInput {
+                    typ: Bool,
+                },
+                "string": AttributeFileInput {
+                    typ: String,
+                },
+                "int": AttributeFileInput {
+                    typ: Int,
+                },
+            },
+        },
+        activities: {
+            "gardening": {
+                "string": AttributeFileInput {
+                    typ: String,
+                },
+                "int": AttributeFileInput {
+                    typ: Int,
+                },
+                "bool": AttributeFileInput {
+                    typ: Bool,
+                },
+            },
+            "swim about": {
+                "bool": AttributeFileInput {
+                    typ: Bool,
+                },
+                "string": AttributeFileInput {
+                    typ: String,
+                },
+                "int": AttributeFileInput {
+                    typ: Int,
+                },
+            },
+        },
+    },
+)
