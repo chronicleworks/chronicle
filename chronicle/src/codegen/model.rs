@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
+use inflector::cases::kebabcase::to_kebab_case;
 use inflector::cases::pascalcase::to_pascal_case;
 use inflector::cases::snakecase::to_snake_case;
 use inflector::string::singularize::to_singular;
@@ -25,11 +26,13 @@ pub struct AttributeDef {
     pub primitive_type: PrimitiveType,
 }
 
-impl AttributeDef {
-    pub fn as_type_name(&self) -> String {
+impl TypeName for AttributeDef {
+    fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.typ))
     }
+}
 
+impl AttributeDef {
     pub fn as_scalar_type(&self) -> String {
         to_pascal_case(&format!("{}Attribute", self.as_type_name()))
     }
@@ -37,6 +40,11 @@ impl AttributeDef {
     pub fn as_property(&self) -> String {
         to_snake_case(&to_singular(&format!("{}Attribute", self.typ)))
     }
+}
+
+/// A name formatted for CLI use - kebab-case, singular, lowercase
+pub trait CliName {
+    fn as_cli_name(&self) -> String;
 }
 
 /// A correctly cased and singularized name for the type
@@ -59,6 +67,15 @@ where
 {
     fn attributes_type_name(&self) -> String {
         to_pascal_case(&format!("{}Attributes", self.as_type_name()))
+    }
+}
+
+impl<T> CliName for T
+where
+    T: TypeName,
+{
+    fn as_cli_name(&self) -> String {
+        to_kebab_case(&*self.as_type_name())
     }
 }
 
