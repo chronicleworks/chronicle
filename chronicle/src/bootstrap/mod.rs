@@ -40,6 +40,8 @@ use std::{
     time::Duration,
 };
 
+use crate::codegen::model::ChronicleDomainDef;
+
 #[allow(dead_code)]
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     Ok(SawtoothSubmitter::new(
@@ -370,17 +372,18 @@ fn print_completions<G: Generator>(gen: G, app: &mut Command) {
     generate(gen, app, app.get_name().to_string(), &mut io::stdout());
 }
 
-pub async fn bootstrap<Query, Mutation>(gql: ChronicleGraphQl<Query, Mutation>)
-where
+pub async fn bootstrap<Query, Mutation>(
+    domain: ChronicleDomainDef,
+    gql: ChronicleGraphQl<Query, Mutation>,
+) where
     Query: ObjectType + 'static + Copy,
     Mutation: ObjectType + 'static + Copy,
 {
-    let matches = cli().get_matches();
+    let matches = cli(domain.clone()).as_cmd().get_matches();
 
     if let Ok(generator) = matches.value_of_t::<Shell>("completions") {
-        let mut app = cli();
         eprintln!("Generating completion file for {}...", generator);
-        print_completions(generator, &mut app);
+        print_completions(generator, &mut cli(domain).as_cmd());
         std::process::exit(0);
     }
 

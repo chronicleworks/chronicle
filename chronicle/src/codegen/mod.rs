@@ -1,12 +1,12 @@
 #![allow(dead_code)]
-mod model;
+pub mod model;
 use std::{io::Write, path::Path};
 
 use genco::prelude::*;
 
-pub use model::{AttributesTypeName, Builder, PrimitiveType, Property, TypeName};
+pub use model::{AttributesTypeName, Builder, CliName, PrimitiveType, Property, TypeName};
 
-use self::model::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
+pub use self::model::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
 
 fn agent_union_type_name() -> String {
     "Agent".to_owned()
@@ -97,11 +97,10 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
                 }
             }
         }
-
     }
 }
 
-fn gen_agent_union(agents: &Vec<AgentDef>) -> rust::Tokens {
+fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -115,7 +114,7 @@ fn gen_agent_union(agents: &Vec<AgentDef>) -> rust::Tokens {
     }
 }
 
-fn gen_entity_union(entities: &Vec<EntityDef>) -> rust::Tokens {
+fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -129,7 +128,7 @@ fn gen_entity_union(entities: &Vec<EntityDef>) -> rust::Tokens {
     }
 }
 
-fn gen_activity_union(activities: &Vec<ActivityDef>) -> rust::Tokens {
+fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -872,10 +871,13 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
         attributes: vec![],
     };
 
+    let builder = &rust::import("chronicle::codegen", "Builder");
+    let primitive_type = &rust::import("chronicle::codegen", "PrimitiveType");
     let tokio = &rust::import("chronicle", "tokio");
 
     let bootstrap = rust::import("chronicle::bootstrap", "bootstrap");
     let chronicle_graphql = rust::import("chronicle::api::chronicle_graphql", "ChronicleGraphQl");
+
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
     #(gen_type_enums(domain))
@@ -898,7 +900,56 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
-        #bootstrap(#chronicle_graphql::new(Query, Mutation)).await
+        let model = #builder::new("chronicle")
+        .with_attribute_type("string", #primitive_type::String)
+        .unwrap()
+        .with_attribute_type("int", #primitive_type::Int)
+        .unwrap()
+        .with_attribute_type("bool", #primitive_type::Bool)
+        .unwrap()
+        .with_entity("octopi", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_entity("the sea", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_activity("gardening", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_activity("swim about", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_agent("friends", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .build();
+
+        #bootstrap(model, #chronicle_graphql::new(Query, Mutation)).await
     }
 
     }

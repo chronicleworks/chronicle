@@ -1,5 +1,5 @@
-use chronicle::tokio;
 use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
+use chronicle::{tokio, Builder, PrimitiveType};
 use main::{Mutation, Query};
 
 #[allow(dead_code)]
@@ -8,7 +8,55 @@ mod main;
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
 pub async fn main() {
-    bootstrap(ChronicleGraphQl::new(Query, Mutation)).await
+    let model = Builder::new("chronicle")
+        .with_attribute_type("string", PrimitiveType::String)
+        .unwrap()
+        .with_attribute_type("int", PrimitiveType::Int)
+        .unwrap()
+        .with_attribute_type("bool", PrimitiveType::Bool)
+        .unwrap()
+        .with_entity("octopi", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_entity("the sea", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_activity("gardening", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_activity("swim about", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .with_agent("friends", |b| {
+            b.with_attribute("string")
+                .unwrap()
+                .with_attribute("int")
+                .unwrap()
+                .with_attribute("bool")
+        })
+        .unwrap()
+        .build();
+    bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
 }
 
 #[cfg(test)]
@@ -26,7 +74,7 @@ mod test {
     use std::time::Duration;
     use tempfile::TempDir;
     use tracing::Level;
-    use tracing_log::log::LevelFilter;
+    use tracing_log::log;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -38,7 +86,7 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        tracing_log::LogTracer::init_with_filter(LevelFilter::Trace).ok();
+        tracing_log::LogTracer::init_with_filter(log::LevelFilter::Trace).ok();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)
