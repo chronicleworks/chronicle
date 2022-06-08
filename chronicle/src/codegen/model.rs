@@ -296,6 +296,14 @@ pub struct AttributeFileInput {
     pub typ: PrimitiveType,
 }
 
+impl From<&AttributeDef> for AttributeFileInput {
+    fn from(attr: &AttributeDef) -> Self {
+        Self {
+            typ: attr.primitive_type,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct DomainFileInput {
     pub name: String,
@@ -482,5 +490,17 @@ pub mod test {
         insta::assert_debug_snapshot!(domain);
 
         Ok(())
+    }
+
+    use super::{AttributeDef, AttributeFileInput, PrimitiveType};
+
+    #[test]
+    fn test_from_attribute_def_for_attribute_file_input() {
+        let attr = AttributeDef {
+            typ: "string".to_string(),
+            primitive_type: PrimitiveType::String,
+        };
+        let input = AttributeFileInput::from(&attr);
+        insta::assert_debug_snapshot!(input);
     }
 }
