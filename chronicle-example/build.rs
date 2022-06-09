@@ -26,6 +26,8 @@ fn main() {
                 .with_attribute("bool")
         })
         .unwrap()
+        .with_entity("shade", |b| Ok(b))
+        .unwrap()
         .with_activity("gardening", |b| {
             b.with_attribute("string")
                 .unwrap()
