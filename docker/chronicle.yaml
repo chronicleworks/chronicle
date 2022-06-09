@@ -57,7 +57,7 @@ services:
     environment: &rustenv
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-    image: &chronicleImage chronicle-untyped:${ISOLATION_ID:-local}
+    image: &chronicleImage chronicle:${ISOLATION_ID:-local}
     entrypoint: |
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp \
         -C tcp://validator:4004 \
@@ -72,10 +72,10 @@ services:
     entrypoint: |
       /bin/sh -xc "/usr/local/bin/chronicle-untyped \
         -c /root/.chronicle/config.toml \
-        --sawtooth tcp://validator:4004
-        --instrument http://jaeger:14268/api/traces"
+        --sawtooth tcp://validator:4004 \
+        --instrument http://jaeger:14268/api/traces \
         serve-graphql \
-        --interface 0.0.0.0:9982 \
+        --interface 0.0.0.0:9982"
     expose:
       - 9982
     ports:

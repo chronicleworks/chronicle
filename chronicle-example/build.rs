@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use chronicle::codegen::ChronicleDomainDef;
-use chronicle::{generate_chronicle_domain_schema, Builder, PrimitiveType};
+use chronicle::generate_chronicle_domain_schema;
 
 fn main() {
     let s = r#"
@@ -14,7 +14,7 @@ fn main() {
       bool:
         typ: "Bool"
     agents:
-      pals:
+      friend:
         string:
           typ: "String"
         int:

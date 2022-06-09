@@ -1,9 +1,18 @@
 use std::process::Command;
 
-use chronicle::{generate_chronicle_domain_schema, Builder};
+use chronicle::{codegen::ChronicleDomainDef, generate_chronicle_domain_schema};
 
 fn main() {
-    let model = Builder::new("chronicle").build();
+    let s = r#"
+    name: "untyped"
+    attributes: {}
+    agents: {}
+    entities: {}
+    activities: {}
+    "#
+    .to_string();
+
+    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
     generate_chronicle_domain_schema(model, "src/main.rs");
 

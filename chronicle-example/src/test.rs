@@ -1,7 +1,6 @@
 use chronicle::codegen::ChronicleDomainDef;
 use chronicle::tokio;
 use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
-use chronicle::{tokio, Builder, PrimitiveType};
 use main::{Mutation, Query};
 
 #[allow(dead_code)]
@@ -20,7 +19,7 @@ pub async fn main() {
       bool:
         typ: "Bool"
     agents:
-      pals:
+      friend:
         string:
           typ: "String"
         int:

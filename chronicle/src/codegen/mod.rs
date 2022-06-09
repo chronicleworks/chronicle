@@ -927,8 +927,6 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     };
 
     let chronicledomaindef = &rust::import("chronicle::codegen", "ChronicleDomainDef");
-    let builder = &rust::import("chronicle::codegen", "Builder");
-    let primitive_type = &rust::import("chronicle::codegen", "PrimitiveType");
     let tokio = &rust::import("chronicle", "tokio");
 
     let bootstrap = rust::import("chronicle::bootstrap", "bootstrap");

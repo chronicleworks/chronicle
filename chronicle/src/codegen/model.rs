@@ -1,3 +1,5 @@
+use std::{collections::BTreeMap, path::Path, str::FromStr};
+
 use inflector::cases::kebabcase::to_kebab_case;
 use inflector::cases::pascalcase::to_pascal_case;
 use inflector::cases::snakecase::to_snake_case;
@@ -19,7 +21,7 @@ pub enum PrimitiveType {
     Int,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributeDef {
     typ: String,
     pub primitive_type: PrimitiveType,
@@ -46,11 +48,6 @@ impl AttributeDef {
             primitive_type: attr.typ,
         }
     }
-}
-
-/// A name formatted for CLI use - kebab-case, singular, lowercase
-pub trait CliName {
-    fn as_cli_name(&self) -> String;
 }
 
 /// A name formatted for CLI use - kebab-case, singular, lowercase
@@ -99,7 +96,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -119,7 +116,10 @@ impl AgentDef {
         }
     }
 
-    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+    pub fn from_input(
+        name: String,
+        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
+    ) -> Self {
         let mut v = Vec::new();
         for (attr, attr_def) in attributes {
             let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
@@ -132,7 +132,7 @@ impl AgentDef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -152,7 +152,10 @@ impl EntityDef {
         }
     }
 
-    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+    pub fn from_input(
+        name: String,
+        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
+    ) -> Self {
         let mut v = Vec::new();
         for (attr, attr_def) in attributes {
             let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
@@ -165,7 +168,7 @@ impl EntityDef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityDef {
     pub(crate) name: String,
     pub attributes: Vec<AttributeDef>,
@@ -184,7 +187,10 @@ impl ActivityDef {
             attributes,
         }
     }
-    pub fn from_input(name: String, attributes: HashMap<String, AttributeFileInput>) -> Self {
+    pub fn from_input(
+        name: String,
+        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
+    ) -> Self {
         let mut v = Vec::new();
         for (attr, attr_def) in attributes {
             let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
@@ -197,28 +203,13 @@ impl ActivityDef {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChronicleDomainDef {
     name: String,
-    pub attributes: Vec<AttributeDef>,
-    pub agents: Vec<AgentDef>,
-    pub entities: Vec<EntityDef>,
-    pub activities: Vec<ActivityDef>,
-}
-
-impl ChronicleDomainDef {
-    pub fn build(name: &str) -> Builder {
-        Builder(ChronicleDomainDef {
-            name: name.to_string(),
-            attributes: vec![],
-            agents: vec![],
-            activities: vec![],
-            entities: vec![],
-        })
-    }
-    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
-        self.attributes.iter().find(|a| a.typ == attr).cloned()
-    }
+    pub(crate) attributes: Vec<AttributeDef>,
+    pub(crate) agents: Vec<AgentDef>,
+    pub(crate) entities: Vec<EntityDef>,
+    pub(crate) activities: Vec<ActivityDef>,
 }
 
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
@@ -374,23 +365,20 @@ impl From<&AttributeDef> for AttributeFileInput {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct DomainFileInput {
     pub name: String,
-    pub attributes: HashMap<String, AttributeFileInput>,
-    pub agents: HashMap<String, HashMap<String, AttributeFileInput>>,
-    pub entities: HashMap<String, HashMap<String, AttributeFileInput>>,
-    pub activities: HashMap<String, HashMap<String, AttributeFileInput>>,
+    pub attributes: BTreeMap<String, AttributeFileInput>,
+    pub agents: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
+    pub entities: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
+    pub activities: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
 }
 
 impl DomainFileInput {
     pub fn new(name: impl AsRef<str>) -> Self {
         DomainFileInput {
             name: name.as_ref().to_string(),
-            attributes: HashMap::new(),
-            agents: HashMap::new(),
-            entities: HashMap::new(),
-            activities: HashMap::new(),
+            ..Default::default()
         }
     }
 }
@@ -420,7 +408,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 
         for agent in &domain.agents {
             let name = &agent.name;
-            let mut input_attributes = HashMap::new();
+            let mut input_attributes = BTreeMap::new();
             for attr in &agent.attributes {
                 let name = attr.typ.to_string();
                 input_attributes.insert(name, attr.into());
@@ -430,7 +418,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 
         for entity in &domain.entities {
             let name = &entity.name;
-            let mut input_attributes = HashMap::new();
+            let mut input_attributes = BTreeMap::new();
             for attr in &entity.attributes {
                 let name = attr.typ.to_string();
                 input_attributes.insert(name, attr.into());
@@ -440,7 +428,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 
         for activity in &domain.activities {
             let name = &activity.name;
-            let mut input_attributes = HashMap::new();
+            let mut input_attributes = BTreeMap::new();
             for attr in &activity.attributes {
                 let name = attr.typ.to_string();
                 input_attributes.insert(name, AttributeFileInput::from(attr));
@@ -452,16 +440,11 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ChronicleDomainDef {
-    name: String,
-    pub attributes: Vec<AttributeDef>,
-    pub agents: Vec<AgentDef>,
-    pub entities: Vec<EntityDef>,
-    pub activities: Vec<ActivityDef>,
-}
-
 impl ChronicleDomainDef {
+    pub fn build(name: &str) -> Builder {
+        Builder::new(name)
+    }
+
     pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
@@ -501,21 +484,21 @@ impl ChronicleDomainDef {
             builder
                 .0
                 .agents
-                .push(AgentDef::from_input(name, attributes))
+                .push(AgentDef::from_input(name, attributes.into_iter()))
         }
 
         for (name, attributes) in model.entities {
             builder
                 .0
                 .entities
-                .push(EntityDef::from_input(name, attributes))
+                .push(EntityDef::from_input(name, attributes.into_iter()))
         }
 
         for (name, attributes) in model.activities {
             builder
                 .0
                 .activities
-                .push(ActivityDef::from_input(name, attributes))
+                .push(ActivityDef::from_input(name, attributes.into_iter()))
         }
 
         Ok(builder.build())
@@ -752,7 +735,55 @@ pub mod test {
          "#;
         let input = DomainFileInput::from_str(s);
 
-        insta::assert_debug_snapshot!(input);
+        insta::assert_yaml_snapshot!(input.unwrap(), @r###"
+        ---
+        name: chronicle
+        attributes:
+          bool:
+            typ: Bool
+          int:
+            typ: Int
+          string:
+            typ: String
+        agents:
+          friends:
+            bool:
+              typ: Bool
+            int:
+              typ: Int
+            string:
+              typ: String
+        entities:
+          octopi:
+            bool:
+              typ: Bool
+            int:
+              typ: Int
+            string:
+              typ: String
+          the sea:
+            bool:
+              typ: Bool
+            int:
+              typ: Int
+            string:
+              typ: String
+        activities:
+          gardening:
+            bool:
+              typ: Bool
+            int:
+              typ: Int
+            string:
+              typ: String
+          swim about:
+            bool:
+              typ: Bool
+            int:
+              typ: Int
+            string:
+              typ: String
+        "###);
 
         Ok(())
     }
@@ -765,7 +796,32 @@ pub mod test {
 
         domain.entities.sort();
 
-        insta::assert_debug_snapshot!(domain);
+        insta::assert_yaml_snapshot!(domain, @r###"
+        ---
+        name: chronicle
+        attributes:
+          - typ: string
+            primitive_type: String
+        agents:
+          - name: friend
+            attributes:
+              - typ: string
+                primitive_type: String
+        entities:
+          - name: octopi
+            attributes:
+              - typ: string
+                primitive_type: String
+          - name: the sea
+            attributes:
+              - typ: string
+                primitive_type: String
+        activities:
+          - name: gardening
+            attributes:
+              - typ: string
+                primitive_type: String
+        "###);
 
         Ok(())
     }
@@ -778,7 +834,60 @@ pub mod test {
 
         domain.entities.sort();
 
-        insta::assert_debug_snapshot!(domain);
+        insta::assert_yaml_snapshot!(domain, @r###"
+        ---
+        name: chronicle
+        attributes:
+          - typ: bool
+            primitive_type: Bool
+          - typ: int
+            primitive_type: Int
+          - typ: string
+            primitive_type: String
+        agents:
+          - name: friends
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        entities:
+          - name: octopi
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+          - name: the sea
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        activities:
+          - name: gardening
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+          - name: swim about
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        "###);
 
         Ok(())
     }
@@ -789,10 +898,62 @@ pub mod test {
     fn test_chronicle_domain_def_from_str() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
         let s: String = std::fs::read_to_string(&file.path())?;
-        let mut domain = ChronicleDomainDef::from_str(&s)?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
 
-        domain.entities.sort();
-        insta::assert_debug_snapshot!(domain);
+        insta::assert_yaml_snapshot!(domain, @r###"
+        ---
+        name: chronicle
+        attributes:
+          - typ: bool
+            primitive_type: Bool
+          - typ: int
+            primitive_type: Int
+          - typ: string
+            primitive_type: String
+        agents:
+          - name: friends
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        entities:
+          - name: octopi
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+          - name: the sea
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        activities:
+          - name: gardening
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+          - name: swim about
+            attributes:
+              - typ: bool
+                primitive_type: Bool
+              - typ: int
+                primitive_type: Int
+              - typ: string
+                primitive_type: String
+        "###);
 
         Ok(())
     }
@@ -804,7 +965,25 @@ pub mod test {
         let domain = ChronicleDomainDef::from_str(&s)?;
         let input = DomainFileInput::from(&domain);
 
-        insta::assert_debug_snapshot!(input);
+        insta::assert_yaml_snapshot!(input, @r###"
+        ---
+        name: test
+        attributes:
+          string:
+            typ: String
+        agents:
+          friend:
+            string:
+              typ: String
+        entities:
+          octopi:
+            string:
+              typ: String
+        activities:
+          gardening:
+            string:
+              typ: String
+        "###);
 
         Ok(())
     }
@@ -818,7 +997,10 @@ pub mod test {
             primitive_type: PrimitiveType::String,
         };
         let input = AttributeFileInput::from(&attr);
-        insta::assert_debug_snapshot!(input);
+        insta::assert_yaml_snapshot!(input, @r###"
+        ---
+        typ: String
+        "###);
     }
 
     #[test]
@@ -827,7 +1009,28 @@ pub mod test {
         let s: String = std::fs::read_to_string(&file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
 
-        insta::assert_debug_snapshot!(domain.to_json_string().unwrap());
+        insta::assert_yaml_snapshot!(domain, @r###"
+        ---
+        name: test
+        attributes:
+          - typ: string
+            primitive_type: String
+        agents:
+          - name: friend
+            attributes:
+              - typ: string
+                primitive_type: String
+        entities:
+          - name: octopi
+            attributes:
+              - typ: string
+                primitive_type: String
+        activities:
+          - name: gardening
+            attributes:
+              - typ: string
+                primitive_type: String
+        "###);
 
         Ok(())
     }
@@ -838,7 +1041,28 @@ pub mod test {
         let s: String = std::fs::read_to_string(&file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
 
-        insta::assert_debug_snapshot!(domain.to_yaml_string().unwrap());
+        insta::assert_yaml_snapshot!(domain, @r###"
+        ---
+        name: test
+        attributes:
+          - typ: string
+            primitive_type: String
+        agents:
+          - name: friend
+            attributes:
+              - typ: string
+                primitive_type: String
+        entities:
+          - name: octopi
+            attributes:
+              - typ: string
+                primitive_type: String
+        activities:
+          - name: gardening
+            attributes:
+              - typ: string
+                primitive_type: String
+        "###);
 
         Ok(())
     }
