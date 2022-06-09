@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1542
+assertion_line: 1545
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {

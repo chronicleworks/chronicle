@@ -19,19 +19,19 @@ services:
       - "4004:4004"
       - "8800:8800"
       - "5050:5050"
-    entrypoint: |
-      /bin/bash -xc "sawadm keygen && sawtooth keygen \
-        && sawset genesis -k \
-          /etc/sawtooth/keys/validator.priv -o config-genesis.batch \
-        && sawset proposal create -k /etc/sawtooth/keys/validator.priv \
-            sawtooth.consensus.min_wait_time=0 \
-            sawtooth.consensus.algorithm.name=devmode \
-            sawtooth.consensus.algorithm.version=1.0 \
-            sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch \
-        && sawadm genesis config-genesis.batch consensus-settings.batch \
-        && sawtooth-validator -v --scheduler parallel \
-              --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004 \
-              --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
+    entrypoint: >
+      /bin/bash -xc "sawadm keygen && sawtooth keygen
+      && sawset genesis -k
+      /etc/sawtooth/keys/validator.priv -o config-genesis.batch
+      && sawset proposal create -k /etc/sawtooth/keys/validator.priv
+      sawtooth.consensus.min_wait_time=0
+      sawtooth.consensus.algorithm.name=devmode
+      sawtooth.consensus.algorithm.version=1.0
+      sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
+      && sawadm genesis config-genesis.batch consensus-settings.batch
+      && sawtooth-validator -v --scheduler parallel
+      --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004
+      --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
     volumes: *rngVolumes
 
   devmode-engine:
@@ -57,11 +57,11 @@ services:
     environment: &rustenv
       - RUST_BACKTRACE=full
       - RUST_LOG=debug
-    image: &chronicleImage chronicle-untyped:${ISOLATION_ID:-local}
-    entrypoint: |
-      /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp \
-        -C tcp://validator:4004 \
-        --instrument http://jaeger:14268/api/traces"
+    image: &chronicleImage chronicle:${ISOLATION_ID:-local}
+    entrypoint: >
+      /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
+      -C tcp://validator:4004
+      --instrument http://jaeger:14268/api/traces"
     depends_on:
       - validator
     volumes: *rngVolumes
@@ -69,12 +69,13 @@ services:
   chronicle-sawtooth-api:
     environment: *rustenv
     image: *chronicleImage
-    entrypoint: |
-      /bin/sh -xc "/usr/local/bin/chronicle-untyped \
-        -c /root/.chronicle/config.toml \
-        --sawtooth tcp://validator:4004 --gql \
-        --gql-interface 0.0.0.0:9982 \
-        --instrument http://jaeger:14268/api/traces"
+    entrypoint: >
+      /bin/sh -xc "/usr/local/bin/chronicle-untyped
+      -c /root/.chronicle/config.toml
+      --sawtooth tcp://validator:4004
+      --instrument http://jaeger:14268/api/traces
+      serve-graphql
+      --interface 0.0.0.0:9982"
     expose:
       - 9982
     ports:

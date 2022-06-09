@@ -1,3 +1,4 @@
+use chronicle::codegen::ChronicleDomainDef;
 use chronicle::tokio;
 use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
 use main::{Mutation, Query};
@@ -8,7 +9,59 @@ mod main;
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
 pub async fn main() {
-    bootstrap(ChronicleGraphQl::new(Query, Mutation)).await
+    let s = r#"
+    name: "chronicle"
+    attributes:
+      string:
+        typ: "String"
+      int:
+        typ: "Int"
+      bool:
+        typ: "Bool"
+    agents:
+      friend:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    entities:
+      octopi:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      the sea:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+    activities:
+      gardening:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+      swim about:
+        string:
+          typ: "String"
+        int:
+          typ: "Int"
+        bool:
+          typ: "Bool"
+     "#
+    .to_string();
+
+    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
+
+    bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
 }
 
 #[cfg(test)]
@@ -26,7 +79,7 @@ mod test {
     use std::time::Duration;
     use tempfile::TempDir;
     use tracing::Level;
-    use tracing_log::log::LevelFilter;
+    use tracing_log::log;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -38,7 +91,7 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        tracing_log::LogTracer::init_with_filter(LevelFilter::Trace).ok();
+        tracing_log::LogTracer::init_with_filter(log::LevelFilter::Trace).ok();
         tracing_subscriber::fmt()
             .pretty()
             .with_max_level(Level::TRACE)

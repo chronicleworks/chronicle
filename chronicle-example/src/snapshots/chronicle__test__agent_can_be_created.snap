@@ -1,7 +1,0 @@
----
-source: cli/src/main.rs
-assertion_line: 686
-expression: create
----
-[data.agent]
-context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'

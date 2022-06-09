@@ -1,12 +1,12 @@
 #![allow(dead_code)]
-mod model;
+pub mod model;
 use std::{io::Write, path::Path};
 
 use genco::prelude::*;
 
-pub use model::{AttributesTypeName, Builder, PrimitiveType, Property, TypeName};
+pub use model::{AttributesTypeName, Builder, CliName, PrimitiveType, Property, TypeName};
 
-use self::model::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
+pub use self::model::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
 
 fn agent_union_type_name() -> String {
     "Agent".to_owned()
@@ -97,11 +97,10 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
                 }
             }
         }
-
     }
 }
 
-fn gen_agent_union(agents: &Vec<AgentDef>) -> rust::Tokens {
+fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -115,7 +114,7 @@ fn gen_agent_union(agents: &Vec<AgentDef>) -> rust::Tokens {
     }
 }
 
-fn gen_entity_union(entities: &Vec<EntityDef>) -> rust::Tokens {
+fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -129,7 +128,7 @@ fn gen_entity_union(entities: &Vec<EntityDef>) -> rust::Tokens {
     }
 }
 
-fn gen_activity_union(activities: &Vec<ActivityDef>) -> rust::Tokens {
+fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
@@ -927,10 +926,12 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
         attributes: vec![],
     };
 
+    let chronicledomaindef = &rust::import("chronicle::codegen", "ChronicleDomainDef");
     let tokio = &rust::import("chronicle", "tokio");
 
     let bootstrap = rust::import("chronicle::bootstrap", "bootstrap");
     let chronicle_graphql = rust::import("chronicle::api::chronicle_graphql", "ChronicleGraphQl");
+
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
     #(gen_type_enums(domain))
@@ -953,7 +954,9 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     #[#tokio::main]
     pub async fn main() {
-        #bootstrap(#chronicle_graphql::new(Query, Mutation)).await
+        let model = #chronicledomaindef::from_input_string(#_(#(&domain.to_json_string().unwrap()))).unwrap();
+
+        #bootstrap(model, #chronicle_graphql::new(Query, Mutation)).await
     }
 
     }

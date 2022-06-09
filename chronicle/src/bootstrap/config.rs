@@ -1,9 +1,7 @@
-use super::CliError;
-use clap::ArgMatches;
+use super::{CliError, CliModel, SubCommand};
 use common::signing::DirectoryStoredKeys;
-use serde_derive::{Deserialize, Serialize};
-
 use question::{Answer, Question};
+use serde_derive::{Deserialize, Serialize};
 
 use std::path::{Path, PathBuf};
 use url::Url;
@@ -30,8 +28,13 @@ pub struct Config {
     pub validator: ValidatorConfig,
 }
 
-pub fn handle_config_and_init(matches: &ArgMatches) -> Result<Config, CliError> {
-    let path = matches.value_of("config").unwrap().to_owned();
+pub fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
+    let path = model
+        .as_cmd()
+        .get_matches()
+        .value_of("config")
+        .unwrap()
+        .to_owned();
     let path = shellexpand::tilde(&path);
     let path = PathBuf::from(&*path);
 

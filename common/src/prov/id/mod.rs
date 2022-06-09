@@ -84,20 +84,20 @@ impl AsRef<str> for &Name {
     }
 }
 
-pub trait NamePart<'a> {
-    fn name_part(&'a self) -> &'a Name;
+pub trait NamePart {
+    fn name_part(&self) -> &Name;
 }
 
-pub trait UuidPart<'a> {
-    fn uuid_part(&'a self) -> &'a Uuid;
+pub trait UuidPart {
+    fn uuid_part(&self) -> &Uuid;
 }
 
-pub trait SignaturePart<'a> {
-    fn signature_part(&'a self) -> &'a str;
+pub trait SignaturePart {
+    fn signature_part(&self) -> &str;
 }
 
-pub trait PublicKeyPart<'a> {
-    fn public_key_part(&'a self) -> &'a str;
+pub trait PublicKeyPart {
+    fn public_key_part(&self) -> &str;
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
@@ -194,14 +194,14 @@ impl AttachmentId {
     }
 }
 
-impl<'a> NamePart<'a> for AttachmentId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for AttachmentId {
+    fn name_part(&self) -> &Name {
         &self.name
     }
 }
 
-impl<'a> SignaturePart<'a> for AttachmentId {
-    fn signature_part(&'a self) -> &'a str {
+impl SignaturePart for AttachmentId {
+    fn signature_part(&self) -> &str {
         &self.signature
     }
 }
@@ -256,14 +256,14 @@ impl IdentityId {
     }
 }
 
-impl<'a> NamePart<'a> for IdentityId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for IdentityId {
+    fn name_part(&self) -> &Name {
         &self.name
     }
 }
 
-impl<'a> PublicKeyPart<'a> for IdentityId {
-    fn public_key_part(&'a self) -> &'a str {
+impl PublicKeyPart for IdentityId {
+    fn public_key_part(&self) -> &str {
         &self.public_key
     }
 }
@@ -298,8 +298,8 @@ impl Display for DomaintypeId {
     }
 }
 
-impl<'a> NamePart<'a> for DomaintypeId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for DomaintypeId {
+    fn name_part(&self) -> &Name {
         &self.0
     }
 }
@@ -316,7 +316,6 @@ impl<'a> TryFrom<Iri<'a>> for DomaintypeId {
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
             [_, name] => Ok(Self(Name::from(name.as_str()))),
-
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }
     }
@@ -349,14 +348,14 @@ impl NamespaceId {
     }
 }
 
-impl<'a> NamePart<'a> for NamespaceId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for NamespaceId {
+    fn name_part(&self) -> &Name {
         &self.name
     }
 }
 
-impl<'a> UuidPart<'a> for NamespaceId {
-    fn uuid_part(&'a self) -> &'a Uuid {
+impl UuidPart for NamespaceId {
+    fn uuid_part(&self) -> &Uuid {
         &self.uuid
     }
 }
@@ -397,8 +396,8 @@ impl EntityId {
     }
 }
 
-impl<'a> NamePart<'a> for EntityId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for EntityId {
+    fn name_part(&self) -> &Name {
         &self.0
     }
 }
@@ -436,8 +435,8 @@ impl AgentId {
     }
 }
 
-impl<'a> NamePart<'a> for AgentId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for AgentId {
+    fn name_part(&self) -> &Name {
         &self.0
     }
 }
@@ -475,8 +474,8 @@ impl ActivityId {
     }
 }
 
-impl<'a> NamePart<'a> for ActivityId {
-    fn name_part(&'a self) -> &'a Name {
+impl NamePart for ActivityId {
+    fn name_part(&self) -> &Name {
         &self.0
     }
 }
