@@ -11,7 +11,6 @@ custom_error::custom_error! {pub ModelError
     ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
     ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
     ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
-    ParseDomainError = "Domain not parsable",
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -116,19 +115,27 @@ impl AgentDef {
         }
     }
 
-    pub fn from_input(
+    pub fn from_input<'a>(
         name: String,
-        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
-    ) -> Self {
-        let mut v = Vec::new();
-        for (attr, attr_def) in attributes {
-            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
-            v.push(a);
-        }
-        AgentDef {
+        attributes: &BTreeMap<String, AttributeFileInput>,
+        attribute_references: impl Iterator<Item = &'a AttributeRef>,
+    ) -> Result<Self, ModelError> {
+        Ok(Self {
             name,
-            attributes: v,
-        }
+            attributes: attribute_references
+                .map(|x| {
+                    attributes
+                        .get(&*x.0)
+                        .ok_or_else(|| ModelError::AttributeNotDefined {
+                            attr: x.0.to_owned(),
+                        })
+                        .map(|attr| AttributeDef {
+                            typ: x.0.to_owned(),
+                            primitive_type: attr.typ,
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        })
     }
 }
 
@@ -152,19 +159,27 @@ impl EntityDef {
         }
     }
 
-    pub fn from_input(
+    pub fn from_input<'a>(
         name: String,
-        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
-    ) -> Self {
-        let mut v = Vec::new();
-        for (attr, attr_def) in attributes {
-            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
-            v.push(a);
-        }
-        EntityDef {
+        attributes: &BTreeMap<String, AttributeFileInput>,
+        attribute_references: impl Iterator<Item = &'a AttributeRef>,
+    ) -> Result<Self, ModelError> {
+        Ok(Self {
             name,
-            attributes: v,
-        }
+            attributes: attribute_references
+                .map(|x| {
+                    attributes
+                        .get(&*x.0)
+                        .ok_or_else(|| ModelError::AttributeNotDefined {
+                            attr: x.0.to_owned(),
+                        })
+                        .map(|attr| AttributeDef {
+                            typ: x.0.to_owned(),
+                            primitive_type: attr.typ,
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        })
     }
 }
 
@@ -187,19 +202,28 @@ impl ActivityDef {
             attributes,
         }
     }
-    pub fn from_input(
+
+    pub fn from_input<'a>(
         name: String,
-        attributes: impl Iterator<Item = (String, AttributeFileInput)>,
-    ) -> Self {
-        let mut v = Vec::new();
-        for (attr, attr_def) in attributes {
-            let a: AttributeDef = AttributeDef::from_attribute_file_input(attr, attr_def);
-            v.push(a);
-        }
-        ActivityDef {
+        attributes: &BTreeMap<String, AttributeFileInput>,
+        attribute_references: impl Iterator<Item = &'a AttributeRef>,
+    ) -> Result<Self, ModelError> {
+        Ok(Self {
             name,
-            attributes: v,
-        }
+            attributes: attribute_references
+                .map(|x| {
+                    attributes
+                        .get(&*x.0)
+                        .ok_or_else(|| ModelError::AttributeNotDefined {
+                            attr: x.0.to_owned(),
+                        })
+                        .map(|attr| AttributeDef {
+                            typ: x.0.to_owned(),
+                            primitive_type: attr.typ,
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        })
     }
 }
 
@@ -354,7 +378,8 @@ impl Builder {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct AttributeFileInput {
-    pub typ: PrimitiveType,
+    #[serde(rename = "type")]
+    typ: PrimitiveType,
 }
 
 impl From<&AttributeDef> for AttributeFileInput {
@@ -365,13 +390,57 @@ impl From<&AttributeDef> for AttributeFileInput {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+
+pub struct AttributeRef(String);
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct ResourceDef {
+    pub attributes: Vec<AttributeRef>,
+}
+
+impl From<&AgentDef> for ResourceDef {
+    fn from(agent: &AgentDef) -> Self {
+        Self {
+            attributes: agent
+                .attributes
+                .iter()
+                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .collect(),
+        }
+    }
+}
+
+impl From<&EntityDef> for ResourceDef {
+    fn from(entity: &EntityDef) -> Self {
+        Self {
+            attributes: entity
+                .attributes
+                .iter()
+                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .collect(),
+        }
+    }
+}
+impl From<&ActivityDef> for ResourceDef {
+    fn from(activity: &ActivityDef) -> Self {
+        Self {
+            attributes: activity
+                .attributes
+                .iter()
+                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .collect(),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct DomainFileInput {
     pub name: String,
     pub attributes: BTreeMap<String, AttributeFileInput>,
-    pub agents: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
-    pub entities: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
-    pub activities: BTreeMap<String, BTreeMap<String, AttributeFileInput>>,
+    pub agents: BTreeMap<String, ResourceDef>,
+    pub entities: BTreeMap<String, ResourceDef>,
+    pub activities: BTreeMap<String, ResourceDef>,
 }
 
 impl DomainFileInput {
@@ -406,35 +475,23 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
             file.attributes.insert(name, attr.into());
         }
 
-        for agent in &domain.agents {
-            let name = &agent.name;
-            let mut input_attributes = BTreeMap::new();
-            for attr in &agent.attributes {
-                let name = attr.typ.to_string();
-                input_attributes.insert(name, attr.into());
-            }
-            file.agents.insert(name.to_string(), input_attributes);
-        }
+        file.agents = domain
+            .agents
+            .iter()
+            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .collect();
 
-        for entity in &domain.entities {
-            let name = &entity.name;
-            let mut input_attributes = BTreeMap::new();
-            for attr in &entity.attributes {
-                let name = attr.typ.to_string();
-                input_attributes.insert(name, attr.into());
-            }
-            file.entities.insert(name.to_string(), input_attributes);
-        }
+        file.entities = domain
+            .entities
+            .iter()
+            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .collect();
 
-        for activity in &domain.activities {
-            let name = &activity.name;
-            let mut input_attributes = BTreeMap::new();
-            for attr in &activity.attributes {
-                let name = attr.typ.to_string();
-                input_attributes.insert(name, AttributeFileInput::from(attr));
-            }
-            file.activities.insert(name.to_string(), input_attributes);
-        }
+        file.activities = domain
+            .activities
+            .iter()
+            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .collect();
 
         file
     }
@@ -469,36 +526,44 @@ impl ChronicleDomainDef {
 
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
+
         let file: String = std::fs::read_to_string(&path)?;
-        Self::from_str(&file)
+
+        match path.extension() {
+            Some(ext) if ext == "json" => Self::from_json(&*file),
+            _ => Self::from_yaml(&*file),
+        }
     }
 
     fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
         let mut builder = Builder::new(model.name);
 
-        for (name, attr) in model.attributes {
+        for (name, attr) in model.attributes.iter() {
             builder = builder.with_attribute_type(name, attr.typ)?;
         }
 
-        for (name, attributes) in model.agents {
-            builder
-                .0
-                .agents
-                .push(AgentDef::from_input(name, attributes.into_iter()))
+        for (name, def) in model.agents {
+            builder.0.agents.push(AgentDef::from_input(
+                name,
+                &model.attributes,
+                def.attributes.iter(),
+            )?)
         }
 
-        for (name, attributes) in model.entities {
-            builder
-                .0
-                .entities
-                .push(EntityDef::from_input(name, attributes.into_iter()))
+        for (name, def) in model.entities {
+            builder.0.entities.push(EntityDef::from_input(
+                name,
+                &model.attributes,
+                def.attributes.iter(),
+            )?)
         }
 
-        for (name, attributes) in model.activities {
-            builder
-                .0
-                .activities
-                .push(ActivityDef::from_input(name, attributes.into_iter()))
+        for (name, def) in model.activities {
+            builder.0.activities.push(ActivityDef::from_input(
+                name,
+                &model.attributes,
+                def.attributes.iter(),
+            )?)
         }
 
         Ok(builder.build())
@@ -517,17 +582,12 @@ impl ChronicleDomainDef {
     }
 }
 
+/// Parse from a yaml formatted string
 impl FromStr for ChronicleDomainDef {
     type Err = ModelError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match Self::from_yaml(s) {
-            Err(_) => match Self::from_json(s) {
-                Err(_) => Err(ModelError::ParseDomainError),
-                Ok(domain) => Ok(domain),
-            },
-            Ok(domain) => Ok(domain),
-        }
+        Self::from_yaml(s)
     }
 }
 
@@ -565,50 +625,40 @@ pub mod test {
             r#"
     name: "chronicle"
     attributes:
-      string:
-        typ: "String"
-      int:
-        typ: "Int"
-      bool:
-        typ: "Bool"
+      String:
+        type: "String"
+      Int:
+        type: "Int"
+      Bool:
+        type: "Bool"
     agents:
       friends:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
     entities:
       octopi:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
       the sea:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
     activities:
       gardening:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
       swim about:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
      "#,
         )?;
         Ok(file)
@@ -622,20 +672,20 @@ pub mod test {
             r#"
         name: "test"
         attributes:
-          string:
-            typ: "String"
+          String:
+            type: String
         agents:
           friend:
-            string:
-              typ: "String"
+            attributes:
+              - String
         entities:
           octopi:
-            string:
-              typ: "String"
+            attributes:
+              - String
         activities:
           gardening:
-            string:
-              typ: "String"
+            attributes:
+              - String
          "#,
         )?;
         Ok(file)
@@ -647,145 +697,40 @@ pub mod test {
             r#" {
                 "name": "chronicle",
                 "attributes": {
-                  "string": {
-                    "typ": "String"
+                  "String": {
+                    "type": "String"
                   }
                 },
                 "agents": {
                   "friend": {
-                    "string": {
-                      "typ": "String"
-                    }
+                    "attributes": [
+                      "String"
+                    ]
                   }
                 },
                 "entities": {
                   "octopi": {
-                    "string": {
-                      "typ": "String"
-                    }
+                    "attributes": [
+                      "String"
+                    ]
                   },
                   "the sea": {
-                    "string": {
-                      "typ": "String"
-                    }
+                    "attributes": [
+                      "String"
+                    ]
                   }
                 },
                 "activities": {
                   "gardening": {
-                    "string": {
-                      "typ": "String"
-                    }
+                    "attributes": [
+                      "String"
+                    ]
                   }
                 }
               }
              "#,
         )?;
         Ok(file)
-    }
-
-    #[test]
-    fn from_str_for_domain_input() -> Result<(), Box<dyn std::error::Error>> {
-        let s = r#"
-        name: "chronicle"
-        attributes:
-          string:
-            typ: "String"
-          int:
-            typ: "Int"
-          bool:
-            typ: "Bool"
-        agents:
-          friends:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-        entities:
-          octopi:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-          the sea:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-        activities:
-          gardening:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-          swim about:
-            string:
-              typ: "String"
-            int:
-              typ: "Int"
-            bool:
-              typ: "Bool"
-         "#;
-        let input = DomainFileInput::from_str(s);
-
-        insta::assert_yaml_snapshot!(input.unwrap(), @r###"
-        ---
-        name: chronicle
-        attributes:
-          bool:
-            typ: Bool
-          int:
-            typ: Int
-          string:
-            typ: String
-        agents:
-          friends:
-            bool:
-              typ: Bool
-            int:
-              typ: Int
-            string:
-              typ: String
-        entities:
-          octopi:
-            bool:
-              typ: Bool
-            int:
-              typ: Int
-            string:
-              typ: String
-          the sea:
-            bool:
-              typ: Bool
-            int:
-              typ: Int
-            string:
-              typ: String
-        activities:
-          gardening:
-            bool:
-              typ: Bool
-            int:
-              typ: Int
-            string:
-              typ: String
-          swim about:
-            bool:
-              typ: Bool
-            int:
-              typ: Int
-            string:
-              typ: String
-        "###);
-
-        Ok(())
     }
 
     #[test]
@@ -800,26 +745,26 @@ pub mod test {
         ---
         name: chronicle
         attributes:
-          - typ: string
+          - typ: String
             primitive_type: String
         agents:
           - name: friend
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         entities:
           - name: octopi
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
           - name: the sea
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         activities:
           - name: gardening
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         "###);
 
@@ -838,55 +783,55 @@ pub mod test {
         ---
         name: chronicle
         attributes:
-          - typ: bool
+          - typ: Bool
             primitive_type: Bool
-          - typ: int
+          - typ: Int
             primitive_type: Int
-          - typ: string
+          - typ: String
             primitive_type: String
         agents:
           - name: friends
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         entities:
           - name: octopi
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
           - name: the sea
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         activities:
           - name: gardening
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
           - name: swim about
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         "###);
 
         Ok(())
@@ -904,55 +849,55 @@ pub mod test {
         ---
         name: chronicle
         attributes:
-          - typ: bool
+          - typ: Bool
             primitive_type: Bool
-          - typ: int
+          - typ: Int
             primitive_type: Int
-          - typ: string
+          - typ: String
             primitive_type: String
         agents:
           - name: friends
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         entities:
           - name: octopi
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
           - name: the sea
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         activities:
           - name: gardening
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
           - name: swim about
             attributes:
-              - typ: bool
-                primitive_type: Bool
-              - typ: int
-                primitive_type: Int
-              - typ: string
+              - typ: String
                 primitive_type: String
+              - typ: Int
+                primitive_type: Int
+              - typ: Bool
+                primitive_type: Bool
         "###);
 
         Ok(())
@@ -969,20 +914,20 @@ pub mod test {
         ---
         name: test
         attributes:
-          string:
-            typ: String
+          String:
+            type: String
         agents:
-          friend:
-            string:
-              typ: String
+          Friend:
+            attributes:
+              - String
         entities:
-          octopi:
-            string:
-              typ: String
+          Octopus:
+            attributes:
+              - String
         activities:
-          gardening:
-            string:
-              typ: String
+          Gardening:
+            attributes:
+              - String
         "###);
 
         Ok(())
@@ -999,7 +944,7 @@ pub mod test {
         let input = AttributeFileInput::from(&attr);
         insta::assert_yaml_snapshot!(input, @r###"
         ---
-        typ: String
+        type: String
         "###);
     }
 
@@ -1013,22 +958,22 @@ pub mod test {
         ---
         name: test
         attributes:
-          - typ: string
+          - typ: String
             primitive_type: String
         agents:
           - name: friend
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         entities:
           - name: octopi
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         activities:
           - name: gardening
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         "###);
 
@@ -1045,22 +990,22 @@ pub mod test {
         ---
         name: test
         attributes:
-          - typ: string
+          - typ: String
             primitive_type: String
         agents:
           - name: friend
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         entities:
           - name: octopi
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         activities:
           - name: gardening
             attributes:
-              - typ: string
+              - typ: String
                 primitive_type: String
         "###);
 
