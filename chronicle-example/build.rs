@@ -7,50 +7,40 @@ fn main() {
     let s = r#"
     name: "chronicle"
     attributes:
-      string:
-        typ: "String"
-      int:
-        typ: "Int"
-      bool:
-        typ: "Bool"
+      String:
+        type: "String"
+      Int:
+        type: "Int"
+      Bool:
+        type: "Bool"
     agents:
       friend:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
     entities:
       octopi:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
       the sea:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
     activities:
       gardening:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
       swim about:
-        string:
-          typ: "String"
-        int:
-          typ: "Int"
-        bool:
-          typ: "Bool"
+        attributes:
+          - String
+          - Int
+          - Bool
      "#
     .to_string();
 
