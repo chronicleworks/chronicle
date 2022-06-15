@@ -440,6 +440,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(Arg::new("agent_id")
                             .help("A valid chronicle agent IRI")
+                            .long("agent")
                             .takes_value(true)
                             .required(false)
                         )
@@ -453,6 +454,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(
                             Arg::new("time")
+                                .long("time")
                                 .help("A valid RFC3339 timestamp")
                                 .required(false)
                                 .takes_value(true)
@@ -467,6 +469,7 @@ impl SubCommand for ActivityCliModel {
                             .required(true)
                         )
                         .arg(Arg::new("agent_id")
+                            .long("agent")
                             .help("A valid chronicle agent IRI")
                             .takes_value(true)
                             .required(false)
@@ -481,6 +484,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(
                             Arg::new("time")
+                                .long("time")
                                 .help("A valid RFC3339 timestamp")
                                 .required(false)
                                 .takes_value(true)
