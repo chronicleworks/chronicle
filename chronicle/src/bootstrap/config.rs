@@ -32,7 +32,7 @@ pub fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
     let path = model
         .as_cmd()
         .get_matches()
-        .value_of("config")
+        .get_one::<String>("config")
         .unwrap()
         .to_owned();
     let path = shellexpand::tilde(&path);

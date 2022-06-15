@@ -38,8 +38,8 @@ use crate::codegen::ChronicleDomainDef;
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     Ok(SawtoothSubmitter::new(
         &options
-            .value_of("sawtooth")
-            .map(Url::parse)
+            .get_one::<String>("sawtooth")
+            .map(|s| Url::parse(&*s))
             .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
@@ -49,8 +49,8 @@ fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter,
 fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
     Ok(StateDelta::new(
         &options
-            .value_of("sawtooth")
-            .map(Url::parse)
+            .get_one::<String>("sawtooth")
+            .map(|s| Url::parse(&*s))
             .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
@@ -80,7 +80,7 @@ fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
-    if let Some(addr) = options.value_of("interface") {
+    if let Some(addr) = options.get_one::<String>("interface") {
         Ok(Some(addr.parse()?))
     } else {
         Ok(None)
@@ -164,7 +164,7 @@ where
     let api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-graphql") {
-        graphql_server(&api, &pool, gql, matches, matches.is_present("open")).await?;
+        graphql_server(&api, &pool, gql, matches, matches.contains_id("open")).await?;
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
@@ -238,8 +238,8 @@ pub async fn bootstrap<Query, Mutation>(
     let matches = cli(domain.clone()).as_cmd().get_matches();
 
     if let Some(generator) = matches.subcommand_matches("completions") {
-        let shell = generator.value_of_t::<Shell>("shell").unwrap();
-        print_completions(shell, &mut cli(domain.clone()).as_cmd());
+        let shell = generator.get_one::<Shell>("shell").unwrap();
+        print_completions(shell.to_owned(), &mut cli(domain.clone()).as_cmd());
         std::process::exit(0);
     }
 
@@ -248,13 +248,13 @@ pub async fn bootstrap<Query, Mutation>(
         std::process::exit(0);
     }
 
-    if matches.is_present("console-logging") {
+    if matches.contains_id("console-logging") {
         telemetry::console_logging();
     }
 
-    if matches.is_present("instrument") {
+    if matches.contains_id("instrument") {
         telemetry::telemetry(
-            Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap(),
+            Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap(),
         );
     }
 

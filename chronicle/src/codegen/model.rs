@@ -405,7 +405,7 @@ impl From<&AgentDef> for ResourceDef {
             attributes: agent
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .map(|attr| AttributeRef(attr.as_type_name()))
                 .collect(),
         }
     }
@@ -417,7 +417,7 @@ impl From<&EntityDef> for ResourceDef {
             attributes: entity
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .map(|attr| AttributeRef(attr.as_type_name()))
                 .collect(),
         }
     }
@@ -428,7 +428,7 @@ impl From<&ActivityDef> for ResourceDef {
             attributes: activity
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name().to_owned()))
+                .map(|attr| AttributeRef(attr.as_type_name()))
                 .collect(),
         }
     }
