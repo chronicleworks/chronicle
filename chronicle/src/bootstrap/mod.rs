@@ -381,6 +381,28 @@ pub mod test {
         };
     }
 
+    macro_rules! assert_json_ld2 {
+        ($x:expr) => {
+            let mut v: serde_json::Value =
+                serde_json::from_str(&$x.to_json().compact().await.unwrap().to_string()).unwrap();
+
+            // Sort @graph by //@id, as objects are unordered
+            if let Some(v) = v.pointer_mut("/@graph") {
+                v.as_array_mut().unwrap().sort_by(|l, r| {
+                    l.as_object()
+                        .unwrap()
+                        .get("@id")
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+                });
+            }
+
+            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
+        };
+    }
+
     async fn parse_and_execute(command_line: &str, cli: CliModel) -> ProvModel {
         let mut api = test_api().await;
 
@@ -430,11 +452,64 @@ pub mod test {
         )
     }
 
+    // To do: check how to use `TestDispatch` for potentially testing `register-key`
+    //                     generate an id for testing
+    //                     potentially use examples in tests in api/src/lib.rs to
+    //                     ...
     #[tokio::test]
     async fn agent_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            r#"chronicle test-agent define test_agent --test-string-attr "test" --test-bool-attr false  --test-int-attr 23 --namespace testns "#,
             test_cli_model()
         ));
     }
+
+    #[tokio::test]
+    async fn activity_define() {
+        assert_json_ld!(parse_and_execute(
+            r#"chronicle test-activity define test_activity --test-string-attr "test" --test-bool-attr false  --test-int-attr 23 --namespace testns "#,
+            test_cli_model()
+        ));
+    }
+
+    #[tokio::test]
+    async fn entity_define() {
+        assert_json_ld!(parse_and_execute(
+            r#"chronicle test-entity define test_entity --test-string-attr "test" --test-bool-attr false  --test-int-attr 23 --namespace testns "#,
+            test_cli_model()
+        ));
+    }
+
+    // #[tokio::test]
+    // async fn agent_register_key() {
+    //     // define a test-agent
+    //     let command_line = r#"chronicle test-agent define test_agent --test-string-attr "test" --test-bool-attr false  --test-int-attr 23 --namespace testns "#;
+    //     let cli = test_cli_model();
+
+    //     let matches = cli
+    //         .as_cmd()
+    //         .get_matches_from(command_line.split_whitespace());
+
+    //     let cmd = cli.matches(&matches).unwrap().unwrap();
+
+    //     let mut api = test_api().await;
+
+    //     let mut prov_model = api.dispatch(cmd).await.unwrap().unwrap().0;
+
+    //     let command_line = r#"chronicle test-agent register-key test_agent --namespace testns --generate "#;
+
+    //     let cli = test_cli_model();
+
+    //     let matches = cli
+    //         .as_cmd()
+    //         .get_matches_from(command_line.split_whitespace());
+
+    //     let cmd = cli.matches(&matches).unwrap().unwrap();
+
+    //     let prov = parse_and_execute(command_line, test_cli_model());
+
+    //     prov_model.merge(prov.await);
+
+    //     assert_json_ld2!(prov_model);
+    // }
 }

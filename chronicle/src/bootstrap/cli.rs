@@ -101,7 +101,7 @@ impl AgentCliModel {
             attributes,
             name: agent.as_cli_name(),
             about: format!("Operations on {} agents", agent.as_type_name()),
-            define_about: format!("Define an agent of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", agent.as_type_name())
+            define_about: format!("Define an agent of type {} with the given name or IRI, re-definition with different attribute values is not allowed", agent.as_type_name())
         }
     }
 }
@@ -308,7 +308,7 @@ impl SubCommand for AgentCliModel {
             )
             .arg(
                 Arg::new("privatekey")
-                    .help("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
+                    .help("Import the private key at the specified path to the configured key store, ensure you have configured the key store to be in an appropriate location")
                     .short('k')
                     .long("privatekey")
                     .required_unless_present_any(vec!["generate","publickey"])
@@ -393,7 +393,7 @@ impl ActivityCliModel {
             attributes,
             name: activity.as_cli_name(),
             about: format!("Operations on {} activities", activity.as_type_name()),
-            define_about: format!("Define an activity of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", activity.as_type_name()),
+            define_about: format!("Define an activity of type {} with the given name or IRI, re-definition with different attribute values is not allowed", activity.as_type_name()),
         }
     }
 }
@@ -609,7 +609,7 @@ impl EntityCliModel {
             attributes,
             name: entity.as_cli_name(),
             about: format!("Operations on {} entities", entity.as_type_name()),
-            define_about: format!("Define an entity of type {} with the given name or IRI, re-defintion with different attribute values is not allowed", entity.as_type_name()),
+            define_about: format!("Define an entity of type {} with the given name or IRI, re-definition with different attribute values is not allowed", entity.as_type_name()),
         }
     }
 }

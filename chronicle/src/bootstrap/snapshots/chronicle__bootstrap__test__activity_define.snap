@@ -113,12 +113,12 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
   },
   "@graph": [
     {
-      "@id": "chronicle:agent:test%5Fagent",
+      "@id": "chronicle:activity:test%5Factivity",
       "@type": [
-        "prov:Agent",
-        "chronicle:domaintype:testAgent"
+        "prov:Activity",
+        "chronicle:domaintype:testActivity"
       ],
-      "label": "test_agent",
+      "label": "test_activity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "value": {
         "TestBool": false,
