@@ -433,7 +433,7 @@ pub mod test {
     #[tokio::test]
     async fn agent_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
             test_cli_model()
         ));
     }
@@ -441,7 +441,7 @@ pub mod test {
     #[tokio::test]
     async fn entity_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns"#,
             test_cli_model()
         ));
     }
@@ -449,7 +449,7 @@ pub mod test {
     #[tokio::test]
     async fn activity_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns"#,
             test_cli_model()
         ));
     }

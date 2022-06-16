@@ -119,7 +119,7 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
         "chronicle:domaintype:testActivity"
       ],
       "label": "test_activity",
-      "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "value": {
         "TestBool": false,
         "TestInt": 23,
@@ -127,9 +127,9 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       }
     },
     {
-      "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "@type": "chronicle:Namespace",
-      "label": "default"
+      "label": "testns"
     }
   ]
 }
