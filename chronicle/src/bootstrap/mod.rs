@@ -437,4 +437,12 @@ pub mod test {
             test_cli_model()
         ));
     }
+
+    #[tokio::test]
+    async fn entity_define() {
+        assert_json_ld!(parse_and_execute(
+            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            test_cli_model()
+        ));
+    }
 }
