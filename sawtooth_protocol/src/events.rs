@@ -128,17 +128,23 @@ impl StateDelta {
         buf.reserve(request.encoded_len());
         request.encode(&mut buf)?;
 
-        let fut = self.tx.send(
-            Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
-            &uuid::Uuid::new_v4().to_string(),
-            &*buf,
-        )?;
-
-        let (_, response) = StateDelta::recv_from_messagefuture(fut).await.unwrap();
-
-        let response = ClientEventsSubscribeResponse::decode(response?.get_content())?;
-
-        debug!(?response, "Subscription response");
+        let response = {
+            loop {
+                let fut = self.tx.send(
+                    Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
+                    &uuid::Uuid::new_v4().to_string(),
+                    &*buf,
+                )?;
+                match StateDelta::recv_from_messagefuture(fut).await {
+                    Ok((_, response)) => {
+                        break ClientEventsSubscribeResponse::decode(response?.get_content())?;
+                    }
+                    Err(e) => {
+                        warn!(?e, "Subscription error");
+                    }
+                }
+            }
+        };
 
         if response.status() != Status::Ok {
             return Err(StateError::SubscribeError {
