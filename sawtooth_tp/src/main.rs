@@ -1,7 +1,6 @@
 mod tp;
 
-use clap::{Arg, Command, ValueHint};
-use clap_generate::Shell;
+use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
 use tp::ChronicleTransactionHandler;
@@ -44,7 +43,7 @@ async fn main() {
             Arg::new("completions")
                 .long("completions")
                 .value_name("completions")
-                .possible_values(Shell::possible_values())
+                .value_parser(PossibleValuesParser::new(&["bash", "zsh", "fish"]))
                 .help("Generate shell completions and exit"),
         )
         .arg(
@@ -58,16 +57,18 @@ async fn main() {
         )
         .get_matches();
 
-    if matches.is_present("instrument") {
-        telemetry(Url::parse(&*matches.value_of_t::<String>("instrument").unwrap()).unwrap());
+    if matches.contains_id("instrument") {
+        telemetry(Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap());
     }
 
-    let endpoint = matches
-        .value_of("connect")
-        .unwrap_or("tcp://localhost:4004");
-
     let handler = ChronicleTransactionHandler::new();
-    let mut processor = TransactionProcessor::new(endpoint);
+    let mut processor = TransactionProcessor::new({
+        if let Some(connect) = matches.get_one::<String>("connect") {
+            connect
+        } else {
+            "tcp://127.0.0.1:4004"
+        }
+    });
 
     processor.add_handler(&handler);
     processor.start();

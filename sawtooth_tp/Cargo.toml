@@ -13,7 +13,7 @@ version = "0.1.0"
 async-trait = "0.1.53"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = "1.1.0"
-clap = "3.1.6"
+clap = "3.2.1"
 clap_generate = "3.0.3"
 common = { path = "../common" }
 crossbeam = "0.8.1"

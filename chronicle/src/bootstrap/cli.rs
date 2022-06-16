@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
 use api::ApiError;
-use clap::*;
+use clap::{builder::PossibleValuesParser, *};
 use common::{
     attributes::{Attribute, Attributes},
     commands::{
@@ -9,7 +9,8 @@ use common::{
         PathOrFile,
     },
     prov::{
-        ActivityId, AgentId, CompactionError, DomaintypeId, EntityId, Name, NamePart, ParseIriError,
+        operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
+        Name, NamePart, ParseIriError,
     },
     signing::SignerError,
 };
@@ -113,9 +114,9 @@ fn name_from<'a, Id>(
 where
     Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
 {
-    if let Some(name) = args.value_of(name_param) {
+    if let Some(name) = args.get_one::<String>(name_param) {
         Ok(Name::from(name))
-    } else if let Some(id) = args.value_of(id_param) {
+    } else if let Some(id) = args.get_one::<String>(id_param) {
         let iri = Iri::from_str(id)?;
         let id = Id::try_from(iri)?;
         Ok(id.name_part().to_owned())
@@ -130,7 +131,7 @@ fn id_from<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Id, CliError>
 where
     Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
 {
-    if let Some(id) = args.value_of(id_param) {
+    if let Some(id) = args.get_one::<String>(id_param) {
         Ok(Id::try_from(Iri::from_str(id)?)?)
     } else {
         Err(CliError::MissingArgument {
@@ -151,7 +152,7 @@ where
 }
 
 fn namespace_from(args: &ArgMatches) -> Result<Name, CliError> {
-    if let Some(namespace) = args.value_of("namespace") {
+    if let Some(namespace) = args.get_one::<String>("namespace") {
         Ok(Name::from(namespace))
     } else {
         Err(CliError::MissingArgument {
@@ -230,7 +231,7 @@ fn attributes_from(
             .map(|attr| {
                 let value = attribute_value_from_param(
                     &attr.attribute_name,
-                    &*args.value_of(&attr.attribute_name).unwrap(),
+                    &*args.get_one::<String>(&attr.attribute_name).unwrap(),
                     attr.attribute.primitive_type,
                 )?;
                 Ok::<_, CliError>((
@@ -333,42 +334,40 @@ impl SubCommand for AgentCliModel {
     }
 
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches(&self.name) {
-            if let Some(matches) = matches.subcommand_matches("define") {
-                return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
-                    name: name_from::<AgentId>(matches, "name", "id")?,
-                    namespace: namespace_from(matches)?,
-                    attributes: attributes_from(matches, &self.agent.name, &self.attributes)?,
-                })));
-            }
-            if let Some(matches) = matches.subcommand_matches("register-key") {
-                let registration = {
-                    if matches.is_present("generate") {
-                        KeyRegistration::Generate
-                    } else if matches.is_present("privatekey") {
-                        KeyRegistration::ImportSigning(KeyImport::FromPath {
-                            path: matches.value_of_t::<PathBuf>("privatekey").unwrap(),
-                        })
-                    } else {
-                        KeyRegistration::ImportVerifying(KeyImport::FromPath {
-                            path: matches.value_of_t::<PathBuf>("privatekey").unwrap(),
-                        })
-                    }
-                };
-                return Ok(Some(ApiCommand::Agent(AgentCommand::RegisterKey {
-                    id: id_from(matches, "id")?,
-                    namespace: namespace_from(matches)?,
-                    registration,
-                })));
-            }
-
-            if let Some(matches) = matches.subcommand_matches("use") {
-                return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
-                    id: id_from(matches, "id")?,
-                    namespace: namespace_from(matches)?,
-                })));
-            };
+        if let Some(matches) = matches.subcommand_matches("define") {
+            return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
+                name: name_from::<AgentId>(matches, "name", "id")?,
+                namespace: namespace_from(matches)?,
+                attributes: attributes_from(matches, &self.agent.name, &self.attributes)?,
+            })));
         }
+        if let Some(matches) = matches.subcommand_matches("register-key") {
+            let registration = {
+                if matches.contains_id("generate") {
+                    KeyRegistration::Generate
+                } else if matches.contains_id("privatekey") {
+                    KeyRegistration::ImportSigning(KeyImport::FromPath {
+                        path: matches.get_one::<PathBuf>("privatekey").unwrap().to_owned(),
+                    })
+                } else {
+                    KeyRegistration::ImportVerifying(KeyImport::FromPath {
+                        path: matches.get_one::<PathBuf>("privatekey").unwrap().to_owned(),
+                    })
+                }
+            };
+            return Ok(Some(ApiCommand::Agent(AgentCommand::RegisterKey {
+                id: id_from(matches, "id")?,
+                namespace: namespace_from(matches)?,
+                registration,
+            })));
+        }
+
+        if let Some(matches) = matches.subcommand_matches("use") {
+            return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
+                id: id_from(matches, "id")?,
+                namespace: namespace_from(matches)?,
+            })));
+        };
 
         Ok(None)
     }
@@ -441,6 +440,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(Arg::new("agent_id")
                             .help("A valid chronicle agent IRI")
+                            .long("agent")
                             .takes_value(true)
                             .required(false)
                         )
@@ -454,6 +454,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(
                             Arg::new("time")
+                                .long("time")
                                 .help("A valid RFC3339 timestamp")
                                 .required(false)
                                 .takes_value(true)
@@ -468,6 +469,7 @@ impl SubCommand for ActivityCliModel {
                             .required(true)
                         )
                         .arg(Arg::new("agent_id")
+                            .long("agent")
                             .help("A valid chronicle agent IRI")
                             .takes_value(true)
                             .required(false)
@@ -482,6 +484,7 @@ impl SubCommand for ActivityCliModel {
                         )
                         .arg(
                             Arg::new("time")
+                                .long("time")
                                 .help("A valid RFC3339 timestamp")
                                 .required(false)
                                 .takes_value(true)
@@ -512,12 +515,12 @@ impl SubCommand for ActivityCliModel {
                 .subcommand(
                     Command::new("generate")
                         .about("Records this activity as having generated the specified entity, creating it if required")
-                        .arg(Arg::new("entity id")
+                        .arg(Arg::new("entity_id")
                             .help("A valid chronicle entity IRI")
                             .takes_value(true)
                             .required(true)
                         )
-                        .arg(Arg::new("activity id")
+                        .arg(Arg::new("activity_id")
                             .help("A valid chronicle activity IRI")
                             .takes_value(true)
                             .required(true)
@@ -534,49 +537,53 @@ impl SubCommand for ActivityCliModel {
     }
 
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches(&self.name) {
-            if let Some(matches) = matches.subcommand_matches("define") {
-                return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
-                    name: name_from::<ActivityId>(matches, "name", "id")?,
-                    namespace: namespace_from(matches)?,
-                    attributes: attributes_from(matches, &self.activity.name, &self.attributes)?,
-                })));
-            }
-
-            if let Some(matches) = matches.subcommand_matches("start") {
-                return Ok(Some(ApiCommand::Activity(ActivityCommand::Start {
-                    id: id_from(matches, "id")?,
-                    namespace: namespace_from(matches)?,
-                    time: matches.value_of("time").map(|t| t.parse()).transpose()?,
-                    agent: id_from_option(matches, "agent_id")?,
-                })));
-            };
-
-            if let Some(matches) = matches.subcommand_matches("end") {
-                return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
-                    id: id_from_option(matches, "id")?,
-                    namespace: namespace_from(matches)?,
-                    time: matches.value_of("time").map(|t| t.parse()).transpose()?,
-                    agent: id_from_option(matches, "agent_id")?,
-                })));
-            };
-
-            if let Some(matches) = matches.subcommand_matches("use") {
-                return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
-                    id: id_from(matches, "entity_id")?,
-                    namespace: namespace_from(matches)?,
-                    activity: id_from_option(matches, "activity_id")?,
-                })));
-            };
-
-            if let Some(matches) = matches.subcommand_matches("generate") {
-                return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
-                    id: id_from(matches, "entity_id")?,
-                    namespace: namespace_from(matches)?,
-                    activity: id_from_option(matches, "activity_id")?,
-                })));
-            };
+        if let Some(matches) = matches.subcommand_matches("define") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
+                name: name_from::<ActivityId>(matches, "name", "id")?,
+                namespace: namespace_from(matches)?,
+                attributes: attributes_from(matches, &self.activity.name, &self.attributes)?,
+            })));
         }
+
+        if let Some(matches) = matches.subcommand_matches("start") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::Start {
+                id: id_from(matches, "id")?,
+                namespace: namespace_from(matches)?,
+                time: matches
+                    .get_one::<String>("time")
+                    .map(|t| t.parse())
+                    .transpose()?,
+                agent: id_from_option(matches, "agent_id")?,
+            })));
+        };
+
+        if let Some(matches) = matches.subcommand_matches("end") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
+                id: id_from_option(matches, "id")?,
+                namespace: namespace_from(matches)?,
+                time: matches
+                    .get_one::<String>("time")
+                    .map(|t| t.parse())
+                    .transpose()?,
+                agent: id_from_option(matches, "agent_id")?,
+            })));
+        };
+
+        if let Some(matches) = matches.subcommand_matches("use") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
+                id: id_from(matches, "entity_id")?,
+                namespace: namespace_from(matches)?,
+                activity: id_from_option(matches, "activity_id")?,
+            })));
+        };
+
+        if let Some(matches) = matches.subcommand_matches("generate") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
+                id: id_from(matches, "entity_id")?,
+                namespace: namespace_from(matches)?,
+                activity: id_from_option(matches, "activity_id")?,
+            })));
+        };
 
         Ok(None)
     }
@@ -638,72 +645,129 @@ impl SubCommand for EntityCliModel {
         }
 
         cmd.subcommand(define)
-           .subcommand(
-                    Command::new("attach")
-                        .about("Sign the input file and record it against the entity")
-                        .arg(Arg::new("entity_name")
-                            .help("An externally meaningful identifier for the activity, e.g. a URI or relational id")
-                            .takes_value(true))
-                        .arg(Arg::new("entity_id")
-                            .help("A valid chronicle activity IRI")
-                            .takes_value(true))
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["entity_name","entity_id"])
-                                    .required(true))
-                        .arg(
-                            Arg::new("namespace")
-                                .short('n')
-                                .long("namespace")
-                                .default_value("default")
-                                .required(false)
-                                .takes_value(true),
-                        )
-                        .arg(
-                            Arg::new("file")
-                                .short('f')
-                                .help("A path to the file to be signed and attached")
-                                .long("file")
-                                .value_hint(ValueHint::FilePath)
-                                .required(true)
-                                .takes_value(true),
-                        )
-                        .arg(
-                            Arg::new("locator")
-                                .short('l')
-                                .long("locator")
-                                .help("A url or other way of identifying the attachment")
-                                .value_hint(ValueHint::Url)
-                                .required(false)
-                                .takes_value(true),
-                        )
-                        .arg(Arg::new("agent_id")
-                            .help("A valid chronicle agent IRI")
+            .subcommand(
+                Command::new("derive")
+                    .about("Derivation of entities from other entities")
+                    .arg(
+                        Arg::new("subtype")
+                            .help("The derivation subtype")
+                            .long("subtype")
+                            .required(false)
                             .takes_value(true)
-                        )
-                        .group(ArgGroup::new("identifier")
-                                    .args(&["activity_name","entity_id"])
-                                    .required(true))
-                )
+                            .value_parser(PossibleValuesParser::new(&[
+                                "revision",
+                                "quotation",
+                                "primary-source",
+                            ])),
+                    )
+                    .arg(
+                        Arg::new("generated_entity_id")
+                            .help("A valid chronicle entity IRI for the generated entity")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::new("used_entity_id")
+                            .help("A valid chronicle entity IRI for the used entity")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::new("activity_id")
+                            .help("The actitity IRI that generated the entity")
+                            .long("activity")
+                            .takes_value(true)
+                            .required(false),
+                    )
+                    .arg(
+                        Arg::new("namespace")
+                            .short('n')
+                            .long("namespace")
+                            .default_value("default")
+                            .required(false)
+                            .takes_value(true),
+                    ),
+            )
+            .subcommand(
+                Command::new("attach")
+                    .about("Sign the input file and record it against the entity")
+                    .arg(
+                        Arg::new("entity_id")
+                            .help("A valid chronicle activity IRI")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("namespace")
+                            .short('n')
+                            .long("namespace")
+                            .default_value("default")
+                            .required(false)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("file")
+                            .short('f')
+                            .help("A path to the file to be signed and attached")
+                            .long("file")
+                            .value_hint(ValueHint::FilePath)
+                            .required(true)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("locator")
+                            .short('l')
+                            .long("locator")
+                            .help("A url or other way of identifying the attachment")
+                            .value_hint(ValueHint::Url)
+                            .required(false)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("agent_id")
+                            .help("A valid chronicle agent IRI")
+                            .takes_value(true),
+                    )
+                    .group(
+                        ArgGroup::new("identifier")
+                            .args(&["activity_name", "entity_id"])
+                            .required(true),
+                    ),
+            )
     }
 
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches(&self.name) {
-            if let Some(matches) = matches.subcommand_matches("define") {
-                return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
-                    name: name_from::<EntityId>(matches, "name", "id")?,
-                    namespace: namespace_from(matches)?,
-                    attributes: attributes_from(matches, &self.entity.name, &self.attributes)?,
-                })));
-            }
+        if let Some(matches) = matches.subcommand_matches("define") {
+            return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
+                name: name_from::<EntityId>(matches, "name", "id")?,
+                namespace: namespace_from(matches)?,
+                attributes: attributes_from(matches, &self.entity.name, &self.attributes)?,
+            })));
+        }
+
+        if let Some(matches) = matches.subcommand_matches("derive") {
+            return Ok(Some(ApiCommand::Entity(EntityCommand::Derive {
+                namespace: namespace_from(matches)?,
+                id: id_from(matches, "generated_entity_id")?,
+                derivation: matches
+                    .get_one::<String>("subtype")
+                    .map(|v| match v.as_str() {
+                        "revision" => DerivationType::Revision,
+                        "quotation" => DerivationType::Quotation,
+                        "primary-source" => DerivationType::PrimarySource,
+                        _ => unreachable!(), // Guaranteed by PossibleValuesParser
+                    }),
+                activity: id_from_option(matches, "activity_id")?,
+                used_entity: id_from(matches, "used_entity_id")?,
+            })));
         }
 
         if let Some(matches) = matches.subcommand_matches("attach") {
             return Ok(Some(ApiCommand::Entity(EntityCommand::Attach {
                 id: id_from(matches, "entity_id")?,
                 namespace: namespace_from(matches)?,
-                file: PathOrFile::Path(matches.value_of_t::<PathBuf>("file")?),
+                file: PathOrFile::Path(matches.get_one::<PathBuf>("file").unwrap().to_owned()),
                 agent: id_from_option(matches, "agent_id")?,
-                locator: matches.value_of("locator").map(|x| x.to_owned()),
+                locator: matches.get_one::<String>("locator").map(|x| x.to_owned()),
             })));
         }
 
@@ -762,7 +826,7 @@ impl SubCommand for CliModel {
                     .about("Generate shell completions and exit")
                     .arg(
                         Arg::new("shell")
-                            .possible_values(&["bash", "zsh", "fish"])
+                            .value_parser(PossibleValuesParser::new(&["bash", "zsh", "fish"]))
                             .default_value("bash")
                             .help("Shell to generate completions for"),
                     ),
@@ -818,19 +882,31 @@ impl SubCommand for CliModel {
 
     /// Iterate our possible subcommands via model and short circuit with the first one that matches
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        for agent in self.agents.iter() {
-            if let Some(matches) = agent.matches(matches)? {
-                return Ok(Some(matches));
+        for (agent, matches) in self.agents.iter().filter_map(|agent| {
+            matches
+                .subcommand_matches(&agent.name)
+                .map(|matches| (agent, matches))
+        }) {
+            if let Some(cmd) = agent.matches(matches)? {
+                return Ok(Some(cmd));
             }
         }
-        for activity in self.activities.iter() {
-            if let Some(matches) = activity.matches(matches)? {
-                return Ok(Some(matches));
+        for (entity, matches) in self.entities.iter().filter_map(|entity| {
+            matches
+                .subcommand_matches(&entity.name)
+                .map(|matches| (entity, matches))
+        }) {
+            if let Some(cmd) = entity.matches(matches)? {
+                return Ok(Some(cmd));
             }
         }
-        for entity in self.entities.iter() {
-            if let Some(matches) = entity.matches(matches)? {
-                return Ok(Some(matches));
+        for (activity, matches) in self.activities.iter().filter_map(|activity| {
+            matches
+                .subcommand_matches(&activity.name)
+                .map(|matches| (activity, matches))
+        }) {
+            if let Some(cmd) = activity.matches(matches)? {
+                return Ok(Some(cmd));
             }
         }
         Ok(None)
