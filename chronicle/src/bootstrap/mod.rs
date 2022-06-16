@@ -445,4 +445,12 @@ pub mod test {
             test_cli_model()
         ));
     }
+
+    #[tokio::test]
+    async fn activity_define() {
+        assert_json_ld!(parse_and_execute(
+            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 "#,
+            test_cli_model()
+        ));
+    }
 }
