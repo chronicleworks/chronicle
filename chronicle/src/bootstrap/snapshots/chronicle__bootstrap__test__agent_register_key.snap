@@ -1,0 +1,54 @@
+---
+source: chronicle/src/bootstrap/mod.rs
+expression: api.1
+---
+namespaces:
+  ? name: testns
+    uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+  : id:
+      name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    name: testns
+agents:
+  ? - name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    - testagent
+  : id: testagent
+    namespaceid:
+      name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    name: testagent
+    domaintypeid: ~
+    attributes: {}
+activities: {}
+entities: {}
+identities:
+  ? - name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    - name: testagent
+      public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+  : id:
+      name: testagent
+      public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+    namespaceid:
+      name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+attachments: {}
+has_identity:
+  ? - name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    - testagent
+  : - name: testns
+      uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    - name: testagent
+      public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+had_identity: {}
+has_attachment: {}
+had_attachment: {}
+association: {}
+derivation: {}
+delegation: {}
+generation: {}
+useage: {}

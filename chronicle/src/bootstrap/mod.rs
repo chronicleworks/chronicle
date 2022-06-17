@@ -277,9 +277,13 @@ pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 
     use common::{
-        commands::{ApiCommand, ApiResponse},
+        attributes::{Attribute, Attributes},
+        commands::{ActivityCommand, ApiCommand, ApiResponse, EntityCommand},
         ledger::InMemLedger,
-        prov::{ChronicleTransactionId, ProvModel},
+        prov::{
+            operations::DerivationType, ActivityId, ChronicleTransactionId, DomaintypeId, EntityId,
+            ProvModel,
+        },
     };
 
     use diesel::{
@@ -381,6 +385,30 @@ pub mod test {
         };
     }
 
+    // not 100% what's happening here but I hacked together a way to get snapshots of the api lib tests
+    macro_rules! assert_json_ld2 {
+        ($x:expr) => {
+            let mut v: serde_json::Value =
+                serde_json::from_str(&*$x.0.to_json().compact().await.unwrap().to_string())
+                    .unwrap();
+
+            // Sort @graph by //@id, as objects are unordered
+            if let Some(v) = v.pointer_mut("/@graph") {
+                v.as_array_mut().unwrap().sort_by(|l, r| {
+                    l.as_object()
+                        .unwrap()
+                        .get("@id")
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+                });
+            }
+
+            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
+        };
+    }
+
     async fn parse_and_execute(command_line: &str, cli: CliModel) -> ProvModel {
         let mut api = test_api().await;
 
@@ -441,7 +469,7 @@ pub mod test {
     #[tokio::test]
     async fn entity_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns"#,
+            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
             test_cli_model()
         ));
     }
@@ -449,8 +477,457 @@ pub mod test {
     #[tokio::test]
     async fn activity_define() {
         assert_json_ld!(parse_and_execute(
-            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns"#,
+            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
             test_cli_model()
         ));
+    }
+
+    // // this works to create an agent and use the macro to output it how we want it in bootstrap/mod.rs
+    // #[tokio::test]
+    // async fn agent_define() {
+    //     let mut api = test_api().await;
+
+    //     assert_json_ld2!(api.dispatch(ApiCommand::Agent(common::commands::AgentCommand::Create {
+    //                 name: "testagent".into(),
+    //                 namespace: "testns".into(),
+    //                 attributes: common::attributes::Attributes {
+    //                     typ: Some(common::prov::DomaintypeId::from_name("test")),
+    //                     attributes: [(
+    //                         "test".to_owned(),
+    //                         common::attributes::Attribute {
+    //                             typ: "test".to_owned(),
+    //                             value: serde_json::Value::String("test".to_owned()),
+    //                         },
+    //                     )]
+    //                     .into_iter()
+    //                     .collect(),
+    //                 },
+    //             }))
+    //             .await
+    //             .unwrap()
+    //             .unwrap()
+    //         );
+    // }
+
+    // for now reapply tests from api/src/lib.rs to get infrastructure and a sense
+    #[tokio::test]
+    async fn activity_start() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Agent(common::commands::AgentCommand::Create {
+            name: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: common::attributes::Attributes {
+                typ: Some(common::prov::DomaintypeId::from_name("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    common::attributes::Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(
+            common::commands::AgentCommand::UseInContext {
+                id: common::prov::AgentId::from_name("testagent"),
+                namespace: "testns".into(),
+            },
+        ))
+        .await
+        .unwrap();
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(
+                common::commands::ActivityCommand::Start {
+                    id: ActivityId::from_name("testactivity"),
+                    namespace: "testns".into(),
+                    time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
+                    agent: None,
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn agent_register_key() {
+        let mut api = test_api().await;
+
+        let pk = r#"
+-----BEGIN PRIVATE KEY-----
+MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
+CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
+Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
+-----END PRIVATE KEY-----
+"#;
+
+        api.dispatch(ApiCommand::NameSpace(
+            common::commands::NamespaceCommand::Create {
+                name: "testns".into(),
+            },
+        ))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(
+            common::commands::AgentCommand::RegisterKey {
+                id: common::prov::AgentId::from_name("testagent"),
+                namespace: "testns".into(),
+                registration: common::commands::KeyRegistration::ImportSigning(
+                    common::commands::KeyImport::FromPEMBuffer {
+                        buffer: pk.as_bytes().into(),
+                    },
+                ),
+            },
+        ))
+        .await
+        .unwrap();
+
+        insta::assert_yaml_snapshot!(api.1, {
+            ".*.publickey" => "[public]"
+        });
+    }
+
+    #[tokio::test]
+    async fn start_activity() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Agent(common::commands::AgentCommand::Create {
+            name: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: common::attributes::Attributes {
+                typ: Some(common::prov::DomaintypeId::from_name("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    common::attributes::Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(
+            common::commands::AgentCommand::UseInContext {
+                id: common::prov::AgentId::from_name("testagent"),
+                namespace: "testns".into(),
+            },
+        ))
+        .await
+        .unwrap();
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(
+                common::commands::ActivityCommand::Start {
+                    id: ActivityId::from_name("testactivity"),
+                    namespace: "testns".into(),
+                    time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
+                    agent: None,
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn end_activity() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Agent(common::commands::AgentCommand::Create {
+            name: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: common::attributes::Attributes {
+                typ: Some(common::prov::DomaintypeId::from_name("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    common::attributes::Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(
+            common::commands::AgentCommand::UseInContext {
+                id: common::prov::AgentId::from_name("testagent"),
+                namespace: "testns".into(),
+            },
+        ))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Activity(
+            common::commands::ActivityCommand::Start {
+                id: ActivityId::from_name("testactivity"),
+                namespace: "testns".into(),
+                time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
+                agent: None,
+            },
+        ))
+        .await
+        .unwrap();
+
+        // Should end the last opened activity
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(
+                common::commands::ActivityCommand::End {
+                    id: None,
+                    namespace: "testns".into(),
+                    time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
+                    agent: None,
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn activity_use() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Agent(common::commands::AgentCommand::Create {
+            name: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: common::attributes::Attributes {
+                typ: Some(common::prov::DomaintypeId::from_name("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    common::attributes::Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Agent(
+            common::commands::AgentCommand::UseInContext {
+                id: common::prov::AgentId::from_name("testagent"),
+                namespace: "testns".into(),
+            },
+        ))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Activity(
+            common::commands::ActivityCommand::Create {
+                name: "testactivity".into(),
+                namespace: "testns".into(),
+                attributes: common::attributes::Attributes {
+                    typ: Some(common::prov::DomaintypeId::from_name("test")),
+                    attributes: [(
+                        "test".to_owned(),
+                        common::attributes::Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            },
+        ))
+        .await
+        .unwrap();
+
+        api.dispatch(ApiCommand::Activity(
+            common::commands::ActivityCommand::Use {
+                id: common::prov::EntityId::from_name("testentity"),
+                namespace: "testns".into(),
+                activity: Some(ActivityId::from_name("testactivity")),
+            },
+        ))
+        .await
+        .unwrap();
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(
+                common::commands::ActivityCommand::End {
+                    id: None,
+                    namespace: "testns".into(),
+                    time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
+                    agent: Some(common::prov::AgentId::from_name("testagent")),
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn activity_generate() {
+        let mut api = test_api().await;
+
+        api.dispatch(ApiCommand::Activity(
+            common::commands::ActivityCommand::Create {
+                name: "testactivity".into(),
+                namespace: "testns".into(),
+                attributes: common::attributes::Attributes {
+                    typ: Some(common::prov::DomaintypeId::from_name("test")),
+                    attributes: [(
+                        "test".to_owned(),
+                        common::attributes::Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            },
+        ))
+        .await
+        .unwrap();
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(
+                common::commands::ActivityCommand::Generate {
+                    id: common::prov::EntityId::from_name("testentity"),
+                    namespace: "testns".into(),
+                    activity: Some(ActivityId::from_name("testactivity")),
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn derive_entity_abstract() {
+        let mut api = test_api().await;
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Entity(
+                common::commands::EntityCommand::Derive {
+                    id: common::prov::EntityId::from_name("testgeneratedentity"),
+                    namespace: "testns".into(),
+                    activity: None,
+                    used_entity: common::prov::EntityId::from_name("testusedentity"),
+                    derivation: None,
+                }
+            ))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn derive_entity_primary_source() {
+        let mut api = test_api().await;
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Entity(EntityCommand::Derive {
+                id: EntityId::from_name("testgeneratedentity"),
+                namespace: "testns".into(),
+                activity: None,
+                derivation: Some(DerivationType::PrimarySource),
+                used_entity: EntityId::from_name("testusedentity"),
+            }))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn derive_entity_revision() {
+        let mut api = test_api().await;
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Entity(EntityCommand::Derive {
+                id: EntityId::from_name("testgeneratedentity"),
+                namespace: "testns".into(),
+                activity: None,
+                used_entity: EntityId::from_name("testusedentity"),
+                derivation: Some(DerivationType::Revision),
+            }))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn derive_entity_quotation() {
+        let mut api = test_api().await;
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Entity(EntityCommand::Derive {
+                id: EntityId::from_name("testgeneratedentity"),
+                namespace: "testns".into(),
+                activity: None,
+                used_entity: EntityId::from_name("testusedentity"),
+                derivation: Some(DerivationType::Quotation),
+            }))
+            .await
+            .unwrap()
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn many_activities() {
+        let mut api = test_api().await;
+
+        for i in 0..=99 {
+            api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                name: format!("testactivity{}", i).into(),
+                namespace: "testns".into(),
+                attributes: Attributes {
+                    typ: Some(DomaintypeId::from_name("test")),
+                    attributes: [(
+                        "test".to_owned(),
+                        Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            }))
+            .await
+            .unwrap();
+        }
+
+        assert_json_ld2!(api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Create {
+                name: format!("testactivity{}", 100).into(),
+                namespace: "testns".into(),
+                attributes: Attributes {
+                    typ: Some(DomaintypeId::from_name("test")),
+                    attributes: [(
+                        "test".to_owned(),
+                        Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            }))
+            .await
+            .unwrap()
+            .unwrap());
     }
 }
