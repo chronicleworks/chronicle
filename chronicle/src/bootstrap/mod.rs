@@ -248,16 +248,12 @@ pub async fn bootstrap<Query, Mutation>(
         print!("{}", gql.exportable_schema());
         std::process::exit(0);
     }
-
-    if matches.contains_id("console-logging") {
-        telemetry::console_logging_info();
-    }
-
-    if matches.contains_id("instrument") {
-        telemetry::telemetry(
-            Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap(),
-        );
-    }
+    telemetry::telemetry(
+        matches
+            .get_one::<String>("instrument")
+            .and_then(|s| Url::parse(&*s).ok()),
+        matches.contains_id("console-logging"),
+    );
 
     config_and_exec(gql, domain.into())
         .await
@@ -325,7 +321,7 @@ pub mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        telemetry::console_logging_trace();
+        telemetry::telemetry(None, true);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
