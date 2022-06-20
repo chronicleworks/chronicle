@@ -3,10 +3,9 @@ mod tp;
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
+use telemetry::telemetry;
 use tp::ChronicleTransactionHandler;
 use url::Url;
-
-use telemetry::telemetry;
 
 #[tokio::main]
 async fn main() {
@@ -31,18 +30,27 @@ async fn main() {
         )
         .arg(
             Arg::new("instrument")
-                .short('i')
                 .long("instrument")
                 .value_name("instrument")
                 .takes_value(true)
                 .value_hint(ValueHint::Url)
                 .help("Instrument using RUST_LOG environment"),
         )
+        .arg(
+            Arg::new("console-logging")
+                .long("console-logging")
+                .value_name("console-logging")
+                .takes_value(false)
+                .help("Log to console using RUST_LOG environment"),
+        )
         .get_matches();
 
-    if matches.contains_id("instrument") {
-        telemetry(Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap());
-    }
+    telemetry(
+        matches
+            .get_one::<String>("instrument")
+            .and_then(|s| Url::parse(&*s).ok()),
+        matches.contains_id("console-logging"),
+    );
 
     let handler = ChronicleTransactionHandler::new();
     let mut processor = TransactionProcessor::new({
