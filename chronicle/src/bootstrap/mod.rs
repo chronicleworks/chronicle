@@ -276,6 +276,7 @@ pub async fn bootstrap<Query, Mutation>(
 pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 
+    // use colored_json::Output;
     use common::{
         attributes::{Attribute, Attributes},
         // attributes::Attributes,
@@ -297,6 +298,7 @@ pub mod test {
         r2d2::{ConnectionManager, Pool},
         SqliteConnection,
     };
+    // use serde_json::Value;
     use tempfile::TempDir;
     use tracing::Level;
     use tracing_log::log::LevelFilter;
@@ -369,51 +371,12 @@ pub mod test {
         TestDispatch(dispatch, ProvModel::default())
     }
 
-    macro_rules! assert_json_ld {
-        ($x:expr) => {
-            let mut v: serde_json::Value =
-                serde_json::from_str(&*$x.await.to_json().compact().await.unwrap().to_string())
-                    .unwrap();
-
-            // Sort @graph by //@id, as objects are unordered
-            if let Some(v) = v.pointer_mut("/@graph") {
-                v.as_array_mut().unwrap().sort_by(|l, r| {
-                    l.as_object()
-                        .unwrap()
-                        .get("@id")
-                        .unwrap()
-                        .as_str()
-                        .unwrap()
-                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
-                });
-            }
-
-            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
-        };
-    }
-
-    // not 100% what's happening here but I hacked together a way to get snapshots of the api lib tests
-    macro_rules! assert_json_ld2 {
-        ($x:expr) => {
-            let mut v: serde_json::Value =
-                serde_json::from_str(&*$x.0.to_json().compact().await.unwrap().to_string())
-                    .unwrap();
-
-            // Sort @graph by //@id, as objects are unordered
-            if let Some(v) = v.pointer_mut("/@graph") {
-                v.as_array_mut().unwrap().sort_by(|l, r| {
-                    l.as_object()
-                        .unwrap()
-                        .get("@id")
-                        .unwrap()
-                        .as_str()
-                        .unwrap()
-                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
-                });
-            }
-
-            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
-        };
+    fn get_api_cmd(command_line: &str) -> ApiCommand {
+        let cli = test_cli_model();
+        let matches = cli
+            .as_cmd()
+            .get_matches_from(command_line.split_whitespace());
+        cli.matches(&matches).unwrap().unwrap()
     }
 
     async fn parse_and_execute(command_line: &str, cli: CliModel) -> ProvModel {
@@ -426,6 +389,34 @@ pub mod test {
         let cmd = cli.matches(&matches).unwrap().unwrap();
 
         api.dispatch(cmd).await.unwrap().unwrap().0
+    }
+
+    // Sort @graph by //@id, as objects are unordered
+    fn sort_graph(mut v: serde_json::Value) -> serde_json::Value {
+        let mut ok = false;
+        if let Some(v) = v.pointer_mut("/@graph") {
+            ok = true;
+            v.as_array_mut().unwrap().sort_by(|l, r| {
+                l.as_object()
+                    .unwrap()
+                    .get("@id")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+            });
+        }
+        assert!(ok);
+        v
+    }
+
+    async fn sort_prov_model(
+        (prov_model, _): (ProvModel, ChronicleTransactionId),
+    ) -> serde_json::Value {
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        sort_graph(v)
     }
 
     fn test_cli_model() -> CliModel {
@@ -465,35 +456,307 @@ pub mod test {
         )
     }
 
-    // #[tokio::test]
-    // async fn help() {
-    // //     // let e = ChronicleIri::from(EntityId::from_name("test_entity"));
-    // //     // let a = ChronicleIri::from(ActivityId::from_name("test_activity"));
-    // //     // let s = format!(r#"chronicle test-activity generate {e} {a} "#);
-    // //     // eprintln!("{}", x);
-    // //     // ->
-    // //     // http://blockchaintp.com/chronicle/ns#activity:test%5Factivity
-    //     assert_json_ld!(parse_and_execute(
-    //         r#"chronicle test-entity attach test_activity --help "#,
-    //         test_cli_model()
-    //     ));
-    // }
+    #[tokio::test]
+    async fn agent_define() {
+        let command_line = r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+        let prov_model = parse_and_execute(command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:agent:test%5Fagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
+              "label": "test_agent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
+    }
 
     #[tokio::test]
     async fn agent_define_id() {
         let id = common::prov::ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
-        let s = format!(
+        let command_line = format!(
             r#"chronicle test-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
-        assert_json_ld!(parse_and_execute(&s, test_cli_model()));
-    }
-
-    #[tokio::test]
-    async fn agent_define() {
-        assert_json_ld!(parse_and_execute(
-            r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
-            test_cli_model()
-        ));
+        let prov_model = parse_and_execute(&command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:agent:test%5Fagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
+              "label": "test_agent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     // issue with keys changing with each generation
@@ -552,12 +815,7 @@ pub mod test {
     //         );
     //         let command_line = format!(r#"chronicle test-agent register-key {id} --privatekey {registration:#?} --namespace testns "#);
 
-    //         let cli = test_cli_model();
-    //         let matches = cli
-    //             .as_cmd()
-    //             .get_matches_from(command_line.split_whitespace());
-
-    //         let cmd = cli.matches(&matches).unwrap().unwrap();
+    //         let cmd = get_api_cmd(command_line);
 
     //         api.dispatch(cmd).await.unwrap();
 
@@ -578,38 +836,460 @@ pub mod test {
 
     #[tokio::test]
     async fn entity_define() {
-        assert_json_ld!(parse_and_execute(
-            r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
-            test_cli_model()
-        ));
+        let command_line = r#"chronicle test-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+        let prov_model = parse_and_execute(command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:test%5Fentity",
+              "@type": [
+                "prov:Entity",
+                "chronicle:domaintype:testEntity"
+              ],
+              "label": "test_entity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn entity_define_id() {
         let id = common::prov::ChronicleIri::from(common::prov::EntityId::from_name("test_entity"));
-        let s = format!(
+        let command_line = format!(
             r#"chronicle test-entity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
-        assert_json_ld!(parse_and_execute(&s, test_cli_model()));
+        let prov_model = parse_and_execute(&command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:test%5Fentity",
+              "@type": [
+                "prov:Entity",
+                "chronicle:domaintype:testEntity"
+              ],
+              "label": "test_entity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn entity_derive_abstract() {
         let mut api = test_api().await;
+
         let generated_entity_id = EntityId::from_name("testgeneratedentity");
         let used_entity_id = EntityId::from_name("testusedentity");
+
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns "#
         );
+        let cmd = get_api_cmd(&command_line);
+        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "label": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasDerivedFrom": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "label": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -618,18 +1298,153 @@ pub mod test {
 
         let generated_entity_id = EntityId::from_name("testgeneratedentity");
         let used_entity_id = EntityId::from_name("testusedentity");
+
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype primary-source "#
         );
+        let cmd = get_api_cmd(&command_line);
+        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "hadPrimarySource": [
+                "chronicle:entity:testusedentity"
+              ],
+              "label": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "label": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -638,18 +1453,153 @@ pub mod test {
 
         let generated_entity_id = EntityId::from_name("testgeneratedentity");
         let used_entity_id = EntityId::from_name("testusedentity");
+
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype revision "#
         );
+        let cmd = get_api_cmd(&command_line);
+        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "label": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasRevisionOf": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "label": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -658,36 +1608,457 @@ pub mod test {
 
         let generated_entity_id = EntityId::from_name("testgeneratedentity");
         let used_entity_id = EntityId::from_name("testusedentity");
+
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype quotation "#
         );
+        let cmd = get_api_cmd(&command_line);
+        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "label": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasQuotedFrom": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "label": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn activity_define() {
-        assert_json_ld!(parse_and_execute(
-            r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#,
-            test_cli_model()
-        ));
+        let command_line = r#"chronicle test-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+        let prov_model = parse_and_execute(&command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:test%5Factivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:testActivity"
+              ],
+              "label": "test_activity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn activity_define_id() {
         let id =
             common::prov::ChronicleIri::from(common::prov::ActivityId::from_name("test_activity"));
-        let s = format!(
+        let command_line = format!(
             r#"chronicle test-activity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
-        assert_json_ld!(parse_and_execute(&s, test_cli_model()));
+        let prov_model = parse_and_execute(&command_line, test_cli_model());
+        let v: serde_json::Value = serde_json::from_str(
+            &prov_model
+                .await
+                .to_json()
+                .compact()
+                .await
+                .unwrap()
+                .to_string(),
+        )
+        .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:test%5Factivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:testActivity"
+              ],
+              "label": "test_activity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -724,18 +2095,147 @@ pub mod test {
         let command_line = format!(
             r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
-
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let cmd = get_api_cmd(&command_line);
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "label": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": "prov:Agent",
+              "label": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
-    // shows a bug where the start time becomes updated as the end time.
     #[tokio::test]
     async fn activity_end() {
         let mut api = test_api().await;
@@ -780,15 +2280,146 @@ pub mod test {
         let command_line = format!(
             r#"chronicle test-activity end --namespace testns --time 2014-07-09T09:10:12Z {id} "#
         );
-
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let cmd = get_api_cmd(&command_line);
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "endTime": "2014-07-09T09:10:12+00:00",
+              "label": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "startTime": "2014-07-09T09:10:12+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": "prov:Agent",
+              "label": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -820,14 +2451,145 @@ pub mod test {
             r#"chronicle test-activity generate --namespace testns {entity_id} {activity_id} "#
         );
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
+        let cmd = get_api_cmd(&command_line);
 
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "label": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:entity:testentity",
+              "@type": "prov:Entity",
+              "label": "testentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasGeneratedBy": [
+                "chronicle:activity:testactivity"
+              ]
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -884,14 +2646,145 @@ pub mod test {
         let command_line =
             format!(r#"chronicle test-activity use --namespace testns {entity_id} {activity_id} "#);
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
+        let cmd = get_api_cmd(&command_line);
 
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "label": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "used": [
+                "chronicle:entity:testentity"
+              ],
+              "value": {}
+            },
+            {
+              "@id": "chronicle:entity:testentity",
+              "@type": "prov:Entity",
+              "label": "testentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -921,14 +2814,141 @@ pub mod test {
 
         // all three attribute types are required
         let command_line = r#"chronicle test-activity define testactivity100 --test-string-attr "test" --test-bool-attr false --test-int-attr 23 --namespace testns "#;
+        let cmd = get_api_cmd(command_line);
 
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-
-        let cmd = cli.matches(&matches).unwrap().unwrap();
-
-        assert_json_ld2!(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity100",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:testActivity"
+              ],
+              "label": "testactivity100",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": false,
+                "TestInt": 23,
+                "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
+        "###);
     }
 }
