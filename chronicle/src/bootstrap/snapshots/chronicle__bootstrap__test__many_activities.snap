@@ -116,12 +116,14 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "@id": "chronicle:activity:testactivity100",
       "@type": [
         "prov:Activity",
-        "chronicle:domaintype:test"
+        "chronicle:domaintype:testActivity"
       ],
       "label": "testactivity100",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "value": {
-        "test": "test"
+        "TestBool": false,
+        "TestInt": 23,
+        "TestString": "test"
       }
     },
     {

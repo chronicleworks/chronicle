@@ -113,23 +113,18 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
   },
   "@graph": [
     {
-      "@id": "chronicle:activity:testactivity",
-      "@type": "prov:Activity",
-      "endTime": "2014-07-08T09:10:11+00:00",
-      "label": "testactivity",
+      "@id": "chronicle:entity:test%5Fentity",
+      "@type": [
+        "prov:Entity",
+        "chronicle:domaintype:testEntity"
+      ],
+      "label": "test_entity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "startTime": "2014-07-08T09:10:11+00:00",
-      "value": {},
-      "wasAssociatedWith": [
-        "chronicle:agent:testagent"
-      ]
-    },
-    {
-      "@id": "chronicle:agent:testagent",
-      "@type": "prov:Agent",
-      "label": "testagent",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "value": {}
+      "value": {
+        "TestBool": false,
+        "TestInt": 23,
+        "TestString": "test"
+      }
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

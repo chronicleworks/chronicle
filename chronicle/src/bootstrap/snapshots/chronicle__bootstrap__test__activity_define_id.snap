@@ -113,18 +113,18 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
   },
   "@graph": [
     {
-      "@id": "chronicle:agent:test%5Fagent",
-      "@type": "prov:Agent",
-      "identity": "chronicle:identity:test%5Fagent:03971c8baae6251730faa2f5426350f26e20024458a639fed9f224e774304e1a69",
-      "label": "test_agent",
+      "@id": "chronicle:activity:test%5Factivity",
+      "@type": [
+        "prov:Activity",
+        "chronicle:domaintype:testActivity"
+      ],
+      "label": "test_activity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "value": {}
-    },
-    {
-      "@id": "chronicle:identity:test%5Fagent:03971c8baae6251730faa2f5426350f26e20024458a639fed9f224e774304e1a69",
-      "@type": "chronicle:Identity",
-      "chronicle:publicKey": "03971c8baae6251730faa2f5426350f26e20024458a639fed9f224e774304e1a69",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+      "value": {
+        "TestBool": false,
+        "TestInt": 23,
+        "TestString": "test"
+      }
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

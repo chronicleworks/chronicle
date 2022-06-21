@@ -1,5 +1,6 @@
 ---
 source: chronicle/src/bootstrap/mod.rs
+assertion_line: 499
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -113,22 +114,18 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
   },
   "@graph": [
     {
-      "@id": "chronicle:activity:testactivity",
-      "@type": "prov:Activity",
-      "label": "testactivity",
-      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-      "startTime": "2014-07-08T09:10:11+00:00",
-      "value": {},
-      "wasAssociatedWith": [
-        "chronicle:agent:testagent"
-      ]
-    },
-    {
-      "@id": "chronicle:agent:testagent",
+      "@id": "chronicle:agent:test%5Fagent",
       "@type": "prov:Agent",
-      "label": "testagent",
+      "identity": "chronicle:identity:test%5Fagent:02886129b010888a5babb9575aee4cc5fd96edffdad4b26438cbdb5c4889711704",
+      "label": "test_agent",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "value": {}
+    },
+    {
+      "@id": "chronicle:identity:test%5Fagent:02886129b010888a5babb9575aee4cc5fd96edffdad4b26438cbdb5c4889711704",
+      "@type": "chronicle:Identity",
+      "chronicle:publicKey": "02886129b010888a5babb9575aee4cc5fd96edffdad4b26438cbdb5c4889711704",
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

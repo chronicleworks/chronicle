@@ -76,5 +76,5 @@ inmem = []
 
 [dev-dependencies]
 assert_fs = "1.0"
-insta     = "1.14.1"
+insta = { version = "1.14.0", features = ["redactions", "toml"] }
 tempfile  = "3.3.0"
