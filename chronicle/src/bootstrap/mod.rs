@@ -749,16 +749,71 @@ pub mod test {
         "###);
     }
 
-    // issue with keys changing with each generation
-    // #[tokio::test]
-    // async fn agent_register_key() {
-    //     let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
-    //     let s = format!(r#"chronicle test-agent register-key --namespace testns {id} -g "#);
-    //     assert_json_ld!(parse_and_execute(
-    //         &s,
-    //         test_cli_model()
-    //     ));
-    // }
+    #[tokio::test]
+    async fn agent_register_key() {
+        let mut api = test_api().await;
+        let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+        let command_line =
+            format!(r#"chronicle test-agent register-key --namespace testns {id} -g "#);
+        let cmd = get_api_cmd(&command_line);
+        api.dispatch(cmd).await.unwrap().unwrap();
+        insta::assert_yaml_snapshot!(api.1, {
+            ".*.*.public_key" => "[public]",
+            ".*.*.*.public_key" => "[public]"
+        }, @r###"
+        ---
+        namespaces:
+          ? name: testns
+            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+          : id:
+              name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            name: testns
+        agents:
+          ? - name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            - test_agent
+          : id: test_agent
+            namespaceid:
+              name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            name: test_agent
+            domaintypeid: ~
+            attributes: {}
+        activities: {}
+        entities: {}
+        identities:
+          ? - name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            - name: test_agent
+              public_key: "[public]"
+          : id:
+              name: test_agent
+              public_key: "[public]"
+            namespaceid:
+              name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            public_key: "[public]"
+        attachments: {}
+        has_identity:
+          ? - name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            - test_agent
+          : - name: testns
+              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+            - name: test_agent
+              public_key: "[public]"
+        had_identity: {}
+        has_attachment: {}
+        had_attachment: {}
+        association: {}
+        derivation: {}
+        delegation: {}
+        generation: {}
+        useage: {}
+        "###);
+    }
 
     //     #[tokio::test]
     //     async fn agent_register_key_pk() {
@@ -805,14 +860,14 @@ pub mod test {
     //         );
     //         let command_line = format!(r#"chronicle test-agent register-key {id} --privatekey {registration:#?} --namespace testns "#);
 
-    //         let cmd = get_api_cmd(command_line);
+    //         let cmd = get_api_cmd(&command_line);
 
     //         api.dispatch(cmd).await.unwrap();
 
-    //         insta::assert_yaml_snapshot!(api.1, {
-    //             ".*.publickey" => "[public]"
-    //         });
-    //     }
+    //     insta::assert_yaml_snapshot!(api.1, {
+    //         ".*.publickey" => "[public]"
+    //     });
+    // }
 
     // #[tokio::test]
     // async fn agent_use() {
