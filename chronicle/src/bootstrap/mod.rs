@@ -276,20 +276,12 @@ pub async fn bootstrap<Query, Mutation>(
 pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 
-    // use colored_json::Output;
     use common::{
         attributes::{Attribute, Attributes},
-        // attributes::Attributes,
         commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse},
         ledger::InMemLedger,
         prov::{
-            ActivityId,
-            AgentId,
-            ChronicleIri,
-            ChronicleTransactionId,
-            DomaintypeId,
-            EntityId,
-            // EntityId, ActivityId,
+            ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, DomaintypeId, EntityId,
             ProvModel,
         },
     };
@@ -298,15 +290,13 @@ pub mod test {
         r2d2::{ConnectionManager, Pool},
         SqliteConnection,
     };
-    // use serde_json::Value;
     use tempfile::TempDir;
     use tracing::Level;
     use tracing_log::log::LevelFilter;
     use uuid::Uuid;
 
-    use crate::codegen::ChronicleDomainDef;
-    // use crate::common::prov::ChronicleIri;
     use super::{CliModel, SubCommand};
+    use crate::codegen::ChronicleDomainDef;
 
     #[derive(Clone)]
     struct TestDispatch(ApiDispatch, ProvModel);
@@ -608,7 +598,7 @@ pub mod test {
 
     #[tokio::test]
     async fn agent_define_id() {
-        let id = common::prov::ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+        let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
         let command_line = format!(
             r#"chronicle test-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
@@ -762,7 +752,7 @@ pub mod test {
     // issue with keys changing with each generation
     // #[tokio::test]
     // async fn agent_register_key() {
-    //     let id = common::prov::ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+    //     let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
     //     let s = format!(r#"chronicle test-agent register-key --namespace testns {id} -g "#);
     //     assert_json_ld!(parse_and_execute(
     //         &s,
@@ -826,7 +816,7 @@ pub mod test {
 
     // #[tokio::test]
     // async fn agent_use() {
-    //     let id = common::prov::ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+    //     let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
     //     let s = format!(r#"chronicle test-agent use --namespace testns {id} "#);
     //     assert_json_ld!(parse_and_execute(
     //         &s,
@@ -986,7 +976,7 @@ pub mod test {
 
     #[tokio::test]
     async fn entity_define_id() {
-        let id = common::prov::ChronicleIri::from(common::prov::EntityId::from_name("test_entity"));
+        let id = ChronicleIri::from(common::prov::EntityId::from_name("test_entity"));
         let command_line = format!(
             r#"chronicle test-entity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
@@ -1909,8 +1899,7 @@ pub mod test {
 
     #[tokio::test]
     async fn activity_define_id() {
-        let id =
-            common::prov::ChronicleIri::from(common::prov::ActivityId::from_name("test_activity"));
+        let id = ChronicleIri::from(common::prov::ActivityId::from_name("test_activity"));
         let command_line = format!(
             r#"chronicle test-activity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
