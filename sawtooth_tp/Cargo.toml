@@ -22,14 +22,6 @@ derivative = "2.2.0"
 futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
-k256 = { version = "0.10.4", features = [
-  "arithmetic",
-  "ecdsa",
-  "pkcs8",
-  "sha256",
-  "std",
-  "pem",
-] }
 lazy_static = "1.4.0"
 openssl = "0.10.38"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }

@@ -1,9 +1,9 @@
+use common::k256::ecdsa::{signature::Signer, Signature, SigningKey};
 use common::{
     ledger::Offset,
     prov::{operations::ChronicleOperation, ChronicleTransactionId},
 };
 use custom_error::custom_error;
-use k256::ecdsa::{signature::Signer, Signature, SigningKey};
 use openssl::sha::Sha512;
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
@@ -81,6 +81,7 @@ impl MessageBuilder {
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);
+        s.normalize_s();
 
         batch.transactions = vec![tx];
         batch.header = encoded_header;
@@ -120,11 +121,12 @@ impl MessageBuilder {
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&*encoded_header);
+        s.normalize_s();
 
         (
             Transaction {
                 header: encoded_header,
-                header_signature: hex::encode_upper(s.as_ref()),
+                header_signature: hex::encode_upper(s.to_vec()),
                 payload: bytes,
             },
             ChronicleTransactionId::from(s),
@@ -139,10 +141,12 @@ mod test {
         NamespaceId,
     };
     use k256::{ecdsa::SigningKey, SecretKey};
+    use openssl::sha::Sha512;
     use prost::Message;
+    use protobuf::Message as ProtoMessage;
     use rand::prelude::StdRng;
     use rand_core::SeedableRng;
-    use sawtooth_sdk::messages::batch::Batch;
+    use sawtooth_sdk::messages::{batch::Batch, transaction::TransactionHeader};
     use uuid::Uuid;
 
     use super::MessageBuilder;
@@ -173,7 +177,17 @@ mod test {
 
         let batch = builder.wrap_tx_as_sawtooth_batch(proto_tx);
 
-        let _batch_sdk_parsed: Batch =
+        let batch_sdk_parsed: Batch =
             protobuf::Message::parse_from_bytes(&*batch.encode_to_vec()).unwrap();
+
+        for tx in batch_sdk_parsed.transactions {
+            let header = TransactionHeader::parse_from_bytes(tx.header.as_slice()).unwrap();
+
+            let mut hasher = Sha512::new();
+            hasher.update(&*tx.payload);
+            let computed_hash = hasher.finish();
+
+            assert_eq!(header.payload_sha512, hex::encode_upper(computed_hash));
+        }
     }
 }
