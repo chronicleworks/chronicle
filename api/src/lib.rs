@@ -9,7 +9,7 @@ use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
-use k256::ecdsa::{signature::Signer, Signature};
+use common::k256::ecdsa::{signature::Signer, Signature};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
@@ -58,6 +58,7 @@ custom_error! {pub ApiError
     Join{source: JoinError}                                     = "Blocking thread pool",
     Subscription{source: SubscriptionError}                     = "State update subscription",
     NotCurrentActivity{}                                        = "No appropriate activity to end",
+    EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -814,7 +815,7 @@ where
 
                 let signer = api.keystore.agent_signing(&agent_id)?;
 
-                let signature: Signature = signer.sign(&*buf);
+                let signature: Signature = signer.try_sign(&*buf)?;
 
                 let tx = ChronicleOperation::EntityAttach(EntityAttach {
                     namespace,

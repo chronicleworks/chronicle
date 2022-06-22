@@ -10,3 +10,5 @@ pub mod context;
 pub mod ledger;
 pub mod prov;
 pub mod signing;
+
+pub use k256;
