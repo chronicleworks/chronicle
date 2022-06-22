@@ -85,7 +85,7 @@ impl SawtoothSubmitter {
 
         let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
-        debug!(?batch, "Validator request");
+        trace!(?batch, "Validator request");
 
         let request = ClientBatchSubmitRequest {
             batches: vec![batch],
@@ -101,7 +101,7 @@ impl SawtoothSubmitter {
 
         let response = ClientBatchSubmitResponse::decode(&*result.content)?;
 
-        debug!(?result, "Validator response");
+        debug!(?response, "Validator response");
 
         if response.status == 1 {
             Ok(tx_id)
