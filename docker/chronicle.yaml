@@ -29,7 +29,7 @@ services:
       sawtooth.consensus.algorithm.version=1.0
       sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
       && sawadm genesis config-genesis.batch consensus-settings.batch
-      && sawtooth-validator -vvv --scheduler parallel
+      && sawtooth-validator -vvvv --scheduler parallel
       --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004
       --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
     volumes: *rngVolumes
@@ -56,18 +56,20 @@ services:
   chronicle-sawtooth-tp:
     environment: &rustenv
       - RUST_BACKTRACE=full
-      - RUST_LOG=debug
+      - RUST_LOG=trace
     image: &chronicleImage chronicle:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
       -C tcp://validator:4004
-      --console-logging
+      --console-logging"
     depends_on:
       - validator
     volumes: *rngVolumes
 
   chronicle-sawtooth-api:
-    environment: *rustenv
+    environment:
+      - RUST_BACKTRACE=full
+      - RUST_LOG=debug
     image: *chronicleImage
     entrypoint: >
       /bin/sh -xc "/usr/local/bin/chronicle-untyped
@@ -75,13 +77,13 @@ services:
       --sawtooth tcp://validator:4004
       --console-logging
       serve-graphql
-      --interface 0.0.0.0:9982"
+      --interface 0.0.0.0:9982
+      --open"
     expose:
       - 9982
     ports:
       - "9982:9982"
     depends_on:
-      - devmode-engine
       - validator
     volumes: *rngVolumes
 
