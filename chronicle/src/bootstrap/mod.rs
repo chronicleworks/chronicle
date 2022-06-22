@@ -2453,40 +2453,22 @@ pub mod test {
     async fn activity_end() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }))
-        .await
-        .unwrap();
+        // let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let command_line = r#"chronicle test-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+        let cmd = get_api_cmd(command_line);
+        api.dispatch(cmd).await.unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_name("testagent"),
-            namespace: "testns".into(),
-        }))
-        .await
-        .unwrap();
+        let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
+        let cmd = get_api_cmd(&command_line);
+        api.dispatch(cmd).await.unwrap();
 
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_name("testactivity"),
-            namespace: "testns".into(),
-            time: Some(chrono::TimeZone::ymd(&chrono::Utc, 2014, 7, 8).and_hms(9, 10, 11)),
-            agent: None,
-        }))
-        .await
-        .unwrap();
+        let id = ChronicleIri::from(ActivityId::from_name("testactivity"));
+        let command_line = format!(
+            r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
+        );
+        let cmd = get_api_cmd(&command_line);
+        api.dispatch(cmd).await.unwrap();
 
         // Should end the last opened activity
         let id = ActivityId::from_name("testactivity");
