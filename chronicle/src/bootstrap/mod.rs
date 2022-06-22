@@ -2453,7 +2453,6 @@ pub mod test {
     async fn activity_end() {
         let mut api = test_api().await;
 
-        // let id = ChronicleIri::from(AgentId::from_name("testagent"));
         let command_line = r#"chronicle test-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
@@ -2621,31 +2620,15 @@ pub mod test {
     async fn activity_generate() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }))
-        .await
-        .unwrap();
+        let command_line = r#"chronicle test-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+        let cmd = get_api_cmd(command_line);
+        api.dispatch(cmd).await.unwrap();
 
         let activity_id = ActivityId::from_name("testactivity");
         let entity_id = EntityId::from_name("testentity");
         let command_line = format!(
             r#"chronicle test-activity generate --namespace testns {entity_id} {activity_id} "#
         );
-
         let cmd = get_api_cmd(&command_line);
 
         let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
