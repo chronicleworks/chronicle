@@ -276,7 +276,7 @@ pub async fn bootstrap<Query, Mutation>(
 pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 
-    use chrono::{TimeZone, Utc};
+    // use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
         commands::{
@@ -455,18 +455,8 @@ pub mod test {
     #[tokio::test]
     async fn agent_define() {
         let command_line = r#"chronicle test-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
-        let prov_model = parse_and_execute(command_line, test_cli_model());
-        let v: serde_json::Value = serde_json::from_str(
-            &prov_model
-                .await
-                .to_json()
-                .compact()
-                .await
-                .unwrap()
-                .to_string(),
-        )
-        .unwrap();
-        let sorted = sort_graph(v);
+        let prov_model = parse_and_execute(command_line, test_cli_model()).await;
+        let sorted = sort_prov_model(prov_model).await;
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
         {
           "@context": {
@@ -608,18 +598,8 @@ pub mod test {
         let command_line = format!(
             r#"chronicle test-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
-        let prov_model = parse_and_execute(&command_line, test_cli_model());
-        let v: serde_json::Value = serde_json::from_str(
-            &prov_model
-                .await
-                .to_json()
-                .compact()
-                .await
-                .unwrap()
-                .to_string(),
-        )
-        .unwrap();
-        let sorted = sort_graph(v);
+        let prov_model = parse_and_execute(&command_line, test_cli_model()).await;
+        let sorted = sort_prov_model(prov_model).await;
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
         {
           "@context": {
@@ -928,24 +908,11 @@ pub mod test {
     async fn agent_use() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }))
-        .await
-        .unwrap();
+        // note, if you don't supply all three types of attribute this won't run
+        let command_line = r#"chronicle test-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 23 "#;
+
+        let cmd = get_api_cmd(command_line);
+        api.dispatch(cmd).await.unwrap();
 
         let id = AgentId::from_name("testagent");
 
@@ -953,16 +920,13 @@ pub mod test {
         let cmd = get_api_cmd(&command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let (prov_model, _) = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
-                id: ActivityId::from_name("testactivity"),
-                namespace: "testns".into(),
-                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-                agent: None,
-            }))
-            .await
-            .unwrap()
-            .unwrap();
+        let id = ActivityId::from_name("testactivity");
+        let command_line = format!(
+            r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
+        );
+        let cmd = get_api_cmd(&command_line);
+
+        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
 
         let v: serde_json::Value =
             serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
