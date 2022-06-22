@@ -136,11 +136,11 @@ impl MessageBuilder {
 
 #[cfg(test)]
 mod test {
+    use common::k256::{ecdsa::SigningKey, SecretKey};
     use common::prov::{
         operations::{ChronicleOperation, CreateNamespace},
         NamespaceId,
     };
-    use k256::{ecdsa::SigningKey, SecretKey};
     use openssl::sha::Sha512;
     use prost::Message;
     use protobuf::Message as ProtoMessage;
