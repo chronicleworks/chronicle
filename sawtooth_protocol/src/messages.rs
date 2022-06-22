@@ -160,7 +160,7 @@ mod test {
 
         let batch = vec![ChronicleOperation::CreateNamespace(CreateNamespace {
             id: NamespaceId::from_name("t", uuid),
-            name: "t".into()t pu,
+            name: "t".into(),
             uuid,
         })];
 
