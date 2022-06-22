@@ -276,11 +276,15 @@ pub async fn bootstrap<Query, Mutation>(
 pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
 
+    use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
         commands::{
-            ActivityCommand, AgentCommand, ApiCommand, ApiResponse, KeyImport, KeyRegistration,
-            NamespaceCommand,
+            ActivityCommand,
+            AgentCommand,
+            ApiCommand,
+            ApiResponse,
+            // KeyImport, KeyRegistration, NamespaceCommand,
         },
         ledger::InMemLedger,
         prov::{
@@ -300,6 +304,7 @@ pub mod test {
 
     use super::{CliModel, SubCommand};
     use crate::codegen::ChronicleDomainDef;
+    // use assert_fs::prelude::*;
 
     #[derive(Clone)]
     struct TestDispatch(ApiDispatch, ProvModel);
@@ -818,100 +823,291 @@ pub mod test {
         "###);
     }
 
+    //     #[tokio::test]
+    //     async fn agent_register_public_key() {
+    //         let mut api = test_api().await;
+
+    // //         let pk = r#"
+    // // -----BEGIN PRIVATE KEY-----
+    // // MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
+    // // CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
+    // // Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
+    // // -----END PRIVATE KEY-----
+    // // "#;
+
+    //         let file = assert_fs::NamedTempFile::new("test.key").unwrap();
+    //         file.write_str(
+    //             r#"
+    // -----BEGIN PRIVATE KEY-----
+    // MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
+    // CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
+    // Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
+    // -----END PRIVATE KEY-----
+    // "#,
+    //         ).unwrap();
+    //         let path = file.path().to_string_lossy();
+    //         let id = ChronicleIri::from(common::prov::AgentId::from_name("testagent"));
+    //         let command_line = format!(r#"chronicle test-agent register-key --namespace testns {id} -k {path} "#);
+
+    //         // api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+    //         //     name: "testns".into(),
+    //         // }))
+    //         // .await
+    //         // .unwrap();
+
+    //         let cmd = get_api_cmd(&command_line);
+    //         api.dispatch(cmd).await.unwrap().unwrap();
+    //         insta::assert_yaml_snapshot!(api.1);
+
+    //         // api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+    //         //     id: AgentId::from_name("testagent"),
+    //         //     namespace: "testns".into(),
+    //         //     registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
+    //         //         buffer: pk.as_bytes().into(),
+    //         //     }),
+    //         // }))
+    //         // .await
+    //         // .unwrap();
+
+    //         // insta::assert_yaml_snapshot!(api.1, {
+    //         //     ".*.publickey" => "[public]"
+    //         // }, @r###"
+    //         // ---
+    //         // namespaces:
+    //         //   ? name: testns
+    //         //     uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //   : id:
+    //         //       name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     name: testns
+    //         // agents:
+    //         //   ? - name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     - testagent
+    //         //   : id: testagent
+    //         //     namespaceid:
+    //         //       name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     name: testagent
+    //         //     domaintypeid: ~
+    //         //     attributes: {}
+    //         // activities: {}
+    //         // entities: {}
+    //         // identities:
+    //         //   ? - name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     - name: testagent
+    //         //       public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+    //         //   : id:
+    //         //       name: testagent
+    //         //       public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+    //         //     namespaceid:
+    //         //       name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+    //         // attachments: {}
+    //         // has_identity:
+    //         //   ? - name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     - testagent
+    //         //   : - name: testns
+    //         //       uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
+    //         //     - name: testagent
+    //         //       public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+    //         // had_identity: {}
+    //         // has_attachment: {}
+    //         // had_attachment: {}
+    //         // association: {}
+    //         // derivation: {}
+    //         // delegation: {}
+    //         // generation: {}
+    //         // useage: {}
+    //         // "###);
+    //     }
+
     #[tokio::test]
-    async fn agent_register_public_key() {
+    async fn agent_use() {
         let mut api = test_api().await;
 
-        let pk = r#"
------BEGIN PRIVATE KEY-----
-MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
-CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
-Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
------END PRIVATE KEY-----
-"#;
-
-        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".into(),
-        }))
-        .await
-        .unwrap();
-
-        api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            id: AgentId::from_name("testagent"),
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            name: "testagent".into(),
             namespace: "testns".into(),
-            registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
-                buffer: pk.as_bytes().into(),
-            }),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from_name("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
         }))
         .await
         .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1, {
-            ".*.publickey" => "[public]"
-        }, @r###"
-        ---
-        namespaces:
-          ? name: testns
-            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-          : id:
-              name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: testns
-        agents:
-          ? - name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - testagent
-          : id: testagent
-            namespaceid:
-              name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: testagent
-            domaintypeid: ~
-            attributes: {}
-        activities: {}
-        entities: {}
-        identities:
-          ? - name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
-          : id:
-              name: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
-            namespaceid:
-              name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
-        attachments: {}
-        has_identity:
-          ? - name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - testagent
-          : - name: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
-        had_identity: {}
-        has_attachment: {}
-        had_attachment: {}
-        association: {}
-        derivation: {}
-        delegation: {}
-        generation: {}
-        useage: {}
+        let id = AgentId::from_name("testagent");
+
+        let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
+        let cmd = get_api_cmd(&command_line);
+        api.dispatch(cmd).await.unwrap();
+
+        let (prov_model, _) = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
+                id: ActivityId::from_name("testactivity"),
+                namespace: "testns".into(),
+                time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+                agent: None,
+            }))
+            .await
+            .unwrap()
+            .unwrap();
+
+        let v: serde_json::Value =
+            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
+                .unwrap();
+        let sorted = sort_graph(v);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @r###"
+        {
+          "@context": {
+            "@version": 1.1,
+            "actedOnBehalfOf": {
+              "@container": "@set",
+              "@id": "prov:actedOnBehalfOf",
+              "@type": "@id"
+            },
+            "activity": {
+              "@id": "prov:activity",
+              "@type": "@id"
+            },
+            "agent": {
+              "@id": "prov:agent",
+              "@type": "@id"
+            },
+            "attachment": {
+              "@id": "chronicle:hasAttachment",
+              "@type": "@id"
+            },
+            "chronicle": "http://blockchaintp.com/chronicle/ns#",
+            "endTime": {
+              "@id": "prov:endedAtTime"
+            },
+            "entity": {
+              "@id": "prov:entity",
+              "@type": "@id"
+            },
+            "hadPrimarySource": {
+              "@container": "@set",
+              "@id": "prov:hadPrimarySource",
+              "@type": "@id"
+            },
+            "identity": {
+              "@id": "chronicle:hasIdentity",
+              "@type": "@id"
+            },
+            "label": {
+              "@id": "rdfs:label"
+            },
+            "namespace": {
+              "@id": "chronicle:hasNamespace",
+              "@type": "@id"
+            },
+            "previousAttachments": {
+              "@container": "@set",
+              "@id": "chronicle:hadAttachment",
+              "@type": "@id"
+            },
+            "previousIdentities": {
+              "@container": "@set",
+              "@id": "chronicle:hadIdentity",
+              "@type": "@id"
+            },
+            "prov": "http://www.w3.org/ns/prov#",
+            "provext": "https://openprovenance.org/ns/provext#",
+            "publicKey": {
+              "@id": "chronicle:hasPublicKey"
+            },
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "signature": {
+              "@id": "chronicle:entitySignature"
+            },
+            "signedAtTime": {
+              "@id": "chronicle:signedAtTime"
+            },
+            "source": {
+              "@id": "chronicle:entityLocator"
+            },
+            "startTime": {
+              "@id": "prov:startedAtTime"
+            },
+            "used": {
+              "@container": "@set",
+              "@id": "prov:used",
+              "@type": "@id"
+            },
+            "value": {
+              "@id": "chronicle:value",
+              "@type": "@json"
+            },
+            "wasAssociatedWith": {
+              "@container": "@set",
+              "@id": "prov:wasAssociatedWith",
+              "@type": "@id"
+            },
+            "wasDerivedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasDerivedFrom",
+              "@type": "@id"
+            },
+            "wasGeneratedBy": {
+              "@container": "@set",
+              "@id": "prov:wasGeneratedBy",
+              "@type": "@id"
+            },
+            "wasQuotedFrom": {
+              "@container": "@set",
+              "@id": "prov:wasQuotedFrom",
+              "@type": "@id"
+            },
+            "wasRevisionOf": {
+              "@container": "@set",
+              "@id": "prov:wasRevisionOf",
+              "@type": "@id"
+            },
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+          },
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "label": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": "prov:Agent",
+              "label": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "label": "testns"
+            }
+          ]
+        }
         "###);
     }
-
-    // #[tokio::test]
-    // async fn agent_use() {
-    //     let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
-    //     let s = format!(r#"chronicle test-agent use --namespace testns {id} "#);
-    //     assert_json_ld!(parse_and_execute(
-    //         &s,
-    //         test_cli_model()
-    //     ));
-    // }
 
     #[tokio::test]
     async fn entity_define() {
