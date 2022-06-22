@@ -29,7 +29,7 @@ services:
       sawtooth.consensus.algorithm.version=1.0
       sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
       && sawadm genesis config-genesis.batch consensus-settings.batch
-      && sawtooth-validator -v --scheduler parallel
+      && sawtooth-validator -vvv --scheduler parallel
       --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004
       --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
     volumes: *rngVolumes
@@ -61,7 +61,7 @@ services:
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
       -C tcp://validator:4004
-      --instrument http://jaeger:14268/api/traces"
+      --console-logging
     depends_on:
       - validator
     volumes: *rngVolumes
@@ -73,7 +73,7 @@ services:
       /bin/sh -xc "/usr/local/bin/chronicle-untyped
       -c /root/.chronicle/config.toml
       --sawtooth tcp://validator:4004
-      --instrument http://jaeger:14268/api/traces
+      --console-logging
       serve-graphql
       --interface 0.0.0.0:9982"
     expose:
