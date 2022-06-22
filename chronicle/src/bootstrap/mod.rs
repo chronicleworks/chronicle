@@ -408,9 +408,7 @@ pub mod test {
         v
     }
 
-    async fn sort_prov_model(
-        (prov_model, _): (ProvModel, ChronicleTransactionId),
-    ) -> serde_json::Value {
+    async fn sort_prov_model(prov_model: ProvModel) -> serde_json::Value {
         let v: serde_json::Value =
             serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
                 .unwrap();
@@ -2370,7 +2368,7 @@ pub mod test {
             r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
         let cmd = get_api_cmd(&command_line);
-        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
         {
           "@context": {
@@ -2555,7 +2553,7 @@ pub mod test {
             r#"chronicle test-activity end --namespace testns --time 2014-07-09T09:10:12Z {id} "#
         );
         let cmd = get_api_cmd(&command_line);
-        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
         {
           "@context": {
@@ -2727,7 +2725,7 @@ pub mod test {
 
         let cmd = get_api_cmd(&command_line);
 
-        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
         {
           "@context": {
@@ -2922,7 +2920,7 @@ pub mod test {
 
         let cmd = get_api_cmd(&command_line);
 
-        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
         {
           "@context": {
@@ -3090,7 +3088,7 @@ pub mod test {
         let command_line = r#"chronicle test-activity define testactivity100 --test-string-attr "test" --test-bool-attr false --test-int-attr 23 --namespace testns "#;
         let cmd = get_api_cmd(command_line);
 
-        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap());
+        let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
         insta::assert_snapshot!(serde_json::to_string_pretty(&sorted.await).unwrap(), @r###"
         {
           "@context": {
