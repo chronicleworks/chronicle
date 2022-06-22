@@ -85,6 +85,7 @@ impl MessageBuilder {
 
         batch.transactions = vec![tx];
         batch.header = encoded_header;
+        batch.trace = true;
         batch.header_signature = hex::encode_upper(s.as_ref());
 
         batch

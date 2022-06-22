@@ -21,7 +21,7 @@ use sawtooth_sdk::{
     },
 };
 use tokio::task::JoinError;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
