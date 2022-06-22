@@ -173,9 +173,7 @@ impl StateDelta {
                 let events = StateDelta::recv_from_channel(rx.clone()).await;
 
                 match events {
-                    Err(StateError::ZmqRxx { .. }) => {
-                        debug!("No events in time window");
-                    }
+                    Err(StateError::ZmqRxx { .. }) => {}
                     Ok(Ok(events)) => {
                         match EventList::decode(events.get_content()) {
                             Ok(events) => {
