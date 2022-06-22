@@ -1,14 +1,16 @@
 use crate::{
-    address::SawtoothAddress, messages::MessageBuilder, sawtooth::ClientBatchSubmitRequest,
+    address::SawtoothAddress,
+    messages::MessageBuilder,
+    sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse},
 };
 
+use common::k256::ecdsa::SigningKey;
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
 use derivative::Derivative;
-use common::k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
@@ -33,9 +35,10 @@ pub struct SawtoothSubmitter {
 custom_error! {pub SawtoothSubmissionError
     Send{source: SendError}                                 = "Submission failed to send to validator",
     Recv{source: ReceiveError}                              = "Submission failed to send to validator",
-    UnexpectedReply{}                                       = "Validator reply unexpected",
+    UnexpectedStatus{status: i32}                           = "Validator status unexpected {}",
     Join{source: JoinError}                                 = "Submission blocking thread pool",
     Ld{source: ProcessorError}                              = "Json LD processing",
+    Decode{source: prost::DecodeError}                      = "Response decoding",
 }
 
 impl From<SawtoothSubmissionError> for SubmissionError {
@@ -96,12 +99,16 @@ impl SawtoothSubmitter {
 
         let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
+        let response = ClientBatchSubmitResponse::decode(&*result.content)?;
+
         debug!(?result, "Validator response");
 
-        if result.message_type == Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE {
+        if response.status == 1 {
             Ok(tx_id)
         } else {
-            Err(SawtoothSubmissionError::UnexpectedReply {})
+            Err(SawtoothSubmissionError::UnexpectedStatus {
+                status: response.status,
+            })
         }
     }
 }
