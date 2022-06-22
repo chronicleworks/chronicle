@@ -1,7 +1,7 @@
 use custom_error::custom_error;
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},
-    pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
+    pkcs8::{self, spki, DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
     SecretKey,
 };
 use rand::prelude::StdRng;
@@ -20,8 +20,8 @@ custom_error! {pub SignerError
     Io{source: std::io::Error}                              = "Invalid key store directory",
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
-    InvalidPublicKey{source: k256::pkcs8::Error}            = "Invalid public key",
-    InvalidPrivateKey{source:  k256::pkcs8::spki::Error}    = "Invalid public key",
+    InvalidPublicKey{source: pkcs8::Error}            = "Invalid public key",
+    InvalidPrivateKey{source:  spki::Error}    = "Invalid public key",
     NoPublicKeyFound{}                                      = "No public key found",
     NoPrivateKeyFound{}                                     = "No private key found",
 }
@@ -162,16 +162,14 @@ impl DirectoryStoredKeys {
     }
 
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {
-        Ok(SigningKey::read_pkcs8_pem_file(Path::join(
-            path,
-            Path::new("key.priv.pem"),
-        ))?)
+        Ok(SigningKey::from_pkcs8_pem(&*std::fs::read_to_string(
+            Path::join(path, Path::new("key.priv.pem")),
+        )?)?)
     }
 
     fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
-        Ok(VerifyingKey::read_public_key_pem_file(Path::join(
-            path,
-            Path::new("key.pub.pem"),
-        ))?)
+        Ok(VerifyingKey::from_public_key_pem(
+            &*std::fs::read_to_string(Path::join(path, Path::new("key.pub.pem")))?,
+        )?)
     }
 }
