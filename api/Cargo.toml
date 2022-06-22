@@ -1,17 +1,17 @@
 [package]
-build = "build.rs"
+build   = "build.rs"
 edition = "2021"
-name = "api"
+name    = "api"
 version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-graphql = { features = [
-    "opentelemetry",
-    "chrono",
-    "unblock",
-    "default",
-    "uuid",
+  "opentelemetry",
+  "chrono",
+  "unblock",
+  "default",
+  "uuid",
 ], version = "3.0.38" }
 async-graphql-poem = "3.0.38"
 async-stream = "0.3.3"
@@ -21,10 +21,10 @@ common = { path = "../common" }
 custom_error = "1.9.2"
 derivative = "2.2.0"
 diesel = { version = "2.0.0-rc.0", features = [
-    "sqlite",
-    "uuid",
-    "chrono",
-    "r2d2",
+  "sqlite",
+  "uuid",
+  "chrono",
+  "r2d2",
 ] }
 diesel_migrations = { version = "2.0.0-rc.0", features = ["sqlite"] }
 futures = "0.3.21"
@@ -34,14 +34,6 @@ iref = "2.1.2"
 iref-enum = "2.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
-k256 = { version = "0.10.4", features = [
-    "arithmetic",
-    "ecdsa",
-    "pkcs8",
-    "sha256",
-    "std",
-    "pem",
-] }
 open = "2.1.1"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
@@ -59,14 +51,12 @@ user-error = "1.2.8"
 uuid = { version = "0.8.2", features = ["v4"] }
 
 [dev-dependencies]
-insta = { version = "1.14.0", features = ["redactions", "toml"] }
+insta      = { version = "1.14.0", features = ["redactions", "toml"] }
 serde_json = "1.0.79"
-tempfile = "3.3.0"
-tracing-log = "0.1.2"
-
+tempfile   = "3.3.0"
 
 [build-dependencies]
 
 [features]
+inmem  = []
 strict = []
-inmem = []

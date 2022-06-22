@@ -16,7 +16,7 @@ use custom_error::custom_error;
 use derivative::*;
 use futures::{stream, Stream, StreamExt, TryFutureExt};
 
-use k256::ecdsa::{Signature, SigningKey};
+use common::k256::ecdsa::{Signature, SigningKey};
 use prost::{DecodeError, EncodeError, Message};
 use sawtooth_sdk::{
     messages::validator::Message_MessageType,
@@ -43,7 +43,7 @@ custom_error! {pub StateError
     RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator",
     MissingBlockNum{}                               = "Missing block_num in block commit",
     MissingTransactionId{}                          = "Missing transaction_id in prov-update",
-    InvalidTransactionId{source: k256::ecdsa::Error}
+    InvalidTransactionId{source: common::k256::ecdsa::Error}
                                                     = "Invalid transaction id (not a signature)",
     MissingData{}                                   = "Missing block_num in block commit",
     UnparsableBlockNum {}                           = "Unparsable block_num in block commit",

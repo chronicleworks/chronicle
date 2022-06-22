@@ -8,7 +8,7 @@ use common::{
 };
 use custom_error::*;
 use derivative::Derivative;
-use k256::ecdsa::SigningKey;
+use common::k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
