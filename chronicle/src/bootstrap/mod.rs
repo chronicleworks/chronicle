@@ -277,7 +277,7 @@ pub mod test {
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
     use common::{
         attributes::{Attribute, Attributes},
-        commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse},
+        commands::{ActivityCommand, ApiCommand, ApiResponse},
         ledger::InMemLedger,
         prov::{
             ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, DomaintypeId, EntityId,
@@ -2774,50 +2774,18 @@ pub mod test {
     async fn activity_use() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: common::attributes::Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }))
-        .await
-        .unwrap();
+        let command_line = r#"chronicle test-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+        let cmd = get_api_cmd(command_line);
+        api.dispatch(cmd).await.unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_name("testagent"),
-            namespace: "testns".into(),
-        }))
-        .await
-        .unwrap();
+        let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
+        let cmd = get_api_cmd(&command_line);
+        api.dispatch(cmd).await.unwrap();
 
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }))
-        .await
-        .unwrap();
+        let command_line = r#"chronicle test-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+        let cmd = get_api_cmd(command_line);
+        api.dispatch(cmd).await.unwrap();
 
         let activity_id = ActivityId::from_name("testactivity");
         let entity_id = EntityId::from_name("testentity");
