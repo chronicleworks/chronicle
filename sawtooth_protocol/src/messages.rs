@@ -75,7 +75,7 @@ impl MessageBuilder {
 
         let mut header = BatchHeader::default();
 
-        let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
+        let pubkey = hex::encode(self.signer.verifying_key().to_bytes());
         header.transaction_ids = vec![tx.header_signature.clone()];
         header.signer_public_key = pubkey;
 
@@ -85,7 +85,7 @@ impl MessageBuilder {
 
         batch.transactions = vec![tx];
         batch.header = encoded_header;
-        batch.header_signature = hex::encode_upper(s.as_ref());
+        batch.header_signature = hex::encode(s.as_ref());
 
         batch
     }
@@ -103,10 +103,10 @@ impl MessageBuilder {
         let mut hasher = Sha512::new();
         hasher.update(&*bytes);
 
-        let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
+        let pubkey = hex::encode(self.signer.verifying_key().to_bytes());
 
         let header = TransactionHeader {
-            payload_sha512: hex::encode_upper(hasher.finish()),
+            payload_sha512: hex::encode(hasher.finish()),
             family_name: self.family_name.clone(),
             family_version: self.family_version.clone(),
             nonce: self.generate_nonce(),
@@ -126,7 +126,7 @@ impl MessageBuilder {
         (
             Transaction {
                 header: encoded_header,
-                header_signature: hex::encode_upper(s.to_vec()),
+                header_signature: hex::encode(s.to_vec()),
                 payload: bytes,
             },
             ChronicleTransactionId::from(s),
@@ -187,7 +187,7 @@ mod test {
             hasher.update(&*tx.payload);
             let computed_hash = hasher.finish();
 
-            assert_eq!(header.payload_sha512, hex::encode_upper(computed_hash));
+            assert_eq!(header.payload_sha512, hex::encode(computed_hash));
         }
     }
 }
