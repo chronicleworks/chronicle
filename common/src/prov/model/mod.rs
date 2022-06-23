@@ -90,7 +90,7 @@ impl From<Uuid> for ChronicleTransactionId {
 
 impl From<Signature> for ChronicleTransactionId {
     fn from(s: Signature) -> Self {
-        Self(hex::encode_upper(s.as_ref()))
+        Self(hex::encode(s.as_ref()))
     }
 }
 
