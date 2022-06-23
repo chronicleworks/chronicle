@@ -4,7 +4,7 @@ use common::{
     ledger::StateInput,
     prov::{operations::ChronicleOperation, ProvModel},
 };
-use sawtooth_protocol::address::{SawtoothAddress, PREFIX};
+use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
 
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
@@ -23,8 +23,8 @@ pub struct ChronicleTransactionHandler {
 impl ChronicleTransactionHandler {
     pub fn new() -> ChronicleTransactionHandler {
         ChronicleTransactionHandler {
-            family_name: "chronicle".into(),
-            family_versions: vec!["1.0".into()],
+            family_name: FAMILY.to_owned(),
+            family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
         }
     }
