@@ -60,6 +60,7 @@ impl From<StateError> for SubscriptionError {
 }
 
 use crate::{
+    address::{FAMILY, VERSION},
     messages::MessageBuilder,
     sawtooth::{
         client_events_subscribe_response::Status, ClientEventsSubscribeResponse, EventList,
@@ -78,7 +79,7 @@ pub struct StateDelta {
 impl StateDelta {
     #[instrument]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
-        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
+        let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         info!(?address, "Subscribing to state updates");
         StateDelta {

@@ -1,5 +1,5 @@
 use crate::{
-    address::SawtoothAddress,
+    address::{SawtoothAddress, FAMILY, VERSION},
     messages::MessageBuilder,
     sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse},
 };
@@ -53,7 +53,7 @@ impl From<SawtoothSubmissionError> for SubmissionError {
 impl SawtoothSubmitter {
     #[allow(dead_code)]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
-        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
+        let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         SawtoothSubmitter { tx, rx, builder }
     }
