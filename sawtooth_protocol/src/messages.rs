@@ -39,7 +39,7 @@ impl MessageBuilder {
 
     fn generate_nonce(&mut self) -> String {
         let bytes = self.rng.gen::<[u8; 20]>();
-        hex::encode_upper(bytes)
+        hex::encode(bytes)
     }
 
     #[allow(dead_code)]
@@ -75,7 +75,7 @@ impl MessageBuilder {
 
         let mut header = BatchHeader::default();
 
-        let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
+        let pubkey = hex::encode(self.signer.verifying_key().to_bytes());
         header.transaction_ids = vec![tx.header_signature.clone()];
         header.signer_public_key = pubkey;
 
@@ -85,7 +85,7 @@ impl MessageBuilder {
 
         batch.transactions = vec![tx];
         batch.header = encoded_header;
-        batch.header_signature = hex::encode_upper(s.as_ref());
+        batch.header_signature = hex::encode(s.as_ref());
 
         batch
     }
@@ -103,7 +103,7 @@ impl MessageBuilder {
         let mut hasher = Sha512::new();
         hasher.update(&*bytes);
 
-        let pubkey = hex::encode_upper(self.signer.verifying_key().to_bytes());
+        let pubkey = hex::encode(self.signer.verifying_key().to_bytes());
 
         let header = TransactionHeader {
             payload_sha512: hex::encode(hasher.finish()),
@@ -126,7 +126,7 @@ impl MessageBuilder {
         (
             Transaction {
                 header: encoded_header,
-                header_signature: hex::encode_upper(s.to_vec()),
+                header_signature: hex::encode(s.to_vec()),
                 payload: bytes,
             },
             ChronicleTransactionId::from(s),

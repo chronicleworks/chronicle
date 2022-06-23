@@ -823,9 +823,9 @@ where
                     agent: agent_id.clone(),
                     identityid: Some(IdentityId::from_name(
                         agent_id.name_part(),
-                        &*hex::encode_upper(signer.to_bytes()),
+                        &*hex::encode(signer.to_bytes()),
                     )),
-                    signature: Some(hex::encode_upper(signature)),
+                    signature: Some(hex::encode(signature)),
                     locator,
                     signature_time: Some(Utc::now()),
                 });

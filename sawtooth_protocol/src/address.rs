@@ -8,7 +8,7 @@ lazy_static! {
     pub static ref PREFIX: String = {
         let mut sha = Sha256::new();
         sha.update("chronicle".as_bytes());
-        hex::encode_upper(sha.finish())[..6].to_string()
+        hex::encode(sha.finish())[..6].to_string()
     };
 }
 
@@ -26,7 +26,7 @@ impl From<&LedgerAddress> for SawtoothAddress {
             sha.update(ns.as_bytes())
         }
         sha.update(addr.resource.as_bytes());
-        SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode_upper(sha.finish())))
+        SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode(sha.finish())))
     }
 }
 
