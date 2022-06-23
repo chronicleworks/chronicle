@@ -308,7 +308,7 @@ impl SubCommand for AgentCliModel {
             )
             .arg(
                 Arg::new("privatekey")
-                    .help("Import the private key at the specifed path to the configured key store, ensure you have configured the key store to be in an appropriate location")
+                    .help("Import the private key at the specified path to the configured key store, ensure you have configured the key store to be in an appropriate location")
                     .short('k')
                     .long("privatekey")
                     .required_unless_present_any(vec!["generate","publickey"])
@@ -674,7 +674,7 @@ impl SubCommand for EntityCliModel {
                     )
                     .arg(
                         Arg::new("activity_id")
-                            .help("The actitity IRI that generated the entity")
+                            .help("The activity IRI that generated the entity")
                             .long("activity")
                             .takes_value(true)
                             .required(false),
@@ -693,7 +693,7 @@ impl SubCommand for EntityCliModel {
                     .about("Sign the input file and record it against the entity")
                     .arg(
                         Arg::new("entity_id")
-                            .help("A valid chronicle activity IRI")
+                            .help("A valid chronicle entity IRI")
                             .takes_value(true),
                     )
                     .arg(
@@ -729,7 +729,7 @@ impl SubCommand for EntityCliModel {
                     )
                     .group(
                         ArgGroup::new("identifier")
-                            .args(&["activity_name", "entity_id"])
+                            .args(&["agent_id", "entity_id"])
                             .required(true),
                     ),
             )
