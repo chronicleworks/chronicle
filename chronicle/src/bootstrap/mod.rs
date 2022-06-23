@@ -1349,43 +1349,6 @@ pub mod test {
         "###);
     }
 
-    // See: https://blockchaintp.atlassian.net/browse/CHRON-33
-
-    // #[tokio::test]
-    // async fn entity_attach() {
-    //     let mut api = test_api().await;
-    //     let entity_id = ChronicleIri::from(EntityId::from_name("test-entity")); // "A valid chronicle entity IRI"
-
-    //     let file = assert_fs::NamedTempFile::new("test.file").unwrap(); // "A path to the file to be signed and attached"
-    //     let path = file.path();
-
-    //     let path = std::path::PathBuf::from(&*path);
-
-    //     let command_line = format!(
-    //         r#"chronicle test-entity attach {entity_id} --namespace testns --file {path:?} "#
-    //     );
-    //     let cmd = get_api_cmd(&command_line);
-    //     let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
-    //     let v: serde_json::Value =
-    //         serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
-    //             .unwrap();
-    //     let sorted = sort_graph(v);
-    //     insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @"");
-    // }
-
-    #[tokio::test]
-    async fn help() {
-        let mut api = test_api().await;
-        let command_line = r#"chronicle test-entity attach --help "#;
-        let cmd = get_api_cmd(command_line);
-        let (prov_model, _) = api.dispatch(cmd).await.unwrap().unwrap();
-        let v: serde_json::Value =
-            serde_json::from_str(&prov_model.to_json().compact().await.unwrap().to_string())
-                .unwrap();
-        let sorted = sort_graph(v);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&sorted).unwrap(), @"");
-    }
-
     #[tokio::test]
     async fn entity_derive_abstract() {
         let mut api = test_api().await;
@@ -2313,30 +2276,9 @@ pub mod test {
     async fn activity_start() {
         let mut api = test_api().await;
 
-        // This and the commented out code below it both pass the same snapshot
-        // But the commented out code only supplies one test-string-attr while all three types are required for command line input
         let command_line = r#"chronicle test-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
-
-        // api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-        //     name: "testagent".into(),
-        //     namespace: "testns".into(),
-        //     attributes: Attributes {
-        //         typ: Some(DomaintypeId::from_name("test")),
-        //         attributes: [(
-        //             "test".to_owned(),
-        //             Attribute {
-        //                 typ: "test".to_owned(),
-        //                 value: serde_json::Value::String("test".to_owned()),
-        //             },
-        //         )]
-        //         .into_iter()
-        //         .collect(),
-        //     },
-        // }))
-        // .await
-        // .unwrap();
 
         let id = ChronicleIri::from(AgentId::from_name("testagent"));
         let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
