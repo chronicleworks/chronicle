@@ -12,6 +12,9 @@ lazy_static! {
     };
 }
 
+pub static VERSION: &str = "1.0";
+pub static FAMILY: &str = "chronicle";
+
 pub struct SawtoothAddress(String);
 
 /// Our sawtooth addresses use hash(chronicle)[..6] as the prefix,
