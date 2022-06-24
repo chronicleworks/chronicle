@@ -68,8 +68,6 @@ mod test {
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
     use std::time::Duration;
     use tempfile::TempDir;
-    use tracing::Level;
-    use tracing_log::log;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -81,12 +79,7 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        tracing_log::LogTracer::init_with_filter(log::LevelFilter::Trace).ok();
-        tracing_subscriber::fmt()
-            .pretty()
-            .with_max_level(Level::TRACE)
-            .try_init()
-            .ok();
+        telemetry::console_logging_trace();
 
         let secretpath = TempDir::new().unwrap();
 
