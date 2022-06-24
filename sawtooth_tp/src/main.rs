@@ -1,4 +1,3 @@
-// pub mod telemetry;
 mod tp;
 
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};

@@ -457,6 +457,8 @@ dependencies = [
  "tokio",
  "toml 0.5.8",
  "tracing",
+ "tracing-log",
+ "tracing-subscriber",
  "url",
  "user-error",
  "uuid 0.8.2",
