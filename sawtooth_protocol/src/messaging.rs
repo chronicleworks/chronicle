@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     address::{SawtoothAddress, FAMILY, VERSION},
     messages::MessageBuilder,
@@ -14,7 +16,7 @@ use derivative::Derivative;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
-    messages::validator::Message_MessageType,
+    messages::{transaction, validator::Message_MessageType},
     messaging::{
         stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
@@ -63,22 +65,17 @@ impl SawtoothSubmitter {
         &mut self,
         transactions: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
-        let mut addresses = vec![];
+        let addresses = transactions
+            .iter()
+            .flat_map(|tx| tx.dependencies())
+            .map(|addr| (SawtoothAddress::from(&addr).to_string(), addr))
+            .collect::<HashSet<_>>();
 
-        for transaction in transactions {
-            addresses.append(
-                &mut transaction
-                    .dependencies()
-                    .iter()
-                    .map(SawtoothAddress::from)
-                    .map(|addr| addr.to_string())
-                    .collect::<Vec<_>>(),
-            );
-        }
+        debug!(address_map = ?addresses);
 
         let (sawtooth_transaction, tx_id) = self.builder.make_sawtooth_transaction(
-            addresses.clone(),
-            addresses,
+            addresses.iter().map(|x| x.0.clone()).collect(),
+            addresses.into_iter().map(|x| x.0).collect(),
             vec![],
             transactions,
         );
