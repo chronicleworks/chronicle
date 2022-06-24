@@ -452,6 +452,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shellexpand",
+ "telemetry",
  "tempfile",
  "tokio",
  "toml 0.5.8",

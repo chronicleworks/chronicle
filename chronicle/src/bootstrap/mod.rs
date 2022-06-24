@@ -1,6 +1,5 @@
 mod cli;
 mod config;
-pub mod telemetry;
 
 use api::{
     chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer},
@@ -23,6 +22,7 @@ use diesel::{
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
+use telemetry;
 use url::Url;
 
 use std::{
@@ -33,8 +33,6 @@ use std::{
 };
 
 use crate::codegen::ChronicleDomainDef;
-
-use telemetry::{console_logging, telemetry};
 
 #[allow(dead_code)]
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
@@ -251,11 +249,13 @@ pub async fn bootstrap<Query, Mutation>(
     }
 
     if matches.contains_id("console-logging") {
-        console_logging();
+        telemetry::console_logging();
     }
 
     if matches.contains_id("instrument") {
-        telemetry(Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap());
+        telemetry::telemetry(
+            Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap(),
+        );
     }
 
     config_and_exec(gql, domain.into())
