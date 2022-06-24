@@ -68,11 +68,11 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "static-iref",
+ "telemetry",
  "tempfile",
  "tokio",
  "tracing",
  "tracing-log",
- "tracing-subscriber",
  "url",
  "user-error",
  "uuid 0.8.2",
@@ -452,13 +452,12 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shellexpand",
+ "telemetry",
  "tempfile",
  "tokio",
  "toml 0.5.8",
  "tracing",
  "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber",
  "url",
  "user-error",
  "uuid 0.8.2",
@@ -472,10 +471,10 @@ dependencies = [
  "chronicle",
  "diesel",
  "insta",
+ "telemetry",
  "tempfile",
  "tracing",
  "tracing-log",
- "tracing-subscriber",
  "uuid 1.0.0",
 ]
 
@@ -2795,11 +2794,9 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_derive",
+ "telemetry",
  "tokio",
  "tracing",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber",
  "url",
  "uuid 0.8.2",
  "zmq",
@@ -3077,6 +3074,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "telemetry"
+version = "0.1.0"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "tracing",
+ "tracing-log",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

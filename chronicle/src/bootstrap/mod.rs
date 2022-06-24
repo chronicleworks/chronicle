@@ -1,6 +1,5 @@
 mod cli;
 mod config;
-pub mod telemetry;
 
 use api::{
     chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer},
@@ -23,6 +22,7 @@ use diesel::{
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
+use telemetry;
 use url::Url;
 
 use std::{
@@ -249,7 +249,7 @@ pub async fn bootstrap<Query, Mutation>(
     }
 
     if matches.contains_id("console-logging") {
-        telemetry::console_logging();
+        telemetry::console_logging_info();
     }
 
     if matches.contains_id("instrument") {
@@ -285,9 +285,8 @@ pub mod test {
         r2d2::{ConnectionManager, Pool},
         SqliteConnection,
     };
+
     use tempfile::TempDir;
-    use tracing::Level;
-    use tracing_log::log::LevelFilter;
     use uuid::Uuid;
 
     use super::{CliModel, SubCommand};
@@ -322,12 +321,7 @@ pub mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        tracing_log::LogTracer::init_with_filter(LevelFilter::Trace).ok();
-        tracing_subscriber::fmt()
-            .pretty()
-            .with_max_level(Level::TRACE)
-            .try_init()
-            .ok();
+        telemetry::console_logging_trace();
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
