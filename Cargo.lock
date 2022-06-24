@@ -2795,6 +2795,7 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_derive",
+ "telemetry",
  "tokio",
  "tracing",
  "tracing-log",

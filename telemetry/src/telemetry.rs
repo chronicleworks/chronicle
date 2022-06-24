@@ -1,13 +1,13 @@
 use tracing::subscriber::set_global_default;
-use tracing_log::LogTracer;
+use tracing_log::{log::LevelFilter, LogTracer};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, EnvFilter, Registry};
 use url::Url;
 
 pub fn telemetry(collector_endpoint: Url) {
-    LogTracer::init().expect("Failed to set logger");
+    LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
     let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name("chronicle_tp")
+        .with_service_name("chronicle_api")
         .with_collector_endpoint(collector_endpoint.as_str())
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
@@ -17,4 +17,14 @@ pub fn telemetry(collector_endpoint: Url) {
     let collector = Registry::default().with(env_filter).with(opentelemetry);
 
     set_global_default(collector).expect("Failed to set collector");
+}
+
+pub fn console_logging() {
+    LogTracer::init_with_filter(LevelFilter::Info).ok();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .pretty()
+        .try_init()
+        .ok();
 }

@@ -1,12 +1,13 @@
-pub mod telemetry;
+// pub mod telemetry;
 mod tp;
 
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
-use telemetry::telemetry;
 use tp::ChronicleTransactionHandler;
 use url::Url;
+
+use telemetry::telemetry;
 
 #[tokio::main]
 async fn main() {
