@@ -1,4 +1,5 @@
 use futures::{stream, SinkExt, Stream, StreamExt};
+
 use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
@@ -13,8 +14,8 @@ use crate::{
             RegisterKey, SetAttributes, StartActivity,
         },
         to_json_ld::ToJson,
-        AgentId, AttachmentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId,
-        NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
+        NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -24,7 +25,8 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
     pin::Pin,
-    str::from_utf8,
+    str::{from_utf8, FromStr},
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug)]
@@ -47,7 +49,7 @@ pub enum SubscriptionError {
 impl Display for SubscriptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Implementation { .. } => write!(f, "Subscription error"),
+            Self::Implementation { .. } => write!(f, "Subecription rror"),
         }
     }
 }
@@ -131,7 +133,7 @@ pub trait LedgerReader {
 }
 
 /// An in memory ledger implementation for development and testing purposes
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
     chan: UnboundedSender<(Offset, ProvModel, ChronicleTransactionId)>,
@@ -147,7 +149,7 @@ impl InMemLedger {
             kv: HashMap::new().into(),
             chan: tx,
             reader: Some(InMemLedgerReader {
-                chan: Some(rx).into(),
+                chan: Arc::new(Mutex::new(Some(rx).into())),
             }),
             head: 0u64,
         }
@@ -164,9 +166,11 @@ impl Default for InMemLedger {
     }
 }
 
-#[derive(Debug)]
+type SharedLedger = Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>;
+
+#[derive(Debug, Clone)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>>,
+    chan: Arc<Mutex<RefCell<SharedLedger>>>,
 }
 
 #[async_trait::async_trait]
@@ -178,7 +182,8 @@ impl LedgerReader for InMemLedgerReader {
         Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
         SubscriptionError,
     > {
-        let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
+        let chan = self.chan.lock().unwrap().take().unwrap();
+        let stream = stream::unfold(chan, |mut chan| async move {
             chan.next()
                 .await
                 .map(|(offset, prov, uuid)| ((offset, prov.into(), uuid), chan))
@@ -222,16 +227,10 @@ impl LedgerWriter for InMemLedger {
         let mut model = ProvModel::default();
         let mut output = vec![];
 
-        let mut addresses: Vec<LedgerAddress> = vec![];
-
         for tx in tx {
-            debug!(?tx, "Processing");
+            let deps = tx.dependencies();
 
-            let mut deps = tx.dependencies();
-
-            debug!(?deps, "Input addresses");
-
-            let input = self
+            let input: Vec<StateInput> = self
                 .kv
                 .borrow()
                 .iter()
@@ -240,33 +239,28 @@ impl LedgerWriter for InMemLedger {
                 .into_iter()
                 .collect();
 
-            debug!(?input, "Processing input state");
+            debug!(
+                input_chronicle_addresses=?deps,
+            );
 
             let (mut tx_output, updated_model) = tx.process(model, input).await.unwrap();
 
             output.append(&mut tx_output);
             model = updated_model;
-            addresses.append(&mut deps);
         }
 
-        // Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
-        // Fail with a submission error if we attempt to write to an address not specified in the addresses from the dependencies() call
+        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
         let output = output
             .into_iter()
             .map(|state| (state.address.clone(), state))
             .collect::<BTreeMap<_, _>>()
             .into_iter()
             .map(|x| x.1)
-            .map(|s| match s.address.specified(&addresses) {
-                true => Ok(s),
-                false => Err(ProcessorError::Address {}),
-            })
-            .collect::<Result<Vec<_>, ProcessorError>>()?;
+            .collect::<Vec<_>>();
 
         for output in output {
             let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-            debug!(?output.address, "Address");
-            debug!(%state, "New state");
+            debug!(output_address=?output.address);
             self.kv.borrow_mut().insert(output.address, state);
         }
 
@@ -283,53 +277,34 @@ impl LedgerWriter for InMemLedger {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 pub struct LedgerAddress {
     // Namespaces do not have a namespace
-    pub namespace: Option<String>,
-    pub resource: String,
+    pub namespace: Option<NamespaceId>,
+    pub resource: ChronicleIri,
 }
 
 impl LedgerAddress {
+    fn from_ld(ns: Option<&str>, resource: &str) -> Result<Self, ParseIriError> {
+        Ok(Self {
+            namespace: if let Some(ns) = ns {
+                Some(ChronicleIri::from_str(ns)?.namespace()?)
+            } else {
+                None
+            },
+            resource: ChronicleIri::from_str(resource)?,
+        })
+    }
+
     fn namespace(ns: &NamespaceId) -> Self {
         Self {
             namespace: None,
-            resource: ns.to_string(),
+            resource: ns.clone().into(),
         }
     }
 
     fn in_namespace(ns: &NamespaceId, resource: impl Into<ChronicleIri>) -> Self {
         Self {
-            namespace: Some(ns.to_string()),
-            resource: resource.into().to_string(),
+            namespace: Some(ns.clone()),
+            resource: resource.into(),
         }
-    }
-
-    fn has_namespace(&self) -> bool {
-        self.namespace.is_some()
-    }
-
-    fn address(&self) -> String {
-        if self.has_namespace() {
-            self.namespace.clone().unwrap()
-        } else {
-            self.resource.clone()
-        }
-    }
-
-    fn is_match(&self, addr: &LedgerAddress) -> bool {
-        let a = LedgerAddress::suffix(addr.address());
-        let b = LedgerAddress::suffix(self.address());
-
-        match (a, b) {
-            (Some(a), Some(b)) => a == b,
-            _ => false,
-        }
-    }
-
-    fn suffix(addr: String) -> Option<String> {
-        addr.rsplit_once(':').map(|(_, a)| a.to_string())
-    }
-
-    fn specified(&self, addresses: &[LedgerAddress]) -> bool {
-        addresses.iter().any(|addr| self.is_match(addr))
     }
 }
 
@@ -366,10 +341,10 @@ impl ChronicleOperation {
             ChronicleOperation::CreateAgent(CreateAgent {
                 namespace, name, ..
             }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    AgentId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, AgentId::from_name(name)),
+                ]
             }
             // Key registration requires identity + agent
             ChronicleOperation::RegisterKey(RegisterKey {
@@ -378,6 +353,7 @@ impl ChronicleOperation {
                 publickey,
                 ..
             }) => vec![
+                LedgerAddress::namespace(namespace),
                 LedgerAddress::in_namespace(namespace, id.clone()),
                 LedgerAddress::in_namespace(
                     namespace,
@@ -387,16 +363,34 @@ impl ChronicleOperation {
             ChronicleOperation::CreateActivity(CreateActivity {
                 namespace, name, ..
             }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    EntityId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, ActivityId::from_name(name)),
+                ]
             }
-            ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+            ChronicleOperation::StartActivity(StartActivity {
+                namespace,
+                id,
+                agent,
+                ..
+            }) => {
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                    LedgerAddress::in_namespace(namespace, agent.clone()),
+                ]
             }
-            ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+            ChronicleOperation::EndActivity(EndActivity {
+                namespace,
+                id,
+                agent,
+                ..
+            }) => {
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                    LedgerAddress::in_namespace(namespace, agent.clone()),
+                ]
             }
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
@@ -404,23 +398,23 @@ impl ChronicleOperation {
                 activity,
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, activity.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                 ]
             }
-            ChronicleOperation::CreateEntity(CreateEntity {
-                namespace, name, ..
-            }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    EntityId::from_name(name),
-                )]
+            ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => {
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, EntityId::from_name(name)),
+                ]
             }
             ChronicleOperation::GenerateEntity(GenerateEntity {
                 namespace,
                 id,
                 activity,
             }) => vec![
+                LedgerAddress::namespace(namespace),
                 LedgerAddress::in_namespace(namespace, activity.clone()),
                 LedgerAddress::in_namespace(namespace, id.clone()),
             ],
@@ -428,18 +422,12 @@ impl ChronicleOperation {
                 namespace,
                 id,
                 agent,
-                identityid,
-                signature,
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
-                    LedgerAddress::in_namespace(namespace, identityid.clone().unwrap()),
-                    LedgerAddress::in_namespace(
-                        namespace,
-                        AttachmentId::from_name(id.name_part(), signature.clone().unwrap()),
-                    ),
                 ]
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
@@ -449,6 +437,7 @@ impl ChronicleOperation {
                 activity_id,
                 ..
             }) => vec![
+                Some(LedgerAddress::namespace(namespace)),
                 activity_id
                     .as_ref()
                     .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
@@ -465,6 +454,7 @@ impl ChronicleOperation {
                 activity_id,
                 ..
             }) => vec![
+                Some(LedgerAddress::namespace(namespace)),
                 activity_id
                     .as_ref()
                     .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
@@ -475,15 +465,24 @@ impl ChronicleOperation {
             .flatten()
             .collect(),
             ChronicleOperation::SetAttributes(SetAttributes::Agent { id, namespace, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
             ChronicleOperation::SetAttributes(SetAttributes::Entity { id, namespace, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
             ChronicleOperation::SetAttributes(SetAttributes::Activity {
                 id, namespace, ..
             }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
         }
     }
@@ -491,46 +490,42 @@ impl ChronicleOperation {
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state,
     /// also return the aggregate model so we can emit it as an event
-    #[instrument]
+    #[instrument(skip(self, model, input))]
     pub async fn process(
         &self,
         mut model: ProvModel,
         input: Vec<StateInput>,
     ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
-        debug!(?input, "Transforming state input");
-
         for input in input {
+            let graph = json::parse(std::str::from_utf8(&input.data)?)?;
+            debug!(input_model=%graph);
             let resource = json::object! {
                 "@context":  PROV.clone(),
-                "@graph": [json::parse(std::str::from_utf8(&input.data)?)?]
+                "@graph": [graph],
             };
-            debug!(%resource, "Restore graph / context");
             model = model.apply_json_ld(resource).await?;
         }
 
         model.apply(self);
         let mut json_ld = model.to_json().compact_stable_order().await?;
-
-        debug!(%json_ld, "Result model");
+        debug!(result_model=%json_ld);
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
-                // Separate graph into discrete outputs
+                // Separate graph into descrete outpute
                 graph
                     .iter()
                     .map(|resource| {
                         Ok(StateOutput {
-                            address: LedgerAddress {
-                                namespace: resource
+                            address: LedgerAddress::from_ld(
+                                resource
                                     .get("namespace")
-                                    .and_then(|resource| resource.as_str())
-                                    .map(|resource| resource.to_owned()),
-                                resource: resource
+                                    .and_then(|resource| resource.as_str()),
+                                resource
                                     .get("@id")
                                     .and_then(|id| id.as_str())
-                                    .ok_or(ProcessorError::NotANode {})?
-                                    .to_owned(),
-                            },
+                                    .ok_or(ProcessorError::NotANode {})?,
+                            )?,
                             data: serde_json::to_string(resource).unwrap().into_bytes(),
                         })
                     })
@@ -542,17 +537,15 @@ impl ChronicleOperation {
                     .map(|graph| graph.remove("@context"));
 
                 vec![StateOutput {
-                    address: LedgerAddress {
-                        namespace: json_ld
+                    address: LedgerAddress::from_ld(
+                        json_ld
                             .get("namespace")
-                            .and_then(|resource| resource.as_str())
-                            .map(|resource| resource.to_owned()),
-                        resource: json_ld
+                            .and_then(|resource| resource.as_str()),
+                        json_ld
                             .get("@id")
                             .and_then(|id| id.as_str())
-                            .ok_or(ProcessorError::NotANode {})?
-                            .to_owned(),
-                    },
+                            .ok_or(ProcessorError::NotANode {})?,
+                    )?,
                     data: serde_json::to_string(&json_ld).unwrap().into_bytes(),
                 }]
             },
@@ -562,35 +555,4 @@ impl ChronicleOperation {
 }
 
 #[cfg(test)]
-pub mod test {
-    use uuid::Uuid;
-
-    use crate::{
-        ledger::{InMemLedger, LedgerWriter},
-        prov::{
-            operations::{ChronicleOperation, CreateNamespace},
-            NamespaceId,
-        },
-    };
-
-    #[tokio::test]
-    async fn test_ledgerwriter_submit_is_ok() -> Result<(), String> {
-        let uuid = {
-            let bytes = [
-                0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
-                0xd7, 0xd8,
-            ];
-            Uuid::from_slice(&bytes).unwrap()
-        };
-        let id = NamespaceId::from_name("test_ns", uuid);
-        let o = ChronicleOperation::CreateNamespace(CreateNamespace::new(id, "test_ns", uuid));
-        let mut l = InMemLedger::new();
-        let tx = vec![o];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
-    }
-}
+pub mod test {}
