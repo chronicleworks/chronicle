@@ -100,6 +100,23 @@ pub trait PublicKeyPart {
     fn public_key_part(&self) -> &str;
 }
 
+/// Transform a chronicle IRI into its compact representation
+pub trait AsCompact {
+    fn compact(&self) -> String;
+}
+
+impl AsCompact for ChronicleIri {
+    fn compact(&self) -> String {
+        self.to_string().replace(Chronicle::PREFIX, "chronicle:")
+    }
+}
+
+impl AsCompact for NamespaceId {
+    fn compact(&self) -> String {
+        self.to_string().replace(Chronicle::PREFIX, "chronicle:")
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub enum ChronicleIri {
     Attachment(AttachmentId),

@@ -12,8 +12,8 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, AttachmentId, ChronicleIri, ChronicleTransactionId, EntityId,
-        IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, AsCompact, AttachmentId, ChronicleIri, ChronicleTransactionId,
+        EntityId, IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
     },
 };
 
@@ -282,14 +282,14 @@ impl LedgerAddress {
     fn namespace(ns: &NamespaceId) -> Self {
         Self {
             namespace: None,
-            resource: ns.to_string(),
+            resource: ns.compact(),
         }
     }
 
     fn in_namespace(ns: &NamespaceId, resource: impl Into<ChronicleIri>) -> Self {
         Self {
-            namespace: Some(ns.to_string()),
-            resource: resource.into().to_string(),
+            namespace: Some(ns.compact()),
+            resource: resource.into().compact(),
         }
     }
 }
