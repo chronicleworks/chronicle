@@ -13,8 +13,8 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, AsCompact, AttachmentId, ChronicleIri, ChronicleTransactionId,
-        EntityId, IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
+        IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
     },
 };
 
@@ -427,6 +427,11 @@ impl ChronicleOperation {
                     LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
+                    LedgerAddress::in_namespace(namespace, identityid.clone()),
+                    LedgerAddress::in_namespace(
+                        namespace,
+                        EvidenceId::from_name(id.name_part(), signature),
+                    ),
                 ]
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {

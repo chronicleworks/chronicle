@@ -1,14 +1,14 @@
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use iref::Iri;
 
-use super::{ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId};
+use super::{ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId};
 
 #[Scalar(name = "AttachmentID")]
-impl ScalarType for AttachmentId {
+impl ScalarType for EvidenceId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = value {
             // Parse the integer value
-            Ok(AttachmentId::try_from(Iri::from_str(&*value)?)?)
+            Ok(EvidenceId::try_from(Iri::from_str(&*value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))

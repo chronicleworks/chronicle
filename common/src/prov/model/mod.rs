@@ -22,7 +22,7 @@ use super::{
         CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
         GenerateEntity, RegisterKey, SetAttributes, StartActivity,
     },
-    ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, Name, NamePart,
+    ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, Name, NamePart,
     NamespaceId, PublicKeyPart, UuidPart,
 };
 
@@ -226,7 +226,7 @@ impl Activity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
-    pub id: AttachmentId,
+    pub id: EvidenceId,
     pub namespaceid: NamespaceId,
     pub signature: String,
     pub signer: IdentityId,
@@ -244,7 +244,7 @@ impl Attachment {
         signature_time: DateTime<Utc>,
     ) -> Attachment {
         Self {
-            id: AttachmentId::from_name(entity.name_part(), signature),
+            id: EvidenceId::from_name(entity.name_part(), signature),
             namespaceid: namespace,
             signature: signature.to_owned(),
             signer: signer.clone(),
@@ -331,7 +331,7 @@ type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 type NamespacedIdentity = NamespacedId<IdentityId>;
-type NamespacedAttachment = NamespacedId<AttachmentId>;
+type NamespacedAttachment = NamespacedId<EvidenceId>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
@@ -343,7 +343,7 @@ pub struct ProvModel {
     pub attachments: HashMap<NamespacedAttachment, Attachment>,
     pub has_identity: HashMap<NamespacedAgent, NamespacedIdentity>,
     pub had_identity: HashMap<NamespacedAgent, HashSet<NamespacedIdentity>>,
-    pub has_attachment: HashMap<NamespacedEntity, NamespacedAttachment>,
+    pub has_evidence: HashMap<NamespacedEntity, NamespacedAttachment>,
     pub had_attachment: HashMap<NamespacedEntity, HashSet<NamespacedAttachment>>,
     pub association: HashMap<NamespacedActivity, Vec<Association>>,
     pub derivation: HashMap<NamespacedEntity, Vec<Derivation>>,
@@ -396,8 +396,8 @@ impl ProvModel {
             self.has_identity.insert(id, other_link);
         }
 
-        for (id, other_link) in other.has_attachment {
-            self.has_attachment.insert(id, other_link);
+        for (id, other_link) in other.has_evidence {
+            self.has_evidence.insert(id, other_link);
         }
 
         for (id, links) in other.had_identity {
@@ -554,7 +554,7 @@ impl ProvModel {
         &mut self,
         namespace: NamespaceId,
         entity: EntityId,
-        attachment: &AttachmentId,
+        attachment: &EvidenceId,
     ) {
         self.had_attachment
             .entry((namespace.clone(), entity))
@@ -566,9 +566,9 @@ impl ProvModel {
         &mut self,
         namespace: NamespaceId,
         entity: EntityId,
-        attachment: &AttachmentId,
+        attachment: &EvidenceId,
     ) {
-        self.has_attachment
+        self.has_evidence
             .insert((namespace.clone(), entity), (namespace, attachment.clone()));
     }
 
@@ -591,7 +591,7 @@ impl ProvModel {
         );
 
         if let Some((_, old_attachment)) = self
-            .has_attachment
+            .has_evidence
             .remove(&(namespace.clone(), entity.clone()))
         {
             self.had_attachment(namespace.clone(), entity.clone(), &old_attachment);
@@ -774,7 +774,6 @@ impl ProvModel {
                 {
                     self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
                 }
-
                 if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
                     self.add_entity(Entity::exists(namespace.clone(), id.clone()));
                 }
