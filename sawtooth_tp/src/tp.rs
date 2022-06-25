@@ -11,7 +11,7 @@ use sawtooth_sdk::{
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
 use tokio::runtime::Handle;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct ChronicleTransactionHandler {

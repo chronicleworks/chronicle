@@ -16,7 +16,7 @@ use derivative::Derivative;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
-    messages::{transaction, validator::Message_MessageType},
+    messages::{validator::Message_MessageType},
     messaging::{
         stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
