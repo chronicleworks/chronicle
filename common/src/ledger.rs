@@ -12,8 +12,8 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, AsCompact, AttachmentId, ChronicleIri, ChronicleTransactionId,
-        EntityId, IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
+        IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
     },
 };
 
@@ -222,13 +222,9 @@ impl LedgerWriter for InMemLedger {
         let mut output = vec![];
 
         for tx in tx {
-            debug!(?tx, "Processing");
-
             let deps = tx.dependencies();
 
-            debug!(?deps, "Input addresses");
-
-            let input = self
+            let input: Vec<StateInput> = self
                 .kv
                 .borrow()
                 .iter()
@@ -237,7 +233,9 @@ impl LedgerWriter for InMemLedger {
                 .into_iter()
                 .collect();
 
-            debug!(?input, "Processing input state");
+            debug!(
+                input_chronicle_addresses=?deps,
+            );
 
             let (mut tx_output, updated_model) = tx.process(model, input).await.unwrap();
 
@@ -256,8 +254,7 @@ impl LedgerWriter for InMemLedger {
 
         for output in output {
             let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-            debug!(?output.address, "Address");
-            debug!(%state, "New state");
+            debug!(output_address=?output.address);
             self.kv.borrow_mut().insert(output.address, state);
         }
 
@@ -413,7 +410,7 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, identityid.clone()),
                     LedgerAddress::in_namespace(
                         namespace,
-                        AttachmentId::from_name(id.name_part(), signature),
+                        EvidenceId::from_name(id.name_part(), signature),
                     ),
                 ]
             }
@@ -466,27 +463,25 @@ impl ChronicleOperation {
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state,
     /// also return the aggregate model so we can emit it as an event
-    #[instrument]
+    #[instrument(skip(self, model, input))]
     pub async fn process(
         &self,
         mut model: ProvModel,
         input: Vec<StateInput>,
     ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
-        debug!(?input, "Transforming state input");
-
         for input in input {
+            let graph = json::parse(std::str::from_utf8(&input.data)?)?;
+            debug!(input_model=%graph);
             let resource = json::object! {
                 "@context":  PROV.clone(),
-                "@graph": [json::parse(std::str::from_utf8(&input.data)?)?]
+                "@graph": [graph],
             };
-            debug!(%resource, "Restore graph / context");
             model = model.apply_json_ld(resource).await?;
         }
 
         model.apply(self);
         let mut json_ld = model.to_json().compact_stable_order().await?;
-
-        debug!(%json_ld, "Result model");
+        debug!(result_model=%json_ld);
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {

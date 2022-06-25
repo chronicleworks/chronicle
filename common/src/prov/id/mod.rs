@@ -119,7 +119,7 @@ impl AsCompact for NamespaceId {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub enum ChronicleIri {
-    Attachment(AttachmentId),
+    Attachment(EvidenceId),
     Identity(IdentityId),
     Namespace(NamespaceId),
     Domaintype(DomaintypeId),
@@ -142,8 +142,8 @@ impl Display for ChronicleIri {
     }
 }
 
-impl From<AttachmentId> for ChronicleIri {
-    fn from(val: AttachmentId) -> Self {
+impl From<EvidenceId> for ChronicleIri {
+    fn from(val: EvidenceId) -> Self {
         ChronicleIri::Attachment(val)
     }
 }
@@ -185,24 +185,24 @@ impl From<ActivityId> for ChronicleIri {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct AttachmentId {
+pub struct EvidenceId {
     name: Name,
     signature: String,
 }
 
-impl Display for AttachmentId {
+impl Display for EvidenceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(Into::<IriRefBuf>::into(self).as_str())
     }
 }
 
-impl From<&AttachmentId> for IriRefBuf {
-    fn from(val: &AttachmentId) -> Self {
+impl From<&EvidenceId> for IriRefBuf {
+    fn from(val: &EvidenceId) -> Self {
         Chronicle::attachment(val.name_part(), &val.signature).into()
     }
 }
 
-impl AttachmentId {
+impl EvidenceId {
     pub fn from_name(name: impl AsRef<str>, signature: impl AsRef<str>) -> Self {
         Self {
             name: name.as_ref().into(),
@@ -211,13 +211,13 @@ impl AttachmentId {
     }
 }
 
-impl NamePart for AttachmentId {
+impl NamePart for EvidenceId {
     fn name_part(&self) -> &Name {
         &self.name
     }
 }
 
-impl SignaturePart for AttachmentId {
+impl SignaturePart for EvidenceId {
     fn signature_part(&self) -> &str {
         &self.signature
     }
@@ -238,7 +238,7 @@ fn fragment_components(iri: Iri) -> Vec<String> {
     }
 }
 
-impl<'a> TryFrom<Iri<'a>> for AttachmentId {
+impl<'a> TryFrom<Iri<'a>> for EvidenceId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {

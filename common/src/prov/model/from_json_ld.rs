@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::DerivationType,
         vocab::{Chronicle, Prov},
-        ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
+        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamespaceId,
     },
 };
 
@@ -278,7 +278,7 @@ impl ProvModel {
     fn apply_node_as_attachment(&mut self, attachment: &Node) -> Result<(), ProcessorError> {
         let namespaceid = extract_namespace(attachment)?;
 
-        let id = AttachmentId::try_from(Iri::from_str(
+        let id = EvidenceId::try_from(Iri::from_str(
             attachment
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
@@ -348,14 +348,14 @@ impl ProvModel {
 
         for attachment in extract_reference_ids(&Chronicle::HasAttachment, entity)?
             .into_iter()
-            .map(|id| AttachmentId::try_from(id.as_iri()))
+            .map(|id| EvidenceId::try_from(id.as_iri()))
         {
             self.has_attachment(namespaceid.clone(), id.clone(), &attachment?);
         }
 
         for attachment in extract_reference_ids(&Chronicle::HadAttachment, entity)?
             .into_iter()
-            .map(|id| AttachmentId::try_from(id.as_iri()))
+            .map(|id| EvidenceId::try_from(id.as_iri()))
         {
             self.had_attachment(namespaceid.clone(), id.clone(), &attachment?);
         }

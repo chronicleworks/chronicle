@@ -332,8 +332,8 @@ where
 
                 let entity = api.store.entity_by_entity_name_and_namespace(
                     connection,
-                    id.name_part().clone(),
-                    namespace.clone(),
+                    id.name_part(),
+                    &namespace,
                 );
 
                 let name: Name = {
@@ -397,8 +397,8 @@ where
 
                     let entity = api.store.entity_by_entity_name_and_namespace(
                         connection,
-                        id.name_part().clone(),
-                        namespace.clone(),
+                        id.name_part(),
+                        &namespace,
                     );
 
                     let name: Name = {
@@ -805,8 +805,8 @@ where
                     .map(|agent| {
                         api.store.agent_by_agent_name_and_namespace(
                             &mut connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )
                     })
                     .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
@@ -947,8 +947,8 @@ where
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
                             connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )?
                     } else {
                         api.store
@@ -1024,8 +1024,8 @@ where
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
                             connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )?
                     } else {
                         api.store

@@ -7,9 +7,9 @@ use common::{
     attributes::Attribute,
     ledger::Offset,
     prov::{
-        Activity, ActivityId, Agent, AgentId, Association, Attachment, AttachmentId,
-        ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
-        Entity, EntityId, Generation, Identity, IdentityId, Name, NamePart, Namespace, NamespaceId,
+        Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
+        ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
+        EvidenceId, Generation, Identity, IdentityId, Name, NamePart, Namespace, NamespaceId,
         ProvModel, PublicKeyPart, SignaturePart, Useage,
     },
 };
@@ -43,9 +43,6 @@ custom_error! {pub StoreError
     TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
-    ModelDoesNotContainActivity{activityid: ActivityId}         = "Could not locate {} in activities",
-    ModelDoesNotContainAgent{agentid: AgentId}                  = "Could not locate {} in agents",
-    ModelDoesNotContainEntity{entityid: EntityId}               = "Could not locate {} in entities",
 }
 
 #[derive(Debug)]
@@ -115,8 +112,8 @@ impl Store {
     pub(crate) fn agent_by_agent_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
-        name: Name,
-        namespaceid: NamespaceId,
+        name: &Name,
+        namespaceid: &NamespaceId,
     ) -> Result<query::Agent, StoreError> {
         let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         use schema::agent::dsl;
@@ -127,7 +124,7 @@ impl Store {
     }
 
     /// Apply an activity to persistent storage, name + namespace are a key, so we update times + domaintype on conflict
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply activity", skip(self, connection, ns))]
     fn apply_activity(
         &self,
         connection: &mut SqliteConnection,
@@ -185,7 +182,7 @@ impl Store {
 
     /// Apply an agent to persistent storage, name + namespace are a key, so we update publickey + domaintype on conflict
     /// current is a special case, only relevent to local CLI context. A possibly improved design would be to store this in another table given its scope
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply agent", skip(self, connection, ns))]
     fn apply_agent(
         &self,
         connection: &mut SqliteConnection,
@@ -212,7 +209,7 @@ impl Store {
             .execute(connection)?;
 
         let query::Agent { id, .. } =
-            self.agent_by_agent_name_and_namespace(connection, name.clone(), namespaceid.clone())?;
+            self.agent_by_agent_name_and_namespace(connection, name, namespaceid)?;
 
         diesel::insert_or_ignore_into(schema::agent_attribute::table)
             .values(
@@ -230,7 +227,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply attachment", skip(self, connection, ns))]
     fn apply_attachment(
         &self,
         connection: &mut SqliteConnection,
@@ -275,35 +272,37 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply entity", skip(self, connection, ns))]
     fn apply_entity(
         &self,
         connection: &mut SqliteConnection,
-        entity: &common::prov::Entity,
+        Entity {
+            namespaceid,
+            id,
+            name,
+            domaintypeid,
+            attributes,
+        }: &Entity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::entity::dsl;
-        let (_namespaceid, nsid) =
-            self.namespace_by_name(connection, entity.namespaceid.name_part())?;
+        let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
+        let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
         diesel::insert_or_ignore_into(schema::entity::table)
             .values((
-                dsl::name.eq(&entity.name),
+                dsl::name.eq(&name),
                 dsl::namespace_id.eq(nsid),
-                dsl::domaintype.eq(entity.domaintypeid.as_ref().map(|x| x.name_part())),
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
             ))
             .execute(connection)?;
 
-        let query::Entity { id, .. } = self.entity_by_entity_name_and_namespace(
-            connection,
-            entity.name.clone(),
-            entity.namespaceid.clone(),
-        )?;
+        let query::Entity { id, .. } =
+            self.entity_by_entity_name_and_namespace(connection, name, namespaceid)?;
 
         diesel::insert_or_ignore_into(schema::entity_attribute::table)
             .values(
-                entity
-                    .attributes
+                attributes
                     .iter()
                     .map(|(_, Attribute { typ, value, .. })| query::EntityAttribute {
                         entity_id: id,
@@ -317,17 +316,17 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
-    fn apply_has_attachment(
+    #[instrument(name = "Apply has evidence", skip(self, connection))]
+    fn apply_has_evidence(
         &self,
         connection: &mut SqliteConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         entity: &EntityId,
-        attachment: &AttachmentId,
+        evidence: &EvidenceId,
     ) -> Result<(), StoreError> {
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
-        let attachment = self.attachment_by(connection, namespaceid, attachment)?;
+        let attachment = self.attachment_by(connection, namespaceid, evidence)?;
         use schema::entity::dsl;
 
         diesel::update(schema::entity::table)
@@ -342,21 +341,18 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
-    fn apply_had_attachment(
+    #[instrument(name = "Apply had evidence", skip(self, connection))]
+    fn apply_had_evidence(
         &self,
         connection: &mut SqliteConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         entity: &EntityId,
-        attachment: &AttachmentId,
+        attachment: &EvidenceId,
     ) -> Result<(), StoreError> {
         let attachment = self.attachment_by(connection, namespaceid, attachment)?;
-        let entity = self.entity_by_entity_name_and_namespace(
-            connection,
-            entity.name_part().clone(),
-            namespaceid.clone(),
-        )?;
+        let entity =
+            self.entity_by_entity_name_and_namespace(connection, entity.name_part(), namespaceid)?;
         use schema::hadattachment::dsl;
 
         diesel::insert_or_ignore_into(schema::hadattachment::table)
@@ -369,7 +365,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply has identity", skip(self, connection))]
     fn apply_has_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -394,7 +390,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply had identity", skip(self, connection))]
     fn apply_had_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -404,11 +400,8 @@ impl Store {
         identity: &IdentityId,
     ) -> Result<(), StoreError> {
         let identity = self.identity_by(connection, namespaceid, identity)?;
-        let agent = self.agent_by_agent_name_and_namespace(
-            connection,
-            agent.name_part().clone(),
-            namespaceid.clone(),
-        )?;
+        let agent =
+            self.agent_by_agent_name_and_namespace(connection, agent.name_part(), namespaceid)?;
         use schema::hadidentity::dsl;
 
         diesel::insert_or_ignore_into(schema::hadidentity::table)
@@ -418,7 +411,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(name = "Apply identity", skip(self, connection, ns))]
     fn apply_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -441,12 +434,14 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(skip(connection, model))]
     fn apply_model(
         &self,
         connection: &mut SqliteConnection,
         model: &ProvModel,
     ) -> Result<(), StoreError> {
+        debug!(model=?model);
+
         for (_, ns) in model.namespaces.iter() {
             self.apply_namespace(connection, ns)?
         }
@@ -467,113 +462,52 @@ impl Store {
         }
 
         for ((namespaceid, agent_id), (_, identity_id)) in model.has_identity.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                agent_id = ?agent_id,
-                identity_id = ?identity_id,
-                "Apply has identity"
-            );
             self.apply_has_identity(connection, model, namespaceid, agent_id, identity_id)?;
         }
 
         for ((namespaceid, agent_id), identity_id) in model.had_identity.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                agent_id = ?agent_id,
-                identity_id = ?identity_id,
-                "Apply had identity"
-            );
             for (_, identity_id) in identity_id {
                 self.apply_had_identity(connection, model, namespaceid, agent_id, identity_id)?;
             }
         }
 
-        for ((namespaceid, entity_id), (_, attachment_id)) in model.has_attachment.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                entity_id = ?entity_id,
-                attachment_id = ?attachment_id,
-                "Apply has attachment"
-            );
-            self.apply_has_attachment(connection, model, namespaceid, entity_id, attachment_id)?;
+        for ((namespaceid, entity_id), (_, evidence_id)) in model.has_evidence.iter() {
+            self.apply_has_evidence(connection, model, namespaceid, entity_id, evidence_id)?;
         }
 
         for ((namespaceid, entity_id), attachment_id) in model.had_attachment.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                entity_id = ?entity_id,
-                attachment_id = ?attachment_id,
-                "Apply had attachment"
-            );
             for (_, attachment_id) in attachment_id {
-                self.apply_had_attachment(
-                    connection,
-                    model,
-                    namespaceid,
-                    entity_id,
-                    attachment_id,
-                )?;
+                self.apply_had_evidence(connection, model, namespaceid, entity_id, attachment_id)?;
             }
         }
 
         for ((namespaceid, _), association) in model.association.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                association = ?association,
-                "Apply was associated with"
-            );
             for (offset, association) in association.iter().enumerate() {
-                self.apply_was_associated_with(
-                    connection,
-                    model,
-                    namespaceid,
-                    offset,
-                    association,
-                )?;
+                self.apply_was_associated_with(connection, namespaceid, offset, association)?;
             }
         }
 
         for ((namespaceid, _), useage) in model.useage.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                useage = ?useage,
-                "Apply useage"
-            );
             for (offset, useage) in useage.iter().enumerate() {
-                self.apply_used(connection, model, namespaceid, offset, useage)?;
+                self.apply_used(connection, namespaceid, offset, useage)?;
             }
         }
 
         for ((namespaceid, _), generation) in model.generation.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                generation = ?generation,
-                "Apply generation"
-            );
             for (offset, generation) in generation.iter().enumerate() {
-                self.apply_was_generated_by(connection, model, namespaceid, offset, generation)?;
+                self.apply_was_generated_by(connection, namespaceid, offset, generation)?;
             }
         }
 
         for ((namespaceid, _), derivation) in model.derivation.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                derivation = ?derivation,
-                "Apply derevation"
-            );
             for (offset, derivation) in derivation.iter().enumerate() {
-                self.apply_derivation(connection, model, namespaceid, offset, derivation)?;
+                self.apply_derivation(connection, namespaceid, offset, derivation)?;
             }
         }
 
         for ((namespaceid, _), delegation) in model.delegation.iter() {
-            debug!(
-                namespace = ?namespaceid,
-                delegation = ?delegation,
-                "Apply delegation"
-            );
             for (offset, delegation) in delegation.iter().enumerate() {
-                self.apply_delegation(connection, model, namespaceid, offset, delegation)?;
+                self.apply_delegation(connection, namespaceid, offset, delegation)?;
             }
         }
 
@@ -596,11 +530,10 @@ impl Store {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(self, prov))]
     pub fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
         debug!("Enter transaction");
 
-        trace!(?prov);
         self.connection()?.immediate_transaction(|connection| {
             debug!("Entered transaction");
             self.apply_model(connection, prov)
@@ -614,34 +547,20 @@ impl Store {
     fn apply_used(
         &self,
         connection: &mut SqliteConnection,
-        model: &ProvModel,
         namespace: &NamespaceId,
         offset: usize,
         useage: &Useage,
     ) -> Result<(), StoreError> {
-        let proventity = model
-            .entities
-            .get(&(namespace.to_owned(), useage.entity_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                entityid: useage.entity_id.clone(),
-            })?;
-        let provactivity = model
-            .activities
-            .get(&(namespace.to_owned(), useage.activity_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
-                activityid: useage.activity_id.clone(),
-            })?;
-
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
-            &provactivity.name,
-            &provactivity.namespaceid,
+            useage.activity_id.name_part(),
+            namespace,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
-            proventity.name.clone(),
-            proventity.namespaceid.clone(),
+            useage.entity_id.name_part(),
+            namespace,
         )?;
 
         use schema::useage::dsl as link;
@@ -656,38 +575,24 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(skip(self, connection))]
     fn apply_was_associated_with(
         &self,
         connection: &mut SqliteConnection,
-        model: &ProvModel,
         namespaceid: &common::prov::NamespaceId,
         offset: usize,
         association: &Association,
     ) -> Result<(), StoreError> {
-        let provagent = model
-            .agents
-            .get(&(namespaceid.to_owned(), association.agent_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
-                agentid: association.agent_id.clone(),
-            })?;
-        let provactivity = model
-            .activities
-            .get(&(namespaceid.to_owned(), association.activity_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
-                activityid: association.activity_id.clone(),
-            })?;
-
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
-            &provactivity.name,
-            &provactivity.namespaceid,
+            association.activity_id.name_part(),
+            namespaceid,
         )?;
 
         let storedagent = self.agent_by_agent_name_and_namespace(
             connection,
-            provagent.name.clone(),
-            provagent.namespaceid.clone(),
+            association.agent_id.name_part(),
+            namespaceid,
         )?;
 
         use schema::association::dsl as asoc;
@@ -702,64 +607,40 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(skip(self, connection, namespace))]
     fn apply_delegation(
         &self,
         connection: &mut SqliteConnection,
-        model: &ProvModel,
         namespace: &common::prov::NamespaceId,
         offset: usize,
         delegation: &Delegation,
     ) -> Result<(), StoreError> {
-        let responsible = model
-            .agents
-            .get(&(namespace.to_owned(), delegation.responsible_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
-                agentid: delegation.responsible_id.clone(),
-            })
-            .and_then(|agent| {
-                self.agent_by_agent_name_and_namespace(
-                    connection,
-                    agent.name.clone(),
-                    agent.namespaceid.clone(),
-                )
-            })?;
+        let responsible = self.agent_by_agent_name_and_namespace(
+            connection,
+            delegation.responsible_id.name_part(),
+            namespace,
+        )?;
 
-        let delegate = model
-            .agents
-            .get(&(namespace.to_owned(), delegation.delegate_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainAgent {
-                agentid: delegation.delegate_id.clone(),
-            })
-            .and_then(|agent| {
-                self.agent_by_agent_name_and_namespace(
-                    connection,
-                    agent.name.clone(),
-                    agent.namespaceid.clone(),
-                )
-            })?;
+        let delegate = self.agent_by_agent_name_and_namespace(
+            connection,
+            delegation.delegate_id.name_part(),
+            namespace,
+        )?;
 
-        let activity = match delegation.activity_id.as_ref().map(|activity_id| {
-            model
-                .activities
-                .get(&(namespace.to_owned(), activity_id.to_owned()))
-                .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
-                    activityid: activity_id.clone(),
-                })
-                .and_then(|activity| {
+        let activity = {
+            if let Some(ref activity_id) = delegation.activity_id {
+                Some(
                     self.activity_by_activity_name_and_namespace(
                         connection,
-                        &activity.name,
-                        &activity.namespaceid,
-                    )
-                })
-                .map(|activity| activity.id)
-        }) {
-            // TODO: This must be in stdrust surely
-            Some(Ok(x)) => Ok(Some(x)),
-            Some(Err(e)) => Err(e),
-            _ => Ok(None),
-        }?;
+                        activity_id.name_part(),
+                        namespace,
+                    )?
+                    .id,
+                )
+            } else {
+                None
+            }
+        };
 
         use schema::delegation::dsl as link;
         diesel::insert_or_ignore_into(schema::delegation::table)
@@ -774,39 +655,24 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(skip(self, connection, namespace))]
     fn apply_derivation(
         &self,
         connection: &mut SqliteConnection,
-        model: &ProvModel,
         namespace: &common::prov::NamespaceId,
         offset: usize,
         derivation: &Derivation,
     ) -> Result<(), StoreError> {
-        let used = model
-            .entities
-            .get(&(namespace.to_owned(), derivation.used_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                entityid: derivation.used_id.clone(),
-            })?;
-
-        let generated = model
-            .entities
-            .get(&(namespace.to_owned(), derivation.generated_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                entityid: derivation.generated_id.clone(),
-            })?;
-
         let stored_generated = self.entity_by_entity_name_and_namespace(
             connection,
-            generated.name.clone(),
-            generated.namespaceid.clone(),
+            derivation.generated_id.name_part(),
+            namespace,
         )?;
 
         let stored_used = self.entity_by_entity_name_and_namespace(
             connection,
-            used.name.clone(),
-            used.namespaceid.clone(),
+            derivation.used_id.name_part(),
+            namespace,
         )?;
 
         use schema::derivation::dsl as link;
@@ -826,34 +692,20 @@ impl Store {
     fn apply_was_generated_by(
         &self,
         connection: &mut SqliteConnection,
-        model: &ProvModel,
         namespace: &common::prov::NamespaceId,
         offset: usize,
         generation: &Generation,
     ) -> Result<(), StoreError> {
-        let proventity = model
-            .entities
-            .get(&(namespace.to_owned(), generation.generated_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainEntity {
-                entityid: generation.generated_id.clone(),
-            })?;
-        let provactivity = model
-            .activities
-            .get(&(namespace.to_owned(), generation.activity_id.to_owned()))
-            .ok_or_else(|| StoreError::ModelDoesNotContainActivity {
-                activityid: generation.activity_id.clone(),
-            })?;
-
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
-            &provactivity.name,
-            &provactivity.namespaceid,
+            generation.activity_id.name_part(),
+            namespace,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
-            proventity.name.clone(),
-            proventity.namespaceid.clone(),
+            generation.generated_id.name_part(),
+            namespace,
         )?;
 
         use schema::generation::dsl as link;
@@ -974,8 +826,8 @@ impl Store {
     pub(crate) fn entity_by_entity_name_and_namespace(
         &self,
         connection: &mut SqliteConnection,
-        name: Name,
-        namespaceid: NamespaceId,
+        name: &Name,
+        namespaceid: &NamespaceId,
     ) -> Result<query::Entity, StoreError> {
         let (_namespaceid, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
         use schema::entity::dsl;
@@ -1061,7 +913,7 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespaceid: &NamespaceId,
-        attachment: &AttachmentId,
+        attachment: &EvidenceId,
     ) -> Result<query::Attachment, StoreError> {
         use self::schema::attachment::dsl;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
