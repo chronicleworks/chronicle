@@ -278,7 +278,7 @@ impl ToJson for ProvModel {
 
             let entity_key = (entity.namespaceid.clone(), entity.id.clone());
 
-            if let Some((_, identity)) = self.has_attachment.get(&entity_key) {
+            if let Some((_, identity)) = self.has_evidence.get(&entity_key) {
                 entitydoc
                     .insert(
                         Iri::from(Chronicle::HasAttachment).as_str(),
