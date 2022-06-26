@@ -375,6 +375,7 @@ impl ChronicleOperation {
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
@@ -386,6 +387,7 @@ impl ChronicleOperation {
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
@@ -402,10 +404,10 @@ impl ChronicleOperation {
                 ]
             }
             ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    EntityId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, EntityId::from_name(name)),
+                ]
             }
             ChronicleOperation::GenerateEntity(GenerateEntity {
                 namespace,
