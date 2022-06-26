@@ -1,7 +1,7 @@
 mod graphlql_scalars;
 pub use graphlql_scalars::*;
 
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use diesel::{
     backend::Backend,
@@ -17,8 +17,10 @@ use uuid::Uuid;
 use super::vocab::Chronicle;
 
 custom_error::custom_error! {pub ParseIriError
-    UnparsableIri {iri: IriRefBuf} = "Unparseable IRI",
+    NotAnIri {source: iref::Error } = "Invalid IRI",
+    UnparsableIri {iri: IriRefBuf} = "Unparseable chronicle IRI",
     UnparsableUuid {source: uuid::Error } = "Unparseable UUID",
+    IncorrectIriKind = "Unexpected Iri type",
 }
 
 #[derive(
@@ -117,7 +119,7 @@ impl AsCompact for NamespaceId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub enum ChronicleIri {
     Attachment(EvidenceId),
     Identity(IdentityId),
@@ -184,7 +186,50 @@ impl From<ActivityId> for ChronicleIri {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+impl FromStr for ChronicleIri {
+    type Err = ParseIriError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        //Compacted form, expand
+        let iri = {
+            if s.starts_with("chronicle:") {
+                s.replace("chronicle:", Chronicle::PREFIX)
+            } else {
+                s.to_owned()
+            }
+        };
+
+        let iri = IriRefBuf::from_str(&*iri)?;
+
+        match fragment_components(iri.as_iri()?)
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<_>>()
+            .as_slice()
+        {
+            ["agent", ..] => Ok(AgentId::try_from(iri.as_iri()?)?.into()),
+            ["ns", ..] => Ok(NamespaceId::try_from(iri.as_iri()?)?.into()),
+            ["activity", ..] => Ok(ActivityId::try_from(iri.as_iri()?)?.into()),
+            ["entity", ..] => Ok(EntityId::try_from(iri.as_iri()?)?.into()),
+            ["domaintype", ..] => Ok(DomaintypeId::try_from(iri.as_iri()?)?.into()),
+            ["evidence", ..] => Ok(EvidenceId::try_from(iri.as_iri()?)?.into()),
+            ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
+            _ => Err(ParseIriError::UnparsableIri { iri }),
+        }
+    }
+}
+
+impl ChronicleIri {
+    // Coerce this to a `NamespaceId`, if possible
+    pub fn namespace(self) -> Result<NamespaceId, ParseIriError> {
+        match self {
+            ChronicleIri::Namespace(ns) => Ok(ns),
+            _ => Err(ParseIriError::IncorrectIriKind),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct EvidenceId {
     name: Name,
     signature: String,
@@ -252,7 +297,7 @@ impl<'a> TryFrom<Iri<'a>> for EvidenceId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct IdentityId {
     name: Name,
     public_key: String,
@@ -306,7 +351,7 @@ impl From<&IdentityId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct DomaintypeId(Name);
 
 impl Display for DomaintypeId {
@@ -344,7 +389,7 @@ impl From<&DomaintypeId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct NamespaceId {
     name: Name,
     uuid: Uuid,
@@ -398,7 +443,7 @@ impl From<&NamespaceId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct EntityId(Name);
 
 impl Display for EntityId {
@@ -437,7 +482,7 @@ impl From<&EntityId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct AgentId(Name);
 
 impl Display for AgentId {
@@ -476,7 +521,7 @@ impl From<&AgentId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct ActivityId(Name);
 
 impl Display for ActivityId {

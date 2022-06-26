@@ -8,15 +8,17 @@ use std::{
 };
 
 use backoff::ExponentialBackoff;
+
 use common::{
     ledger::{LedgerReader, Offset, SubscriptionError},
-    prov::{ChronicleTransactionId, ProcessorError, ProvModel},
+    prov::{ChronicleTransactionId, ChronicleTransactionIdError, ProcessorError, ProvModel},
 };
 use custom_error::custom_error;
 use derivative::*;
 use futures::{stream, Stream, StreamExt, TryFutureExt};
 
-use common::k256::ecdsa::{Signature, SigningKey};
+use common::k256::ecdsa::SigningKey;
+use hex::FromHexError;
 use prost::{DecodeError, EncodeError, Message};
 use sawtooth_sdk::{
     messages::validator::Message_MessageType,
@@ -49,6 +51,8 @@ custom_error! {pub StateError
     UnparsableBlockNum {}                           = "Unparsable block_num in block commit",
     UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data",
     Processor { source: ProcessorError }            = "Json LD processing",
+    Hex{ source: FromHexError }                     = "Hex decode",
+    Signature {source: ChronicleTransactionIdError }          = "Signature parse"
 }
 
 impl From<StateError> for SubscriptionError {
@@ -196,14 +200,8 @@ impl StateDelta {
                                                 .iter()
                                                 .find(|attr| attr.key == "transaction_id")
                                                 .ok_or(StateError::MissingTransactionId {})
-                                                .and_then(|transaction_id| {
-                                                    Signature::try_from(
-                                                        transaction_id.value.as_bytes(),
-                                                    )
-                                                    .map_err(StateError::from)
-                                                })
-                                                .map(|transaction_id| {
-                                                    ChronicleTransactionId::from(transaction_id)
+                                                .map(|attr| {
+                                                    ChronicleTransactionId::from(&*attr.value)
                                                 });
 
                                             transaction_id.and_then(|transaction_id| {
