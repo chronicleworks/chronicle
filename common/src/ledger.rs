@@ -24,7 +24,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
     pin::Pin,
-    str::{from_utf8, FromStr},
+    str::from_utf8,
     sync::{Arc, Mutex},
 };
 
