@@ -1099,7 +1099,6 @@ mod test {
     use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
     use r2d2::Pool;
-    use telemetry::console_logging_trace;
     use tempfile::TempDir;
     use uuid::Uuid;
 
@@ -1136,7 +1135,7 @@ mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        console_logging_trace();
+        telemetry::telemetry(None, true);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
@@ -1302,7 +1301,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             - name: testagent
               public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
         had_identity: {}
-        has_attachment: {}
+        has_evidence: {}
         had_attachment: {}
         association: {}
         derivation: {}

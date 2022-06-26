@@ -47,7 +47,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
         name = "Process transaction",
         skip(request,context),
         fields(
-            correlation_id = %request.context_id,
+            transaction_id = %request.signature,
             inputs = ?request.header.as_ref().map(|x| &x.inputs),
             outputs = ?request.header.as_ref().map(|x| &x.outputs),
             dependencies = ?request.header.as_ref().map(|x| &x.dependencies)
@@ -116,7 +116,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
         context.add_event(
             "chronicle/prov-update".to_string(),
-            vec![],
+            vec![("transaction_id".to_owned(), request.signature.clone())],
             &*serde_cbor::to_vec(&model)
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
         )?;
