@@ -197,7 +197,7 @@ where
         uuidgen: U,
     ) -> Result<ApiDispatch, ApiError>
     where
-        R: LedgerReader + Send + 'static,
+        R: LedgerReader + Send + Clone + Sync + 'static,
         W: LedgerWriter + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
@@ -218,64 +218,70 @@ where
             })
             .map_err(|migration| StoreError::DbMigration { migration })?;
 
+        let reuse_reader = ledger_reader.clone();
+
         tokio::task::spawn(async move {
             let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-
-            // Get last committed offset from the store before we attach it to ledger state updates and the api
-            let mut state_updates = ledger_reader
-                .state_updates(
-                    store
-                        .get_last_offset()
-                        .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
-                        .unwrap_or(Offset::Genesis),
-                )
-                .await
-                .unwrap();
 
             let mut api = Api::<U> {
                 tx: tx.clone(),
                 keystore,
                 ledger_writer: BlockingLedgerWriter::new(ledger_writer),
-                store,
+                store: store.clone(),
                 uuidsource: PhantomData::default(),
             };
 
             debug!(?api, "Api running on localset");
+
             loop {
-                select! {
-                        state = state_updates.next().fuse() =>{
+                let mut state_updates = reuse_reader
+                    .clone()
+                    .state_updates(
+                        store
+                            .get_last_offset()
+                            .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
+                            .unwrap_or(Offset::Genesis),
+                    )
+                    .await
+                    .unwrap();
 
-                            if state.is_none() {
-                                warn!("Ledger reader disconnected");
-                            }
+                loop {
+                    select! {
+                            state = state_updates.next().fuse() =>{
 
-                            if let Some((offset, prov, correlation_id)) = state {
-                                    api.sync(&prov, offset.clone(),correlation_id.clone())
-                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
-                                        .await
-                                        .map_err(|e| {
-                                            error!(?e, "Api sync to confirmed commit");
-                                        }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
-                            }
+                                if state.is_none() {
+                                    warn!("Ledger reader disconnected");
+                                    break;
+                                }
 
-                        },
-                        cmd = rx.recv().fuse() => {
-                            if let Some((command, reply)) = cmd {
+                                if let Some((offset, prov, correlation_id)) = state {
+                                        api.sync(&prov, offset.clone(),correlation_id.clone())
+                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
+                                            .await
+                                            .map_err(|e| {
+                                                error!(?e, "Api sync to confirmed commit");
+                                            }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
+                                }
 
-                            let result = api
-                                .dispatch(command)
-                                .await;
+                            },
+                            cmd = rx.recv().fuse() => {
+                                if let Some((command, reply)) = cmd {
 
-                            reply
-                                .send(result)
-                                .await
-                                .map_err(|e| {
-                                    warn!(?e, "Send reply to Api consumer failed");
-                                })
-                                .ok();
-                            }
+                                let result = api
+                                    .dispatch(command)
+                                    .await;
+
+                                reply
+                                    .send(result)
+                                    .await
+                                    .map_err(|e| {
+                                        warn!(?e, "Send reply to Api consumer failed");
+                                    })
+                                    .ok();
+                                }
+                        }
+                        complete => break
                     }
-                    complete => break
                 }
             }
         });
