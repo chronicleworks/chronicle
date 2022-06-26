@@ -261,6 +261,7 @@ impl StateDelta {
                     Ok(Err(e)) => {
                         // recoverable error
                         warn!(?e, "Zmq recv error");
+                        return None;
                     }
                     Err(e) => {
                         // Non recoverable channel error, end stream
@@ -292,6 +293,6 @@ impl LedgerReader for StateDelta {
             })
         });
 
-        Ok(subscribe.await?.flat_map(stream::iter).boxed())
+        Ok(subscribe.await?.fuse().flat_map(stream::iter).boxed())
     }
 }
