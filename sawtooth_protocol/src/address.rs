@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use common::ledger::LedgerAddress;
+use common::{ledger::LedgerAddress, prov::AsCompact};
 use lazy_static::lazy_static;
 use openssl::sha::Sha256;
 
@@ -23,9 +23,9 @@ impl From<&LedgerAddress> for SawtoothAddress {
     fn from(addr: &LedgerAddress) -> Self {
         let mut sha = Sha256::new();
         if let Some(ns) = addr.namespace.as_ref() {
-            sha.update(ns.as_bytes())
+            sha.update(ns.compact().as_bytes())
         }
-        sha.update(addr.resource.as_bytes());
+        sha.update(addr.resource.compact().as_bytes());
         SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode(sha.finish())))
     }
 }

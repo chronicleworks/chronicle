@@ -16,7 +16,7 @@ use derivative::Derivative;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
-    messages::{validator::Message_MessageType},
+    messages::validator::Message_MessageType,
     messaging::{
         stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
@@ -94,11 +94,13 @@ impl SawtoothSubmitter {
             &*request.encode_to_vec(),
         )?;
 
+        debug!(submit_transaction=%tx_id);
+
         let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
         let response = ClientBatchSubmitResponse::decode(&*result.content)?;
 
-        debug!(?response, "Validator response");
+        debug!(validator_response=?response);
 
         if response.status == 1 {
             Ok(tx_id)

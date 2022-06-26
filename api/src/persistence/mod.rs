@@ -155,6 +155,7 @@ impl Store {
             .on_conflict((dsl::name, dsl::namespace_id))
             .do_update()
             .set((
+                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
                 dsl::started.eq(started.map(|t| t.naive_utc())),
                 dsl::ended.eq(ended.map(|t| t.naive_utc())),
             ))
@@ -200,13 +201,16 @@ impl Store {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
-        diesel::insert_or_ignore_into(schema::agent::table)
+        diesel::insert_into(schema::agent::table)
             .values((
                 dsl::name.eq(name),
                 dsl::namespace_id.eq(nsid),
                 dsl::current.eq(0),
                 dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
             ))
+            .on_conflict((dsl::namespace_id, dsl::name))
+            .do_update()
+            .set(dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())))
             .execute(connection)?;
 
         let query::Agent { id, .. } =
@@ -290,12 +294,15 @@ impl Store {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
-        diesel::insert_or_ignore_into(schema::entity::table)
+        diesel::insert_into(schema::entity::table)
             .values((
                 dsl::name.eq(&name),
                 dsl::namespace_id.eq(nsid),
                 dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
             ))
+            .on_conflict((dsl::namespace_id, dsl::name))
+            .do_update()
+            .set(dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())))
             .execute(connection)?;
 
         let query::Entity { id, .. } =
@@ -872,7 +879,7 @@ impl Store {
 
     /// Get the last fully syncronised offset
     #[instrument]
-    pub fn get_last_offset(&self) -> Result<Option<(Offset, ChronicleTransactionId)>, StoreError> {
+    pub fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
         use schema::ledgersync::dsl;
         self.connection()?.immediate_transaction(|connection| {
             schema::ledgersync::table
@@ -880,13 +887,8 @@ impl Store {
                 .select((dsl::offset, dsl::correlation_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)
-                .and_then(|(offset, correlation_id)| {
-                    let correlation_id = ChronicleTransactionId::try_from(&*correlation_id)?;
-                    if let Some(offset) = offset {
-                        Ok(Some((Offset::from(&*offset), correlation_id)))
-                    } else {
-                        Ok(None)
-                    }
+                .map(|(offset, correlation_id)| {
+                    offset.map(|offset| (Offset::from(&*offset), correlation_id))
                 })
         })
     }

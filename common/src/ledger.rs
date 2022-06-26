@@ -13,8 +13,8 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
-        IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
+        IdentityId, NamePart, NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -24,7 +24,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
     pin::Pin,
-    str::from_utf8,
+    str::{from_utf8, FromStr},
     sync::{Arc, Mutex},
 };
 
@@ -295,14 +295,14 @@ impl LedgerAddress {
     fn namespace(ns: &NamespaceId) -> Self {
         Self {
             namespace: None,
-            resource: ns.compact(),
+            resource: ns.clone().into(),
         }
     }
 
     fn in_namespace(ns: &NamespaceId, resource: impl Into<ChronicleIri>) -> Self {
         Self {
-            namespace: Some(ns.compact()),
-            resource: resource.into().compact(),
+            namespace: Some(ns.clone()),
+            resource: resource.into(),
         }
     }
 }
