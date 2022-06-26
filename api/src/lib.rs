@@ -234,25 +234,16 @@ where
             debug!(?api, "Api running on localset");
 
             loop {
-                select! {
-                        state = state_updates.next().fuse() =>{
-
-                            if state.is_none() {
-                                warn!("Ledger reader disconnected");
-                            }
-
-                            if let Some((offset, prov, correlation_id)) = state {
-                                    api.sync(&prov, offset.clone(),correlation_id.clone())
-                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
-                                        .await
-                                        .map_err(|e| {
-                                            error!(?e, "Api sync to confirmed commit");
-                                        }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
-                            }
-
-                        },
-                        cmd = rx.recv().fuse() => {
-                            if let Some((command, reply)) = cmd {
+                let mut state_updates = reuse_reader
+                    .clone()
+                    .state_updates(
+                        store
+                            .get_last_offset()
+                            .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
+                            .unwrap_or(Offset::Genesis),
+                    )
+                    .await
+                    .unwrap();
 
                 loop {
                     select! {
