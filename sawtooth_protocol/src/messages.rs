@@ -123,13 +123,15 @@ impl MessageBuilder {
         let s: Signature = self.signer.sign(&*encoded_header);
         s.normalize_s();
 
+        let s = hex::encode(s.to_vec());
+
         (
             Transaction {
                 header: encoded_header,
-                header_signature: hex::encode(s.to_vec()),
+                header_signature: s.clone(),
                 payload: bytes,
             },
-            ChronicleTransactionId::from(s),
+            ChronicleTransactionId::from(&*s),
         )
     }
 }

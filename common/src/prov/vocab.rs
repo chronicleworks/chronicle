@@ -133,7 +133,7 @@ impl Chronicle {
 
     pub fn attachment(entity_name: &Name, signature: impl AsRef<str>) -> IriBuf {
         IriBuf::new(&format!(
-            "{}attachment:{}:{}",
+            "{}evidence:{}:{}",
             Self::PREFIX,
             Self::encode(entity_name.as_str()),
             Self::encode(signature.as_ref())

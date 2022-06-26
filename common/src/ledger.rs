@@ -1,4 +1,5 @@
 use futures::{stream, SinkExt, Stream, StreamExt};
+
 use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument};
@@ -12,8 +13,8 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
-        IdentityId, NamePart, NamespaceId, ProcessorError, ProvModel,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
+        IdentityId, NamePart, NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -23,7 +24,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
     pin::Pin,
-    str::from_utf8,
+    str::{from_utf8, FromStr},
     sync::{Arc, Mutex},
 };
 
@@ -275,22 +276,33 @@ impl LedgerWriter for InMemLedger {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 pub struct LedgerAddress {
     // Namespaces do not have a namespace
-    pub namespace: Option<String>,
-    pub resource: String,
+    pub namespace: Option<NamespaceId>,
+    pub resource: ChronicleIri,
 }
 
 impl LedgerAddress {
+    fn from_ld(ns: Option<&str>, resource: &str) -> Result<Self, ParseIriError> {
+        Ok(Self {
+            namespace: if let Some(ns) = ns {
+                Some(ChronicleIri::from_str(ns)?.namespace()?)
+            } else {
+                None
+            },
+            resource: ChronicleIri::from_str(resource)?,
+        })
+    }
+
     fn namespace(ns: &NamespaceId) -> Self {
         Self {
             namespace: None,
-            resource: ns.compact(),
+            resource: ns.clone().into(),
         }
     }
 
     fn in_namespace(ns: &NamespaceId, resource: impl Into<ChronicleIri>) -> Self {
         Self {
-            namespace: Some(ns.compact()),
-            resource: resource.into().compact(),
+            namespace: Some(ns.clone()),
+            resource: resource.into(),
         }
     }
 }
@@ -328,10 +340,10 @@ impl ChronicleOperation {
             ChronicleOperation::CreateAgent(CreateAgent {
                 namespace, name, ..
             }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    AgentId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, AgentId::from_name(name)),
+                ]
             }
             // Key registration requires identity + agent
             ChronicleOperation::RegisterKey(RegisterKey {
@@ -340,6 +352,7 @@ impl ChronicleOperation {
                 publickey,
                 ..
             }) => vec![
+                LedgerAddress::namespace(namespace),
                 LedgerAddress::in_namespace(namespace, id.clone()),
                 LedgerAddress::in_namespace(
                     namespace,
@@ -349,10 +362,10 @@ impl ChronicleOperation {
             ChronicleOperation::CreateActivity(CreateActivity {
                 namespace, name, ..
             }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    ActivityId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, ActivityId::from_name(name)),
+                ]
             }
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
@@ -361,6 +374,7 @@ impl ChronicleOperation {
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
@@ -372,6 +386,7 @@ impl ChronicleOperation {
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
@@ -382,21 +397,23 @@ impl ChronicleOperation {
                 activity,
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, activity.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                 ]
             }
             ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => {
-                vec![LedgerAddress::in_namespace(
-                    namespace,
-                    EntityId::from_name(name),
-                )]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, EntityId::from_name(name)),
+                ]
             }
             ChronicleOperation::GenerateEntity(GenerateEntity {
                 namespace,
                 id,
                 activity,
             }) => vec![
+                LedgerAddress::namespace(namespace),
                 LedgerAddress::in_namespace(namespace, activity.clone()),
                 LedgerAddress::in_namespace(namespace, id.clone()),
             ],
@@ -409,6 +426,7 @@ impl ChronicleOperation {
                 ..
             }) => {
                 vec![
+                    LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
                     LedgerAddress::in_namespace(namespace, identityid.clone()),
@@ -425,6 +443,7 @@ impl ChronicleOperation {
                 activity_id,
                 ..
             }) => vec![
+                Some(LedgerAddress::namespace(namespace)),
                 activity_id
                     .as_ref()
                     .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
@@ -441,6 +460,7 @@ impl ChronicleOperation {
                 activity_id,
                 ..
             }) => vec![
+                Some(LedgerAddress::namespace(namespace)),
                 activity_id
                     .as_ref()
                     .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
@@ -451,15 +471,24 @@ impl ChronicleOperation {
             .flatten()
             .collect(),
             ChronicleOperation::SetAttributes(SetAttributes::Agent { id, namespace, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
             ChronicleOperation::SetAttributes(SetAttributes::Entity { id, namespace, .. }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
             ChronicleOperation::SetAttributes(SetAttributes::Activity {
                 id, namespace, ..
             }) => {
-                vec![LedgerAddress::in_namespace(namespace, id.clone())]
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, id.clone()),
+                ]
             }
         }
     }
@@ -494,17 +523,15 @@ impl ChronicleOperation {
                     .iter()
                     .map(|resource| {
                         Ok(StateOutput {
-                            address: LedgerAddress {
-                                namespace: resource
+                            address: LedgerAddress::from_ld(
+                                resource
                                     .get("namespace")
-                                    .and_then(|resource| resource.as_str())
-                                    .map(|resource| resource.to_owned()),
-                                resource: resource
+                                    .and_then(|resource| resource.as_str()),
+                                resource
                                     .get("@id")
                                     .and_then(|id| id.as_str())
-                                    .ok_or(ProcessorError::NotANode {})?
-                                    .to_owned(),
-                            },
+                                    .ok_or(ProcessorError::NotANode {})?,
+                            )?,
                             data: serde_json::to_string(resource).unwrap().into_bytes(),
                         })
                     })
@@ -516,17 +543,15 @@ impl ChronicleOperation {
                     .map(|graph| graph.remove("@context"));
 
                 vec![StateOutput {
-                    address: LedgerAddress {
-                        namespace: json_ld
+                    address: LedgerAddress::from_ld(
+                        json_ld
                             .get("namespace")
-                            .and_then(|resource| resource.as_str())
-                            .map(|resource| resource.to_owned()),
-                        resource: json_ld
+                            .and_then(|resource| resource.as_str()),
+                        json_ld
                             .get("@id")
                             .and_then(|id| id.as_str())
-                            .ok_or(ProcessorError::NotANode {})?
-                            .to_owned(),
-                    },
+                            .ok_or(ProcessorError::NotANode {})?,
+                    )?,
                     data: serde_json::to_string(&json_ld).unwrap().into_bytes(),
                 }]
             },

@@ -1,5 +1,4 @@
 use tracing::subscriber::set_global_default;
-use tracing::Level;
 use tracing_log::{log::LevelFilter, LogTracer};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
@@ -30,7 +29,7 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: bool) {
                     .with(otel)
                     .with(console),
             )
-            .expect("Instrumentation");
+            .ok();
         }
         (None, true) => {
             let console = tracing_subscriber::fmt::layer()
@@ -38,8 +37,7 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: bool) {
                 .with_target(true) // don't include targets
                 .with_thread_ids(true) // include the thread ID of the current thread
                 .pretty();
-            set_global_default(Registry::default().with(env_filter).with(console))
-                .expect("Instrumentation");
+            set_global_default(Registry::default().with(env_filter).with(console)).ok();
         }
         (Some(otel), false) => {
             let otel = OpenTelemetryLayer::new(
@@ -49,8 +47,7 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: bool) {
                     .install_batch(opentelemetry::runtime::Tokio)
                     .unwrap(),
             );
-            set_global_default(Registry::default().with(env_filter).with(otel))
-                .expect("Instrumentation");
+            set_global_default(Registry::default().with(env_filter).with(otel)).ok();
         }
         _ => (),
     }

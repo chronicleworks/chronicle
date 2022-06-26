@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use custom_error::custom_error;
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
-use k256::ecdsa::Signature;
+
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -60,34 +60,15 @@ impl Display for ChronicleTransactionId {
         f.write_str(&*self.0)
     }
 }
-
-impl TryFrom<&str> for ChronicleTransactionId {
-    type Error = ChronicleTransactionIdError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if let Ok(id) = Uuid::parse_str(value) {
-            return Ok(Self::from(id));
-        } else if let Ok(id) = hex::decode(value) {
-            if let Ok(id) = Signature::try_from(&*id) {
-                return Ok(Self::from(id));
-            }
-        }
-
-        Err(ChronicleTransactionIdError::InvalidTransactionId {
-            id: value.to_owned(),
-        })
-    }
-}
-
 impl From<Uuid> for ChronicleTransactionId {
     fn from(u: Uuid) -> Self {
         Self(u.to_string())
     }
 }
 
-impl From<Signature> for ChronicleTransactionId {
-    fn from(s: Signature) -> Self {
-        Self(hex::encode(s.as_ref()))
+impl From<&str> for ChronicleTransactionId {
+    fn from(s: &str) -> Self {
+        Self(s.to_owned())
     }
 }
 
