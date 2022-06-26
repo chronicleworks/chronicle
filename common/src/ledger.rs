@@ -24,6 +24,7 @@ use std::{
     fmt::Display,
     pin::Pin,
     str::from_utf8,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug)]
@@ -130,7 +131,7 @@ pub trait LedgerReader {
 }
 
 /// An in memory ledger implementation for development and testing purposes
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
     chan: UnboundedSender<(Offset, ProvModel, ChronicleTransactionId)>,
@@ -146,7 +147,7 @@ impl InMemLedger {
             kv: HashMap::new().into(),
             chan: tx,
             reader: Some(InMemLedgerReader {
-                chan: Some(rx).into(),
+                chan: Arc::new(Mutex::new(Some(rx).into())),
             }),
             head: 0u64,
         }
@@ -163,9 +164,11 @@ impl Default for InMemLedger {
     }
 }
 
-#[derive(Debug)]
+type SharedLedger = Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>;
+
+#[derive(Debug, Clone)]
 pub struct InMemLedgerReader {
-    chan: RefCell<Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>>,
+    chan: Arc<Mutex<RefCell<SharedLedger>>>,
 }
 
 #[async_trait::async_trait]
@@ -177,7 +180,8 @@ impl LedgerReader for InMemLedgerReader {
         Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
         SubscriptionError,
     > {
-        let stream = stream::unfold(self.chan.take().unwrap(), |mut chan| async move {
+        let chan = self.chan.lock().unwrap().take().unwrap();
+        let stream = stream::unfold(chan, |mut chan| async move {
             chan.next()
                 .await
                 .map(|(offset, prov, uuid)| ((offset, prov.into(), uuid), chan))
