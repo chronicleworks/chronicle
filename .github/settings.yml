@@ -85,6 +85,8 @@ teams:
     permission: maintain
   - name: btp-documentation
     permission: maintain
+  - name: release-managers
+    permission: admin
   - name: repository-admin
     permission: admin
   - name: ci-bots
@@ -120,6 +122,7 @@ branches:
         # Required. The list of status checks to require in order to merge into
         # this branch
         contexts:
+          - License Compliance
           - DCO
           - cargo-checkmate
           - continuous-integration/jenkins/pr-head
