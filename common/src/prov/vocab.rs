@@ -5,6 +5,37 @@ use uuid::Uuid;
 use super::Name;
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
+#[iri_prefix("chronicleop" = "http://blockchaintp.com/chronicleoperations/ns#")]
+pub enum ChronicleOperations {
+    #[iri("chronicleop:CreateNamespace")]
+    CreateNamespace,
+    #[iri("chronicleop:CreateAgent")]
+    CreateAgent,
+    #[iri("chronicleop:AgentActsOnBehalfOf")]
+    AgentActsOnBehalfOf,
+    #[iri("chronicleop:RegisterKey")]
+    RegisterKey,
+    #[iri("chronicleop:CreateActivity")]
+    CreateActivity,
+    #[iri("chronicleop:StartActivity")]
+    StartActivity,
+    #[iri("chronicleop:EndActivity")]
+    EndActivity,
+    #[iri("chronicleop:ActivityUses")]
+    ActivityUses,
+    #[iri("chronicleop:CreateEntity")]
+    CreateEntity,
+    #[iri("chronicleop:GenerateEntity")]
+    GenerateEntity,
+    #[iri("chronicleop:EntityDerive")]
+    EntityDerive,
+    #[iri("chronicleop:EntityAttach")]
+    EntityAttach,
+    #[iri("chronicleop:SetAttributes")]
+    SetAttributes,
+}
+
+#[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("prov" = "http://www.w3.org/ns/prov#")]
 pub enum Prov {
     #[iri("prov:Agent")]
@@ -77,9 +108,9 @@ pub enum Chronicle {
     Value,
 }
 
-/// Operarations to format specific Iri kinds, using percentage encoding to ensure they are infallible
+/// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible
 impl Chronicle {
-    const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
+    pub const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
 
     fn encode(s: &str) -> String {
         percent_encode(s.as_bytes(), NON_ALPHANUMERIC).to_string()
@@ -133,7 +164,7 @@ impl Chronicle {
 
     pub fn attachment(entity_name: &Name, signature: impl AsRef<str>) -> IriBuf {
         IriBuf::new(&format!(
-            "{}attachment:{}:{}",
+            "{}evidence:{}:{}",
             Self::PREFIX,
             Self::encode(entity_name.as_str()),
             Self::encode(signature.as_ref())
