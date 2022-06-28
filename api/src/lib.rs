@@ -24,9 +24,9 @@ use common::{
     ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
     prov::{
         operations::{
-            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
-            GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
         },
         ActivityId, AgentId, ChronicleTransactionId, EntityId, IdentityId, Name, NamePart,
         NamespaceId, ProvModel,
@@ -364,7 +364,7 @@ where
 
                 let id = EntityId::from_name(&name);
 
-                let create = ChronicleOperation::GenerateEntity(GenerateEntity {
+                let create = ChronicleOperation::GenerateEntity(WasGeneratedBy {
                     namespace,
                     id: id.clone(),
                     activity: ActivityId::from_name(&activity.name),
@@ -475,7 +475,7 @@ where
 
                 let id = EntityId::from_name(&name);
 
-                let create = ChronicleOperation::CreateEntity(CreateEntity {
+                let create = ChronicleOperation::CreateEntity(EntityExists {
                     namespace: namespace.clone(),
                     name: name.clone(),
                 });
@@ -523,7 +523,7 @@ where
                     .store
                     .disambiguate_activity_name(connection, &name, &namespace)?;
 
-                let create = ChronicleOperation::CreateActivity(CreateActivity {
+                let create = ChronicleOperation::CreateActivity(ActivityExists {
                     namespace: namespace.clone(),
                     name: name.clone(),
                 });
@@ -571,7 +571,7 @@ where
                     .store
                     .disambiguate_agent_name(connection, &name, &namespace)?;
 
-                let create = ChronicleOperation::CreateAgent(CreateAgent {
+                let create = ChronicleOperation::CreateAgent(AgentExists {
                     name: name.to_owned(),
                     namespace: namespace.clone(),
                 });
@@ -829,7 +829,7 @@ where
 
                 let signature: Signature = signer.try_sign(&*buf)?;
 
-                let tx = ChronicleOperation::EntityAttach(EntityAttach {
+                let tx = ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                     namespace,
                     id: id.clone(),
                     agent: agent_id.clone(),

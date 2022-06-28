@@ -2,7 +2,7 @@ use iref::IriBuf;
 use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
 use uuid::Uuid;
 
-use super::Name;
+use super::{ActivityId, AgentId, Name, NamePart, Role};
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("chronicleop" = "http://blockchaintp.com/chronicleoperations/ns#")]
@@ -208,6 +208,38 @@ impl Chronicle {
             Self::PREFIX,
             Self::encode(agent_name.as_str()),
             Self::encode(public_key.as_ref())
+        ))
+        .unwrap()
+    }
+
+    pub fn association(
+        agent: &AgentId,
+        activity: &ActivityId,
+        role: Option<impl AsRef<Role>>,
+    ) -> IriBuf {
+        IriBuf::new(&format!(
+            "{}association:{}:{}:role={}",
+            Self::PREFIX,
+            Self::encode(agent.name_part().as_str()),
+            Self::encode(activity.name_part().as_ref()),
+            Self::encode(role.as_deref().unwrap_or(""))
+        ))
+        .unwrap()
+    }
+
+    pub fn delegation(
+        delegate: &AgentId,
+        responsible: &ActivityId,
+        activity: Option<ActivityId>,
+        role: Option<impl AsRef<Role>>,
+    ) -> IriBuf {
+        IriBuf::new(&format!(
+            "{}delegation:{}:{}:role={}:activity={}",
+            Self::PREFIX,
+            Self::encode(delegate.name_part().as_str()),
+            Self::encode(responsible.name_part().as_str()),
+            Self::encode(role.as_deref().unwrap_or("")),
+            Self::encode(activity.name_part().as_ref()),
         ))
         .unwrap()
     }

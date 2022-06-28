@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::attributes::Attributes;
 
-use super::{ActivityId, AgentId, EntityId, IdentityId, Name, NamespaceId};
+use super::{ActivityId, AgentId, AssociationId, EntityId, IdentityId, Name, NamespaceId};
 
 #[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[diesel(sql_type = Integer)]
@@ -83,12 +83,12 @@ impl CreateNamespace {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct CreateAgent {
+pub struct AgentExists {
     pub namespace: NamespaceId,
     pub name: Name,
 }
 
-impl CreateAgent {
+impl AgentExists {
     pub fn new(namespace: NamespaceId, name: impl AsRef<str>) -> Self {
         Self {
             namespace,
@@ -113,7 +113,7 @@ pub struct RegisterKey {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct CreateActivity {
+pub struct ActivityExists {
     pub namespace: NamespaceId,
     pub name: Name,
 }
@@ -142,13 +142,13 @@ pub struct ActivityUses {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct CreateEntity {
+pub struct EntityExists {
     pub namespace: NamespaceId,
     pub name: Name,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct GenerateEntity {
+pub struct WasGeneratedBy {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
@@ -164,7 +164,16 @@ pub struct EntityDerive {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct EntityAttach {
+pub struct Associate {
+    pub id: AssociationId,
+    pub role: Option<String>,
+    pub namespace: NamespaceId,
+    pub activity_id: ActivityId,
+    pub agent_id: AgentId,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct EntityHasEvidence {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub agent: AgentId,
@@ -196,16 +205,17 @@ pub enum SetAttributes {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
-    CreateAgent(CreateAgent),
+    CreateAgent(AgentExists),
     AgentActsOnBehalfOf(ActsOnBehalfOf),
     RegisterKey(RegisterKey),
-    CreateActivity(CreateActivity),
+    CreateActivity(ActivityExists),
     StartActivity(StartActivity),
     EndActivity(EndActivity),
     ActivityUses(ActivityUses),
-    CreateEntity(CreateEntity),
-    GenerateEntity(GenerateEntity),
+    CreateEntity(EntityExists),
+    GenerateEntity(WasGeneratedBy),
     EntityDerive(EntityDerive),
-    EntityAttach(EntityAttach),
+    EntityHasEvidence(EntityHasEvidence),
     SetAttributes(SetAttributes),
+    Associate(Associate),
 }

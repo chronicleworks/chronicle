@@ -18,9 +18,9 @@ use crate::attributes::{Attribute, Attributes};
 use super::{
     id,
     operations::{
-        ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-        CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
-        GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+        ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+        CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
+        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
     },
     ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, Name, NamePart,
     NamespaceId, PublicKeyPart, UuidPart,
@@ -620,7 +620,7 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&id);
             }
-            ChronicleOperation::CreateAgent(CreateAgent {
+            ChronicleOperation::CreateAgent(AgentExists {
                 namespace, name, ..
             }) => {
                 let id = AgentId::from_name(&name);
@@ -668,7 +668,7 @@ impl ProvModel {
                     .or_insert_with(|| Agent::exists(namespace.clone(), id.clone()));
                 self.new_identity(&namespace, &id, &publickey);
             }
-            ChronicleOperation::CreateActivity(CreateActivity {
+            ChronicleOperation::CreateActivity(ActivityExists {
                 namespace, name, ..
             }) => {
                 let id = ActivityId::from_name(&name);
@@ -760,7 +760,7 @@ impl ProvModel {
 
                 self.used(namespace, &activity, &id);
             }
-            ChronicleOperation::CreateEntity(CreateEntity {
+            ChronicleOperation::CreateEntity(EntityExists {
                 namespace, name, ..
             }) => {
                 let id = EntityId::from_name(&name);
@@ -770,7 +770,7 @@ impl ProvModel {
                     Entity::exists(namespace, id),
                 );
             }
-            ChronicleOperation::GenerateEntity(GenerateEntity {
+            ChronicleOperation::GenerateEntity(WasGeneratedBy {
                 namespace,
                 id,
                 activity,
@@ -788,7 +788,7 @@ impl ProvModel {
 
                 self.was_generated_by(namespace, &id, &activity)
             }
-            ChronicleOperation::EntityAttach(EntityAttach {
+            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,
                 agent,

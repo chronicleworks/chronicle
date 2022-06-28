@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    ActivityUses, ActsOnBehalfOf, CompactedJson, EntityAttach, EntityDerive, StartActivity,
+    ActivityUses, ActsOnBehalfOf, CompactedJson, EntityDerive, EntityHasEvidence, StartActivity,
 };
 
 prop_compose! {
@@ -78,9 +78,9 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn create_agent() (name in name(),namespace in namespace()) -> CreateAgent {
+    fn create_agent() (name in name(),namespace in namespace()) -> AgentExists {
         let _id = AgentId::from_name(&name);
-        CreateAgent {
+        AgentExists {
             namespace,
             name,
         }
@@ -99,8 +99,8 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn create_activity() (name in name(),namespace in namespace()) -> CreateActivity {
-        CreateActivity {
+    fn create_activity() (name in name(),namespace in namespace()) -> ActivityExists {
+        ActivityExists {
             namespace,
             name,
         }
@@ -153,8 +153,8 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn create_entity() (name in name(),namespace in namespace()) -> CreateEntity {
-        CreateEntity {
+    fn create_entity() (name in name(),namespace in namespace()) -> EntityExists {
+        EntityExists {
             namespace,
             name,
         }
@@ -162,12 +162,12 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn generate_entity() (activity_name in name(), entity_name in name(),namespace in namespace()) -> GenerateEntity {
+    fn generate_entity() (activity_name in name(), entity_name in name(),namespace in namespace()) -> WasGeneratedBy {
         let activity = ActivityId::from_name(&activity_name);
         let id = EntityId::from_name(&entity_name);
 
 
-        GenerateEntity {
+        WasGeneratedBy {
             namespace,
             id,
             activity
@@ -184,14 +184,14 @@ prop_compose! {
         name in name(),
         namespace in namespace(),
         public_key in "[0-9a-f]{64}",
-    ) -> EntityAttach {
+    ) -> EntityHasEvidence {
         let id = EntityId::from_name(&name);
         let agent: AgentId = AgentId::from_name(&agent_name);
         let identityid = IdentityId::from_name(&agent_name , &*public_key);
 
         let signature_time = Utc::today().and_hms_micro(offset, 0,0,0);
 
-        EntityAttach {
+        EntityHasEvidence {
             namespace,
             id,
             locator,
@@ -317,7 +317,7 @@ fn transaction() -> impl Strategy<Value = ChronicleOperation> {
         4 => activity_uses().prop_map(ChronicleOperation::ActivityUses),
         2 => create_entity().prop_map(ChronicleOperation::CreateEntity),
         4 => generate_entity().prop_map(ChronicleOperation::GenerateEntity),
-        2 => entity_attach().prop_map(ChronicleOperation::EntityAttach),
+        2 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
         2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
         2 => agent_acts_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
         2 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
@@ -376,7 +376,7 @@ proptest! {
                     prop_assert_eq!(&ns.uuid, uuid);
                 },
                 ChronicleOperation::CreateAgent(
-                    CreateAgent { namespace, name}) => {
+                    AgentExists { namespace, name}) => {
                     let agent = &prov.agents.get(&(namespace.to_owned(),AgentId::from_name(name)));
                     prop_assert!(agent.is_some());
                     let agent = agent.unwrap();
@@ -427,7 +427,7 @@ proptest! {
                         prop_assert_eq!(&identity.public_key, &publickey.clone());
                 },
                 ChronicleOperation::CreateActivity(
-                    CreateActivity { namespace,  name }) => {
+                    ActivityExists { namespace,  name }) => {
                     let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_name(name)));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
@@ -500,14 +500,14 @@ proptest! {
                     prop_assert!(has_useage);
                 },
                 ChronicleOperation::CreateEntity(
-                    CreateEntity { namespace, name}) => {
+                    EntityExists { namespace, name}) => {
                     let entity = &prov.entities.get(&(namespace.to_owned(),EntityId::from_name(name)));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
                     prop_assert_eq!(&entity.name, name);
                     prop_assert_eq!(&entity.namespaceid, namespace);
                 },
-                ChronicleOperation::GenerateEntity(GenerateEntity{namespace, id, activity}) => {
+                ChronicleOperation::GenerateEntity(WasGeneratedBy{namespace, id, activity}) => {
                     let activity_id = activity;
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(entity.is_some());
@@ -531,8 +531,8 @@ proptest! {
 
                     prop_assert!(has_generation);
                 }
-                ChronicleOperation::EntityAttach(
-                    EntityAttach{
+                ChronicleOperation::EntityHasEvidence(
+                    EntityHasEvidence{
                     namespace,
                     identityid: _,
                     id,
