@@ -6,11 +6,25 @@ use diesel::{
     sql_types::Integer,
     QueryId, SqlType,
 };
+use json::JsonValue;
+// use iref::Iri;
+// use json::object;
 use uuid::Uuid;
 
 use crate::attributes::Attributes;
 
-use super::{ActivityId, AgentId, EntityId, IdentityId, Name, NamespaceId};
+use super::{
+    ActivityId,
+    AgentId,
+    EntityId,
+    IdentityId,
+    Name,
+    NamePart,
+    NamespaceId,
+    UuidPart,
+    // vocab::ChronicleOperations,
+    // ExpandedJson
+};
 
 #[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[diesel(sql_type = Integer)]
@@ -207,4 +221,554 @@ pub enum ChronicleOperation {
     EntityDerive(EntityDerive),
     EntityAttach(EntityAttach),
     SetAttributes(SetAttributes),
+}
+
+fn namespacename(id: &NamespaceId) -> (String, Vec<JsonValue>) {
+    let key = iref::Iri::from(super::vocab::ChronicleOperations::NamespaceName).to_string();
+    let mut value: Vec<JsonValue> = Vec::new();
+    let object = json::object! {
+        "@value": id.name_part().to_string()
+    };
+    value.push(object);
+    (key, value)
+}
+
+fn namespaceuuid(id: &NamespaceId) -> (String, Vec<JsonValue>) {
+    let key = iref::Iri::from(super::vocab::ChronicleOperations::NamespaceUuid).to_string();
+    let mut value: Vec<JsonValue> = Vec::new();
+    let object = json::object! {
+        "@value": id.uuid_part().to_string()
+    };
+    value.push(object);
+    (key, value)
+}
+
+fn agentname(name: &Name) -> (String, Vec<JsonValue>) {
+    let key = iref::Iri::from(super::vocab::ChronicleOperations::AgentName).to_string();
+    let mut value: Vec<JsonValue> = Vec::new();
+    let object = json::object! {
+        "@value": name.to_string()
+    };
+    value.push(object);
+    (key, value)
+}
+
+fn activityname(name: &Name) -> (String, Vec<JsonValue>) {
+    let key = iref::Iri::from(super::vocab::ChronicleOperations::ActivityName).to_string();
+    let mut value: Vec<JsonValue> = Vec::new();
+    let object = json::object! {
+        "@value": name.to_string()
+    };
+    value.push(object);
+    (key, value)
+}
+
+impl ChronicleOperation {
+    pub fn to_json(&self) -> super::ExpandedJson {
+        let mut operation: Vec<JsonValue> = Vec::new();
+
+        let o = match self {
+            ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::CreateNamespace).as_str(),
+                };
+
+                let (key, value) = namespacename(id);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(id);
+                o.insert(&key, value).ok();
+
+                o
+            }
+            ChronicleOperation::CreateAgent(CreateAgent { namespace, name }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::CreateAgent).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = agentname(name);
+                o.insert(&key, value).ok();
+
+                o
+            }
+            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+            }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::AgentActsOnBehalfOf).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = agentname(id.name_part());
+                o.insert(&key, value).ok();
+
+                let key =
+                    iref::Iri::from(super::vocab::ChronicleOperations::DelegateId).to_string();
+                let mut value: Vec<JsonValue> = Vec::new();
+                let object = json::object! {
+                    "@value": delegate_id.name_part().to_string()
+                };
+                value.push(object);
+                o.insert(&key, value).ok();
+
+                if let Some(activity_id) = activity_id {
+                    let (key, value) = activityname(activity_id.name_part());
+                    o.insert(&key, value).ok();
+                }
+
+                o
+            }
+            ChronicleOperation::RegisterKey(RegisterKey {
+                namespace,
+                id,
+                publickey,
+            }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::RegisterKey).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = agentname(id.name_part());
+                o.insert(&key, value).ok();
+
+                let key = iref::Iri::from(super::vocab::ChronicleOperations::PublicKey).to_string();
+                let mut value: Vec<JsonValue> = Vec::new();
+                let object = json::object! {
+                    "@value": publickey.to_owned()
+                };
+                value.push(object);
+                o.insert(&key, value).ok();
+
+                o
+            }
+            ChronicleOperation::CreateActivity(CreateActivity { namespace, name }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::CreateActivity).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = activityname(name);
+                o.insert(&key, value).ok();
+
+                o
+            }
+            ChronicleOperation::StartActivity(StartActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::StartActivity).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = agentname(agent.name_part());
+                o.insert(&key, value).ok();
+
+                let (key, value) = activityname(id.name_part());
+                o.insert(&key, value).ok();
+
+                let key = iref::Iri::from(super::vocab::ChronicleOperations::StartActivityTime)
+                    .to_string();
+                let mut value: Vec<JsonValue> = Vec::new();
+                let object = json::object! {
+                    "@value": time.to_rfc3339()
+                };
+                value.push(object);
+                o.insert(&key, value).ok();
+
+                o
+            }
+            // ChronicleOperation::EndActivity(EndActivity {
+            //     namespace,
+            //     id,
+            //     agent,
+            //     time,
+            // }) => unimplemented!(),
+            // ChronicleOperation::ActivityUses(ActivityUses {
+            //     namespace,
+            //     id,
+            //     activity,
+            // }) => unimplemented!(),
+            // ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => unimplemented!(),
+            // ChronicleOperation::GenerateEntity(GenerateEntity {
+            //     namespace,
+            //     id,
+            //     activity,
+            // }) => unimplemented!(),
+            // ChronicleOperation::EntityAttach(EntityAttach {
+            //     // from proptest.rs
+            //     // EntityAttach {
+            //     //     namespace,
+            //     //     id,
+            //     //     locator,
+            //     //     agent,
+            //     //     signature,
+            //     //     identityid,
+            //     //     signature_time
+            //     // }
+            //     namespace,
+            //     identityid: _,
+            //     id,
+            //     locator: _,
+            //     agent,
+            //     signature: _,
+            //     signature_time: _,
+            // }) => unimplemented!(),
+            // ChronicleOperation::EntityDerive(EntityDerive {
+            //     namespace,
+            //     id,
+            //     used_id,
+            //     activity_id,
+            //     typ,
+            // }) => unimplemented!(),
+            // ChronicleOperation::SetAttributes(SetAttributes::Entity {
+            //     namespace,
+            //     id,
+            //     attributes,
+            // }) => unimplemented!(),
+            // ChronicleOperation::SetAttributes(SetAttributes::Activity {
+            //     namespace,
+            //     id,
+            //     attributes,
+            // }) => unimplemented!(),
+            // ChronicleOperation::SetAttributes(SetAttributes::Agent {
+            //     namespace,
+            //     id,
+            //     attributes,
+            // }) => unimplemented!(),
+            _ => unreachable!(),
+        };
+        operation.push(o);
+        super::ExpandedJson(operation.into())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::prov::{ActivityId, AgentId, NamespaceId};
+
+    use super::ChronicleOperation;
+
+    // Sort @graph by //@id, as objects are unordered
+    // fn sort_graph(mut v: serde_json::Value) -> serde_json::Value {
+    //     let mut ok = false;
+    //     if let Some(v) = v.pointer_mut("/@graph") {
+    //         ok = true;
+    //         v.as_array_mut().unwrap().sort_by(|l, r| {
+    //             l.as_object()
+    //                 .unwrap()
+    //                 .get("@id")
+    //                 .unwrap()
+    //                 .as_str()
+    //                 .unwrap()
+    //                 .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
+    //         });
+    //     }
+    //     assert!(ok);
+    //     v
+    // }
+
+    #[tokio::test]
+    async fn test_create_namespace() {
+        let name = "testns";
+        let uuid = uuid::Uuid::new_v4();
+        let id = NamespaceId::from_name(name, uuid);
+
+        let op =
+            super::ChronicleOperation::CreateNamespace(super::CreateNamespace::new(id, name, uuid));
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateNamespace",
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "acd922b4-22cb-43f5-bf3c-829e4ea383c1"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_create_agent() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let name: crate::prov::Name =
+            crate::prov::NamePart::name_part(&crate::prov::AgentId::from_name("funnyagent"))
+                .clone();
+        let op: ChronicleOperation =
+            super::ChronicleOperation::CreateAgent(crate::prov::operations::CreateAgent {
+                namespace,
+                name,
+            });
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateAgent",
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "funnyagent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "3dd79c6d-9be8-4184-85e4-86c6854bd389"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_agent_acts_on_behalf_of() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let id = crate::prov::AgentId::from_name("funnyagent");
+        let delegate_id = AgentId::from_name("delegatename");
+        let activity_id = Some(ActivityId::from_name("activity"));
+
+        let op: ChronicleOperation = super::ChronicleOperation::AgentActsOnBehalfOf(
+            crate::prov::operations::ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+            },
+        );
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "funnyagent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
+              {
+                "@value": "delegatename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "be5c1b8d-5375-446b-a94d-e04a3ab161ac"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_register_key() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let id = crate::prov::AgentId::from_name("funnyagent");
+        let publickey =
+            "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
+
+        let op: ChronicleOperation =
+            super::ChronicleOperation::RegisterKey(crate::prov::operations::RegisterKey {
+                namespace,
+                id,
+                publickey,
+            });
+
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#RegisterKey",
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "funnyagent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "0fb4fa0c-75a7-4205-b9cb-458708d98d09"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#PublicKey": [
+              {
+                "@value": "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_create_activity() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let name =
+            crate::prov::NamePart::name_part(&ActivityId::from_name("activity_name")).to_owned();
+
+        let op: ChronicleOperation =
+            super::ChronicleOperation::CreateActivity(crate::prov::operations::CreateActivity {
+                namespace,
+                name,
+            });
+
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateActivity",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "activity_name"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "1b91974a-1279-4225-9454-3cfafc7723b6"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn start_activity() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let id = ActivityId::from_name("activity");
+        let agent = crate::prov::AgentId::from_name("funnyagent");
+        let time = chrono::DateTime::<chrono::Utc>::from_utc(
+            chrono::NaiveDateTime::from_timestamp(61, 0),
+            chrono::Utc,
+        );
+        let op: ChronicleOperation =
+            super::ChronicleOperation::StartActivity(crate::prov::operations::StartActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            });
+
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#StartActivity",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "funnyagent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "7bdb840b-3c98-4f84-895e-ba2ff283586e"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
+              {
+                "@value": "1970-01-01T00:01:01+00:00"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_to_json() {}
 }

@@ -9,16 +9,32 @@ use super::Name;
 pub enum ChronicleOperations {
     #[iri("chronicleop:CreateNamespace")]
     CreateNamespace,
+    #[iri("chronicleop:NamespaceName")]
+    NamespaceName,
+    #[iri("chronicleop:NamespaceUuid")]
+    NamespaceUuid,
     #[iri("chronicleop:CreateAgent")]
     CreateAgent,
+    #[iri("chronicleop:AgentName")]
+    AgentName,
+    #[iri("chronicleop:AgentUuid")]
+    AgentUuid,
     #[iri("chronicleop:AgentActsOnBehalfOf")]
     AgentActsOnBehalfOf,
+    #[iri("chronicleop:DelegateId")]
+    DelegateId,
     #[iri("chronicleop:RegisterKey")]
     RegisterKey,
+    #[iri("chronicleop:PublicKey")]
+    PublicKey,
     #[iri("chronicleop:CreateActivity")]
     CreateActivity,
+    #[iri("chronicleop:ActivityName")]
+    ActivityName,
     #[iri("chronicleop:StartActivity")]
     StartActivity,
+    #[iri("chronicleop:StartActivityTime")]
+    StartActivityTime,
     #[iri("chronicleop:EndActivity")]
     EndActivity,
     #[iri("chronicleop:ActivityUses")]

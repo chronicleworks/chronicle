@@ -966,7 +966,6 @@ custom_error::custom_error! {pub CompactionError
     Join{source : JoinError}               = "Tokio",
     Serde{source: serde_json::Error }      = "Serde conversion",
 }
-
 pub struct ExpandedJson(pub JsonValue);
 
 impl ExpandedJson {

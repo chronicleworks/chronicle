@@ -11,6 +11,10 @@ use crate::{
 
 use super::{ExpandedJson, ProvModel};
 
+trait ToJson {
+    fn to_json(&self) -> ExpandedJson;
+}
+
 impl ProvModel {
     /// Write the model out as a JSON-LD document in expanded form
     pub fn to_json(&self) -> ExpandedJson {
