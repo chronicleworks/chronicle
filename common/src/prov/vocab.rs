@@ -39,6 +39,8 @@ pub enum ChronicleOperations {
     EndActivity,
     #[iri("chronicleop:ActivityUses")]
     ActivityUses,
+    #[iri("chronicleop:EntityName")]
+    EntityName,
     #[iri("chronicleop:CreateEntity")]
     CreateEntity,
     #[iri("chronicleop:GenerateEntity")]
