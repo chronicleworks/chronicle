@@ -263,6 +263,16 @@ fn activityname(name: &Name) -> (String, Vec<JsonValue>) {
     (key, value)
 }
 
+fn operation_time(time: &DateTime<Utc>) -> (String, Vec<JsonValue>) {
+    let key = iref::Iri::from(super::vocab::ChronicleOperations::StartActivityTime).to_string();
+    let mut value: Vec<JsonValue> = Vec::new();
+    let object = json::object! {
+        "@value": time.to_rfc3339()
+    };
+    value.push(object);
+    (key, value)
+}
+
 impl ChronicleOperation {
     pub fn to_json(&self) -> super::ExpandedJson {
         let mut operation: Vec<JsonValue> = Vec::new();
@@ -404,23 +414,39 @@ impl ChronicleOperation {
                 let (key, value) = activityname(id.name_part());
                 o.insert(&key, value).ok();
 
-                let key = iref::Iri::from(super::vocab::ChronicleOperations::StartActivityTime)
-                    .to_string();
-                let mut value: Vec<JsonValue> = Vec::new();
-                let object = json::object! {
-                    "@value": time.to_rfc3339()
-                };
-                value.push(object);
+                let (key, value) = operation_time(time);
                 o.insert(&key, value).ok();
 
                 o
             }
-            // ChronicleOperation::EndActivity(EndActivity {
-            //     namespace,
-            //     id,
-            //     agent,
-            //     time,
-            // }) => unimplemented!(),
+            ChronicleOperation::EndActivity(EndActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            }) => {
+                let mut o = json::object! {
+                    "@id": "_:n1",
+                    "@type": iref::Iri::from(super::vocab::ChronicleOperations::EndActivity).as_str(),
+                };
+
+                let (key, value) = namespacename(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = namespaceuuid(namespace);
+                o.insert(&key, value).ok();
+
+                let (key, value) = activityname(id.name_part());
+                o.insert(&key, value).ok();
+
+                let (key, value) = agentname(agent.name_part());
+                o.insert(&key, value).ok();
+
+                let (key, value) = operation_time(time);
+                o.insert(&key, value).ok();
+
+                o
+            }
             // ChronicleOperation::ActivityUses(ActivityUses {
             //     namespace,
             //     id,
@@ -756,7 +782,7 @@ mod test {
             ],
             "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
               {
-                "@value": "7bdb840b-3c98-4f84-895e-ba2ff283586e"
+                "@value": "efa01588-b2cf-4355-aa8e-502dea7b53ab"
               }
             ],
             "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
@@ -770,5 +796,57 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_to_json() {}
+    async fn test_end_activity() {
+        let namespace: NamespaceId =
+            NamespaceId::from_name("hilariousnamespacename", uuid::Uuid::new_v4());
+        let id = ActivityId::from_name("activity");
+        let agent = crate::prov::AgentId::from_name("funnyagent");
+        let time = chrono::DateTime::<chrono::Utc>::from_utc(
+            chrono::NaiveDateTime::from_timestamp(61, 0),
+            chrono::Utc,
+        );
+        let op: ChronicleOperation =
+            super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            });
+
+        let x = op.to_json();
+        let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#EndActivity",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "funnyagent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "hilariousnamespacename"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a9b54e25-f435-4625-b711-3add1ca01cef"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
+              {
+                "@value": "1970-01-01T00:01:01+00:00"
+              }
+            ]
+          }
+        ]
+        "###);
+    }
 }
