@@ -47,10 +47,16 @@ pub enum ChronicleOperations {
     GenerateEntity,
     #[iri("chronicleop:EntityDerive")]
     EntityDerive,
+    #[iri("chronicleop:DerivationType")]
+    DerivationType,
     #[iri("chronicleop:EntityAttach")]
     EntityAttach,
     #[iri("chronicleop:SetAttributes")]
     SetAttributes,
+    #[iri("chronicleop:Attributes")]
+    Attributes,
+    #[iri("chronicleop:DomaintypeId")]
+    DomaintypeId,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
