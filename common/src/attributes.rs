@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde_json::Value;
 
@@ -22,14 +22,14 @@ impl Attribute {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Attributes {
     pub typ: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
 }
 
 impl Attributes {
     pub fn type_only(typ: Option<DomaintypeId>) -> Self {
         Self {
             typ,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }

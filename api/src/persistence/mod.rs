@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::DateTime;
@@ -1142,7 +1143,7 @@ impl Store {
                                 )
                             })
                         })
-                        .collect::<Result<HashMap<_, _>, _>>()?,
+                        .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
 
@@ -1191,7 +1192,7 @@ impl Store {
                                 )
                             })
                         })
-                        .collect::<Result<HashMap<_, _>, _>>()?,
+                        .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
 
@@ -1255,7 +1256,7 @@ impl Store {
                                 )
                             })
                         })
-                        .collect::<Result<HashMap<_, _>, _>>()?,
+                        .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
         }

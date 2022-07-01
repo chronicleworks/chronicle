@@ -6,7 +6,7 @@ use k256::ecdsa::Signature;
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
     fmt::Display,
 };
@@ -127,7 +127,7 @@ pub struct Agent {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,7 +172,7 @@ impl Agent {
             name: id.name_part().to_owned(),
             id,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -183,7 +183,7 @@ pub struct Activity {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
     pub started: Option<DateTime<Utc>>,
     pub ended: Option<DateTime<Utc>>,
 }
@@ -218,7 +218,7 @@ impl Activity {
             started: None,
             ended: None,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -259,7 +259,7 @@ pub struct Entity {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
 }
 
 impl Entity {
@@ -285,7 +285,7 @@ impl Entity {
             id,
             namespaceid,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
