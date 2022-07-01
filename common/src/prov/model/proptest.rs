@@ -7,8 +7,9 @@ use uuid::Uuid;
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::*, ActivityId, AgentId, Association, Delegation, Derivation, DomaintypeId,
-        EntityId, Generation, IdentityId, Name, NamePart, NamespaceId, ProvModel, Useage, UuidPart,
+        operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, Delegation,
+        Derivation, DomaintypeId, EntityId, Generation, IdentityId, Name, NamePart, NamespaceId,
+        ProvModel, Useage, UuidPart,
     },
 };
 

@@ -1078,18 +1078,17 @@ mod test {
         commands::{ApiResponse, EntityCommand, KeyImport},
         ledger::InMemLedger,
         prov::{
-            operations::DerivationType, ActivityId, AgentId, ChronicleTransactionId, DomaintypeId,
-            EntityId, ProvModel,
+            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
+            ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
         },
     };
 
+    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
     use r2d2::Pool;
     use telemetry::console_logging_trace;
     use tempfile::TempDir;
     use uuid::Uuid;
-
-    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
 
     use common::commands::{
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,

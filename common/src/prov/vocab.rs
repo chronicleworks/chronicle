@@ -37,6 +37,8 @@ pub enum ChronicleOperations {
     StartActivityTime,
     #[iri("chronicleop:EndActivity")]
     EndActivity,
+    #[iri("chronicleop:EndActivityTime")]
+    EndActivityTime,
     #[iri("chronicleop:ActivityUses")]
     ActivityUses,
     #[iri("chronicleop:EntityName")]

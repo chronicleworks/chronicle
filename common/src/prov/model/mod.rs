@@ -26,6 +26,8 @@ use super::{
     NamespaceId, PublicKeyPart, UuidPart,
 };
 
+pub mod to_json_ld;
+
 custom_error! {pub ProcessorError
     Compaction{source: CompactionError} = "Json Ld Error",
     Expansion{inner: String} = "Json Ld Error",
@@ -1015,7 +1017,6 @@ impl ExpandedJson {
     }
 }
 pub mod from_json_ld;
-pub mod to_json_ld;
 
 pub struct CompactedJson(pub JsonValue);
 

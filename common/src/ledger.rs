@@ -12,6 +12,7 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
+        to_json_ld::ToJson,
         AgentId, AttachmentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId,
         NamePart, NamespaceId, ProcessorError, ProvModel,
     },
