@@ -876,8 +876,9 @@ mod test {
     use crate::{
         attributes::Attribute,
         prov::{
-            operations::CreateNamespace, to_json_ld::ToJson, ActivityId, AgentId, DomaintypeId,
-            EntityId, IdentityId, NamespaceId,
+            operations::{ActsOnBehalfOf, CreateNamespace},
+            to_json_ld::ToJson,
+            ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
         },
     };
 
@@ -961,18 +962,16 @@ mod test {
     #[tokio::test]
     async fn test_agent_acts_on_behalf_of() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = crate::prov::AgentId::from_name("test_agent");
+        let id = AgentId::from_name("test_agent");
         let delegate_id = AgentId::from_name("test_delegate");
         let activity_id = Some(ActivityId::from_name("test_activity"));
 
-        let op: ChronicleOperation = super::ChronicleOperation::AgentActsOnBehalfOf(
-            crate::prov::operations::ActsOnBehalfOf {
-                namespace,
-                id,
-                delegate_id,
-                activity_id,
-            },
-        );
+        let op: ChronicleOperation = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+            namespace,
+            id,
+            delegate_id,
+            activity_id,
+        });
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"

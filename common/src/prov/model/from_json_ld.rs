@@ -7,7 +7,9 @@ use json_ld::{util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Refe
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::{ChronicleOperation, CreateAgent, CreateNamespace, DerivationType},
+        operations::{
+            ActsOnBehalfOf, ChronicleOperation, CreateAgent, CreateNamespace, DerivationType,
+        },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
         NamespaceId, UuidPart,
@@ -433,6 +435,32 @@ fn operation_namespace(o: &Node) -> NamespaceId {
     NamespaceId::from_name(name, uuid)
 }
 
+fn operation_agent(o: &Node) -> AgentId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::AgentName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    AgentId::from_name(name)
+}
+
+fn operation_delegate(o: &Node) -> AgentId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::DelegateId.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    AgentId::from_name(name)
+}
+
+fn operation_activity_id(o: &Node) -> Option<ActivityId> {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::ActivityName.as_iri().into(),
+    ));
+    match name_objects.next() {
+        Some(object) => Some(ActivityId::from_name(object.as_str().unwrap())),
+        None => return None,
+    }
+}
+
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
@@ -464,13 +492,28 @@ impl ChronicleOperation {
                 ChronicleOperations::CreateAgent.as_iri().into(),
             )) {
                 let namespace = operation_namespace(&o);
-                let mut agent_name_objects = o.get(&Reference::Id(
-                    ChronicleOperations::AgentName.as_iri().into(),
-                ));
-                let name = agent_name_objects.next().unwrap().as_str().unwrap();
+                let agent = operation_agent(&o);
+                // let mut agent_name_objects = o.get(&Reference::Id(
+                //     ChronicleOperations::AgentName.as_iri().into(),
+                // ));
+                let name = agent.name_part();
+                // let name = agent_name_objects.next().unwrap().as_str().unwrap();
                 Ok(ChronicleOperation::CreateAgent(CreateAgent {
                     namespace,
                     name: name.into(),
+                }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::AgentActsOnBehalfOf.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_agent(&o);
+                let delegate_id = operation_delegate(&o);
+                let activity_id = operation_activity_id(&o);
+                Ok(ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                    namespace,
+                    id,
+                    delegate_id,
+                    activity_id,
                 }))
             } else {
                 unreachable!()
@@ -486,10 +529,127 @@ mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        operations::{ChronicleOperation, CreateNamespace},
+        operations::{ActsOnBehalfOf, ChronicleOperation, CreateNamespace},
         to_json_ld::ToJson,
-        NamespaceId, ProcessorError,
+        ActivityId, AgentId, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_create_agent_acts_on_behalf_of_no_activity() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = AgentId::from_name("test_agent");
+        let delegate_id = AgentId::from_name("test_delegate");
+        let activity_id = None;
+
+        let operation: ChronicleOperation =
+            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+            });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
+              {
+                "@value": "test_delegate"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_agent_acts_on_behalf_of() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = AgentId::from_name("test_agent");
+        let delegate_id = AgentId::from_name("test_delegate");
+        let activity_id = Some(ActivityId::from_name("test_activity"));
+
+        let operation: ChronicleOperation =
+            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                namespace,
+                id,
+                delegate_id,
+                activity_id,
+            });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "test_activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
+              {
+                "@value": "test_delegate"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_create_agent_from_json() -> Result<(), ProcessorError> {
