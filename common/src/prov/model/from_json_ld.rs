@@ -7,9 +7,10 @@ use json_ld::{util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Refe
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::{ChronicleOperation, CreateNamespace, DerivationType},
+        operations::{ChronicleOperation, CreateAgent, CreateNamespace, DerivationType},
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
+        ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
+        NamespaceId, UuidPart,
     },
 };
 
@@ -419,6 +420,19 @@ impl ProvModel {
     }
 }
 
+fn operation_namespace(o: &Node) -> NamespaceId {
+    let mut uuid_objects = o.get(&Reference::Id(
+        ChronicleOperations::NamespaceUuid.as_iri().into(),
+    ));
+    let uuid = uuid_objects.next().unwrap().as_str().unwrap();
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::NamespaceName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    let uuid = uuid::Uuid::parse_str(uuid).unwrap();
+    NamespaceId::from_name(name, uuid)
+}
+
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
@@ -427,41 +441,43 @@ impl ChronicleOperation {
                 inner: e.to_string(),
             })
             .await?;
-
-        let mut v: Vec<ChronicleOperation> = Vec::new();
-        for o in output {
-            let o = o
+        assert!(output.len() == 1);
+        if let Some(object) = output.into_iter().next() {
+            let o = object
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
+            let id = o.id().unwrap().as_str();
+            assert!(id == "_:n1");
             if o.has_type(&Reference::Id(
                 ChronicleOperations::CreateNamespace.as_iri().into(),
             )) {
-                let id = o.id().unwrap().as_str();
-                assert!(id == "_:n1");
-                let mut uuid_objects = o.get(&Reference::Id(
-                    ChronicleOperations::NamespaceUuid.as_iri().into(),
-                ));
-                let uuid = uuid_objects.next().unwrap().as_str().unwrap();
-                let mut name_objects = o.get(&Reference::Id(
-                    ChronicleOperations::NamespaceName.as_iri().into(),
-                ));
-                let name = name_objects.next().unwrap().as_str().unwrap();
-                let uuid = uuid::Uuid::parse_str(uuid).unwrap();
-                let id = NamespaceId::from_name(name, uuid);
-                let op = CreateNamespace {
-                    id,
-                    name: name.into(),
+                let namespace = operation_namespace(&o);
+                let name = namespace.name_part().to_owned();
+                let uuid = namespace.uuid_part().to_owned();
+                Ok(ChronicleOperation::CreateNamespace(CreateNamespace {
+                    id: namespace,
+                    name,
                     uuid,
-                };
-                let operation = ChronicleOperation::CreateNamespace(op);
-                v.push(operation);
+                }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::CreateAgent.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let mut agent_name_objects = o.get(&Reference::Id(
+                    ChronicleOperations::AgentName.as_iri().into(),
+                ));
+                let name = agent_name_objects.next().unwrap().as_str().unwrap();
+                Ok(ChronicleOperation::CreateAgent(CreateAgent {
+                    namespace,
+                    name: name.into(),
+                }))
             } else {
                 unreachable!()
             }
+        } else {
+            Err(ProcessorError::NotANode {})
         }
-        let v = v[0].clone();
-        Ok(v)
     }
 }
 
@@ -474,6 +490,53 @@ mod test {
         to_json_ld::ToJson,
         NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_create_agent_from_json() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let name: crate::prov::Name =
+            crate::prov::NamePart::name_part(&crate::prov::AgentId::from_name("test_agent"))
+                .clone();
+        let operation: ChronicleOperation =
+            super::ChronicleOperation::CreateAgent(crate::prov::operations::CreateAgent {
+                namespace,
+                name,
+            });
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateAgent",
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_create_namespace_from_json() -> Result<(), ProcessorError> {
