@@ -476,19 +476,22 @@ mod test {
     };
 
     #[tokio::test]
-    async fn test_yo() -> Result<(), ProcessorError> {
+    async fn test_create_namespace_from_json() -> Result<(), ProcessorError> {
         let name = "testns";
         let uuid =
             Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
         let id = NamespaceId::from_name(name, uuid.unwrap());
 
-        let op = ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid.unwrap()));
-        let x = op.to_json();
-        let x = ChronicleOperation::from_json(x).await?;
-        eprintln!("the whole operation: {:?}", x);
-        assert!(ChronicleOperation::from_json(x.to_json()).await? == x);
-        let y = x.to_json();
-        let x: serde_json::Value = serde_json::from_str(&y.0.to_string())?;
+        let operation =
+            ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid.unwrap()));
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
         insta::assert_json_snapshot!(&x, @r###"
         [
           {
