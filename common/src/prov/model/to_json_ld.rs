@@ -347,8 +347,8 @@ impl ProvModel {
 }
 
 impl ToJson for ChronicleOperation {
-    fn to_json(&self) -> super::ExpandedJson {
-        let mut operation: Vec<JsonValue> = Vec::new();
+    fn to_json(&self) -> ExpandedJson {
+        let mut operation: Vec<JsonValue> = json::Array::new();
 
         let o = match self {
             ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
@@ -807,7 +807,7 @@ impl Operate for JsonValue {
 
     fn operate(&mut self, id: OperationsId, op: ChronicleOperations) {
         let key = iref::Iri::from(op).to_string();
-        let mut value: Vec<JsonValue> = Vec::new();
+        let mut value: Vec<JsonValue> = json::Array::new();
         let object = Self::new_value(id);
         value.push(object);
         self.insert(&key, value).ok();
@@ -833,7 +833,7 @@ impl Operate for JsonValue {
         self.insert(&key, value).ok();
 
         if !attributes.attributes.is_empty() {
-            let mut attribute_objects: Vec<JsonValue> = Vec::new();
+            let mut attribute_objects: Vec<JsonValue> = json::Array::new();
             let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
             for (k, v) in &attributes.attributes {
                 ordered_map.insert(k.clone(), v.clone());

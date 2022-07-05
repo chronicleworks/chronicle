@@ -7,13 +7,15 @@ use json_ld::{util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Refe
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::DerivationType,
-        vocab::{Chronicle, Prov},
+        operations::{ChronicleOperation, CreateNamespace, DerivationType},
+        vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
     },
 };
 
-use super::{Activity, Agent, Attachment, Entity, Identity, ProcessorError, ProvModel};
+use super::{
+    Activity, Agent, Attachment, Entity, ExpandedJson, Identity, ProcessorError, ProvModel,
+};
 
 fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, ProcessorError> {
     let ids: Result<Vec<_>, _> = node
@@ -413,6 +415,98 @@ impl ProvModel {
         let attributes = Self::extract_attributes(entity)?;
         self.add_entity(Entity::exists(namespaceid, id).has_attributes(attributes));
 
+        Ok(())
+    }
+}
+
+impl ChronicleOperation {
+    pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
+        let output = json
+            .expand::<JsonContext, _>(&mut NoLoader)
+            .map_err(|e| ProcessorError::Expansion {
+                inner: e.to_string(),
+            })
+            .await?;
+
+        let mut v: Vec<ChronicleOperation> = Vec::new();
+        for o in output {
+            let o = o
+                .try_cast::<Node>()
+                .map_err(|_| ProcessorError::NotANode {})?
+                .into_inner();
+            if o.has_type(&Reference::Id(
+                ChronicleOperations::CreateNamespace.as_iri().into(),
+            )) {
+                let id = o.id().unwrap().as_str();
+                assert!(id == "_:n1");
+                let mut uuid_objects = o.get(&Reference::Id(
+                    ChronicleOperations::NamespaceUuid.as_iri().into(),
+                ));
+                let uuid = uuid_objects.next().unwrap().as_str().unwrap();
+                let mut name_objects = o.get(&Reference::Id(
+                    ChronicleOperations::NamespaceName.as_iri().into(),
+                ));
+                let name = name_objects.next().unwrap().as_str().unwrap();
+                let uuid = uuid::Uuid::parse_str(uuid).unwrap();
+                let id = NamespaceId::from_name(name, uuid);
+                let op = CreateNamespace {
+                    id,
+                    name: name.into(),
+                    uuid,
+                };
+                let operation = ChronicleOperation::CreateNamespace(op);
+                v.push(operation);
+            } else {
+                unreachable!()
+            }
+        }
+        let v = v[0].clone();
+        Ok(v)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use uuid::Uuid;
+
+    use crate::prov::{
+        operations::{ChronicleOperation, CreateNamespace},
+        to_json_ld::ToJson,
+        NamespaceId, ProcessorError,
+    };
+
+    #[tokio::test]
+    async fn test_yo() -> Result<(), ProcessorError> {
+        let name = "testns";
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let id = NamespaceId::from_name(name, uuid.unwrap());
+
+        let op = ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid.unwrap()));
+        let x = op.to_json();
+        let x = ChronicleOperation::from_json(x).await?;
+        eprintln!("the whole operation: {:?}", x);
+        assert!(ChronicleOperation::from_json(x.to_json()).await? == x);
+        let y = x.to_json();
+        let x: serde_json::Value = serde_json::from_str(&y.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateNamespace",
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
         Ok(())
     }
 }
