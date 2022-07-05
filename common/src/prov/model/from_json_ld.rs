@@ -9,6 +9,7 @@ use crate::{
     prov::{
         operations::{
             ActsOnBehalfOf, ChronicleOperation, CreateAgent, CreateNamespace, DerivationType,
+            RegisterKey,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
@@ -455,10 +456,18 @@ fn operation_activity_id(o: &Node) -> Option<ActivityId> {
     let mut name_objects = o.get(&Reference::Id(
         ChronicleOperations::ActivityName.as_iri().into(),
     ));
-    match name_objects.next() {
-        Some(object) => Some(ActivityId::from_name(object.as_str().unwrap())),
+    let object = match name_objects.next() {
+        Some(object) => object,
         None => return None,
-    }
+    };
+    Some(ActivityId::from_name(object.as_str().unwrap()))
+}
+
+fn operation_key(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::PublicKey.as_iri().into(),
+    ));
+    String::from(objects.next().unwrap().as_str().unwrap())
 }
 
 impl ChronicleOperation {
@@ -493,11 +502,7 @@ impl ChronicleOperation {
             )) {
                 let namespace = operation_namespace(&o);
                 let agent = operation_agent(&o);
-                // let mut agent_name_objects = o.get(&Reference::Id(
-                //     ChronicleOperations::AgentName.as_iri().into(),
-                // ));
                 let name = agent.name_part();
-                // let name = agent_name_objects.next().unwrap().as_str().unwrap();
                 Ok(ChronicleOperation::CreateAgent(CreateAgent {
                     namespace,
                     name: name.into(),
@@ -515,6 +520,17 @@ impl ChronicleOperation {
                     delegate_id,
                     activity_id,
                 }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::RegisterKey.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_agent(&o);
+                let publickey = operation_key(&o);
+                Ok(ChronicleOperation::RegisterKey(RegisterKey {
+                    namespace,
+                    id,
+                    publickey,
+                }))
             } else {
                 unreachable!()
             }
@@ -529,10 +545,63 @@ mod test {
     use uuid::Uuid;
 
     use crate::prov::{
-        operations::{ActsOnBehalfOf, ChronicleOperation, CreateNamespace},
+        operations::{ActsOnBehalfOf, ChronicleOperation, CreateNamespace, RegisterKey},
         to_json_ld::ToJson,
         ActivityId, AgentId, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_register_key() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = AgentId::from_name("test_agent");
+        let publickey =
+            "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
+        let operation: ChronicleOperation = ChronicleOperation::RegisterKey(RegisterKey {
+            namespace,
+            id,
+            publickey,
+        });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#RegisterKey",
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#PublicKey": [
+              {
+                "@value": "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_create_agent_acts_on_behalf_of_no_activity() -> Result<(), ProcessorError> {

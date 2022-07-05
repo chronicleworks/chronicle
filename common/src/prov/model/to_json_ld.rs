@@ -876,7 +876,7 @@ mod test {
     use crate::{
         attributes::Attribute,
         prov::{
-            operations::{ActsOnBehalfOf, CreateNamespace},
+            operations::{ActsOnBehalfOf, CreateNamespace, RegisterKey},
             to_json_ld::ToJson,
             ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
         },
@@ -1016,12 +1016,11 @@ mod test {
         let publickey =
             "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
 
-        let op: ChronicleOperation =
-            super::ChronicleOperation::RegisterKey(crate::prov::operations::RegisterKey {
-                namespace,
-                id,
-                publickey,
-            });
+        let op: ChronicleOperation = ChronicleOperation::RegisterKey(RegisterKey {
+            namespace,
+            id,
+            publickey,
+        });
 
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
