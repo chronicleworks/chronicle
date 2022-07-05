@@ -397,10 +397,10 @@ impl ChronicleOperation {
                 vec![
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
-                    LedgerAddress::in_namespace(namespace, identityid.clone()),
+                    LedgerAddress::in_namespace(namespace, identityid.clone().unwrap()),
                     LedgerAddress::in_namespace(
                         namespace,
-                        AttachmentId::from_name(id.name_part(), signature),
+                        AttachmentId::from_name(id.name_part(), signature.clone().unwrap()),
                     ),
                 ]
             }

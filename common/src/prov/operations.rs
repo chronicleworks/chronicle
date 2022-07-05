@@ -168,10 +168,10 @@ pub struct EntityAttach {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub agent: AgentId,
-    pub identityid: IdentityId,
-    pub signature: String,
+    pub identityid: Option<IdentityId>,
+    pub signature: Option<String>,
     pub locator: Option<String>,
-    pub signature_time: DateTime<Utc>,
+    pub signature_time: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]

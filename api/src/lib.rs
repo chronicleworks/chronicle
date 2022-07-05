@@ -820,13 +820,13 @@ where
                     namespace,
                     id: id.clone(),
                     agent: agent_id.clone(),
-                    identityid: IdentityId::from_name(
+                    identityid: Some(IdentityId::from_name(
                         agent_id.name_part(),
                         &*hex::encode_upper(signer.to_bytes()),
-                    ),
-                    signature: hex::encode_upper(signature),
+                    )),
+                    signature: Some(hex::encode_upper(signature)),
                     locator,
-                    signature_time: Utc::now(),
+                    signature_time: Some(Utc::now()),
                 });
 
                 to_apply.push(tx);

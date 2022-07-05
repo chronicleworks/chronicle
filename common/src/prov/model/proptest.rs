@@ -196,9 +196,9 @@ prop_compose! {
             id,
             locator,
             agent,
-            signature,
-            identityid,
-            signature_time
+            signature: Some(signature),
+            identityid: Some(identityid),
+            signature_time: Some(signature_time),
         }
     }
 }

@@ -874,14 +874,15 @@ mod test {
     use uuid::Uuid;
 
     use crate::{
-        attributes::Attribute,
+        attributes::{Attribute, Attributes},
         prov::{
             operations::{
-                ActivityUses, ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey,
+                ActivityUses, ActsOnBehalfOf, CreateActivity, CreateEntity, CreateNamespace,
+                EntityAttach, EntityDerive, GenerateEntity, RegisterKey, SetAttributes,
                 StartActivity,
             },
             to_json_ld::ToJson,
-            ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamePart, NamespaceId,
+            ActivityId, AgentId, DomaintypeId, EntityId, NamePart, NamespaceId,
         },
     };
 
@@ -1245,14 +1246,13 @@ mod test {
     #[tokio::test]
     async fn test_create_entity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = crate::prov::NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
-        let op: ChronicleOperation =
-            super::ChronicleOperation::CreateEntity(crate::prov::operations::CreateEntity {
-                namespace,
-                name: id,
-            });
+        let id = NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
+        let operation: ChronicleOperation = ChronicleOperation::CreateEntity(CreateEntity {
+            namespace,
+            name: id,
+        });
 
-        let x = op.to_json();
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
@@ -1284,14 +1284,13 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
         let activity = ActivityId::from_name("test_activity");
-        let op: ChronicleOperation =
-            super::ChronicleOperation::GenerateEntity(crate::prov::operations::GenerateEntity {
-                namespace,
-                id,
-                activity,
-            });
+        let operation: ChronicleOperation = ChronicleOperation::GenerateEntity(GenerateEntity {
+            namespace,
+            id,
+            activity,
+        });
 
-        let x = op.to_json();
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
@@ -1327,25 +1326,18 @@ mod test {
     async fn test_entity_attach() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
-        let public_key =
-            "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
-        let time = chrono::DateTime::<chrono::Utc>::from_utc(
-            chrono::NaiveDateTime::from_timestamp(61, 0),
-            chrono::Utc,
-        );
-        let op: ChronicleOperation =
-            super::ChronicleOperation::EntityAttach(crate::prov::operations::EntityAttach {
-                namespace,
-                identityid: IdentityId::from_name("name", public_key),
-                id,
-                locator: Some(String::from("nothing")),
-                agent,
-                signature: String::from("string"),
-                signature_time: time,
-            });
+        let agent = AgentId::from_name("test_agent");
+        let operation: ChronicleOperation = ChronicleOperation::EntityAttach(EntityAttach {
+            namespace,
+            identityid: None,
+            id,
+            locator: None,
+            agent,
+            signature: None,
+            signature_time: None,
+        });
 
-        let x = op.to_json();
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
@@ -1384,16 +1376,15 @@ mod test {
         let used_id = EntityId::from_name("test_used_entity");
         let activity_id = Some(ActivityId::from_name("test_activity"));
         let typ = Some(DerivationType::Revision);
-        let op: ChronicleOperation =
-            super::ChronicleOperation::EntityDerive(crate::prov::operations::EntityDerive {
-                namespace,
-                id,
-                used_id,
-                activity_id,
-                typ,
-            });
+        let operation: ChronicleOperation = ChronicleOperation::EntityDerive(EntityDerive {
+            namespace,
+            id,
+            used_id,
+            activity_id,
+            typ,
+        });
 
-        let x = op.to_json();
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
@@ -1435,18 +1426,17 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
         let domain = DomaintypeId::from_name("test_domain");
-        let attributes = crate::attributes::Attributes {
+        let attributes = Attributes {
             typ: Some(domain),
-            attributes: std::collections::BTreeMap::new(),
+            attributes: BTreeMap::new(),
         };
-        let op: ChronicleOperation = super::ChronicleOperation::SetAttributes(
-            crate::prov::operations::SetAttributes::Entity {
+        let operation: ChronicleOperation =
+            ChronicleOperation::SetAttributes(SetAttributes::Entity {
                 namespace,
                 id,
                 attributes,
-            },
-        );
-        let x = op.to_json();
+            });
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
@@ -1513,18 +1503,17 @@ mod test {
             h
         };
 
-        let attributes = crate::attributes::Attributes {
+        let attributes = Attributes {
             typ: Some(domain),
             attributes: attrs,
         };
-        let op: ChronicleOperation = super::ChronicleOperation::SetAttributes(
-            crate::prov::operations::SetAttributes::Entity {
+        let operation: ChronicleOperation =
+            ChronicleOperation::SetAttributes(SetAttributes::Entity {
                 namespace,
                 id,
                 attributes,
-            },
-        );
-        let x = op.to_json();
+            });
+        let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
         [
