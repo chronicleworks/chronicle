@@ -876,9 +876,9 @@ mod test {
     use crate::{
         attributes::Attribute,
         prov::{
-            operations::{ActsOnBehalfOf, CreateNamespace, RegisterKey},
+            operations::{ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey},
             to_json_ld::ToJson,
-            ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamespaceId,
+            ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamePart, NamespaceId,
         },
     };
 
@@ -1057,14 +1057,10 @@ mod test {
     #[tokio::test]
     async fn test_create_activity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let name =
-            crate::prov::NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
+        let name = NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
 
         let op: ChronicleOperation =
-            super::ChronicleOperation::CreateActivity(crate::prov::operations::CreateActivity {
-                namespace,
-                name,
-            });
+            ChronicleOperation::CreateActivity(CreateActivity { namespace, name });
 
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
