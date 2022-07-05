@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::{
             ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent, CreateNamespace,
-            DerivationType, RegisterKey,
+            DerivationType, EndActivity, RegisterKey, StartActivity,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
@@ -470,6 +470,24 @@ fn operation_key(o: &Node) -> String {
     String::from(objects.next().unwrap().as_str().unwrap())
 }
 
+fn operation_start_time(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::StartActivityTime.as_iri().into(),
+    ));
+    let time = objects.next().unwrap().as_str().unwrap();
+    eprint!("time!: {}", time);
+    time.to_owned()
+}
+
+fn operation_end_time(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::EndActivityTime.as_iri().into(),
+    ));
+    let time = objects.next().unwrap().as_str().unwrap();
+    eprint!("time!: {}", time);
+    time.to_owned()
+}
+
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
@@ -541,6 +559,32 @@ impl ChronicleOperation {
                     namespace,
                     name,
                 }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::StartActivity.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_activity_id(&o).unwrap();
+                let agent = operation_agent(&o);
+                let time: DateTime<Utc> = operation_start_time(&o).parse().unwrap();
+                Ok(ChronicleOperation::StartActivity(StartActivity {
+                    namespace,
+                    id,
+                    agent,
+                    time,
+                }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::EndActivity.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_activity_id(&o).unwrap();
+                let agent = operation_agent(&o);
+                let time: DateTime<Utc> = operation_end_time(&o).parse().unwrap();
+                Ok(ChronicleOperation::EndActivity(EndActivity {
+                    namespace,
+                    id,
+                    agent,
+                    time,
+                }))
             } else {
                 unreachable!()
             }
@@ -557,10 +601,138 @@ mod test {
     use crate::prov::{
         operations::{
             ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateNamespace, RegisterKey,
+            StartActivity,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, NamePart, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_end_activity() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+
+        let id = ActivityId::from_name("test_activity");
+        let agent = crate::prov::AgentId::from_name("test_agent");
+        let time = chrono::DateTime::<chrono::Utc>::from_utc(
+            chrono::NaiveDateTime::from_timestamp(61, 0),
+            chrono::Utc,
+        );
+        let operation: ChronicleOperation =
+            super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
+                namespace,
+                id,
+                agent,
+                time,
+            });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#EndActivity",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "test_activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#EndActivityTime": [
+              {
+                "@value": "1970-01-01T00:01:01+00:00"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_start_activity() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+
+        let id = ActivityId::from_name("test_activity");
+        let agent = crate::prov::AgentId::from_name("test_agent");
+        let time = chrono::DateTime::<chrono::Utc>::from_utc(
+            chrono::NaiveDateTime::from_timestamp(61, 0),
+            chrono::Utc,
+        );
+        let operation: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
+            namespace,
+            id,
+            agent,
+            time,
+        });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#StartActivity",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "test_activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
+              {
+                "@value": "1970-01-01T00:01:01+00:00"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_create_activity() -> Result<(), ProcessorError> {

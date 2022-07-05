@@ -876,7 +876,9 @@ mod test {
     use crate::{
         attributes::Attribute,
         prov::{
-            operations::{ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey},
+            operations::{
+                ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey, StartActivity,
+            },
             to_json_ld::ToJson,
             ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamePart, NamespaceId,
         },
@@ -1093,18 +1095,17 @@ mod test {
     async fn start_activity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = ActivityId::from_name("test_activity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
+        let agent = AgentId::from_name("test_agent");
         let time = chrono::DateTime::<chrono::Utc>::from_utc(
             chrono::NaiveDateTime::from_timestamp(61, 0),
             chrono::Utc,
         );
-        let op: ChronicleOperation =
-            super::ChronicleOperation::StartActivity(crate::prov::operations::StartActivity {
-                namespace,
-                id,
-                agent,
-                time,
-            });
+        let op: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
+            namespace,
+            id,
+            agent,
+            time,
+        });
 
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
