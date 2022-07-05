@@ -1,15 +1,15 @@
 use chrono::Utc;
 use json::JsonValue;
-use proptest::prelude::*;
+use proptest::{option, prelude::*};
 
 use uuid::Uuid;
 
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, Delegation,
-        Derivation, DomaintypeId, EntityId, Generation, IdentityId, Name, NamePart, NamespaceId,
-        ProvModel, Useage, UuidPart,
+        operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
+        Delegation, DelegationId, Derivation, DomaintypeId, EntityId, Generation, IdentityId, Name,
+        NamePart, NamespaceId, ProvModel, Role, Useage, UuidPart,
     },
 };
 
@@ -140,7 +140,7 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn activity_uses() (activity_name in name(), entity_name in name(),namespace in namespace()) -> ActivityUses {
+    fn used() (activity_name in name(), entity_name in name(),namespace in namespace()) -> ActivityUses {
         let activity = ActivityId::from_name(&activity_name);
         let id = EntityId::from_name(&entity_name);
 
@@ -248,18 +248,44 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn agent_acts_on_behalf_of() (
+    fn acted_on_behalf_of() (
         name in name(),
+        activity in option::of(name()),
+        role in option::of(name()),
         delegate in name(),
         namespace in namespace(),
     ) -> ActsOnBehalfOf {
 
+        let responsible_id = AgentId::from_name(&name);
+        let delegate_id = AgentId::from_name(&delegate);
+        let activity_id = activity.map(|a| ActivityId::from_name(&a));
+        let id = DelegationId::from_component_ids(&delegate_id, &responsible_id, activity_id.as_ref(), role.as_ref().map(|x| x.as_str()));
+
         ActsOnBehalfOf {
-            id: AgentId::from_name(&name),
-            delegate_id: AgentId::from_name(&delegate),
-            activity_id: None,
+            id,
+            responsible_id,
+            delegate_id,
+            role: role.as_ref().map(|x| Role::from(x.as_str())),
+            activity_id,
             namespace,
         }
+
+    }
+}
+
+prop_compose! {
+    fn was_associated_with() (
+        activity in name(),
+        role in option::of(name()),
+        agent in name(),
+        namespace in namespace(),
+    ) -> Associate {
+
+        let agent_id = AgentId::from_name(&agent);
+        let activity_id = ActivityId::from_name(&activity);
+        let id = AssociationId::from_component_ids(&agent_id, &activity_id,  role.as_ref().map(|x| x.as_str()));
+
+        Associate{id,agent_id,activity_id,role:role.as_ref().map(|x|Role::from(x)), namespace }
 
     }
 }
@@ -314,12 +340,13 @@ fn transaction() -> impl Strategy<Value = ChronicleOperation> {
         4 => create_activity().prop_map(ChronicleOperation::CreateActivity),
         4 => start_activity().prop_map(ChronicleOperation::StartActivity),
         4 => end_activity().prop_map(ChronicleOperation::EndActivity),
-        4 => activity_uses().prop_map(ChronicleOperation::ActivityUses),
+        4 => used().prop_map(ChronicleOperation::ActivityUses),
         2 => create_entity().prop_map(ChronicleOperation::CreateEntity),
         4 => generate_entity().prop_map(ChronicleOperation::GenerateEntity),
         2 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
         2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
-        2 => agent_acts_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
+        2 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
+        2 => was_associated_with().prop_map(ChronicleOperation::Associate),
         2 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
         2 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
         2 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
@@ -384,9 +411,9 @@ proptest! {
                     prop_assert_eq!(&agent.namespaceid, namespace);
                 },
                 ChronicleOperation::AgentActsOnBehalfOf(
-                    ActsOnBehalfOf {namespace, id, delegate_id, activity_id }
+                    ActsOnBehalfOf {namespace,id,delegate_id,activity_id, role, responsible_id }
                 ) => {
-                    let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
+                    let agent = &prov.agents.get(&(namespace.to_owned(),responsible_id.to_owned()));
                     prop_assert!(agent.is_some());
                     let agent = agent.unwrap();
 
@@ -399,12 +426,14 @@ proptest! {
                         prop_assert!(activity.is_some());
                     }
 
-                    let has_delegation = prov.delegation.get(&(namespace.to_owned(),id.to_owned()))
+                    let has_delegation = prov.delegation.get(&(namespace.to_owned(),responsible_id.to_owned()))
                         .unwrap()
                         .contains(&Delegation {
+                            id: id.clone(),
                             responsible_id: agent.id.clone(),
                             delegate_id: delegate.id.clone(),
                             activity_id: activity_id.clone(),
+                            role: role.clone(),
                         });
 
                     prop_assert!(has_delegation);
@@ -445,14 +474,6 @@ proptest! {
                     prop_assert!(activity.started == Some(time.to_owned()));
                     prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
 
-                    let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
-                        .unwrap()
-                        .contains(&Association {
-                            agent_id: agent.clone(),
-                            activity_id: id.clone()
-                        });
-
-                    prop_assert!(has_assoc);
                 },
                 ChronicleOperation::EndActivity(
                     EndActivity { namespace, id, agent, time }) => {
@@ -465,14 +486,13 @@ proptest! {
                     prop_assert!(activity.ended == Some(time.to_owned()));
                     prop_assert!(activity.started.unwrap() <= *time);
 
-                    let has_assoc = prov.association.get(&(namespace.to_owned(),id.to_owned()))
+                }
+                ChronicleOperation::Associate(Associate { id, role, namespace, activity_id, agent_id }) => {
+                    let has_asoc = prov.association.get(&(namespace.to_owned(), activity_id.to_owned()))
                         .unwrap()
-                        .contains(&Association {
-                            agent_id: agent.clone(),
-                            activity_id: id.clone()
-                        });
+                        .contains(&Association {activity_id:activity_id.clone(),id:id.clone(), agent_id: agent_id.clone(), role: role.clone()});
 
-                    prop_assert!(has_assoc);
+                    prop_assert!(has_asoc);
                 }
                 ChronicleOperation::ActivityUses(
                     ActivityUses { namespace, id, activity }) => {

@@ -9,9 +9,9 @@ use crate::{
     context::PROV,
     prov::{
         operations::{
-            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence,
-            RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, Associate,
+            ChronicleOperation, CreateNamespace, EndActivity, EntityDerive, EntityExists,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
@@ -380,6 +380,18 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
             }
+            ChronicleOperation::Associate(Associate {
+                id,
+                namespace,
+                activity_id,
+                agent_id,
+                ..
+            }) => vec![
+                LedgerAddress::namespace(namespace),
+                LedgerAddress::in_namespace(namespace, id.clone()),
+                LedgerAddress::in_namespace(namespace, activity_id.clone()),
+                LedgerAddress::in_namespace(namespace, agent_id.clone()),
+            ],
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,

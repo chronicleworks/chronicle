@@ -117,13 +117,19 @@ impl ToJson for ProvModel {
                 .get(&(agent.namespaceid.to_owned(), id.to_owned()))
             {
                 let mut ids = json::Array::new();
+                let mut qualified_ids = json::Array::new();
 
                 for delegation in delegation.iter() {
                     ids.push(object! {"@id": delegation.delegate_id.to_string()});
+                    qualified_ids.push(object! {"@id": delegation.id.to_string()});
                 }
 
                 agentdoc
                     .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), ids)
+                    .ok();
+
+                agentdoc
+                    .insert(Iri::from(Prov::QualifiedDelegation).as_str(), qualified_ids)
                     .ok();
             }
 
@@ -140,6 +146,79 @@ impl ToJson for ProvModel {
             Self::write_attributes(&mut agentdoc, agent.attributes.values());
 
             doc.push(agentdoc);
+        }
+
+        for (_, associations) in self.association.iter() {
+            for association in associations {
+                let mut associationdoc = object! {
+                    "@id": association.id.to_string(),
+                    "@type": Iri::from(Prov::Association).as_str(),
+                };
+
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@id": JsonValue::String(association.agent_id.to_string()),
+                });
+
+                associationdoc
+                    .insert(Iri::from(Prov::Responsible).as_str(), values)
+                    .ok();
+
+                if let Some(role) = association.role {
+                    let mut values = json::Array::new();
+
+                    values.push(JsonValue::String(role.to_string()));
+
+                    associationdoc
+                        .insert(Iri::from(Prov::HadRole).as_str(), values)
+                        .ok();
+                }
+
+                doc.push(associationdoc);
+            }
+        }
+
+        for (_, delegations) in self.delegation.iter() {
+            for delegation in delegations {
+                let mut delegationdoc = object! {
+                    "@id": delegation.id.to_string(),
+                    "@type": Iri::from(Prov::Delegation).as_str(),
+                };
+
+                if let Some(activity_id) = delegation.activity_id {
+                    let mut values = json::Array::new();
+
+                    values.push(object! {
+                        "@id": JsonValue::String(activity_id.to_string()),
+                    });
+
+                    delegationdoc
+                        .insert(Iri::from(Prov::HadActivity).as_str(), values)
+                        .ok();
+                }
+
+                if let Some(role) = delegation.role {
+                    let mut values = json::Array::new();
+
+                    values.push(JsonValue::String(role.to_string()));
+
+                    delegationdoc
+                        .insert(Iri::from(Prov::HadRole).as_str(), values)
+                        .ok();
+                }
+
+                let mut responsible_ids = json::Array::new();
+                responsible_ids.push(
+                    object! { "@id": JsonValue::String(delegation.responsible_id.to_string())},
+                );
+
+                delegationdoc
+                    .insert(Iri::from(Prov::Responsible).as_str(), responsible_ids)
+                    .ok();
+
+                doc.push(delegationdoc);
+            }
         }
 
         for ((namespace, id), activity) in self.activities.iter() {
@@ -177,12 +256,21 @@ impl ToJson for ProvModel {
             if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
+                let mut qualified_ids = json::Array::new();
                 for asoc in asoc.iter() {
                     ids.push(object! {"@id": asoc.agent_id.to_string()});
+                    qualified_ids.push(object! {"@id": asoc.id.to_string()});
                 }
 
                 activitydoc
                     .insert(&Iri::from(Prov::WasAssociatedWith).to_string(), ids)
+                    .ok();
+
+                activitydoc
+                    .insert(
+                        &Iri::from(Prov::QualifiedAssociation).to_string(),
+                        qualified_ids,
+                    )
                     .ok();
             }
 

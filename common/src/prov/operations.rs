@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use crate::attributes::Attributes;
 
-use super::{ActivityId, AgentId, AssociationId, EntityId, IdentityId, Name, NamespaceId};
+use super::{
+    ActivityId, AgentId, AssociationId, DelegationId, EntityId, IdentityId, Name, NamespaceId, Role,
+};
 
 #[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[diesel(sql_type = Integer)]
@@ -99,10 +101,12 @@ impl AgentExists {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ActsOnBehalfOf {
-    pub namespace: NamespaceId,
-    pub id: AgentId,
-    pub delegate_id: AgentId,
+    pub id: DelegationId,
+    pub role: Option<Role>,
     pub activity_id: Option<ActivityId>,
+    pub responsible_id: AgentId,
+    pub delegate_id: AgentId,
+    pub namespace: NamespaceId,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -166,10 +170,19 @@ pub struct EntityDerive {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Associate {
     pub id: AssociationId,
-    pub role: Option<String>,
+    pub role: Option<Role>,
     pub namespace: NamespaceId,
     pub activity_id: ActivityId,
     pub agent_id: AgentId,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct Delegate {
+    pub id: DelegationId,
+    pub role: Option<Role>,
+    pub activity_id: ActivityId,
+    pub responsible_id: AgentId,
+    pub delegate_id: AgentId,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]

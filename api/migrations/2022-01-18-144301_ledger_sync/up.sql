@@ -102,6 +102,7 @@ create table generation (
     activity_id integer not null,
     generated_entity_id integer not null,
     typ text,
+    role text,
     foreign key(activity_id) references activity(id),
     foreign key(generated_entity_id) references entity(id),
     primary key(offset,generated_entity_id)
@@ -111,6 +112,8 @@ create table association (
     offset integer not null,
     agent_id integer not null,
     activity_id integer not null,
+    typ text,
+    role text,
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
     primary key(offset,agent_id, activity_id)
@@ -139,6 +142,15 @@ create table hadattachment (
     foreign key(entity_id ) references entity(id),
     foreign key(attachment_id) references attachment(id),
     primary key(entity_id,attachment_id)
+);
+
+
+create table entity_attribute (
+    entity_id integer not null,
+    typename text not null,
+    value text not null,
+    foreign key(entity_id ) references entity(id),
+    primary key(entity_id,typename)
 );
 
 create table entity_attribute (

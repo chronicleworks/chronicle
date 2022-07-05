@@ -76,6 +76,10 @@ pub enum Prov {
     Activity,
     #[iri("prov:wasAssociatedWith")]
     WasAssociatedWith,
+    #[iri("prov:qualifiedAssociation")]
+    Association,
+    #[iri("prov:Association")]
+    QualifiedAssociation,
     #[iri("prov:wasGeneratedBy")]
     WasGeneratedBy,
     #[iri("prov:used")]
@@ -96,6 +100,16 @@ pub enum Prov {
     WasRevisionOf,
     #[iri("prov:actedOnBehalfOf")]
     ActedOnBehalfOf,
+    #[iri("prov:qualifiedDelegation")]
+    QualifiedDelegation,
+    #[iri("prov:Delegation")]
+    Delegation,
+    #[iri("prov:agent")]
+    Responsible,
+    #[iri("prov:hadRole")]
+    HadRole,
+    #[iri("prov:hadActivity")]
+    HadActivity,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
@@ -212,34 +226,30 @@ impl Chronicle {
         .unwrap()
     }
 
-    pub fn association(
-        agent: &AgentId,
-        activity: &ActivityId,
-        role: Option<impl AsRef<Role>>,
-    ) -> IriBuf {
+    pub fn association(agent: &AgentId, activity: &ActivityId, role: &Option<Role>) -> IriBuf {
         IriBuf::new(&format!(
             "{}association:{}:{}:role={}",
             Self::PREFIX,
             Self::encode(agent.name_part().as_str()),
             Self::encode(activity.name_part().as_ref()),
-            Self::encode(role.as_deref().unwrap_or(""))
+            Self::encode(&role.map(|x| x.to_string()).unwrap_or("".to_owned())),
         ))
         .unwrap()
     }
 
     pub fn delegation(
         delegate: &AgentId,
-        responsible: &ActivityId,
-        activity: Option<ActivityId>,
-        role: Option<impl AsRef<Role>>,
+        responsible: &AgentId,
+        activity: &Option<ActivityId>,
+        role: &Option<Role>,
     ) -> IriBuf {
         IriBuf::new(&format!(
             "{}delegation:{}:{}:role={}:activity={}",
             Self::PREFIX,
             Self::encode(delegate.name_part().as_str()),
             Self::encode(responsible.name_part().as_str()),
-            Self::encode(role.as_deref().unwrap_or("")),
-            Self::encode(activity.name_part().as_ref()),
+            Self::encode(role.map(|x| x.as_str()).unwrap_or("")),
+            Self::encode(activity.map(|x| x.name_part().as_str()).unwrap_or("")),
         ))
         .unwrap()
     }

@@ -21,7 +21,7 @@ custom_error::custom_error! {pub ParseIriError
     UnparsableIri {iri: IriRefBuf} = "Unparseable chronicle IRI",
     UnparsableUuid {source: uuid::Error } = "Unparseable UUID",
     IncorrectIriKind = "Unexpected Iri type",
-    OptionalalComponentNotFround{component: String} = "Expected {} ",
+    MissingComponent{component: String} = "Expected {} ",
 }
 
 #[derive(
@@ -87,6 +87,19 @@ impl AsRef<str> for &Role {
     }
 }
 
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    AsExpression,
+    FromSqlRow,
+)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub struct Name(String);
 
@@ -179,6 +192,8 @@ pub enum ChronicleIri {
     Entity(EntityId),
     Agent(AgentId),
     Activity(ActivityId),
+    Association(AssociationId),
+    Delegation(DelegationId),
 }
 
 impl Display for ChronicleIri {
@@ -191,6 +206,8 @@ impl Display for ChronicleIri {
             ChronicleIri::Entity(id) => write!(f, "{}", id),
             ChronicleIri::Agent(id) => write!(f, "{}", id),
             ChronicleIri::Activity(id) => write!(f, "{}", id),
+            ChronicleIri::Association(id) => write!(f, "{}", id),
+            ChronicleIri::Delegation(id) => write!(f, "{}", id),
         }
     }
 }
@@ -237,6 +254,18 @@ impl From<ActivityId> for ChronicleIri {
     }
 }
 
+impl From<AssociationId> for ChronicleIri {
+    fn from(val: AssociationId) -> Self {
+        ChronicleIri::Association(val)
+    }
+}
+
+impl From<DelegationId> for ChronicleIri {
+    fn from(val: DelegationId) -> Self {
+        ChronicleIri::Delegation(val)
+    }
+}
+
 impl FromStr for ChronicleIri {
     type Err = ParseIriError;
 
@@ -265,6 +294,8 @@ impl FromStr for ChronicleIri {
             ["domaintype", ..] => Ok(DomaintypeId::try_from(iri.as_iri()?)?.into()),
             ["evidence", ..] => Ok(EvidenceId::try_from(iri.as_iri()?)?.into()),
             ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
+            ["assocation", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
+            ["delegation", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
             _ => Err(ParseIriError::UnparsableIri { iri }),
         }
     }
@@ -337,13 +368,13 @@ fn fragment_components(iri: Iri) -> Vec<String> {
 fn optional_component(name: &str, component: &str) -> Result<Option<String>, ParseIriError> {
     let kv = format!("{}=", name);
     if !component.starts_with(&*kv) {
-        Err(ParseIriError::MissingComponent {
-            name: name.to_string(),
-        })
+        return Err(ParseIriError::MissingComponent {
+            component: name.to_string(),
+        });
     }
 
     match component.replace(&*kv, "") {
-        "" => Ok(None),
+        s if s.is_empty() => Ok(None),
         s => Ok(Some(s)),
     }
 }
@@ -364,44 +395,52 @@ impl<'a> TryFrom<Iri<'a>> for EvidenceId {
 
 // A composite identifier of agent, activity and role
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct DerivationId {
+pub struct DelegationId {
     delegate: Name,
     responsible: Name,
     activity: Option<Name>,
     role: Option<Role>,
 }
 
-impl Display for DerivationId {
+impl Display for DelegationId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(Into::<IriRefBuf>::into(self).as_str())
     }
 }
 
-impl DerivationId {
+impl DelegationId {
     pub fn from_component_ids(
         delegate: &AgentId,
         responsible: &AgentId,
         activity: Option<&ActivityId>,
-        role: Option<impl AsRef<Role>>,
+        role: Option<impl AsRef<str>>,
     ) -> Self {
         Self {
             delegate: delegate.name_part().clone(),
             responsible: responsible.name_part().clone(),
-            activity: activity.map(NamePart::name_part),
-            role: role.as_deref().clone(),
+            activity: activity.map(|x| NamePart::name_part(x).to_owned()),
+            role: role.map(|x| Role::from(x.as_ref())),
         }
     }
 
-    pub fn agent(&self) -> AgentId {
-        AgentId::from_name(self.agent)
+    pub fn delegate(&self) -> AgentId {
+        AgentId::from_name(&self.delegate)
     }
 
-    pub fn activity(&self) -> ActivityId {
-        ActivityId::from_name(self.activity)
+    pub fn responsible(&self) -> AgentId {
+        AgentId::from_name(&self.responsible)
+    }
+
+    pub fn activity(&self) -> Option<ActivityId> {
+        self.activity.as_ref().map(ActivityId::from_name)
+    }
+
+    pub fn role(&self) -> &Option<Role> {
+        &self.role
     }
 }
 
-impl<'a> TryFrom<Iri<'a>> for DerivationId {
+impl<'a> TryFrom<Iri<'a>> for DelegationId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
@@ -410,7 +449,7 @@ impl<'a> TryFrom<Iri<'a>> for DerivationId {
                 delegate: Name::from(delegate),
                 responsible: Name::from(responsible),
                 activity: optional_component("activity", role)?.map(Name::from),
-                role: optional_component("role", role)?.as_deref(),
+                role: optional_component("role", role)?.map(Role::from),
             }),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -418,9 +457,15 @@ impl<'a> TryFrom<Iri<'a>> for DerivationId {
     }
 }
 
-impl From<&DerivationId> for IriRefBuf {
-    fn from(val: &DerivationId) -> Self {
-        Chronicle::association(val.agent, val.activity, val.role)
+impl From<&DelegationId> for IriRefBuf {
+    fn from(val: &DelegationId) -> Self {
+        Chronicle::delegation(
+            &AgentId::from_name(&val.delegate),
+            &AgentId::from_name(&val.responsible),
+            &val.activity().map(|n| ActivityId::from_name(n.name_part())),
+            &val.role,
+        )
+        .into()
     }
 }
 
@@ -441,22 +486,22 @@ impl Display for AssociationId {
 impl AssociationId {
     pub fn from_component_ids(
         agent: &AgentId,
-        activity: ActivityId,
-        role: Option<impl AsRef<Role>>,
+        activity: &ActivityId,
+        role: Option<impl AsRef<str>>,
     ) -> Self {
         Self {
             agent: agent.name_part().clone(),
             activity: activity.name_part().clone(),
-            role: role.as_deref().clone(),
+            role: role.map(|x| Role::from(x.as_ref())),
         }
     }
 
     pub fn agent(&self) -> AgentId {
-        AgentId::from_name(self.agent)
+        AgentId::from_name(&self.agent)
     }
 
     pub fn activity(&self) -> ActivityId {
-        ActivityId::from_name(self.activity)
+        ActivityId::from_name(&self.activity)
     }
 }
 
@@ -468,7 +513,7 @@ impl<'a> TryFrom<Iri<'a>> for AssociationId {
             [_, agent, activity, role] => Ok(Self {
                 agent: Name::from(agent),
                 activity: Name::from(activity),
-                role: optional_component("role", role)?.as_deref(),
+                role: optional_component("role", role)?.map(Role::from),
             }),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -478,7 +523,12 @@ impl<'a> TryFrom<Iri<'a>> for AssociationId {
 
 impl From<&AssociationId> for IriRefBuf {
     fn from(val: &AssociationId) -> Self {
-        Chronicle::association(val.agent, val.activity, val.role)
+        Chronicle::association(
+            &AgentId::from_name(&val.agent),
+            &ActivityId::from_name(&val.activity),
+            &val.role,
+        )
+        .into()
     }
 }
 
