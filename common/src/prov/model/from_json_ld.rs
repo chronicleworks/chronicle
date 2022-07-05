@@ -8,8 +8,8 @@ use crate::{
     attributes::{Attribute, Attributes},
     prov::{
         operations::{
-            ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent, CreateNamespace,
-            DerivationType, EndActivity, RegisterKey, StartActivity,
+            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
+            CreateNamespace, DerivationType, EndActivity, RegisterKey, StartActivity,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
@@ -452,7 +452,7 @@ fn operation_delegate(o: &Node) -> AgentId {
     AgentId::from_name(name)
 }
 
-fn operation_activity_id(o: &Node) -> Option<ActivityId> {
+fn operation_activity(o: &Node) -> Option<ActivityId> {
     let mut name_objects = o.get(&Reference::Id(
         ChronicleOperations::ActivityName.as_iri().into(),
     ));
@@ -486,6 +486,14 @@ fn operation_end_time(o: &Node) -> String {
     let time = objects.next().unwrap().as_str().unwrap();
     eprint!("time!: {}", time);
     time.to_owned()
+}
+
+fn operation_entity(o: &Node) -> EntityId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::EntityName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    EntityId::from_name(name)
 }
 
 impl ChronicleOperation {
@@ -531,7 +539,7 @@ impl ChronicleOperation {
                 let namespace = operation_namespace(&o);
                 let id = operation_agent(&o);
                 let delegate_id = operation_delegate(&o);
-                let activity_id = operation_activity_id(&o);
+                let activity_id = operation_activity(&o);
                 Ok(ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                     namespace,
                     id,
@@ -553,7 +561,7 @@ impl ChronicleOperation {
                 ChronicleOperations::CreateActivity.as_iri().into(),
             )) {
                 let namespace = operation_namespace(&o);
-                let activity_id = operation_activity_id(&o).unwrap();
+                let activity_id = operation_activity(&o).unwrap();
                 let name = activity_id.name_part().to_owned();
                 Ok(ChronicleOperation::CreateActivity(CreateActivity {
                     namespace,
@@ -563,7 +571,7 @@ impl ChronicleOperation {
                 ChronicleOperations::StartActivity.as_iri().into(),
             )) {
                 let namespace = operation_namespace(&o);
-                let id = operation_activity_id(&o).unwrap();
+                let id = operation_activity(&o).unwrap();
                 let agent = operation_agent(&o);
                 let time: DateTime<Utc> = operation_start_time(&o).parse().unwrap();
                 Ok(ChronicleOperation::StartActivity(StartActivity {
@@ -576,7 +584,7 @@ impl ChronicleOperation {
                 ChronicleOperations::EndActivity.as_iri().into(),
             )) {
                 let namespace = operation_namespace(&o);
-                let id = operation_activity_id(&o).unwrap();
+                let id = operation_activity(&o).unwrap();
                 let agent = operation_agent(&o);
                 let time: DateTime<Utc> = operation_end_time(&o).parse().unwrap();
                 Ok(ChronicleOperation::EndActivity(EndActivity {
@@ -584,6 +592,17 @@ impl ChronicleOperation {
                     id,
                     agent,
                     time,
+                }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::ActivityUses.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_entity(&o);
+                let activity = operation_activity(&o).unwrap();
+                Ok(ChronicleOperation::ActivityUses(ActivityUses {
+                    namespace,
+                    id,
+                    activity,
                 }))
             } else {
                 unreachable!()
@@ -600,12 +619,65 @@ mod test {
 
     use crate::prov::{
         operations::{
-            ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateNamespace, RegisterKey,
-            StartActivity,
+            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateNamespace,
+            RegisterKey, StartActivity,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, NamePart, NamespaceId, ProcessorError,
+        ActivityId, AgentId, EntityId, NamePart, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_activity_uses() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+
+        let id = EntityId::from_name("test_entity");
+        let activity = ActivityId::from_name("test_activity");
+        let operation: ChronicleOperation = ChronicleOperation::ActivityUses(ActivityUses {
+            namespace,
+            id,
+            activity,
+        });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#ActivityUses",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "test_activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+              {
+                "@value": "test_entity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_end_activity() -> Result<(), ProcessorError> {

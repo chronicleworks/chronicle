@@ -877,7 +877,8 @@ mod test {
         attributes::Attribute,
         prov::{
             operations::{
-                ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey, StartActivity,
+                ActivityUses, ActsOnBehalfOf, CreateActivity, CreateNamespace, RegisterKey,
+                StartActivity,
             },
             to_json_ld::ToJson,
             ActivityId, AgentId, DomaintypeId, EntityId, IdentityId, NamePart, NamespaceId,
@@ -1203,12 +1204,11 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
         let activity = ActivityId::from_name("test_activity");
-        let op: ChronicleOperation =
-            super::ChronicleOperation::ActivityUses(crate::prov::operations::ActivityUses {
-                namespace,
-                id,
-                activity,
-            });
+        let op: ChronicleOperation = ChronicleOperation::ActivityUses(ActivityUses {
+            namespace,
+            id,
+            activity,
+        });
 
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
