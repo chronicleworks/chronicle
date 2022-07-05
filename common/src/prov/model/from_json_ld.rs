@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::{
             ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach,
+            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
             GenerateEntity, RegisterKey, StartActivity,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
@@ -497,6 +497,29 @@ fn operation_entity(o: &Node) -> EntityId {
     EntityId::from_name(name)
 }
 
+fn operation_used_entity(o: &Node) -> EntityId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::UsedEntityName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    EntityId::from_name(name)
+}
+
+fn operation_derivation(o: &Node) -> Option<DerivationType> {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::DerivationType.as_iri().into(),
+    ));
+    let derivation = objects.next().unwrap().as_str().unwrap();
+
+    let d = match derivation {
+        "Revision" => DerivationType::Revision,
+        "Quotation" => DerivationType::Quotation,
+        "PrimarySource" => DerivationType::PrimarySource,
+        _ => unreachable!(),
+    };
+    Some(d)
+}
+
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
@@ -641,6 +664,21 @@ impl ChronicleOperation {
                     signature: None,
                     signature_time: None,
                 }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::EntityDerive.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let id = operation_entity(&o);
+                let used_id = operation_used_entity(&o);
+                let activity_id = operation_activity(&o);
+                let typ = operation_derivation(&o);
+                Ok(ChronicleOperation::EntityDerive(EntityDerive {
+                    namespace,
+                    id,
+                    used_id,
+                    activity_id,
+                    typ,
+                }))
             } else {
                 unreachable!()
             }
@@ -657,11 +695,78 @@ mod test {
     use crate::prov::{
         operations::{
             ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateEntity,
-            CreateNamespace, EntityAttach, GenerateEntity, RegisterKey, StartActivity,
+            CreateNamespace, DerivationType, EntityAttach, EntityDerive, GenerateEntity,
+            RegisterKey, StartActivity,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, EntityId, NamePart, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_entity_derive() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = EntityId::from_name("test_entity");
+        let used_id = EntityId::from_name("test_used_entity");
+        let activity_id = Some(ActivityId::from_name("test_activity"));
+        let typ = Some(DerivationType::Revision);
+        let operation: ChronicleOperation = ChronicleOperation::EntityDerive(EntityDerive {
+            namespace,
+            id,
+            used_id,
+            activity_id,
+            typ,
+        });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        let operation_json = deserialized_operation.to_json();
+        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
+        insta::assert_json_snapshot!(&x, @r###"
+        [
+          {
+            "@id": "_:n1",
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityDerive",
+            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+              {
+                "@value": "test_activity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#DerivationType": [
+              {
+                "@value": "Revision"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+              {
+                "@value": "test_entity"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+              {
+                "@value": "testns"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+              {
+                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#UsedEntityName": [
+              {
+                "@value": "test_used_entity"
+              }
+            ]
+          }
+        ]
+        "###);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_entity_attach() -> Result<(), ProcessorError> {

@@ -673,7 +673,7 @@ impl ToJson for ChronicleOperation {
 
                 o.operate(
                     OperationsId::from_id(used_id.name_part()),
-                    ChronicleOperations::EntityName,
+                    ChronicleOperations::UsedEntityName,
                 );
 
                 if let Some(activity) = activity_id {
@@ -1403,7 +1403,7 @@ mod test {
             ],
             "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
               {
-                "@value": "test_used_entity"
+                "@value": "test_entity"
               }
             ],
             "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
@@ -1414,6 +1414,11 @@ mod test {
             "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#UsedEntityName": [
+              {
+                "@value": "test_used_entity"
               }
             ]
           }

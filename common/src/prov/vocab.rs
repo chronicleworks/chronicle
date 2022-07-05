@@ -53,6 +53,8 @@ pub enum ChronicleOperations {
     DerivationType,
     #[iri("chronicleop:EntityAttach")]
     EntityAttach,
+    #[iri("chronicleop:UsedEntityName")]
+    UsedEntityName,
     #[iri("chronicleop:SetAttributes")]
     SetAttributes,
     #[iri("chronicleop:Attributes")]
