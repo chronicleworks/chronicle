@@ -1,8 +1,12 @@
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use iref::{AsIri, Iri, IriBuf};
 use json::JsonValue;
-use json_ld::{util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference};
+use json_ld::{
+    syntax::Term, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
+};
 
 use crate::{
     attributes::{Attribute, Attributes},
@@ -10,7 +14,7 @@ use crate::{
         operations::{
             ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
             CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
-            GenerateEntity, RegisterKey, StartActivity,
+            GenerateEntity, RegisterKey, SetAttributes, StartActivity,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, NamePart,
@@ -424,102 +428,6 @@ impl ProvModel {
     }
 }
 
-fn operation_namespace(o: &Node) -> NamespaceId {
-    let mut uuid_objects = o.get(&Reference::Id(
-        ChronicleOperations::NamespaceUuid.as_iri().into(),
-    ));
-    let uuid = uuid_objects.next().unwrap().as_str().unwrap();
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::NamespaceName.as_iri().into(),
-    ));
-    let name = name_objects.next().unwrap().as_str().unwrap();
-    let uuid = uuid::Uuid::parse_str(uuid).unwrap();
-    NamespaceId::from_name(name, uuid)
-}
-
-fn operation_agent(o: &Node) -> AgentId {
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::AgentName.as_iri().into(),
-    ));
-    let name = name_objects.next().unwrap().as_str().unwrap();
-    AgentId::from_name(name)
-}
-
-fn operation_delegate(o: &Node) -> AgentId {
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::DelegateId.as_iri().into(),
-    ));
-    let name = name_objects.next().unwrap().as_str().unwrap();
-    AgentId::from_name(name)
-}
-
-fn operation_activity(o: &Node) -> Option<ActivityId> {
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::ActivityName.as_iri().into(),
-    ));
-    let object = match name_objects.next() {
-        Some(object) => object,
-        None => return None,
-    };
-    Some(ActivityId::from_name(object.as_str().unwrap()))
-}
-
-fn operation_key(o: &Node) -> String {
-    let mut objects = o.get(&Reference::Id(
-        ChronicleOperations::PublicKey.as_iri().into(),
-    ));
-    String::from(objects.next().unwrap().as_str().unwrap())
-}
-
-fn operation_start_time(o: &Node) -> String {
-    let mut objects = o.get(&Reference::Id(
-        ChronicleOperations::StartActivityTime.as_iri().into(),
-    ));
-    let time = objects.next().unwrap().as_str().unwrap();
-    eprint!("time!: {}", time);
-    time.to_owned()
-}
-
-fn operation_end_time(o: &Node) -> String {
-    let mut objects = o.get(&Reference::Id(
-        ChronicleOperations::EndActivityTime.as_iri().into(),
-    ));
-    let time = objects.next().unwrap().as_str().unwrap();
-    eprint!("time!: {}", time);
-    time.to_owned()
-}
-
-fn operation_entity(o: &Node) -> EntityId {
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::EntityName.as_iri().into(),
-    ));
-    let name = name_objects.next().unwrap().as_str().unwrap();
-    EntityId::from_name(name)
-}
-
-fn operation_used_entity(o: &Node) -> EntityId {
-    let mut name_objects = o.get(&Reference::Id(
-        ChronicleOperations::UsedEntityName.as_iri().into(),
-    ));
-    let name = name_objects.next().unwrap().as_str().unwrap();
-    EntityId::from_name(name)
-}
-
-fn operation_derivation(o: &Node) -> Option<DerivationType> {
-    let mut objects = o.get(&Reference::Id(
-        ChronicleOperations::DerivationType.as_iri().into(),
-    ));
-    let derivation = objects.next().unwrap().as_str().unwrap();
-
-    let d = match derivation {
-        "Revision" => DerivationType::Revision,
-        "Quotation" => DerivationType::Quotation,
-        "PrimarySource" => DerivationType::PrimarySource,
-        _ => unreachable!(),
-    };
-    Some(d)
-}
-
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
@@ -679,6 +587,48 @@ impl ChronicleOperation {
                     activity_id,
                     typ,
                 }))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::SetAttributes.as_iri().into(),
+            )) {
+                let namespace = operation_namespace(&o);
+                let domain = operation_domain(&o);
+
+                let attrs = operation_attributes(&o);
+
+                let attributes = Attributes {
+                    typ: domain,
+                    attributes: attrs,
+                };
+                let actor: SetAttributes = {
+                    if o.has_key(&Term::Ref(Reference::Id(
+                        ChronicleOperations::EntityName.as_iri().into(),
+                    ))) {
+                        let id = operation_entity(&o);
+                        SetAttributes::Entity {
+                            namespace,
+                            id,
+                            attributes,
+                        }
+                    } else if o.has_key(&Term::Ref(Reference::Id(
+                        ChronicleOperations::AgentName.as_iri().into(),
+                    ))) {
+                        let id = operation_agent(&o);
+                        SetAttributes::Agent {
+                            namespace,
+                            id,
+                            attributes,
+                        }
+                    } else {
+                        let id = operation_activity(&o).unwrap();
+                        SetAttributes::Activity {
+                            namespace,
+                            id,
+                            attributes,
+                        }
+                    }
+                };
+
+                Ok(ChronicleOperation::SetAttributes(actor))
             } else {
                 unreachable!()
             }
@@ -688,19 +638,260 @@ impl ChronicleOperation {
     }
 }
 
+fn operation_namespace(o: &Node) -> NamespaceId {
+    let mut uuid_objects = o.get(&Reference::Id(
+        ChronicleOperations::NamespaceUuid.as_iri().into(),
+    ));
+    let uuid = uuid_objects.next().unwrap().as_str().unwrap();
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::NamespaceName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    let uuid = uuid::Uuid::parse_str(uuid).unwrap();
+    NamespaceId::from_name(name, uuid)
+}
+
+fn operation_agent(o: &Node) -> AgentId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::AgentName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    AgentId::from_name(name)
+}
+
+fn operation_delegate(o: &Node) -> AgentId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::DelegateId.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    AgentId::from_name(name)
+}
+
+fn operation_activity(o: &Node) -> Option<ActivityId> {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::ActivityName.as_iri().into(),
+    ));
+    let object = match name_objects.next() {
+        Some(object) => object,
+        None => return None,
+    };
+    Some(ActivityId::from_name(object.as_str().unwrap()))
+}
+
+fn operation_key(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::PublicKey.as_iri().into(),
+    ));
+    String::from(objects.next().unwrap().as_str().unwrap())
+}
+
+fn operation_start_time(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::StartActivityTime.as_iri().into(),
+    ));
+    let time = objects.next().unwrap().as_str().unwrap();
+    eprint!("time!: {}", time);
+    time.to_owned()
+}
+
+fn operation_end_time(o: &Node) -> String {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::EndActivityTime.as_iri().into(),
+    ));
+    let time = objects.next().unwrap().as_str().unwrap();
+    eprint!("time!: {}", time);
+    time.to_owned()
+}
+
+fn operation_entity(o: &Node) -> EntityId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::EntityName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    EntityId::from_name(name)
+}
+
+fn operation_used_entity(o: &Node) -> EntityId {
+    let mut name_objects = o.get(&Reference::Id(
+        ChronicleOperations::UsedEntityName.as_iri().into(),
+    ));
+    let name = name_objects.next().unwrap().as_str().unwrap();
+    EntityId::from_name(name)
+}
+
+fn operation_derivation(o: &Node) -> Option<DerivationType> {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::DerivationType.as_iri().into(),
+    ));
+    let derivation = match objects.next() {
+        Some(object) => object.as_str().unwrap(),
+        None => return None,
+    };
+
+    let d = match derivation {
+        "Revision" => DerivationType::Revision,
+        "Quotation" => DerivationType::Quotation,
+        "PrimarySource" => DerivationType::PrimarySource,
+        _ => unreachable!(),
+    };
+    Some(d)
+}
+
+fn operation_domain(o: &Node) -> Option<DomaintypeId> {
+    let mut objects = o.get(&Reference::Id(
+        ChronicleOperations::DomaintypeId.as_iri().into(),
+    ));
+    let d = match objects.next() {
+        Some(object) => object.as_str().unwrap(),
+        None => return None,
+    };
+    Some(DomaintypeId::from_name(d))
+}
+
+fn operation_attributes(o: &Node) -> BTreeMap<String, Attribute> {
+    let objects = o.get(&Reference::Id(
+        ChronicleOperations::Attributes.as_iri().into(),
+    ));
+    let mut a: BTreeMap<String, Attribute> = BTreeMap::new();
+    for o in objects {
+        let j = o.as_json();
+        let x = j["@type"][0].to_string();
+        let value = serde_json::json!(x);
+        let attr = Attribute {
+            typ: x.clone(),
+            value,
+        };
+        a.insert(format!("{}_attribute", x.to_lowercase()), attr);
+    }
+    a
+}
+
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
+
     use uuid::Uuid;
 
-    use crate::prov::{
-        operations::{
-            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateEntity,
-            CreateNamespace, DerivationType, EntityAttach, EntityDerive, GenerateEntity,
-            RegisterKey, StartActivity,
+    use crate::{
+        attributes::{Attribute, Attributes},
+        prov::{
+            operations::{
+                ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
+                CreateEntity, CreateNamespace, DerivationType, EntityAttach, EntityDerive,
+                GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+            },
+            to_json_ld::ToJson,
+            ActivityId, AgentId, DomaintypeId, EntityId, Name, NamePart, NamespaceId,
+            ProcessorError,
         },
-        to_json_ld::ToJson,
-        ActivityId, AgentId, EntityId, NamePart, NamespaceId, ProcessorError,
     };
+
+    #[tokio::test]
+    async fn test_set_attributes_activity_multiple_attributes() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = ActivityId::from_name("test_activity");
+        let domain = DomaintypeId::from_name("test_domain");
+
+        let attrs = {
+            let mut h: BTreeMap<String, Attribute> = BTreeMap::new();
+
+            let attr = Attribute {
+                typ: "Bool".to_string(),
+                value: serde_json::json!("Bool"),
+            };
+            h.insert("bool_attribute".to_string(), attr);
+
+            let attr = Attribute {
+                typ: "String".to_string(),
+                value: serde_json::json!("String"),
+            };
+            h.insert("string_attribute".to_string(), attr);
+
+            let attr = Attribute {
+                typ: "Int".to_string(),
+                value: serde_json::json!("Int"),
+            };
+            h.insert("int_attribute".to_string(), attr);
+
+            h
+        };
+        let attributes = Attributes {
+            typ: Some(domain),
+            attributes: attrs,
+        };
+        let operation: ChronicleOperation =
+            ChronicleOperation::SetAttributes(SetAttributes::Activity {
+                namespace,
+                id,
+                attributes,
+            });
+
+        let serialized_operation = operation.to_json();
+
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_attributes_agent_empty_attributes() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = AgentId::from_name("test_agent");
+        let domain = DomaintypeId::from_name("test_domain");
+        let attributes = Attributes {
+            typ: Some(domain),
+            attributes: BTreeMap::new(),
+        };
+        let operation: ChronicleOperation =
+            ChronicleOperation::SetAttributes(SetAttributes::Agent {
+                namespace,
+                id,
+                attributes,
+            });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_attributes_entity_empty_attributes() -> Result<(), ProcessorError> {
+        let uuid =
+            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
+        let id = EntityId::from_name("test_entity");
+        let domain = DomaintypeId::from_name("test_domain");
+        let attributes = Attributes {
+            typ: Some(domain),
+            attributes: BTreeMap::new(),
+        };
+        let operation: ChronicleOperation =
+            ChronicleOperation::SetAttributes(SetAttributes::Entity {
+                namespace,
+                id,
+                attributes,
+            });
+
+        let serialized_operation = operation.to_json();
+        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
+        assert!(
+            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
+                == deserialized_operation
+        );
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_entity_derive() -> Result<(), ProcessorError> {
@@ -725,46 +916,6 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityDerive",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#DerivationType": [
-              {
-                "@value": "Revision"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
-              {
-                "@value": "test_entity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#UsedEntityName": [
-              {
-                "@value": "test_used_entity"
-              }
-            ]
-          }
-        ]
-        "###);
         Ok(())
     }
 
@@ -792,36 +943,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityAttach",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
-              {
-                "@value": "test_entity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -846,36 +968,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#GenerateEntity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
-              {
-                "@value": "test_entity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -897,31 +990,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateEntity",
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
-              {
-                "@value": "test_entity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -945,36 +1014,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#ActivityUses",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
-              {
-                "@value": "test_entity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -1004,41 +1044,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#EndActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EndActivityTime": [
-              {
-                "@value": "1970-01-01T00:01:01+00:00"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -1067,41 +1073,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#StartActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
-              {
-                "@value": "1970-01-01T00:01:01+00:00"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -1121,31 +1093,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -1169,36 +1117,7 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#RegisterKey",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#PublicKey": [
-              {
-                "@value": "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23"
-              }
-            ]
-          }
-        ]
-        "###);
+
         Ok(())
     }
 
@@ -1225,36 +1144,6 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
-              {
-                "@value": "test_delegate"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
         Ok(())
     }
 
@@ -1281,41 +1170,6 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
-              {
-                "@value": "test_activity"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
-              {
-                "@value": "test_delegate"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
         Ok(())
     }
 
@@ -1324,45 +1178,15 @@ mod test {
         let uuid =
             Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let name: crate::prov::Name =
-            crate::prov::NamePart::name_part(&crate::prov::AgentId::from_name("test_agent"))
-                .clone();
+        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
         let operation: ChronicleOperation =
-            super::ChronicleOperation::CreateAgent(crate::prov::operations::CreateAgent {
-                namespace,
-                name,
-            });
+            ChronicleOperation::CreateAgent(CreateAgent { namespace, name });
         let serialized_operation = operation.to_json();
         let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
         assert!(
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateAgent",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
         Ok(())
     }
 
@@ -1381,26 +1205,6 @@ mod test {
             ChronicleOperation::from_json(deserialized_operation.to_json()).await?
                 == deserialized_operation
         );
-        let operation_json = deserialized_operation.to_json();
-        let x: serde_json::Value = serde_json::from_str(&operation_json.0.to_string())?;
-        insta::assert_json_snapshot!(&x, @r###"
-        [
-          {
-            "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateNamespace",
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
-              {
-                "@value": "testns"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
-              {
-                "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
-              }
-            ]
-          }
-        ]
-        "###);
         Ok(())
     }
 }

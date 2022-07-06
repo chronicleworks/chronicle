@@ -59,6 +59,8 @@ pub enum ChronicleOperations {
     SetAttributes,
     #[iri("chronicleop:Attributes")]
     Attributes,
+    #[iri("chronicleop:Attribute")]
+    Attribute,
     #[iri("chronicleop:DomaintypeId")]
     DomaintypeId,
 }

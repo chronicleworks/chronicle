@@ -711,7 +711,12 @@ impl ToJson for ChronicleOperation {
                     ChronicleOperations::EntityName,
                 );
 
-                o.attributes_object(OperationsId::from_id(id.name_part()), attributes);
+                if let Some(domaintypeid) = &attributes.typ {
+                    let id = OperationsId::from_id(domaintypeid.name_part());
+                    o.operate(id, ChronicleOperations::DomaintypeId);
+                }
+
+                o.attributes_object(attributes);
 
                 o
             }
@@ -737,7 +742,7 @@ impl ToJson for ChronicleOperation {
                     ChronicleOperations::ActivityName,
                 );
 
-                o.attributes_object(OperationsId::from_id(id.name_part()), attributes);
+                o.attributes_object(attributes);
 
                 o
             }
@@ -763,7 +768,7 @@ impl ToJson for ChronicleOperation {
                     ChronicleOperations::AgentName,
                 );
 
-                o.attributes_object(OperationsId::from_id(id.name_part()), attributes);
+                o.attributes_object(attributes);
 
                 o
             }
@@ -786,7 +791,7 @@ trait Operate {
     fn new_type(id: OperationsId, op: ChronicleOperations) -> Self;
     fn new_value(id: OperationsId) -> Self;
     fn operate(&mut self, id: OperationsId, op: ChronicleOperations);
-    fn attributes_object(&mut self, id: OperationsId, attributes: &Attributes);
+    fn attributes_object(&mut self, attributes: &Attributes);
     fn new_attribute(typ: String, val: Value) -> Self;
     fn derivation(&mut self, typ: &DerivationType);
 }
@@ -818,33 +823,52 @@ impl Operate for JsonValue {
         Self::new_type(id, op)
     }
 
-    fn attributes_object(&mut self, id: OperationsId, attributes: &Attributes) {
+    // fn attributes_object(&mut self, id: OperationsId, attributes: &Attributes) {
+    fn attributes_object(&mut self, attributes: &Attributes) {
         let key = iref::Iri::from(ChronicleOperations::Attributes).to_string();
 
-        let mut attributes_object = Self::new_type(id, ChronicleOperations::Attributes);
+        // let attributes_object = Self::new_type(
+        //   id,
+        //   ChronicleOperations::Attributes
+        // );
 
-        if let Some(domaintypeid) = &attributes.typ {
-            let id = OperationsId::from_id(domaintypeid.name_part());
-            attributes_object.operate(id, ChronicleOperations::DomaintypeId);
+        // if let Some(domaintypeid) = &attributes.typ {
+        //     let id = OperationsId::from_id(domaintypeid.name_part());
+        //     attributes_object.operate(id, ChronicleOperations::DomaintypeId);
+        // }
+
+        // if !attributes.attributes.is_empty() {
+        let mut attribute_objects: Vec<JsonValue> = json::Array::new();
+        let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
+        for (k, v) in &attributes.attributes {
+            ordered_map.insert(k.clone(), v.clone());
         }
+        #[allow(clippy::for_kv_map)]
+        for (_, attr) in ordered_map {
+            let object = Self::new_attribute(attr.typ.clone(), attr.value.clone());
+            attribute_objects.push(object);
+        }
+        // self.insert(&key, attribute_objects).ok();
+        // }
 
-        let value: Vec<JsonValue> = vec![attributes_object];
+        // let value: Vec<JsonValue> = vec![attributes_object];
+        let value: Vec<JsonValue> = attribute_objects;
 
         self.insert(&key, value).ok();
 
-        if !attributes.attributes.is_empty() {
-            let mut attribute_objects: Vec<JsonValue> = json::Array::new();
-            let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
-            for (k, v) in &attributes.attributes {
-                ordered_map.insert(k.clone(), v.clone());
-            }
-            #[allow(clippy::for_kv_map)]
-            for (_, attr) in ordered_map {
-                let object = Self::new_attribute(attr.typ.clone(), attr.value.clone());
-                attribute_objects.push(object);
-            }
-            self.insert(&key, attribute_objects).ok();
-        }
+        // if !attributes.attributes.is_empty() {
+        //     let mut attribute_objects: Vec<JsonValue> = json::Array::new();
+        //     let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
+        //     for (k, v) in &attributes.attributes {
+        //         ordered_map.insert(k.clone(), v.clone());
+        //     }
+        //     #[allow(clippy::for_kv_map)]
+        //     for (_, attr) in ordered_map {
+        //         let object = Self::new_attribute(attr.typ.clone(), attr.value.clone());
+        //         attribute_objects.push(object);
+        //     }
+        //     self.insert(&key, attribute_objects).ok();
+        // }
     }
 
     fn new_attribute(typ: String, val: Value) -> Self {
@@ -1448,15 +1472,10 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#SetAttributes",
-            "http://blockchaintp.com/chronicleoperations/ns#Attributes": [
+            "http://blockchaintp.com/chronicleoperations/ns#Attributes": [],
+            "http://blockchaintp.com/chronicleoperations/ns#DomaintypeId": [
               {
-                "@id": "test_entity",
-                "@type": "http://blockchaintp.com/chronicleoperations/ns#Attributes",
-                "http://blockchaintp.com/chronicleoperations/ns#DomaintypeId": [
-                  {
-                    "@value": "test_domain"
-                  }
-                ]
+                "@value": "test_domain"
               }
             ],
             "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
@@ -1537,6 +1556,11 @@ mod test {
               {
                 "@primitive_type": "\"String\"",
                 "@type": "String"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#DomaintypeId": [
+              {
+                "@value": "test_domain"
               }
             ],
             "http://blockchaintp.com/chronicleoperations/ns#EntityName": [

@@ -835,7 +835,7 @@ impl ProvModel {
                     let id = identityid.clone().unwrap();
                     let public_key = &id.public_key_part().to_owned();
                     self.add_identity(Identity::new(&namespace, &agent, public_key));
-                    self.has_identity(namespace.clone(), &agent, &id.clone());
+                    self.has_identity(namespace.clone(), &agent, &id);
                 }
 
                 let entity = self
