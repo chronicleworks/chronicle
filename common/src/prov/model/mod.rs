@@ -272,7 +272,7 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Derivation {
     pub generated_id: EntityId,
     pub used_id: EntityId,
@@ -280,7 +280,7 @@ pub struct Derivation {
     pub typ: Option<DerivationType>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Delegation {
     pub namespace_id: NamespaceId,
     pub id: DelegationId,
@@ -314,7 +314,7 @@ impl Delegation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Association {
     pub namespace_id: NamespaceId,
     pub id: AssociationId,
@@ -340,14 +340,14 @@ impl Association {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Useage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
     pub time: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Generation {
     pub activity_id: ActivityId,
     pub generated_id: EntityId,
@@ -373,11 +373,11 @@ pub struct ProvModel {
     pub had_identity: HashMap<NamespacedAgent, HashSet<NamespacedIdentity>>,
     pub has_evidence: HashMap<NamespacedEntity, NamespacedAttachment>,
     pub had_attachment: HashMap<NamespacedEntity, HashSet<NamespacedAttachment>>,
-    pub association: HashMap<NamespacedActivity, Vec<Association>>,
-    pub derivation: HashMap<NamespacedEntity, Vec<Derivation>>,
-    pub delegation: HashMap<NamespacedAgent, Vec<Delegation>>,
-    pub generation: HashMap<NamespacedEntity, Vec<Generation>>,
-    pub useage: HashMap<NamespacedActivity, Vec<Useage>>,
+    pub association: HashMap<NamespacedActivity, HashSet<Association>>,
+    pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
+    pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
+    pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
+    pub useage: HashMap<NamespacedActivity, HashSet<Useage>>,
 }
 
 impl ProvModel {
@@ -451,35 +451,35 @@ impl ProvModel {
         for (id, mut rhs) in other.association {
             self.association
                 .entry(id.clone())
-                .and_modify(|xs| xs.append(&mut rhs))
+                .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
         }
 
         for (id, mut rhs) in other.generation {
             self.generation
                 .entry(id.clone())
-                .and_modify(|xs| xs.append(&mut rhs))
+                .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
         }
 
         for (id, mut rhs) in other.useage {
             self.useage
                 .entry(id.clone())
-                .and_modify(|xs| xs.append(&mut rhs))
+                .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
         }
 
         for (id, mut rhs) in other.derivation {
             self.derivation
                 .entry(id.clone())
-                .and_modify(|xs| xs.append(&mut rhs))
+                .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
         }
 
         for (id, mut rhs) in other.delegation {
             self.delegation
                 .entry(id.clone())
-                .and_modify(|xs| xs.append(&mut rhs))
+                .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
         }
     }
@@ -495,8 +495,8 @@ impl ProvModel {
     ) {
         self.derivation
             .entry((namespace_id, id.clone()))
-            .or_insert_with(Vec::new)
-            .push(Derivation {
+            .or_insert_with(HashSet::new)
+            .insert(Derivation {
                 typ,
                 generated_id: id,
                 used_id,
@@ -515,8 +515,8 @@ impl ProvModel {
     ) {
         self.delegation
             .entry((namespace_id.clone(), responsible_id.clone()))
-            .or_insert_with(Vec::new)
-            .push(Delegation {
+            .or_insert_with(HashSet::new)
+            .insert(Delegation {
                 namespace_id: namespace_id.clone(),
                 id: DelegationId::from_component_ids(
                     delegate_id,
@@ -540,8 +540,8 @@ impl ProvModel {
     ) {
         self.association
             .entry((namespace_id.clone(), activity_id.clone()))
-            .or_insert_with(std::vec::Vec::new)
-            .push(Association {
+            .or_insert_with(HashSet::new)
+            .insert(Association {
                 namespace_id: namespace_id.clone(),
                 id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
                 agent_id: agent_id.clone(),
@@ -558,23 +558,23 @@ impl ProvModel {
     ) {
         self.generation
             .entry((namespace, generated_id.clone()))
-            .or_insert_with(std::vec::Vec::new)
-            .push(Generation {
+            .or_insert_with(HashSet::new)
+            .insert(Generation {
                 activity_id: activity_id.clone(),
                 generated_id: generated_id.clone(),
                 time: None,
-            })
+            });
     }
 
     pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
         self.useage
             .entry((namespace, activity_id.clone()))
-            .or_insert_with(std::vec::Vec::new)
-            .push(Useage {
+            .or_insert_with(HashSet::new)
+            .insert(Useage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
                 time: None,
-            })
+            });
     }
 
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {

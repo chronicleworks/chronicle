@@ -1,6 +1,6 @@
 ---
 source: api/src/lib.rs
-assertion_line: 1374
+assertion_line: 1492
 expression: "serde_json::to_string_pretty(&v).unwrap()"
 ---
 {
@@ -119,10 +119,12 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "endTime": "2014-07-08T09:10:11+00:00",
       "label": "testactivity",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "prov:qualifiedAssociation": {
+        "@id": "chronicle:association:testagent:testactivity:role="
+      },
       "startTime": "2014-07-08T09:10:11+00:00",
       "value": {},
       "wasAssociatedWith": [
-        "chronicle:agent:testagent",
         "chronicle:agent:testagent"
       ]
     },
@@ -132,6 +134,15 @@ expression: "serde_json::to_string_pretty(&v).unwrap()"
       "label": "testagent",
       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
       "value": {}
+    },
+    {
+      "@id": "chronicle:association:testagent:testactivity:role=",
+      "@type": "prov:Association",
+      "agent": "chronicle:agent:testagent",
+      "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+      "prov:hadActivity": {
+        "@id": "chronicle:activity:testactivity"
+      }
     },
     {
       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",

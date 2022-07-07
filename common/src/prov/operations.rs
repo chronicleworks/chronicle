@@ -15,7 +15,7 @@ use super::{
     ActivityId, AgentId, AssociationId, DelegationId, EntityId, IdentityId, Name, NamespaceId, Role,
 };
 
-#[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[diesel(sql_type = Integer)]
 #[repr(i32)]
 pub enum DerivationType {
