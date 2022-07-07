@@ -820,13 +820,13 @@ where
                     namespace,
                     id: id.clone(),
                     agent: agent_id.clone(),
-                    identityid: IdentityId::from_name(
+                    identityid: Some(IdentityId::from_name(
                         agent_id.name_part(),
                         &*hex::encode_upper(signer.to_bytes()),
-                    ),
-                    signature: hex::encode_upper(signature),
+                    )),
+                    signature: Some(hex::encode_upper(signature)),
                     locator,
-                    signature_time: Utc::now(),
+                    signature_time: Some(Utc::now()),
                 });
 
                 to_apply.push(tx);
@@ -1078,18 +1078,17 @@ mod test {
         commands::{ApiResponse, EntityCommand, KeyImport},
         ledger::InMemLedger,
         prov::{
-            operations::DerivationType, ActivityId, AgentId, ChronicleTransactionId, DomaintypeId,
-            EntityId, ProvModel,
+            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
+            ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
         },
     };
 
+    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
     use r2d2::Pool;
     use telemetry::console_logging_trace;
     use tempfile::TempDir;
     use uuid::Uuid;
-
-    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
 
     use common::commands::{
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,

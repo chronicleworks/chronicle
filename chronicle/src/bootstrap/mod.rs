@@ -25,6 +25,7 @@ use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use telemetry;
 use url::Url;
 
+use common::prov::to_json_ld::ToJson;
 use std::{
     io,
     net::SocketAddr,
@@ -278,7 +279,10 @@ pub mod test {
     use common::{
         commands::{ApiCommand, ApiResponse},
         ledger::InMemLedger,
-        prov::{ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, ProvModel},
+        prov::{
+            to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
+            EntityId, ProvModel,
+        },
     };
 
     use diesel::{

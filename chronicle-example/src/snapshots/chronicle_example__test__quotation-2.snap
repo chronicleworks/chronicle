@@ -1,6 +1,5 @@
 ---
 source: chronicle-example/src/test.rs
-assertion_line: 312
 expression: derived
 ---
 [data.entityById]

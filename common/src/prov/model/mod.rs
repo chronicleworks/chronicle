@@ -6,7 +6,7 @@ use k256::ecdsa::Signature;
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
     fmt::Display,
 };
@@ -25,6 +25,8 @@ use super::{
     ActivityId, AgentId, AttachmentId, DomaintypeId, EntityId, IdentityId, Name, NamePart,
     NamespaceId, PublicKeyPart, UuidPart,
 };
+
+pub mod to_json_ld;
 
 custom_error! {pub ProcessorError
     Compaction{source: CompactionError} = "Json Ld Error",
@@ -125,7 +127,7 @@ pub struct Agent {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,7 +172,7 @@ impl Agent {
             name: id.name_part().to_owned(),
             id,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -181,7 +183,7 @@ pub struct Activity {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
     pub started: Option<DateTime<Utc>>,
     pub ended: Option<DateTime<Utc>>,
 }
@@ -216,7 +218,7 @@ impl Activity {
             started: None,
             ended: None,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -257,7 +259,7 @@ pub struct Entity {
     pub namespaceid: NamespaceId,
     pub name: Name,
     pub domaintypeid: Option<DomaintypeId>,
-    pub attributes: HashMap<String, Attribute>,
+    pub attributes: BTreeMap<String, Attribute>,
 }
 
 impl Entity {
@@ -283,7 +285,7 @@ impl Entity {
             id,
             namespaceid,
             domaintypeid: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -826,13 +828,14 @@ impl ProvModel {
                     self.add_agent(Agent::exists(namespace.clone(), agent));
                 }
 
-                let identity_key = (namespace.clone(), identityid.clone());
+                let identity_key = (namespace.clone(), identityid.as_ref().unwrap().clone());
 
                 if !self.identities.contains_key(&identity_key) {
                     let agent = self.agents.get(&agent_key).unwrap().id.clone();
-                    let public_key = identityid.public_key_part();
+                    let id = identityid.clone().unwrap();
+                    let public_key = &id.public_key_part().to_owned();
                     self.add_identity(Identity::new(&namespace, &agent, public_key));
-                    self.has_identity(namespace.clone(), &agent, &identityid);
+                    self.has_identity(namespace.clone(), &agent, &id);
                 }
 
                 let entity = self
@@ -844,11 +847,11 @@ impl ProvModel {
 
                 self.sign(
                     namespace,
-                    &identityid,
+                    &identityid.unwrap(),
                     &entity,
-                    &*signature,
+                    &*signature.unwrap(),
                     locator,
-                    signature_time,
+                    signature_time.unwrap(),
                 );
             }
             ChronicleOperation::EntityDerive(EntityDerive {
@@ -966,7 +969,6 @@ custom_error::custom_error! {pub CompactionError
     Join{source : JoinError}               = "Tokio",
     Serde{source: serde_json::Error }      = "Serde conversion",
 }
-
 pub struct ExpandedJson(pub JsonValue);
 
 impl ExpandedJson {
@@ -1016,7 +1018,6 @@ impl ExpandedJson {
     }
 }
 pub mod from_json_ld;
-pub mod to_json_ld;
 
 pub struct CompactedJson(pub JsonValue);
 

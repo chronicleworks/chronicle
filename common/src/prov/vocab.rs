@@ -5,6 +5,67 @@ use uuid::Uuid;
 use super::Name;
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
+#[iri_prefix("chronicleop" = "http://blockchaintp.com/chronicleoperations/ns#")]
+pub enum ChronicleOperations {
+    #[iri("chronicleop:CreateNamespace")]
+    CreateNamespace,
+    #[iri("chronicleop:NamespaceName")]
+    NamespaceName,
+    #[iri("chronicleop:NamespaceUuid")]
+    NamespaceUuid,
+    #[iri("chronicleop:CreateAgent")]
+    CreateAgent,
+    #[iri("chronicleop:AgentName")]
+    AgentName,
+    #[iri("chronicleop:AgentUuid")]
+    AgentUuid,
+    #[iri("chronicleop:AgentActsOnBehalfOf")]
+    AgentActsOnBehalfOf,
+    #[iri("chronicleop:DelegateId")]
+    DelegateId,
+    #[iri("chronicleop:RegisterKey")]
+    RegisterKey,
+    #[iri("chronicleop:PublicKey")]
+    PublicKey,
+    #[iri("chronicleop:CreateActivity")]
+    CreateActivity,
+    #[iri("chronicleop:ActivityName")]
+    ActivityName,
+    #[iri("chronicleop:StartActivity")]
+    StartActivity,
+    #[iri("chronicleop:StartActivityTime")]
+    StartActivityTime,
+    #[iri("chronicleop:EndActivity")]
+    EndActivity,
+    #[iri("chronicleop:EndActivityTime")]
+    EndActivityTime,
+    #[iri("chronicleop:ActivityUses")]
+    ActivityUses,
+    #[iri("chronicleop:EntityName")]
+    EntityName,
+    #[iri("chronicleop:CreateEntity")]
+    CreateEntity,
+    #[iri("chronicleop:GenerateEntity")]
+    GenerateEntity,
+    #[iri("chronicleop:EntityDerive")]
+    EntityDerive,
+    #[iri("chronicleop:DerivationType")]
+    DerivationType,
+    #[iri("chronicleop:EntityAttach")]
+    EntityAttach,
+    #[iri("chronicleop:UsedEntityName")]
+    UsedEntityName,
+    #[iri("chronicleop:SetAttributes")]
+    SetAttributes,
+    #[iri("chronicleop:Attributes")]
+    Attributes,
+    #[iri("chronicleop:Attribute")]
+    Attribute,
+    #[iri("chronicleop:DomaintypeId")]
+    DomaintypeId,
+}
+
+#[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("prov" = "http://www.w3.org/ns/prov#")]
 pub enum Prov {
     #[iri("prov:Agent")]
@@ -77,9 +138,9 @@ pub enum Chronicle {
     Value,
 }
 
-/// Operarations to format specific Iri kinds, using percentage encoding to ensure they are infallible
+/// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible
 impl Chronicle {
-    const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
+    pub const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
 
     fn encode(s: &str) -> String {
         percent_encode(s.as_bytes(), NON_ALPHANUMERIC).to_string()
@@ -133,7 +194,7 @@ impl Chronicle {
 
     pub fn attachment(entity_name: &Name, signature: impl AsRef<str>) -> IriBuf {
         IriBuf::new(&format!(
-            "{}attachment:{}:{}",
+            "{}evidence:{}:{}",
             Self::PREFIX,
             Self::encode(entity_name.as_str()),
             Self::encode(signature.as_ref())

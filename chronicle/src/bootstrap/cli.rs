@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::Infallible, path::PathBuf};
+use std::{collections::BTreeMap, convert::Infallible, path::PathBuf};
 
 use api::ApiError;
 use clap::{builder::PossibleValuesParser, *};
@@ -242,7 +242,7 @@ fn attributes_from(
                     },
                 ))
             })
-            .collect::<Result<HashMap<_, _>, _>>()?,
+            .collect::<Result<BTreeMap<_, _>, _>>()?,
     })
 }
 

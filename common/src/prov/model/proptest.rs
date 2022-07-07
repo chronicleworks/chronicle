@@ -7,8 +7,9 @@ use uuid::Uuid;
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::*, ActivityId, AgentId, Association, Delegation, Derivation, DomaintypeId,
-        EntityId, Generation, IdentityId, Name, NamePart, NamespaceId, ProvModel, Useage, UuidPart,
+        operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, Delegation,
+        Derivation, DomaintypeId, EntityId, Generation, IdentityId, Name, NamePart, NamespaceId,
+        ProvModel, Useage, UuidPart,
     },
 };
 
@@ -195,9 +196,9 @@ prop_compose! {
             id,
             locator,
             agent,
-            signature,
-            identityid,
-            signature_time
+            signature: Some(signature),
+            identityid: Some(identityid),
+            signature_time: Some(signature_time),
         }
     }
 }

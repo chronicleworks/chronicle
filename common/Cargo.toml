@@ -58,6 +58,7 @@ json = "0.12.4"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
+insta = { version = "1.14.0", features = ["redactions", "toml"] }
 proptest = "1.0.0"
 
 [features]
