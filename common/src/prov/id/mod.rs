@@ -294,8 +294,8 @@ impl FromStr for ChronicleIri {
             ["domaintype", ..] => Ok(DomaintypeId::try_from(iri.as_iri()?)?.into()),
             ["evidence", ..] => Ok(EvidenceId::try_from(iri.as_iri()?)?.into()),
             ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
-            ["assocation", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
-            ["delegation", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
+            ["association", ..] => Ok(AssociationId::try_from(iri.as_iri()?)?.into()),
+            ["delegation", ..] => Ok(DelegationId::try_from(iri.as_iri()?)?.into()),
             _ => Err(ParseIriError::UnparsableIri { iri }),
         }
     }
@@ -445,7 +445,7 @@ impl<'a> TryFrom<Iri<'a>> for DelegationId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, delegate, responsible, activity, role] => Ok(Self {
+            [_, delegate, responsible, _activity, role] => Ok(Self {
                 delegate: Name::from(delegate),
                 responsible: Name::from(responsible),
                 activity: optional_component("activity", role)?.map(Name::from),

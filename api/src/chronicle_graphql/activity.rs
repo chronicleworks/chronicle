@@ -30,8 +30,8 @@ pub async fn was_associated_with<'a>(
 
     let res = association::table
         .filter(dsl::activity_id.eq(id))
-        .order(dsl::offset)
         .inner_join(crate::persistence::schema::agent::table)
+        .order(crate::persistence::schema::agent::name)
         .select(Agent::as_select())
         .load::<Agent>(&mut connection)?;
 
@@ -47,8 +47,8 @@ pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<E
 
     let res = useage::table
         .filter(dsl::activity_id.eq(id))
-        .order(dsl::offset)
         .inner_join(crate::persistence::schema::entity::table)
+        .order(crate::persistence::schema::entity::name)
         .select(Entity::as_select())
         .load::<Entity>(&mut connection)?;
 

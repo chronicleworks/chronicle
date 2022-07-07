@@ -9,7 +9,10 @@ use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
-use common::k256::ecdsa::{signature::Signer, Signature};
+use common::{
+    k256::ecdsa::{signature::Signer, Signature},
+    prov::{operations::WasAssociatedWith, Role},
+};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
@@ -364,7 +367,7 @@ where
 
                 let id = EntityId::from_name(&name);
 
-                let create = ChronicleOperation::GenerateEntity(WasGeneratedBy {
+                let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id: id.clone(),
                     activity: ActivityId::from_name(&activity.name),
@@ -475,7 +478,7 @@ where
 
                 let id = EntityId::from_name(&name);
 
-                let create = ChronicleOperation::CreateEntity(EntityExists {
+                let create = ChronicleOperation::EntityExists(EntityExists {
                     namespace: namespace.clone(),
                     name: name.clone(),
                 });
@@ -523,7 +526,7 @@ where
                     .store
                     .disambiguate_activity_name(connection, &name, &namespace)?;
 
-                let create = ChronicleOperation::CreateActivity(ActivityExists {
+                let create = ChronicleOperation::ActivityExists(ActivityExists {
                     namespace: namespace.clone(),
                     name: name.clone(),
                 });
@@ -571,7 +574,7 @@ where
                     .store
                     .disambiguate_agent_name(connection, &name, &namespace)?;
 
-                let create = ChronicleOperation::CreateAgent(AgentExists {
+                let create = ChronicleOperation::AgentExists(AgentExists {
                     name: name.to_owned(),
                     namespace: namespace.clone(),
                 });
@@ -644,7 +647,8 @@ where
                 delegate,
                 activity,
                 namespace,
-            }) => self.delegate(id, namespace, delegate, activity).await,
+                role,
+            }) => self.delegate(namespace, id, delegate, activity, role).await,
             ApiCommand::Activity(ActivityCommand::Create {
                 name,
                 namespace,
@@ -667,6 +671,12 @@ where
                 namespace,
                 activity,
             }) => self.activity_use(id, namespace, activity).await,
+            ApiCommand::Activity(ActivityCommand::Associate {
+                id,
+                namespace,
+                responsible,
+                role,
+            }) => self.associate(namespace, responsible, id, role).await,
             ApiCommand::Entity(EntityCommand::Create {
                 name,
                 namespace,
@@ -701,13 +711,14 @@ where
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn delegate(
         &self,
-        id: AgentId,
         namespace: Name,
+        responsible_id: AgentId,
         delegate_id: AgentId,
         activity_id: Option<ActivityId>,
+        role: Option<Role>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
 
@@ -717,18 +728,55 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-                    namespace,
-                    id: id.clone(),
-                    activity_id: activity_id.to_owned(),
-                    delegate_id: delegate_id.to_owned(),
-                });
+                let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
+                    &namespace,
+                    &responsible_id,
+                    &delegate_id,
+                    activity_id.as_ref(),
+                    role,
+                ));
 
                 to_apply.push(tx);
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
                 Ok(ApiResponse::submission(
-                    id,
+                    responsible_id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
+    #[instrument(skip(self))]
+    async fn associate(
+        &self,
+        namespace: Name,
+        responsible_id: AgentId,
+        activity_id: ActivityId,
+        role: Option<Role>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
+                    &namespace,
+                    &activity_id,
+                    &responsible_id,
+                    role,
+                ));
+
+                to_apply.push(tx);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(
+                    responsible_id,
                     ProvModel::from_tx(&to_apply),
                     correlation_id,
                 ))
@@ -991,11 +1039,14 @@ where
 
                 let id = ActivityId::from_name(&name);
                 to_apply.push(ChronicleOperation::StartActivity(StartActivity {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
-                    agent: AgentId::from_name(&agent.name),
                     time: time.unwrap_or_else(Utc::now),
                 }));
+
+                to_apply.push(ChronicleOperation::WasAssociatedWith(
+                    WasAssociatedWith::new(&namespace, &id, &AgentId::from_name(&agent.name), None),
+                ));
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
@@ -1048,11 +1099,14 @@ where
 
                 let id = ActivityId::from_name(&activity.name);
                 to_apply.push(ChronicleOperation::EndActivity(EndActivity {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
-                    agent: AgentId::from_name(&agent.name),
                     time: time.unwrap_or_else(Utc::now),
                 }));
+
+                to_apply.push(ChronicleOperation::WasAssociatedWith(
+                    WasAssociatedWith::new(&namespace, &id, &AgentId::from_name(&agent.name), None),
+                ));
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 

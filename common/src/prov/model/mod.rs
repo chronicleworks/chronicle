@@ -18,9 +18,10 @@ use crate::attributes::{Attribute, Attributes};
 use super::{
     id,
     operations::{
-        ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, Associate, ChronicleOperation,
+        ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
+        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
+        WasGeneratedBy,
     },
     ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
     IdentityId, Name, NamePart, NamespaceId, PublicKeyPart, Role, UuidPart,
@@ -281,6 +282,7 @@ pub struct Derivation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Delegation {
+    pub namespace_id: NamespaceId,
     pub id: DelegationId,
     pub delegate_id: AgentId,
     pub responsible_id: AgentId,
@@ -290,32 +292,52 @@ pub struct Delegation {
 
 impl Delegation {
     pub fn new(
+        namespace_id: &NamespaceId,
         delegate_id: &AgentId,
         responsible_id: &AgentId,
         activity_id: Option<&ActivityId>,
         role: Option<Role>,
     ) -> Self {
         Self {
+            namespace_id: namespace_id.clone(),
             id: DelegationId::from_component_ids(
-                &delegate_id,
-                &responsible_id,
+                delegate_id,
+                responsible_id,
                 activity_id,
                 role.as_ref(),
             ),
             delegate_id: delegate_id.clone(),
             responsible_id: responsible_id.clone(),
             activity_id: activity_id.cloned(),
-            role: role.clone(),
+            role,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Association {
+    pub namespace_id: NamespaceId,
     pub id: AssociationId,
     pub agent_id: AgentId,
     pub activity_id: ActivityId,
     pub role: Option<Role>,
+}
+
+impl Association {
+    pub fn new(
+        namespace_id: &NamespaceId,
+        agent_id: &AgentId,
+        activity_id: &ActivityId,
+        role: Option<Role>,
+    ) -> Self {
+        Self {
+            namespace_id: namespace_id.clone(),
+            id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
+            agent_id: agent_id.clone(),
+            activity_id: activity_id.clone(),
+            role,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -465,14 +487,14 @@ impl ProvModel {
     /// Append a derivation to the model
     pub fn was_derived_from(
         &mut self,
-        namespace: NamespaceId,
+        namespace_id: NamespaceId,
         typ: Option<DerivationType>,
         used_id: EntityId,
         id: EntityId,
         activity_id: Option<ActivityId>,
     ) {
         self.derivation
-            .entry((namespace, id.clone()))
+            .entry((namespace_id, id.clone()))
             .or_insert_with(Vec::new)
             .push(Derivation {
                 typ,
@@ -483,20 +505,21 @@ impl ProvModel {
     }
 
     /// Append a delegation to the model
-    pub fn acted_on_behalf_of(
+    pub fn qualified_delegation(
         &mut self,
-        namespace: &NamespaceId,
+        namespace_id: &NamespaceId,
         responsible_id: &AgentId,
         delegate_id: &AgentId,
         activity_id: Option<ActivityId>,
         role: Option<Role>,
     ) {
         self.delegation
-            .entry((namespace.clone(), responsible_id.clone()))
+            .entry((namespace_id.clone(), responsible_id.clone()))
             .or_insert_with(Vec::new)
             .push(Delegation {
+                namespace_id: namespace_id.clone(),
                 id: DelegationId::from_component_ids(
-                    &delegate_id,
+                    delegate_id,
                     responsible_id,
                     activity_id.as_ref(),
                     role.as_ref(),
@@ -508,17 +531,18 @@ impl ProvModel {
             });
     }
 
-    pub fn was_associated_with(
+    pub fn qualified_association(
         &mut self,
-        namespace: &NamespaceId,
+        namespace_id: &NamespaceId,
         activity_id: &ActivityId,
         agent_id: &AgentId,
         role: Option<Role>,
     ) {
         self.association
-            .entry((namespace.clone(), activity_id.clone()))
+            .entry((namespace_id.clone(), activity_id.clone()))
             .or_insert_with(std::vec::Vec::new)
             .push(Association {
+                namespace_id: namespace_id.clone(),
                 id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
                 agent_id: agent_id.clone(),
                 activity_id: activity_id.clone(),
@@ -657,7 +681,7 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&id);
             }
-            ChronicleOperation::CreateAgent(AgentExists {
+            ChronicleOperation::AgentExists(AgentExists {
                 namespace, name, ..
             }) => {
                 let id = AgentId::from_name(&name);
@@ -668,7 +692,7 @@ impl ProvModel {
                 );
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-                id,
+                id: _,
                 namespace,
                 delegate_id,
                 activity_id,
@@ -691,7 +715,7 @@ impl ProvModel {
                         .or_insert_with(|| Activity::exists(namespace.clone(), activity_id));
                 }
 
-                self.acted_on_behalf_of(
+                self.qualified_delegation(
                     &namespace,
                     &responsible_id,
                     &delegate_id,
@@ -712,7 +736,7 @@ impl ProvModel {
                     .or_insert_with(|| Agent::exists(namespace.clone(), id.clone()));
                 self.new_identity(&namespace, &id, &publickey);
             }
-            ChronicleOperation::CreateActivity(ActivityExists {
+            ChronicleOperation::ActivityExists(ActivityExists {
                 namespace, name, ..
             }) => {
                 let id = ActivityId::from_name(&name);
@@ -725,14 +749,9 @@ impl ProvModel {
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
                 id,
-                agent,
                 time,
             }) => {
                 self.namespace_context(&namespace);
-
-                self.agents
-                    .entry((namespace.clone(), agent.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), agent.clone()));
 
                 // Ensure started <= ended
                 self.activities
@@ -753,14 +772,9 @@ impl ProvModel {
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,
-                agent,
                 time,
             }) => {
                 self.namespace_context(&namespace);
-
-                self.agents
-                    .entry((namespace.clone(), agent.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), agent.clone()));
 
                 // Set our end time, and also the start date if this is a new resource, or the existing resource does not specify a start time
                 // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
@@ -776,14 +790,14 @@ impl ProvModel {
                         activity.ended = Some(time);
                     })
                     .or_insert({
-                        let mut activity = Activity::exists(namespace.clone(), id.clone());
+                        let mut activity = Activity::exists(namespace.clone(), id);
                         activity.ended = Some(time);
                         activity.started = Some(time);
                         activity
                     });
             }
-            ChronicleOperation::Associate(Associate {
-                id,
+            ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
+                id: _,
                 role,
                 namespace,
                 activity_id,
@@ -799,7 +813,7 @@ impl ProvModel {
                     .entry((namespace.clone(), activity_id.clone()))
                     .or_insert_with(|| Activity::exists(namespace.clone(), activity_id.clone()));
 
-                self.was_associated_with(&namespace, &activity_id, &agent_id, role);
+                self.qualified_association(&namespace, &activity_id, &agent_id, role);
             }
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
@@ -819,7 +833,7 @@ impl ProvModel {
 
                 self.used(namespace, &activity, &id);
             }
-            ChronicleOperation::CreateEntity(EntityExists {
+            ChronicleOperation::EntityExists(EntityExists {
                 namespace, name, ..
             }) => {
                 let id = EntityId::from_name(&name);
@@ -829,7 +843,7 @@ impl ProvModel {
                     Entity::exists(namespace, id),
                 );
             }
-            ChronicleOperation::GenerateEntity(WasGeneratedBy {
+            ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
                 activity,

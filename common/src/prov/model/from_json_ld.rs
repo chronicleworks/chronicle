@@ -12,13 +12,13 @@ use crate::{
     attributes::{Attribute, Attributes},
     prov::{
         operations::{
-            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
-            GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamePart, NamespaceId,
-        UuidPart,
+        Role, UuidPart,
     },
 };
 
@@ -105,8 +105,12 @@ impl ProvModel {
                 self.apply_node_as_entity(&o)?;
             } else if o.has_type(&Reference::Id(Chronicle::Identity.as_iri().into())) {
                 self.apply_node_as_identity(&o)?;
-            } else if o.has_type(&Reference::Id(Chronicle::HasAttachment.as_iri().into())) {
+            } else if o.has_type(&Reference::Id(Chronicle::HasEvidence.as_iri().into())) {
                 self.apply_node_as_attachment(&o)?;
+            } else if o.has_type(&Reference::Id(Prov::Delegation.as_iri().into())) {
+                self.apply_node_as_delegation(&o)?;
+            } else if o.has_type(&Reference::Id(Prov::Association.as_iri().into())) {
+                self.apply_node_as_association(&o)?;
             }
         }
 
@@ -158,6 +162,79 @@ impl ProvModel {
         Ok(())
     }
 
+    fn apply_node_as_delegation(&mut self, delegation: &Node) -> Result<(), ProcessorError> {
+        let namespace_id = extract_namespace(delegation)?;
+        self.namespace_context(&namespace_id);
+
+        let role = extract_scalar_prop(&Prov::HadRole, delegation)
+            .ok()
+            .and_then(|x| x.as_str().map(Role::from));
+
+        let responsible_id = extract_reference_ids(&Prov::Responsible, delegation)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: delegation.as_json(),
+                iri: Prov::Responsible.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
+
+        let delegate_id = extract_reference_ids(&Prov::ActedOnBehalfOf, delegation)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: delegation.as_json(),
+                iri: Prov::ActedOnBehalfOf.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
+
+        let activity_id = extract_reference_ids(&Prov::HadActivity, delegation)?
+            .into_iter()
+            .next()
+            .map(|x| ActivityId::try_from(x.as_iri()))
+            .transpose()?;
+
+        self.qualified_delegation(
+            &namespace_id,
+            &responsible_id,
+            &delegate_id,
+            activity_id,
+            role,
+        );
+        Ok(())
+    }
+
+    fn apply_node_as_association(&mut self, association: &Node) -> Result<(), ProcessorError> {
+        let namespace_id = extract_namespace(association)?;
+        self.namespace_context(&namespace_id);
+
+        let role = extract_scalar_prop(&Prov::HadRole, association)
+            .ok()
+            .and_then(|x| x.as_str().map(Role::from));
+
+        let agent_id = extract_reference_ids(&Prov::Responsible, association)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: association.as_json(),
+                iri: Prov::Responsible.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
+
+        let activity_id = extract_reference_ids(&Prov::HadActivity, association)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: association.as_json(),
+                iri: Prov::HadActivity.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(ActivityId::try_from(x.as_iri())?))?;
+
+        self.qualified_association(&namespace_id, &activity_id, &agent_id, role);
+
+        Ok(())
+    }
+
     fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
         let id = AgentId::try_from(Iri::from_str(
             agent
@@ -172,13 +249,6 @@ impl ProvModel {
         self.namespace_context(&namespaceid);
 
         let attributes = Self::extract_attributes(agent)?;
-
-        for delegated in extract_reference_ids(&Prov::ActedOnBehalfOf, agent)?
-            .into_iter()
-            .map(|id| AgentId::try_from(id.as_iri()))
-        {
-            self.acted_on_behalf_of(namespaceid.clone(), id.clone(), delegated?, None);
-        }
 
         for identity in extract_reference_ids(&Chronicle::HasIdentity, agent)?
             .into_iter()
@@ -227,11 +297,6 @@ impl ProvModel {
             .map(|id| EntityId::try_from(id.as_iri()))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let wasassociatedwith = extract_reference_ids(&Prov::WasAssociatedWith, activity)?
-            .into_iter()
-            .map(|id| AgentId::try_from(id.as_iri()))
-            .collect::<Result<Vec<_>, _>>()?;
-
         let attributes = Self::extract_attributes(activity)?;
 
         let mut activity = Activity::exists(namespaceid.clone(), id).has_attributes(attributes);
@@ -246,10 +311,6 @@ impl ProvModel {
 
         for entity in used {
             self.used(namespaceid.clone(), &activity.id, &entity);
-        }
-
-        for agent in wasassociatedwith {
-            self.was_associated_with(&namespaceid, &activity.id, &agent);
         }
 
         self.add_activity(activity);
@@ -357,14 +418,14 @@ impl ProvModel {
             .map(|id| ActivityId::try_from(id.as_iri()))
             .collect::<Result<Vec<_>, _>>()?;
 
-        for attachment in extract_reference_ids(&Chronicle::HasAttachment, entity)?
+        for attachment in extract_reference_ids(&Chronicle::HasEvidence, entity)?
             .into_iter()
             .map(|id| EvidenceId::try_from(id.as_iri()))
         {
             self.has_attachment(namespaceid.clone(), id.clone(), &attachment?);
         }
 
-        for attachment in extract_reference_ids(&Chronicle::HadAttachment, entity)?
+        for attachment in extract_reference_ids(&Chronicle::HadEvidence, entity)?
             .into_iter()
             .map(|id| EvidenceId::try_from(id.as_iri()))
         {
@@ -432,7 +493,9 @@ trait Operation {
     fn operation_namespace(&self) -> NamespaceId;
     fn operation_agent(&self) -> AgentId;
     fn operation_delegate(&self) -> AgentId;
+    fn operation_responsible(&self) -> AgentId;
     fn operation_activity(&self) -> Option<ActivityId>;
+    fn operation_role(&self) -> Option<Role>;
     fn operation_key(&self) -> String;
     fn operation_start_time(&self) -> String;
     fn operation_end_time(&self) -> String;
@@ -571,6 +634,18 @@ impl Operation for Node {
         }
         a
     }
+
+    fn operation_responsible(&self) -> AgentId {
+        let mut name_objects = self.get(&Reference::Id(
+            ChronicleOperations::ResponsibleId.as_iri().into(),
+        ));
+        let name = name_objects.next().unwrap().as_str().unwrap();
+        AgentId::from_name(name)
+    }
+
+    fn operation_role(&self) -> Option<Role> {
+        todo!()
+    }
 }
 
 impl ChronicleOperation {
@@ -581,14 +656,11 @@ impl ChronicleOperation {
                 inner: e.to_string(),
             })
             .await?;
-        // assert!(output.len() == 1);
         if let Some(object) = output.into_iter().next() {
             let o = object
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
-            // let id = o.id().unwrap().as_str();
-            // assert!(id == "_:n1");
             if o.has_type(&Reference::Id(
                 ChronicleOperations::CreateNamespace.as_iri().into(),
             )) {
@@ -601,12 +673,12 @@ impl ChronicleOperation {
                     uuid,
                 }))
             } else if o.has_type(&Reference::Id(
-                ChronicleOperations::CreateAgent.as_iri().into(),
+                ChronicleOperations::AgentExists.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
                 let agent = o.operation_agent();
                 let name = agent.name_part();
-                Ok(ChronicleOperation::CreateAgent(CreateAgent {
+                Ok(ChronicleOperation::AgentExists(AgentExists {
                     namespace,
                     name: name.into(),
                 }))
@@ -614,15 +686,19 @@ impl ChronicleOperation {
                 ChronicleOperations::AgentActsOnBehalfOf.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
-                let id = o.operation_agent();
                 let delegate_id = o.operation_delegate();
+                let responsible_id = o.operation_responsible();
                 let activity_id = o.operation_activity();
-                Ok(ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-                    namespace,
-                    id,
-                    delegate_id,
-                    activity_id,
-                }))
+
+                Ok(ChronicleOperation::AgentActsOnBehalfOf(
+                    ActsOnBehalfOf::new(
+                        &namespace,
+                        &responsible_id,
+                        &delegate_id,
+                        activity_id.as_ref(),
+                        None,
+                    ),
+                ))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::RegisterKey.as_iri().into(),
             )) {
@@ -635,12 +711,12 @@ impl ChronicleOperation {
                     publickey,
                 }))
             } else if o.has_type(&Reference::Id(
-                ChronicleOperations::CreateActivity.as_iri().into(),
+                ChronicleOperations::ActivityExists.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
                 let activity_id = o.operation_activity().unwrap();
                 let name = activity_id.name_part().to_owned();
-                Ok(ChronicleOperation::CreateActivity(CreateActivity {
+                Ok(ChronicleOperation::ActivityExists(ActivityExists {
                     namespace,
                     name,
                 }))
@@ -649,12 +725,10 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_activity().unwrap();
-                let agent = o.operation_agent();
                 let time: DateTime<Utc> = o.operation_start_time().parse().unwrap();
                 Ok(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
                     id,
-                    agent,
                     time,
                 }))
             } else if o.has_type(&Reference::Id(
@@ -662,12 +736,10 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_activity().unwrap();
-                let agent = o.operation_agent();
                 let time: DateTime<Utc> = o.operation_end_time().parse().unwrap();
                 Ok(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
                     id,
-                    agent,
                     time,
                 }))
             } else if o.has_type(&Reference::Id(
@@ -682,33 +754,33 @@ impl ChronicleOperation {
                     activity,
                 }))
             } else if o.has_type(&Reference::Id(
-                ChronicleOperations::CreateEntity.as_iri().into(),
+                ChronicleOperations::EntityExists.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
                 let entity = o.operation_entity();
                 let id = entity.name_part().into();
-                Ok(ChronicleOperation::CreateEntity(CreateEntity {
+                Ok(ChronicleOperation::EntityExists(EntityExists {
                     namespace,
                     name: id,
                 }))
             } else if o.has_type(&Reference::Id(
-                ChronicleOperations::GenerateEntity.as_iri().into(),
+                ChronicleOperations::WasGeneratedBy.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
                 let activity = o.operation_activity().unwrap();
-                Ok(ChronicleOperation::GenerateEntity(GenerateEntity {
+                Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id,
                     activity,
                 }))
             } else if o.has_type(&Reference::Id(
-                ChronicleOperations::EntityAttach.as_iri().into(),
+                ChronicleOperations::EntityHasEvidence.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
                 let agent = o.operation_agent();
-                Ok(ChronicleOperation::EntityAttach(EntityAttach {
+                Ok(ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                     namespace,
                     identityid: None,
                     id,
@@ -793,13 +865,13 @@ mod test {
         attributes::{Attribute, Attributes},
         prov::{
             operations::{
-                ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-                CreateEntity, CreateNamespace, DerivationType, EntityAttach, EntityDerive,
-                GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+                ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+                CreateNamespace, DerivationType, EntityDerive, EntityExists, EntityHasEvidence,
+                RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
             },
             to_json_ld::ToJson,
-            ActivityId, AgentId, DomaintypeId, EntityId, Name, NamePart, NamespaceId,
-            ProcessorError,
+            ActivityId, AgentId, DelegationId, DomaintypeId, EntityId, Name, NamePart, NamespaceId,
+            ProcessorError, Role,
         },
     };
 
@@ -944,15 +1016,16 @@ mod test {
 
         let id = EntityId::from_name("test_entity");
         let agent = AgentId::from_name("test_agent");
-        let operation: ChronicleOperation = ChronicleOperation::EntityAttach(EntityAttach {
-            namespace,
-            identityid: None,
-            id,
-            locator: None,
-            agent,
-            signature: None,
-            signature_time: None,
-        });
+        let operation: ChronicleOperation =
+            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
+                namespace,
+                identityid: None,
+                id,
+                locator: None,
+                agent,
+                signature: None,
+                signature_time: None,
+            });
 
         let serialized_operation = operation.to_json();
         let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
@@ -973,7 +1046,7 @@ mod test {
         let id = EntityId::from_name("test_entity");
         let activity = ActivityId::from_name("test_activity");
         let operation: ChronicleOperation =
-            super::ChronicleOperation::GenerateEntity(GenerateEntity {
+            super::ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
                 activity,
@@ -996,7 +1069,7 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
 
         let id = NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
-        let operation: ChronicleOperation = ChronicleOperation::CreateEntity(CreateEntity {
+        let operation: ChronicleOperation = ChronicleOperation::EntityExists(EntityExists {
             namespace,
             name: id,
         });
@@ -1051,7 +1124,6 @@ mod test {
             super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
                 namespace,
                 id,
-                agent,
                 time,
             });
 
@@ -1080,7 +1152,6 @@ mod test {
         let operation: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
             namespace,
             id,
-            agent,
             time,
         });
 
@@ -1102,7 +1173,7 @@ mod test {
         let name = NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
 
         let operation: ChronicleOperation =
-            ChronicleOperation::CreateActivity(CreateActivity { namespace, name });
+            ChronicleOperation::ActivityExists(ActivityExists { namespace, name });
 
         let serialized_operation = operation.to_json();
         let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
@@ -1139,46 +1210,30 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_create_agent_acts_on_behalf_of_no_activity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = AgentId::from_name("test_agent");
-        let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = None;
-
-        let operation: ChronicleOperation =
-            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-                namespace,
-                id,
-                delegate_id,
-                activity_id,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_create_agent_acts_on_behalf_of() -> Result<(), ProcessorError> {
         let uuid =
             Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = AgentId::from_name("test_agent");
+        let responsible_id = AgentId::from_name("test_agent");
         let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = Some(ActivityId::from_name("test_activity"));
+        let activity_id = ActivityId::from_name("test_activity");
+        let role = Role::from("test_role");
+
+        let id = DelegationId::from_component_ids(
+            &delegate_id,
+            &responsible_id,
+            Some(&activity_id),
+            Some(&role),
+        );
 
         let operation: ChronicleOperation =
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                 namespace,
-                id,
                 delegate_id,
-                activity_id,
+                activity_id: Some(activity_id),
+                role: Some(role),
+                responsible_id,
+                id,
             });
 
         let serialized_operation = operation.to_json();
@@ -1197,7 +1252,7 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
         let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
         let operation: ChronicleOperation =
-            ChronicleOperation::CreateAgent(CreateAgent { namespace, name });
+            ChronicleOperation::AgentExists(AgentExists { namespace, name });
         let serialized_operation = operation.to_json();
         let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
         assert!(

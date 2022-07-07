@@ -53,8 +53,8 @@ pub async fn acted_on_behalf_of<'a>(
 
     Ok(delegation::table
         .filter(dsl::responsible_id.eq(id))
-        .order(dsl::offset)
         .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
+        .order(agentdsl::name)
         .select(Agent::as_select())
         .load::<Agent>(&mut connection)?)
 }

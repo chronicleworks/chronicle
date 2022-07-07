@@ -10,7 +10,7 @@ use crate::{
     attributes::Attributes,
     prov::{
         operations::DerivationType, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
-        EntityId, Name, ProvModel,
+        EntityId, Name, ProvModel, Role,
     },
 };
 
@@ -53,6 +53,7 @@ pub enum AgentCommand {
         delegate: AgentId,
         activity: Option<ActivityId>,
         namespace: Name,
+        role: Option<Role>,
     },
 }
 
@@ -84,6 +85,12 @@ pub enum ActivityCommand {
         id: EntityId,
         namespace: Name,
         activity: Option<ActivityId>,
+    },
+    Associate {
+        id: ActivityId,
+        namespace: Name,
+        responsible: AgentId,
+        role: Option<Role>,
     },
 }
 

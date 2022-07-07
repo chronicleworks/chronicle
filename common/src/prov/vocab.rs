@@ -9,59 +9,65 @@ use super::{ActivityId, AgentId, Name, NamePart, Role};
 pub enum ChronicleOperations {
     #[iri("chronicleop:CreateNamespace")]
     CreateNamespace,
-    #[iri("chronicleop:NamespaceName")]
+    #[iri("chronicleop:namespaceName")]
     NamespaceName,
-    #[iri("chronicleop:NamespaceUuid")]
+    #[iri("chronicleop:namespaceUuid")]
     NamespaceUuid,
-    #[iri("chronicleop:CreateAgent")]
-    CreateAgent,
-    #[iri("chronicleop:AgentName")]
+    #[iri("chronicleop:AgentExists")]
+    AgentExists,
+    #[iri("chronicleop:agentName")]
     AgentName,
-    #[iri("chronicleop:AgentUuid")]
+    #[iri("chronicleop:agentUuid")]
     AgentUuid,
     #[iri("chronicleop:AgentActsOnBehalfOf")]
     AgentActsOnBehalfOf,
-    #[iri("chronicleop:DelegateId")]
+    #[iri("chronicleop:delegateId")]
     DelegateId,
+    #[iri("chronicleop:responsibleId")]
+    ResponsibleId,
     #[iri("chronicleop:RegisterKey")]
     RegisterKey,
-    #[iri("chronicleop:PublicKey")]
+    #[iri("chronicleop:publicKey")]
     PublicKey,
-    #[iri("chronicleop:CreateActivity")]
-    CreateActivity,
-    #[iri("chronicleop:ActivityName")]
+    #[iri("chronicleop:ActivityExists")]
+    ActivityExists,
+    #[iri("chronicleop:activityName")]
     ActivityName,
     #[iri("chronicleop:StartActivity")]
     StartActivity,
-    #[iri("chronicleop:StartActivityTime")]
+    #[iri("chronicleop:startActivityTime")]
     StartActivityTime,
-    #[iri("chronicleop:EndActivity")]
+    #[iri("chronicleop:endactivity")]
     EndActivity,
-    #[iri("chronicleop:EndActivityTime")]
+    #[iri("chronicleop:endActivityTime")]
     EndActivityTime,
+    #[iri("chronicleop:WasAssociatedWith")]
+    WasAssociatedWith,
     #[iri("chronicleop:ActivityUses")]
     ActivityUses,
-    #[iri("chronicleop:EntityName")]
+    #[iri("chronicleop:entityName")]
     EntityName,
-    #[iri("chronicleop:CreateEntity")]
-    CreateEntity,
-    #[iri("chronicleop:GenerateEntity")]
-    GenerateEntity,
+    #[iri("chronicleop:role")]
+    Role,
+    #[iri("chronicleop:EntityExists")]
+    EntityExists,
+    #[iri("chronicleop:WasGeneratedBy")]
+    WasGeneratedBy,
     #[iri("chronicleop:EntityDerive")]
     EntityDerive,
-    #[iri("chronicleop:DerivationType")]
+    #[iri("chronicleop:derivationType")]
     DerivationType,
-    #[iri("chronicleop:EntityAttach")]
-    EntityAttach,
-    #[iri("chronicleop:UsedEntityName")]
+    #[iri("chronicleop:EntityHasEvidence")]
+    EntityHasEvidence,
+    #[iri("chronicleop:usedEntityName")]
     UsedEntityName,
     #[iri("chronicleop:SetAttributes")]
     SetAttributes,
-    #[iri("chronicleop:Attributes")]
+    #[iri("chronicleop:attributes")]
     Attributes,
-    #[iri("chronicleop:Attribute")]
+    #[iri("chronicleop:attribute")]
     Attribute,
-    #[iri("chronicleop:DomaintypeId")]
+    #[iri("chronicleop:domaintypeId")]
     DomaintypeId,
 }
 
@@ -77,9 +83,9 @@ pub enum Prov {
     #[iri("prov:wasAssociatedWith")]
     WasAssociatedWith,
     #[iri("prov:qualifiedAssociation")]
-    Association,
-    #[iri("prov:Association")]
     QualifiedAssociation,
+    #[iri("prov:Association")]
+    Association,
     #[iri("prov:wasGeneratedBy")]
     WasGeneratedBy,
     #[iri("prov:used")]
@@ -132,12 +138,12 @@ pub enum Chronicle {
     Namespace,
     #[iri("chronicle:hasNamespace")]
     HasNamespace,
-    #[iri("chronicle:Attachment")]
-    Attachment,
-    #[iri("chronicle:hasAttachment")]
-    HasAttachment,
-    #[iri("chronicle:hadAttachment")]
-    HadAttachment,
+    #[iri("chronicle:Evidence")]
+    Evidence,
+    #[iri("chronicle:hasEvidence")]
+    HasEvidence,
+    #[iri("chronicle:hadEvidence")]
+    HadEvidence,
     #[iri("chronicle:publicKey")]
     PublicKey,
     #[iri("chronicle:entitySignature")]
@@ -232,7 +238,12 @@ impl Chronicle {
             Self::PREFIX,
             Self::encode(agent.name_part().as_str()),
             Self::encode(activity.name_part().as_ref()),
-            Self::encode(&role.map(|x| x.to_string()).unwrap_or("".to_owned())),
+            Self::encode(
+                &role
+                    .as_ref()
+                    .map(|x| x.to_string())
+                    .unwrap_or_else(|| "".to_owned())
+            ),
         ))
         .unwrap()
     }
@@ -248,8 +259,13 @@ impl Chronicle {
             Self::PREFIX,
             Self::encode(delegate.name_part().as_str()),
             Self::encode(responsible.name_part().as_str()),
-            Self::encode(role.map(|x| x.as_str()).unwrap_or("")),
-            Self::encode(activity.map(|x| x.name_part().as_str()).unwrap_or("")),
+            Self::encode(role.as_ref().map(|x| x.as_str()).unwrap_or("")),
+            Self::encode(
+                activity
+                    .as_ref()
+                    .map(|x| x.name_part().as_str())
+                    .unwrap_or("")
+            ),
         ))
         .unwrap()
     }

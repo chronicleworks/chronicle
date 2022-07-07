@@ -490,32 +490,32 @@ impl Store {
         }
 
         for ((namespaceid, _), association) in model.association.iter() {
-            for (offset, association) in association.iter().enumerate() {
-                self.apply_was_associated_with(connection, namespaceid, offset, association)?;
+            for association in association.iter() {
+                self.apply_was_associated_with(connection, namespaceid, association)?;
             }
         }
 
         for ((namespaceid, _), useage) in model.useage.iter() {
-            for (offset, useage) in useage.iter().enumerate() {
-                self.apply_used(connection, namespaceid, offset, useage)?;
+            for useage in useage.iter() {
+                self.apply_used(connection, namespaceid, useage)?;
             }
         }
 
         for ((namespaceid, _), generation) in model.generation.iter() {
-            for (offset, generation) in generation.iter().enumerate() {
-                self.apply_was_generated_by(connection, namespaceid, offset, generation)?;
+            for generation in generation.iter() {
+                self.apply_was_generated_by(connection, namespaceid, generation)?;
             }
         }
 
         for ((namespaceid, _), derivation) in model.derivation.iter() {
-            for (offset, derivation) in derivation.iter().enumerate() {
-                self.apply_derivation(connection, namespaceid, offset, derivation)?;
+            for derivation in derivation.iter() {
+                self.apply_derivation(connection, namespaceid, derivation)?;
             }
         }
 
         for ((namespaceid, _), delegation) in model.delegation.iter() {
-            for (offset, delegation) in delegation.iter().enumerate() {
-                self.apply_delegation(connection, namespaceid, offset, delegation)?;
+            for delegation in delegation.iter() {
+                self.apply_delegation(connection, namespaceid, delegation)?;
             }
         }
 
@@ -556,7 +556,6 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &NamespaceId,
-        offset: usize,
         useage: &Useage,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
@@ -574,7 +573,6 @@ impl Store {
         use schema::useage::dsl as link;
         diesel::insert_or_ignore_into(schema::useage::table)
             .values((
-                &link::offset.eq(offset as i32),
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
             ))
@@ -588,7 +586,6 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespaceid: &common::prov::NamespaceId,
-        offset: usize,
         association: &Association,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
@@ -606,9 +603,9 @@ impl Store {
         use schema::association::dsl as asoc;
         diesel::insert_or_ignore_into(schema::association::table)
             .values((
-                &asoc::offset.eq(offset as i32),
                 &asoc::activity_id.eq(storedactivity.id),
                 &asoc::agent_id.eq(storedagent.id),
+                &asoc::role.eq(association.role.as_ref()),
             ))
             .execute(connection)?;
 
@@ -620,7 +617,6 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &common::prov::NamespaceId,
-        offset: usize,
         delegation: &Delegation,
     ) -> Result<(), StoreError> {
         let responsible = self.agent_by_agent_name_and_namespace(
@@ -653,10 +649,10 @@ impl Store {
         use schema::delegation::dsl as link;
         diesel::insert_or_ignore_into(schema::delegation::table)
             .values((
-                &link::offset.eq(offset as i32),
                 &link::responsible_id.eq(responsible.id),
                 &link::delegate_id.eq(delegate.id),
                 &link::activity_id.eq(activity),
+                &link::role.eq(delegation.role.as_ref()),
             ))
             .execute(connection)?;
 
@@ -668,7 +664,6 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &common::prov::NamespaceId,
-        offset: usize,
         derivation: &Derivation,
     ) -> Result<(), StoreError> {
         let stored_generated = self.entity_by_entity_name_and_namespace(
@@ -683,13 +678,25 @@ impl Store {
             namespace,
         )?;
 
+        let stored_activity = derivation
+            .activity_id
+            .as_ref()
+            .map(|activity_id| {
+                self.activity_by_activity_name_and_namespace(
+                    connection,
+                    activity_id.name_part(),
+                    namespace,
+                )
+            })
+            .transpose()?;
+
         use schema::derivation::dsl as link;
         diesel::insert_or_ignore_into(schema::derivation::table)
             .values((
-                &link::offset.eq(offset as i32),
                 &link::used_entity_id.eq(stored_used.id),
                 &link::generated_entity_id.eq(stored_generated.id),
                 &link::typ.eq(derivation.typ),
+                &link::activity_id.eq(stored_activity.map(|activity| activity.id)),
             ))
             .execute(connection)?;
 
@@ -701,7 +708,6 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &common::prov::NamespaceId,
-        offset: usize,
         generation: &Generation,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
@@ -719,7 +725,6 @@ impl Store {
         use schema::generation::dsl as link;
         diesel::insert_or_ignore_into(schema::generation::table)
             .values((
-                &link::offset.eq(offset as i32),
                 &link::activity_id.eq(storedactivity.id),
                 &link::generated_entity_id.eq(storedentity.id),
             ))
@@ -1000,17 +1005,6 @@ impl Store {
                         .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
-
-            for asoc in schema::association::table
-                .filter(schema::association::agent_id.eq(agent.id))
-                .order(schema::association::offset.asc())
-                .inner_join(schema::activity::table)
-                .select(schema::activity::name)
-                .load_iter::<String>(connection)?
-            {
-                let asoc = asoc?;
-                model.was_associated_with(&namespaceid, &ActivityId::from_name(&asoc), &agentid);
-            }
         }
 
         let activities = schema::activity::table
@@ -1050,20 +1044,20 @@ impl Store {
                 },
             );
 
-            for asoc in schema::generation::table
+            for generation in schema::generation::table
                 .filter(schema::generation::activity_id.eq(activity.id))
-                .order(schema::generation::offset.asc())
+                .order(schema::generation::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
                 .load_iter::<String>(connection)?
             {
-                let asoc = asoc?;
+                let asoc = generation?;
                 model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&asoc), &id);
             }
 
             for used in schema::useage::table
                 .filter(schema::useage::activity_id.eq(activity.id))
-                .order(schema::useage::offset.asc())
+                .order(schema::useage::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
                 .load_iter::<String>(connection)?

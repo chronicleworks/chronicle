@@ -109,6 +109,30 @@ pub struct ActsOnBehalfOf {
     pub namespace: NamespaceId,
 }
 
+impl ActsOnBehalfOf {
+    pub fn new(
+        namespace: &NamespaceId,
+        responsible_id: &AgentId,
+        delegate_id: &AgentId,
+        activity_id: Option<&ActivityId>,
+        role: Option<Role>,
+    ) -> Self {
+        Self {
+            namespace: namespace.clone(),
+            id: DelegationId::from_component_ids(
+                delegate_id,
+                responsible_id,
+                activity_id,
+                role.as_ref(),
+            ),
+            role,
+            activity_id: activity_id.cloned(),
+            responsible_id: responsible_id.clone(),
+            delegate_id: delegate_id.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct RegisterKey {
     pub namespace: NamespaceId,
@@ -126,7 +150,6 @@ pub struct ActivityExists {
 pub struct StartActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
-    pub agent: AgentId,
     pub time: DateTime<Utc>,
 }
 
@@ -134,7 +157,6 @@ pub struct StartActivity {
 pub struct EndActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
-    pub agent: AgentId,
     pub time: DateTime<Utc>,
 }
 
@@ -168,7 +190,7 @@ pub struct EntityDerive {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct Associate {
+pub struct WasAssociatedWith {
     pub id: AssociationId,
     pub role: Option<Role>,
     pub namespace: NamespaceId,
@@ -176,13 +198,21 @@ pub struct Associate {
     pub agent_id: AgentId,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct Delegate {
-    pub id: DelegationId,
-    pub role: Option<Role>,
-    pub activity_id: ActivityId,
-    pub responsible_id: AgentId,
-    pub delegate_id: AgentId,
+impl WasAssociatedWith {
+    pub fn new(
+        namespace: &NamespaceId,
+        activity_id: &ActivityId,
+        agent_id: &AgentId,
+        role: Option<Role>,
+    ) -> Self {
+        Self {
+            id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
+            role,
+            namespace: namespace.clone(),
+            activity_id: activity_id.clone(),
+            agent_id: agent_id.clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -218,17 +248,17 @@ pub enum SetAttributes {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
-    CreateAgent(AgentExists),
+    AgentExists(AgentExists),
     AgentActsOnBehalfOf(ActsOnBehalfOf),
     RegisterKey(RegisterKey),
-    CreateActivity(ActivityExists),
+    ActivityExists(ActivityExists),
     StartActivity(StartActivity),
     EndActivity(EndActivity),
     ActivityUses(ActivityUses),
-    CreateEntity(EntityExists),
-    GenerateEntity(WasGeneratedBy),
+    EntityExists(EntityExists),
+    WasGeneratedBy(WasGeneratedBy),
     EntityDerive(EntityDerive),
     EntityHasEvidence(EntityHasEvidence),
     SetAttributes(SetAttributes),
-    Associate(Associate),
+    WasAssociatedWith(WasAssociatedWith),
 }

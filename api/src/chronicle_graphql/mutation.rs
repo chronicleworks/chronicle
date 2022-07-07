@@ -10,7 +10,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
         PathOrFile,
     },
-    prov::{operations::DerivationType, ActivityId, AgentId, EntityId},
+    prov::{operations::DerivationType, ActivityId, AgentId, EntityId, Role},
 };
 
 use crate::ApiDispatch;
@@ -125,6 +125,7 @@ pub async fn acted_on_behalf_of<'a>(
     namespace: Option<String>,
     responsible_id: AgentId,
     delegate_id: AgentId,
+    role: Option<Role>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
@@ -136,6 +137,7 @@ pub async fn acted_on_behalf_of<'a>(
             delegate: delegate_id,
             activity: None,
             namespace,
+            role,
         }))
         .await?;
 

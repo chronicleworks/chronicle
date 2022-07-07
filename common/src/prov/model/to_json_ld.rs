@@ -50,7 +50,7 @@ impl ToJson for ProvModel {
         for ((ns, id), attachment) in self.attachments.iter() {
             let mut attachmentdoc = object! {
                 "@id": (*id.to_string()),
-                "@type": Iri::from(Chronicle::HasAttachment).as_str(),
+                "@type": Iri::from(Chronicle::HasEvidence).as_str(),
                 "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
                 "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
                 "http://blockchaintp.com/chronicle/ns#signedBy": {
@@ -165,15 +165,33 @@ impl ToJson for ProvModel {
                     .insert(Iri::from(Prov::Responsible).as_str(), values)
                     .ok();
 
-                if let Some(role) = association.role {
-                    let mut values = json::Array::new();
+                associationdoc
+                    .insert(
+                        Iri::from(Prov::HadActivity).as_str(),
+                        vec![object! {
+                            "@id": JsonValue::String(association.activity_id.to_string()),
+                        }],
+                    )
+                    .ok();
 
-                    values.push(JsonValue::String(role.to_string()));
-
+                if let Some(role) = &association.role {
                     associationdoc
-                        .insert(Iri::from(Prov::HadRole).as_str(), values)
+                        .insert(
+                            Iri::from(Prov::HadRole).as_str(),
+                            vec![JsonValue::String(role.to_string())],
+                        )
                         .ok();
                 }
+
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@id": JsonValue::String(association.namespace_id.to_string()),
+                });
+
+                associationdoc
+                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
+                    .ok();
 
                 doc.push(associationdoc);
             }
@@ -186,25 +204,23 @@ impl ToJson for ProvModel {
                     "@type": Iri::from(Prov::Delegation).as_str(),
                 };
 
-                if let Some(activity_id) = delegation.activity_id {
-                    let mut values = json::Array::new();
-
-                    values.push(object! {
-                        "@id": JsonValue::String(activity_id.to_string()),
-                    });
-
+                if let Some(activity_id) = &delegation.activity_id {
                     delegationdoc
-                        .insert(Iri::from(Prov::HadActivity).as_str(), values)
+                        .insert(
+                            Iri::from(Prov::HadActivity).as_str(),
+                            vec![object! {
+                                "@id": JsonValue::String(activity_id.to_string()),
+                            }],
+                        )
                         .ok();
                 }
 
-                if let Some(role) = delegation.role {
-                    let mut values = json::Array::new();
-
-                    values.push(JsonValue::String(role.to_string()));
-
+                if let Some(role) = &delegation.role {
                     delegationdoc
-                        .insert(Iri::from(Prov::HadRole).as_str(), values)
+                        .insert(
+                            Iri::from(Prov::HadRole).as_str(),
+                            vec![JsonValue::String(role.to_string())],
+                        )
                         .ok();
                 }
 
@@ -215,6 +231,24 @@ impl ToJson for ProvModel {
 
                 delegationdoc
                     .insert(Iri::from(Prov::Responsible).as_str(), responsible_ids)
+                    .ok();
+
+                let mut delegate_ids = json::Array::new();
+                delegate_ids
+                    .push(object! { "@id": JsonValue::String(delegation.delegate_id.to_string())});
+
+                delegationdoc
+                    .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), delegate_ids)
+                    .ok();
+
+                let mut values = json::Array::new();
+
+                values.push(object! {
+                    "@id": JsonValue::String(delegation.namespace_id.to_string()),
+                });
+
+                delegationdoc
+                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
                     .ok();
 
                 doc.push(delegationdoc);
@@ -369,7 +403,7 @@ impl ToJson for ProvModel {
             if let Some((_, identity)) = self.has_evidence.get(&entity_key) {
                 entitydoc
                     .insert(
-                        Iri::from(Chronicle::HasAttachment).as_str(),
+                        Iri::from(Chronicle::HasEvidence).as_str(),
                         object! {"@id": identity.to_string()},
                     )
                     .ok();
@@ -382,7 +416,7 @@ impl ToJson for ProvModel {
                     values.push(object! { "@id": id.to_string()});
                 }
                 entitydoc
-                    .insert(Iri::from(Chronicle::HadAttachment).as_str(), values)
+                    .insert(Iri::from(Chronicle::HadEvidence).as_str(), values)
                     .ok();
             }
 
@@ -454,8 +488,8 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::CreateAgent(CreateAgent { namespace, name }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::CreateAgent);
+            ChronicleOperation::AgentExists(AgentExists { namespace, name }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::AgentExists);
 
                 o.operate(
                     OperationsId::from_id(namespace.name_part()),
@@ -473,9 +507,11 @@ impl ToJson for ChronicleOperation {
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                 namespace,
-                id,
+                id: _, // This is derivable from components
                 delegate_id,
                 activity_id,
+                role,
+                responsible_id,
             }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::AgentActsOnBehalfOf);
 
@@ -490,14 +526,18 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.operate(
-                    OperationsId::from_id(id.name_part()),
-                    ChronicleOperations::AgentName,
-                );
-
-                o.operate(
                     OperationsId::from_id(delegate_id.name_part()),
                     ChronicleOperations::DelegateId,
                 );
+
+                o.operate(
+                    OperationsId::from_id(responsible_id.name_part()),
+                    ChronicleOperations::ResponsibleId,
+                );
+
+                if let Some(role) = role {
+                    o.operate(OperationsId::from_id(role), ChronicleOperations::Role);
+                }
 
                 if let Some(activity_id) = activity_id {
                     o.operate(
@@ -537,8 +577,8 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::CreateActivity(CreateActivity { namespace, name }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::CreateActivity);
+            ChronicleOperation::ActivityExists(ActivityExists { namespace, name }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::ActivityExists);
 
                 o.operate(
                     OperationsId::from_id(namespace.name_part()),
@@ -560,7 +600,6 @@ impl ToJson for ChronicleOperation {
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
                 id,
-                agent,
                 time,
             }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::StartActivity);
@@ -573,11 +612,6 @@ impl ToJson for ChronicleOperation {
                 o.operate(
                     OperationsId::from_id(namespace.uuid_part()),
                     ChronicleOperations::NamespaceUuid,
-                );
-
-                o.operate(
-                    OperationsId::from_id(agent.name_part()),
-                    ChronicleOperations::AgentName,
                 );
 
                 o.operate(
@@ -595,7 +629,6 @@ impl ToJson for ChronicleOperation {
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,
-                agent,
                 time,
             }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EndActivity);
@@ -613,11 +646,6 @@ impl ToJson for ChronicleOperation {
                 o.operate(
                     OperationsId::from_id(id.name_part()),
                     ChronicleOperations::ActivityName,
-                );
-
-                o.operate(
-                    OperationsId::from_id(agent.name_part()),
-                    ChronicleOperations::AgentName,
                 );
 
                 o.operate(
@@ -656,8 +684,8 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::CreateEntity);
+            ChronicleOperation::EntityExists(EntityExists { namespace, name }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::EntityExists);
 
                 o.operate(
                     OperationsId::from_id(namespace.name_part()),
@@ -673,12 +701,12 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::GenerateEntity(GenerateEntity {
+            ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
                 activity,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::GenerateEntity);
+                let mut o = JsonValue::new_operation(ChronicleOperations::WasGeneratedBy);
 
                 o.operate(
                     OperationsId::from_id(namespace.name_part()),
@@ -702,7 +730,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::EntityAttach(EntityAttach {
+            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 identityid: _,
                 id,
@@ -711,7 +739,7 @@ impl ToJson for ChronicleOperation {
                 signature: _,
                 signature_time: _,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::EntityAttach);
+                let mut o = JsonValue::new_operation(ChronicleOperations::EntityHasEvidence);
 
                 o.operate(
                     OperationsId::from_id(namespace.name_part()),
@@ -860,6 +888,41 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+            ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
+                id: _,
+                role,
+                namespace,
+                activity_id,
+                agent_id,
+            }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::WasAssociatedWith);
+
+                o.operate(
+                    OperationsId::from_id(namespace.name_part()),
+                    ChronicleOperations::NamespaceName,
+                );
+
+                o.operate(
+                    OperationsId::from_id(namespace.uuid_part()),
+                    ChronicleOperations::NamespaceUuid,
+                );
+
+                o.operate(
+                    OperationsId::from_id(activity_id.name_part()),
+                    ChronicleOperations::ActivityName,
+                );
+
+                o.operate(
+                    OperationsId::from_id(agent_id.name_part()),
+                    ChronicleOperations::AgentName,
+                );
+
+                if let Some(role) = role {
+                    o.operate(OperationsId::from_id(role), ChronicleOperations::Role);
+                }
+
+                o
+            }
         };
         operation.push(o);
         super::ExpandedJson(operation.into())
@@ -911,21 +974,9 @@ impl Operate for JsonValue {
         Self::new_type(id, op)
     }
 
-    // fn attributes_object(&mut self, id: OperationsId, attributes: &Attributes) {
     fn attributes_object(&mut self, attributes: &Attributes) {
         let key = iref::Iri::from(ChronicleOperations::Attributes).to_string();
 
-        // let attributes_object = Self::new_type(
-        //   id,
-        //   ChronicleOperations::Attributes
-        // );
-
-        // if let Some(domaintypeid) = &attributes.typ {
-        //     let id = OperationsId::from_id(domaintypeid.name_part());
-        //     attributes_object.operate(id, ChronicleOperations::DomaintypeId);
-        // }
-
-        // if !attributes.attributes.is_empty() {
         let mut attribute_objects: Vec<JsonValue> = json::Array::new();
         let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
         for (k, v) in &attributes.attributes {
@@ -936,27 +987,9 @@ impl Operate for JsonValue {
             let object = Self::new_attribute(attr.typ.clone(), attr.value.clone());
             attribute_objects.push(object);
         }
-        // self.insert(&key, attribute_objects).ok();
-        // }
-
-        // let value: Vec<JsonValue> = vec![attributes_object];
         let value: Vec<JsonValue> = attribute_objects;
 
         self.insert(&key, value).ok();
-
-        // if !attributes.attributes.is_empty() {
-        //     let mut attribute_objects: Vec<JsonValue> = json::Array::new();
-        //     let mut ordered_map: BTreeMap<String, Attribute> = BTreeMap::new();
-        //     for (k, v) in &attributes.attributes {
-        //         ordered_map.insert(k.clone(), v.clone());
-        //     }
-        //     #[allow(clippy::for_kv_map)]
-        //     for (_, attr) in ordered_map {
-        //         let object = Self::new_attribute(attr.typ.clone(), attr.value.clone());
-        //         attribute_objects.push(object);
-        //     }
-        //     self.insert(&key, attribute_objects).ok();
-        // }
     }
 
     fn new_attribute(typ: String, val: Value) -> Self {
@@ -989,12 +1022,12 @@ mod test {
         attributes::{Attribute, Attributes},
         prov::{
             operations::{
-                ActivityUses, ActsOnBehalfOf, CreateActivity, CreateEntity, CreateNamespace,
-                EntityAttach, EntityDerive, GenerateEntity, RegisterKey, SetAttributes,
-                StartActivity,
+                ActivityExists, ActivityUses, ActsOnBehalfOf, CreateNamespace, EntityDerive,
+                EntityExists, EntityHasEvidence, RegisterKey, SetAttributes, StartActivity,
+                WasGeneratedBy,
             },
             to_json_ld::ToJson,
-            ActivityId, AgentId, DomaintypeId, EntityId, NamePart, NamespaceId,
+            ActivityId, AgentId, DomaintypeId, EntityId, NamePart, NamespaceId, Role,
         },
     };
 
@@ -1044,7 +1077,7 @@ mod test {
             crate::prov::NamePart::name_part(&crate::prov::AgentId::from_name("test_agent"))
                 .clone();
         let op: ChronicleOperation =
-            super::ChronicleOperation::CreateAgent(crate::prov::operations::CreateAgent {
+            super::ChronicleOperation::AgentExists(crate::prov::operations::AgentExists {
                 namespace,
                 name,
             });
@@ -1078,16 +1111,19 @@ mod test {
     #[tokio::test]
     async fn test_agent_acts_on_behalf_of() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = AgentId::from_name("test_agent");
+        let responsible_id = AgentId::from_name("test_agent");
         let delegate_id = AgentId::from_name("test_delegate");
         let activity_id = Some(ActivityId::from_name("test_activity"));
+        let role = Some(Role::from("test_role"));
 
-        let op: ChronicleOperation = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-            namespace,
-            id,
-            delegate_id,
-            activity_id,
-        });
+        let op: ChronicleOperation = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
+            &namespace,
+            &responsible_id,
+            &delegate_id,
+            activity_id.as_ref(),
+            role,
+        ));
+
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
         insta::assert_json_snapshot!(&x, @r###"
@@ -1176,7 +1212,7 @@ mod test {
         let name = NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
 
         let op: ChronicleOperation =
-            ChronicleOperation::CreateActivity(CreateActivity { namespace, name });
+            ChronicleOperation::ActivityExists(ActivityExists { namespace, name });
 
         let x = op.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();
@@ -1209,7 +1245,6 @@ mod test {
     async fn start_activity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = ActivityId::from_name("test_activity");
-        let agent = AgentId::from_name("test_agent");
         let time = chrono::DateTime::<chrono::Utc>::from_utc(
             chrono::NaiveDateTime::from_timestamp(61, 0),
             chrono::Utc,
@@ -1217,7 +1252,6 @@ mod test {
         let op: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
             namespace,
             id,
-            agent,
             time,
         });
 
@@ -1262,7 +1296,6 @@ mod test {
     async fn test_end_activity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = ActivityId::from_name("test_activity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
         let time = chrono::DateTime::<chrono::Utc>::from_utc(
             chrono::NaiveDateTime::from_timestamp(61, 0),
             chrono::Utc,
@@ -1271,7 +1304,6 @@ mod test {
             super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
                 namespace,
                 id,
-                agent,
                 time,
             });
 
@@ -1359,7 +1391,7 @@ mod test {
     async fn test_create_entity() {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
-        let operation: ChronicleOperation = ChronicleOperation::CreateEntity(CreateEntity {
+        let operation: ChronicleOperation = ChronicleOperation::EntityExists(EntityExists {
             namespace,
             name: id,
         });
@@ -1396,7 +1428,7 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
         let activity = ActivityId::from_name("test_activity");
-        let operation: ChronicleOperation = ChronicleOperation::GenerateEntity(GenerateEntity {
+        let operation: ChronicleOperation = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
             namespace,
             id,
             activity,
@@ -1439,15 +1471,16 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = EntityId::from_name("test_entity");
         let agent = AgentId::from_name("test_agent");
-        let operation: ChronicleOperation = ChronicleOperation::EntityAttach(EntityAttach {
-            namespace,
-            identityid: None,
-            id,
-            locator: None,
-            agent,
-            signature: None,
-            signature_time: None,
-        });
+        let operation: ChronicleOperation =
+            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
+                namespace,
+                identityid: None,
+                id,
+                locator: None,
+                agent,
+                signature: None,
+                signature_time: None,
+            });
 
         let x = operation.to_json();
         let x: serde_json::Value = serde_json::from_str(&x.0.to_string()).unwrap();

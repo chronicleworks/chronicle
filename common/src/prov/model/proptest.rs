@@ -116,7 +116,6 @@ prop_compose! {
 
         StartActivity {
             namespace,
-            agent: AgentId::from_name(&name),
             id,
             time: today - chrono::Duration::days(offset as _)
         }
@@ -132,7 +131,6 @@ prop_compose! {
 
         EndActivity {
             namespace,
-            agent: AgentId::from_name(&name),
             id,
             time: today - chrono::Duration::days(offset as _)
         }
@@ -279,13 +277,13 @@ prop_compose! {
         role in option::of(name()),
         agent in name(),
         namespace in namespace(),
-    ) -> Associate {
+    ) -> WasAssociatedWith {
 
         let agent_id = AgentId::from_name(&agent);
         let activity_id = ActivityId::from_name(&activity);
         let id = AssociationId::from_component_ids(&agent_id, &activity_id,  role.as_ref().map(|x| x.as_str()));
 
-        Associate{id,agent_id,activity_id,role:role.as_ref().map(|x|Role::from(x)), namespace }
+        WasAssociatedWith{id,agent_id,activity_id,role:role.as_ref().map(|x|Role::from(x)), namespace }
 
     }
 }
@@ -335,18 +333,18 @@ prop_compose! {
 fn transaction() -> impl Strategy<Value = ChronicleOperation> {
     prop_oneof![
         1 => create_namespace().prop_map(ChronicleOperation::CreateNamespace),
-        2 => create_agent().prop_map(ChronicleOperation::CreateAgent),
+        2 => create_agent().prop_map(ChronicleOperation::AgentExists),
         2 => register_key().prop_map(ChronicleOperation::RegisterKey),
-        4 => create_activity().prop_map(ChronicleOperation::CreateActivity),
+        4 => create_activity().prop_map(ChronicleOperation::ActivityExists),
         4 => start_activity().prop_map(ChronicleOperation::StartActivity),
         4 => end_activity().prop_map(ChronicleOperation::EndActivity),
         4 => used().prop_map(ChronicleOperation::ActivityUses),
-        2 => create_entity().prop_map(ChronicleOperation::CreateEntity),
-        4 => generate_entity().prop_map(ChronicleOperation::GenerateEntity),
+        2 => create_entity().prop_map(ChronicleOperation::EntityExists),
+        4 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
         2 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
         2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
         2 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
-        2 => was_associated_with().prop_map(ChronicleOperation::Associate),
+        2 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
         2 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
         2 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
         2 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
@@ -402,7 +400,7 @@ proptest! {
                     prop_assert_eq!(&ns.name, name);
                     prop_assert_eq!(&ns.uuid, uuid);
                 },
-                ChronicleOperation::CreateAgent(
+                ChronicleOperation::AgentExists(
                     AgentExists { namespace, name}) => {
                     let agent = &prov.agents.get(&(namespace.to_owned(),AgentId::from_name(name)));
                     prop_assert!(agent.is_some());
@@ -411,7 +409,7 @@ proptest! {
                     prop_assert_eq!(&agent.namespaceid, namespace);
                 },
                 ChronicleOperation::AgentActsOnBehalfOf(
-                    ActsOnBehalfOf {namespace,id,delegate_id,activity_id, role, responsible_id }
+                    ActsOnBehalfOf {namespace,id: _,delegate_id,activity_id, role, responsible_id }
                 ) => {
                     let agent = &prov.agents.get(&(namespace.to_owned(),responsible_id.to_owned()));
                     prop_assert!(agent.is_some());
@@ -428,13 +426,13 @@ proptest! {
 
                     let has_delegation = prov.delegation.get(&(namespace.to_owned(),responsible_id.to_owned()))
                         .unwrap()
-                        .contains(&Delegation {
-                            id: id.clone(),
-                            responsible_id: agent.id.clone(),
-                            delegate_id: delegate.id.clone(),
-                            activity_id: activity_id.clone(),
-                            role: role.clone(),
-                        });
+                        .contains(&Delegation::new(
+                            namespace,
+                            &delegate.id,
+                            &agent.id,
+                            activity_id.as_ref(),
+                            role.clone()
+                        ));
 
                     prop_assert!(has_delegation);
 
@@ -455,7 +453,7 @@ proptest! {
                         prop_assert_eq!(&agent.namespaceid, &namespace.clone());
                         prop_assert_eq!(&identity.public_key, &publickey.clone());
                 },
-                ChronicleOperation::CreateActivity(
+                ChronicleOperation::ActivityExists(
                     ActivityExists { namespace,  name }) => {
                     let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_name(name)));
                     prop_assert!(activity.is_some());
@@ -464,7 +462,7 @@ proptest! {
                     prop_assert_eq!(&activity.namespaceid, namespace);
                 },
                 ChronicleOperation::StartActivity(
-                    StartActivity { namespace, id, agent, time }) =>  {
+                    StartActivity { namespace, id, time }) =>  {
                     let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
@@ -476,7 +474,7 @@ proptest! {
 
                 },
                 ChronicleOperation::EndActivity(
-                    EndActivity { namespace, id, agent, time }) => {
+                    EndActivity { namespace, id, time }) => {
                     let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
@@ -487,10 +485,15 @@ proptest! {
                     prop_assert!(activity.started.unwrap() <= *time);
 
                 }
-                ChronicleOperation::Associate(Associate { id, role, namespace, activity_id, agent_id }) => {
+                ChronicleOperation::WasAssociatedWith(WasAssociatedWith { id : _, role, namespace, activity_id, agent_id }) => {
                     let has_asoc = prov.association.get(&(namespace.to_owned(), activity_id.to_owned()))
                         .unwrap()
-                        .contains(&Association {activity_id:activity_id.clone(),id:id.clone(), agent_id: agent_id.clone(), role: role.clone()});
+                        .contains(&Association::new(
+                            namespace,
+                            agent_id,
+                            activity_id,
+                            role.clone())
+                        );
 
                     prop_assert!(has_asoc);
                 }
@@ -519,7 +522,7 @@ proptest! {
 
                     prop_assert!(has_useage);
                 },
-                ChronicleOperation::CreateEntity(
+                ChronicleOperation::EntityExists(
                     EntityExists { namespace, name}) => {
                     let entity = &prov.entities.get(&(namespace.to_owned(),EntityId::from_name(name)));
                     prop_assert!(entity.is_some());
@@ -527,7 +530,7 @@ proptest! {
                     prop_assert_eq!(&entity.name, name);
                     prop_assert_eq!(&entity.namespaceid, namespace);
                 },
-                ChronicleOperation::GenerateEntity(WasGeneratedBy{namespace, id, activity}) => {
+                ChronicleOperation::WasGeneratedBy(WasGeneratedBy{namespace, id, activity}) => {
                     let activity_id = activity;
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(entity.is_some());
@@ -591,6 +594,7 @@ proptest! {
                         &(namespace.clone(),id.clone()))
                         .unwrap()
                         .contains(& Derivation {
+
                             used_id: used_id.clone(),
                             activity_id: activity_id.clone(),
                             generated_id: id.clone(),
