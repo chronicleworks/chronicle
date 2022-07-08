@@ -125,6 +125,7 @@ pub async fn acted_on_behalf_of<'a>(
     namespace: Option<String>,
     responsible_id: AgentId,
     delegate_id: AgentId,
+    activity_id: Option<ActivityId>,
     role: Option<Role>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -135,7 +136,7 @@ pub async fn acted_on_behalf_of<'a>(
         .dispatch(ApiCommand::Agent(AgentCommand::Delegate {
             id: responsible_id,
             delegate: delegate_id,
-            activity: None,
+            activity: activity_id,
             namespace,
             role,
         }))
@@ -259,6 +260,29 @@ pub async fn end_activity<'a>(
             namespace,
             time,
             agent: Some(agent),
+        }))
+        .await?;
+
+    transaction_context(res, ctx).await
+}
+
+pub async fn was_associated_with<'a>(
+    ctx: &Context<'a>,
+    responsible: AgentId,
+    activity: ActivityId,
+    role: Option<Role>,
+    namespace: Option<String>,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
+
+    let res = api
+        .dispatch(ApiCommand::Activity(ActivityCommand::Associate {
+            id: activity,
+            responsible,
+            role,
+            namespace,
         }))
         .await?;
 
