@@ -2514,18 +2514,12 @@ pub mod test {
               "@type": "prov:Activity",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": [
-                {
-                  "@id": "chronicle:association:testagent:testactivity:role="
-                },
-                {
-                  "@id": "chronicle:association:testagent:testactivity:role="
-                }
-              ],
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
               "startTime": "2014-07-08T09:10:11+00:00",
               "value": {},
               "wasAssociatedWith": [
-                "chronicle:agent:testagent",
                 "chronicle:agent:testagent"
               ]
             },
