@@ -109,7 +109,7 @@ impl SawtoothSubmitter {
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for SawtoothSubmitter {
     /// TODO: This blocks on a bunch of non tokio / futures 'futures' in the sawtooth rust SDK,
-    /// which also exposes a buch of non clonable types so we probably need another dispatch / join mpsc here
+    /// which also exposes a bunch of non clonable types so we probably need another dispatch / join mpsc here
     async fn submit(
         &mut self,
         tx: &[ChronicleOperation],

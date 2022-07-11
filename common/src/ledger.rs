@@ -47,7 +47,7 @@ pub enum SubscriptionError {
 impl Display for SubscriptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Implementation { .. } => write!(f, "Subecription rror"),
+            Self::Implementation { .. } => write!(f, "Subscription error"),
         }
     }
 }
@@ -222,10 +222,12 @@ impl LedgerWriter for InMemLedger {
         let mut model = ProvModel::default();
         let mut output = vec![];
 
+        let mut addresses: Vec<LedgerAddress> = vec![];
+
         for tx in tx {
             debug!(?tx, "Processing");
 
-            let deps = tx.dependencies();
+            let mut deps = tx.dependencies();
 
             debug!(?deps, "Input addresses");
 
@@ -244,16 +246,29 @@ impl LedgerWriter for InMemLedger {
 
             output.append(&mut tx_output);
             model = updated_model;
+            addresses.append(&mut deps);
         }
 
-        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
+        // Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
+        // Fail with a submission error if we attempt to write to an address not specified in the addresses from the dependencies() call
         let output = output
             .into_iter()
             .map(|state| (state.address.clone(), state))
             .collect::<BTreeMap<_, _>>()
             .into_iter()
             .map(|x| x.1)
-            .collect::<Vec<_>>();
+            .map(|s| {
+                if addresses.iter().any(|addr| {
+                    let (_, a) = addr.resource.rsplit_once(':').unwrap();
+                    let (_, b) = s.address.resource.rsplit_once(':').unwrap();
+                    a == b
+                }) {
+                    Ok(s)
+                } else {
+                    Err(ProcessorError::Address {})
+                }
+            })
+            .collect::<Result<Vec<_>, ProcessorError>>()?;
 
         for output in output {
             let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
@@ -477,7 +492,7 @@ impl ChronicleOperation {
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
-                // Separate graph into descrete outpute
+                // Separate graph into discrete outputs
                 graph
                     .iter()
                     .map(|resource| {
@@ -524,4 +539,35 @@ impl ChronicleOperation {
 }
 
 #[cfg(test)]
-pub mod test {}
+pub mod test {
+    use uuid::Uuid;
+
+    use crate::{
+        ledger::{InMemLedger, LedgerWriter},
+        prov::{
+            operations::{ChronicleOperation, CreateNamespace},
+            NamespaceId,
+        },
+    };
+
+    #[tokio::test]
+    async fn test_ledgerwriter_submit_is_ok() -> Result<(), String> {
+        let uuid = {
+            let bytes = [
+                0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
+                0xd7, 0xd8,
+            ];
+            Uuid::from_slice(&bytes).unwrap()
+        };
+        let id = NamespaceId::from_name("test_ns", uuid);
+        let o = ChronicleOperation::CreateNamespace(CreateNamespace::new(id, "test_ns", uuid));
+        let mut l = InMemLedger::new();
+        let tx = vec![o];
+        let id = l.submit(&tx).await;
+        if id.is_err() {
+            Err(format!("error: {id:?}"))
+        } else {
+            Ok(())
+        }
+    }
+}
