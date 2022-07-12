@@ -258,11 +258,7 @@ impl LedgerWriter for InMemLedger {
             .into_iter()
             .map(|x| x.1)
             .map(|s| {
-                if addresses.iter().any(|addr| {
-                    let (_, a) = addr.resource.rsplit_once(':').unwrap();
-                    let (_, b) = s.address.resource.rsplit_once(':').unwrap();
-                    a == b
-                }) {
+                if addresses.iter().any(|addr| *addr == s.address) {
                     Ok(s)
                 } else {
                     Err(ProcessorError::Address {})
