@@ -258,7 +258,7 @@ impl LedgerWriter for InMemLedger {
             .into_iter()
             .map(|x| x.1)
             .map(|s| {
-                if addresses.iter().any(|addr| *addr == s.address) {
+                if addresses.iter().any(|addr| s.address.is_match(addr)) {
                     Ok(s)
                 } else {
                     Err(ProcessorError::Address {})
@@ -303,6 +303,35 @@ impl LedgerAddress {
             namespace: Some(ns.to_string()),
             resource: resource.into().to_string(),
         }
+    }
+
+    fn has_namespace(&self) -> bool {
+        self.namespace.is_some()
+    }
+
+    fn address(&self) -> String {
+        if self.has_namespace() {
+            self.namespace.clone().unwrap()
+        } else {
+            self.resource.clone()
+        }
+    }
+
+    fn is_match(&self, addr: &LedgerAddress) -> bool {
+        let a = addr.address();
+        let b = self.address();
+
+        let a = match a.rsplit_once(':') {
+            Some((_, a)) => a,
+            None => return false,
+        };
+
+        let b = match b.rsplit_once(':') {
+            Some((_, b)) => b,
+            None => return false,
+        };
+
+        a == b
     }
 }
 
