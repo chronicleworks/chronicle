@@ -257,12 +257,9 @@ impl LedgerWriter for InMemLedger {
             .collect::<BTreeMap<_, _>>()
             .into_iter()
             .map(|x| x.1)
-            .map(|s| {
-                if addresses.iter().any(|addr| s.address.is_match(addr)) {
-                    Ok(s)
-                } else {
-                    Err(ProcessorError::Address {})
-                }
+            .map(|s| match s.address.specified(&addresses) {
+                true => Ok(s),
+                false => Err(ProcessorError::Address {}),
             })
             .collect::<Result<Vec<_>, ProcessorError>>()?;
 
@@ -318,20 +315,21 @@ impl LedgerAddress {
     }
 
     fn is_match(&self, addr: &LedgerAddress) -> bool {
-        let a = addr.address();
-        let b = self.address();
+        let a = LedgerAddress::suffix(addr.address());
+        let b = LedgerAddress::suffix(self.address());
 
-        let a = match a.rsplit_once(':') {
-            Some((_, a)) => a,
-            None => return false,
-        };
+        match (a, b) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
+    }
 
-        let b = match b.rsplit_once(':') {
-            Some((_, b)) => b,
-            None => return false,
-        };
+    fn suffix(addr: String) -> Option<String> {
+        addr.rsplit_once(':').map(|(_, a)| a.to_string())
+    }
 
-        a == b
+    fn specified(&self, addresses: &[LedgerAddress]) -> bool {
+        addresses.iter().any(|addr| self.is_match(addr))
     }
 }
 
