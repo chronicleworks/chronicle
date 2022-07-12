@@ -47,15 +47,21 @@ macro_rules! gql_cursor {
                         .unwrap_or(false),
                 );
 
-                gql.append(rx.into_iter().enumerate().map(
-                    (|(pos, (agent, _count))| {
-                        Edge::with_additional_fields(
-                            (pos as i32) + (start as i32),
-                            agent,
-                            EmptyFields,
+                gql.edges.append(
+                    &mut rx
+                        .into_iter()
+                        .enumerate()
+                        .map(
+                            (|(pos, (agent, _count))| {
+                                Edge::with_additional_fields(
+                                    (pos as i32) + (start as i32),
+                                    agent,
+                                    EmptyFields,
+                                )
+                            }),
                         )
-                    }),
-                ));
+                        .collect(),
+                );
 
                 Ok::<_, GraphQlError>(gql)
             },

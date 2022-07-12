@@ -41,6 +41,8 @@ fn main() {
           - String
           - Int
           - Bool
+    roles:
+      - friend
      "#
     .to_string();
 

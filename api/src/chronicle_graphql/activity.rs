@@ -1,5 +1,6 @@
 use crate::chronicle_graphql::{Agent, Store};
 use async_graphql::Context;
+use common::prov::Role;
 use diesel::prelude::*;
 
 use super::{Entity, Namespace};
@@ -21,7 +22,7 @@ pub async fn namespace<'a>(
 pub async fn was_associated_with<'a>(
     id: i32,
     ctx: &Context<'a>,
-) -> async_graphql::Result<Vec<Agent>> {
+) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
     use crate::persistence::schema::association::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();
@@ -32,8 +33,8 @@ pub async fn was_associated_with<'a>(
         .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::agent::table)
         .order(crate::persistence::schema::agent::name)
-        .select(Agent::as_select())
-        .load::<Agent>(&mut connection)?;
+        .select((Agent::as_select(), association::role))
+        .load::<(Agent, Option<Role>)>(&mut connection)?;
 
     Ok(res)
 }

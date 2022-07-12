@@ -36,10 +36,53 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     }
 }
 
+fn gen_association_unions(domain: &ChronicleDomainDef) -> rust::Tokens {
+    let union_macro = &rust::import("chronicle::async_graphql", "Union").qualified();
+
+    let output_type = &rust::import("chronicle::async_graphql", "Object").qualified();
+
+    quote! {
+
+
+
+    #[derive(#union_macro)]
+    pub enum Role {
+        Role(Agent),
+        #(for role in domain.roles.iter() =>
+            #(role.as_type_name())(#(agent_union_type_name()))
+        )
+    }
+
+    #[derive(#output_type)]
+    pub struct Association {
+        pub was_associated_with: Role,
+        pub was_attributed_to: Role,
+    }
+
+    }
+}
+
 fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
     let graphql_enum = &rust::import("chronicle::async_graphql", "Enum");
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let prov_role = &rust::import("chronicle::common::prov", "Role").qualified();
     quote! {
+
+        #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        pub enum Role {
+            #(for role in domain.roles.iter() =>
+                #(role.as_type_name()),
+            )
+        }
+
+        impl Into<#prov_role> for Role {
+            fn into(self) -> #prov_role {
+                match self {
+                #(for role in domain.roles.iter() =>
+                    Role::#(role.as_type_name()) => #prov_role::from(#_(#(role.as_type_name())))),
+                }
+            }
+        }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
         pub enum AgentType {
@@ -190,12 +233,12 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
         async fn was_associated_with<'a>(
             &self,
             ctx: &#context<'a>,
-        ) -> #async_result<Vec<#(agent_union_type_name())>> {
+        ) -> #async_result<Vec<Association>> {
             Ok(
                 #activity_impl::was_associated_with(self.0.id, ctx)
                     .await?
                     .into_iter()
-                    .map(map_agent_to_domain_type)
+                    .map(|(agent,role)| map_association_to_role(agent, None, role))
                     .collect(),
             )
         }
@@ -519,6 +562,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 
 fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
     let agent_impl = &rust::import("chronicle::api::chronicle_graphql", "Agent").qualified();
+    let role = &rust::import("chronicle::common::prov", "Role").qualified();
     let entity_impl = &rust::import("chronicle::api::chronicle_graphql", "Entity").qualified();
     let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
 
@@ -531,6 +575,31 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
             ),
             )
             _ => #(agent_union_type_name())::ProvAgent(ProvAgent(agent))
+        }
+    }
+
+    fn map_association_to_role(responsible: #agent_impl, delegate: #agent_impl, responsible_role: Option<#role>, delegate_role: Option<#role>) -> Association {
+        Association {
+            was_associated_with: match responsible_role.map(|x| x.as_str()) {
+                None => {
+                    Role::Role(map_agent_to_domain_type(responsible))
+                },
+                #(for role in domain.roles.iter() =>
+                Some(#_(#(&role.as_type_name()))) => Role::#(role.as_type_name())(
+                    map_agent_to_domain_type(responsible)
+                ),
+                )
+            },
+            was_attributed_to: match delegate_role.map(|x| x.as_str()) {
+                None => {
+                    Role::Role(map_agent_to_domain_type(delegate))
+                },
+                #(for role in domain.roles.iter() =>
+                Some(#_(#(&role.as_type_name()))) => Role::#(role.as_type_name())(
+                    map_agent_to_domain_type(delegate)
+                ),
+                )
+            }
         }
     }
 
@@ -794,8 +863,10 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             responsible: #agent_id,
             delegate: #agent_id,
+            activity: Option<#activity_id>,
+            role: Option<Role>,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate).await
+            #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate, activity, role.map(|x| x.into())).await
         }
 
         pub async fn was_derived_from<'a>(
@@ -935,6 +1006,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
     #(gen_type_enums(domain))
+    #(gen_association_unions(domain))
     #(gen_abstract_prov_attributes())
     #(for agent in domain.agents.iter() => #(gen_attribute_definition(agent, &agent.attributes)))
     #(for activity in domain.activities.iter() => #(gen_attribute_definition(activity, &activity.attributes)))
