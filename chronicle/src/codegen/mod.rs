@@ -39,10 +39,9 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
 fn gen_association_unions(domain: &ChronicleDomainDef) -> rust::Tokens {
     let union_macro = &rust::import("chronicle::async_graphql", "Union").qualified();
 
-    let output_type = &rust::import("chronicle::async_graphql", "Object").qualified();
+    let simple_object = &rust::import("chronicle::async_graphql", "SimpleObject").qualified();
 
     quote! {
-
 
 
     #[derive(#union_macro)]
@@ -53,7 +52,7 @@ fn gen_association_unions(domain: &ChronicleDomainDef) -> rust::Tokens {
         )
     }
 
-    #[derive(#output_type)]
+    #[derive(#simple_object)]
     pub struct Association {
         pub was_associated_with: Role,
         pub was_attributed_to: Role,
@@ -68,18 +67,20 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
     let prov_role = &rust::import("chronicle::common::prov", "Role").qualified();
     quote! {
 
+
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
-        pub enum Role {
+        pub enum RoleType {
+            Unspecified,
             #(for role in domain.roles.iter() =>
                 #(role.as_type_name()),
             )
         }
 
-        impl Into<#prov_role> for Role {
+        impl Into<#prov_role> for RoleType {
             fn into(self) -> #prov_role {
                 match self {
                 #(for role in domain.roles.iter() =>
-                    Role::#(role.as_type_name()) => #prov_role::from(#_(#(role.as_type_name())))),
+                    RoleType::#(role.as_type_name()) => #prov_role::from(#_(#(role.as_type_name())))),
                 }
             }
         }
@@ -238,7 +239,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                 #activity_impl::was_associated_with(self.0.id, ctx)
                     .await?
                     .into_iter()
-                    .map(|(agent,role)| map_association_to_role(agent, None, role))
+                    .map(|(agent,role)| map_association_to_role(agent, None, role, None))
                     .collect(),
             )
         }
@@ -578,9 +579,9 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
     }
 
-    fn map_association_to_role(responsible: #agent_impl, delegate: #agent_impl, responsible_role: Option<#role>, delegate_role: Option<#role>) -> Association {
+    fn map_association_to_role(responsible: #agent_impl, delegate: Option<#agent_impl>, responsible_role: Option<#role>, delegate_role: Option<#role>) -> Association {
         Association {
-            was_associated_with: match responsible_role.map(|x| x.as_str()) {
+            was_associated_with: match (responsible,responsible_role.map(|x| x.as_str())) {
                 None => {
                     Role::Role(map_agent_to_domain_type(responsible))
                 },
@@ -590,12 +591,13 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ),
                 )
             },
-            was_attributed_to: match delegate_role.map(|x| x.as_str()) {
-                None => {
+            was_attributed_to: match (delegate,delegate_role.map(|x| x.as_str())) {
+                (None,_) => None,
+                (Some(delegate), None) => {
                     Role::Role(map_agent_to_domain_type(delegate))
                 },
                 #(for role in domain.roles.iter() =>
-                Some(#_(#(&role.as_type_name()))) => Role::#(role.as_type_name())(
+                (Some(delegate),Some(#_(#(&role.as_type_name())))) => Role::#(role.as_type_name())(
                     map_agent_to_domain_type(delegate)
                 ),
                 )
@@ -864,9 +866,9 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             responsible: #agent_id,
             delegate: #agent_id,
             activity: Option<#activity_id>,
-            role: Option<Role>,
+            role: RoleType,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate, activity, role.map(|x| x.into())).await
+            #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate, activity, Some(role.into())).await
         }
 
         pub async fn was_derived_from<'a>(
