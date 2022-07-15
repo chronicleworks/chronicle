@@ -30,6 +30,7 @@ use super::{
 pub mod to_json_ld;
 
 custom_error! {pub ProcessorError
+    Address{} = "Invalid address",
     Compaction{source: CompactionError} = "Json Ld Error",
     Expansion{inner: String} = "Json Ld Error",
     IRef{source: iref::Error} = "Invalid IRI",
