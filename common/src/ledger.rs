@@ -246,6 +246,7 @@ impl LedgerWriter for InMemLedger {
 
             output.append(&mut tx_output);
             model = updated_model;
+            deps_addresses = deps.into_iter().collect();
         }
 
         //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
@@ -255,7 +256,24 @@ impl LedgerWriter for InMemLedger {
             .collect::<BTreeMap<_, _>>()
             .into_iter()
             .map(|x| x.1)
-            .collect::<Vec<_>>();
+            .map(|s| {
+                if s.address.is_specified(&deps_addresses) {
+                    Ok(s)
+                } else {
+                    Err(ProcessorError::Address {})
+                }
+            })
+            // .map(|s| {
+            //     if s.address.namespace.is_none() {
+            //         match s.address.is_specified(&deps_addresses) {
+            //             true => Ok(s),
+            //             false => Err(ProcessorError::Address {}),
+            //         }
+            //     } else {
+            //         Ok(s)
+            //     }
+            // })
+            .collect::<Result<Vec<_>, ProcessorError>>()?;
 
         for output in output {
             let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
