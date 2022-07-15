@@ -263,16 +263,6 @@ impl LedgerWriter for InMemLedger {
                     Err(ProcessorError::Address {})
                 }
             })
-            // .map(|s| {
-            //     if s.address.namespace.is_none() {
-            //         match s.address.is_specified(&deps_addresses) {
-            //             true => Ok(s),
-            //             false => Err(ProcessorError::Address {}),
-            //         }
-            //     } else {
-            //         Ok(s)
-            //     }
-            // })
             .collect::<Result<Vec<_>, ProcessorError>>()?;
 
         for output in output {
