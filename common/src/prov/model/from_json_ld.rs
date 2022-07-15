@@ -11,9 +11,14 @@ use json_ld::{
 use crate::{
     attributes::{Attribute, Attributes},
     prov::{
-        operations::DerivationType,
-        vocab::{Chronicle, Prov},
-        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamespaceId,
+        operations::{
+            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
+            CreateEntity, CreateNamespace, DerivationType, EndActivity, EntityAttach, EntityDerive,
+            GenerateEntity, RegisterKey, SetAttributes, StartActivity,
+        },
+        vocab::{Chronicle, ChronicleOperations, Prov},
+        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamePart, NamespaceId,
+        UuidPart,
     },
 };
 

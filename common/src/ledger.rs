@@ -13,8 +13,9 @@ use crate::{
             CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
             RegisterKey, SetAttributes, StartActivity,
         },
-        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, EvidenceId,
-        IdentityId, NamePart, NamespaceId, ParseIriError, ProcessorError, ProvModel,
+        to_json_ld::ToJson,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
+        NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -226,6 +227,8 @@ impl LedgerWriter for InMemLedger {
         let mut model = ProvModel::default();
         let mut output = vec![];
 
+        let mut deps_addresses: Vec<LedgerAddress> = vec![];
+
         for tx in tx {
             let deps = tx.dependencies();
 
@@ -256,12 +259,9 @@ impl LedgerWriter for InMemLedger {
             .collect::<BTreeMap<_, _>>()
             .into_iter()
             .map(|x| x.1)
-            .map(|s| {
-                if s.address.is_specified(&deps_addresses) {
-                    Ok(s)
-                } else {
-                    Err(ProcessorError::Address {})
-                }
+            .map(|s| match s.address.is_specified(&deps_addresses) {
+                true => Ok(s),
+                _ => Err(ProcessorError::Address {}),
             })
             .collect::<Result<Vec<_>, ProcessorError>>()?;
 
@@ -312,6 +312,10 @@ impl LedgerAddress {
             namespace: Some(ns.clone()),
             resource: resource.into(),
         }
+    }
+
+    fn is_specified(&self, dependencies: &[LedgerAddress]) -> bool {
+        dependencies.iter().any(|addr| self == addr)
     }
 }
 
@@ -435,11 +439,6 @@ impl ChronicleOperation {
                     LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, agent.clone()),
                     LedgerAddress::in_namespace(namespace, id.clone()),
-                    LedgerAddress::in_namespace(namespace, identityid.clone()),
-                    LedgerAddress::in_namespace(
-                        namespace,
-                        EvidenceId::from_name(id.name_part(), signature),
-                    ),
                 ]
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
@@ -524,7 +523,7 @@ impl ChronicleOperation {
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
-                // Separate graph into descrete outpute
+                // Separate graph into discrete outputs
                 graph
                     .iter()
                     .map(|resource| {
