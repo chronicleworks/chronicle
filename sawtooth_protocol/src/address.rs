@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use common::{ledger::LedgerAddress, prov::AsCompact};
+use common::{
+    ledger::{LedgerAddress, NameSpacePart, ResourcePart},
+    prov::AsCompact,
+};
 use lazy_static::lazy_static;
 use openssl::sha::Sha256;
 

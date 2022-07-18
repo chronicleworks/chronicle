@@ -288,6 +288,26 @@ pub struct LedgerAddress {
     resource: ChronicleIri,
 }
 
+pub trait NameSpacePart {
+    fn namespace_part(&self) -> Option<NamespaceId>;
+}
+
+impl NameSpacePart for LedgerAddress {
+    fn namespace_part(&self) -> Option<NamespaceId> {
+        self.namespace.clone()
+    }
+}
+
+pub trait ResourcePart {
+    fn resource_part(&self) -> ChronicleIri;
+}
+
+impl ResourcePart for LedgerAddress {
+    fn resource_part(&self) -> ChronicleIri {
+        self.resource.clone()
+    }
+}
+
 impl LedgerAddress {
     fn from_ld(ns: Option<&str>, resource: &str) -> Result<Self, ParseIriError> {
         Ok(Self {
@@ -316,14 +336,6 @@ impl LedgerAddress {
 
     fn is_specified(&self, dependencies: &[LedgerAddress]) -> bool {
         dependencies.iter().any(|addr| self == addr)
-    }
-
-    pub fn namespace_part(&self) -> Option<NamespaceId> {
-        self.namespace.clone()
-    }
-
-    pub fn resource_part(&self) -> ChronicleIri {
-        self.resource.clone()
     }
 }
 
