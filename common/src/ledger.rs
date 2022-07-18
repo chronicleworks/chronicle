@@ -49,7 +49,7 @@ pub enum SubscriptionError {
 impl Display for SubscriptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Implementation { .. } => write!(f, "Subecription rror"),
+            Self::Implementation { .. } => write!(f, "Subscription error"),
         }
     }
 }
@@ -284,8 +284,8 @@ impl LedgerWriter for InMemLedger {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 pub struct LedgerAddress {
     // Namespaces do not have a namespace
-    pub namespace: Option<NamespaceId>,
-    pub resource: ChronicleIri,
+    namespace: Option<NamespaceId>,
+    resource: ChronicleIri,
 }
 
 impl LedgerAddress {
@@ -316,6 +316,14 @@ impl LedgerAddress {
 
     fn is_specified(&self, dependencies: &[LedgerAddress]) -> bool {
         dependencies.iter().any(|addr| self == addr)
+    }
+
+    pub fn namespace_part(&self) -> Option<NamespaceId> {
+        self.namespace.clone()
+    }
+
+    pub fn resource_part(&self) -> ChronicleIri {
+        self.resource.clone()
     }
 }
 
@@ -523,7 +531,7 @@ impl ChronicleOperation {
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
-                // Separate graph into descrete outpute
+                // Separate graph into discrete outputs
                 graph
                     .iter()
                     .map(|resource| {

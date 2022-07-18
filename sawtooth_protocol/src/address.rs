@@ -22,10 +22,10 @@ pub struct SawtoothAddress(String);
 impl From<&LedgerAddress> for SawtoothAddress {
     fn from(addr: &LedgerAddress) -> Self {
         let mut sha = Sha256::new();
-        if let Some(ns) = addr.namespace.as_ref() {
+        if let Some(ns) = addr.namespace_part().as_ref() {
             sha.update(ns.compact().as_bytes())
         }
-        sha.update(addr.resource.compact().as_bytes());
+        sha.update(addr.resource_part().compact().as_bytes());
         SawtoothAddress(format!("{}{}", &*PREFIX, hex::encode(sha.finish())))
     }
 }
