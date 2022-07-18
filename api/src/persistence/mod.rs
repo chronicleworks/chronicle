@@ -11,7 +11,7 @@ use common::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
         EvidenceId, Generation, Identity, IdentityId, Name, NamePart, Namespace, NamespaceId,
-        ProvModel, PublicKeyPart, SignaturePart, Useage,
+        ProvModel, PublicKeyPart, SignaturePart, Usage,
     },
 };
 use custom_error::custom_error;
@@ -542,9 +542,9 @@ impl Store {
             }
         }
 
-        for ((namespaceid, _), useage) in model.useage.iter() {
-            for useage in useage.iter() {
-                self.apply_used(connection, namespaceid, useage)?;
+        for ((namespaceid, _), usage) in model.usage.iter() {
+            for usage in usage.iter() {
+                self.apply_used(connection, namespaceid, usage)?;
             }
         }
 
@@ -603,22 +603,22 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &NamespaceId,
-        useage: &Useage,
+        usage: &Usage,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
-            useage.activity_id.name_part(),
+            usage.activity_id.name_part(),
             namespace,
         )?;
 
         let storedentity = self.entity_by_entity_name_and_namespace(
             connection,
-            useage.entity_id.name_part(),
+            usage.entity_id.name_part(),
             namespace,
         )?;
 
-        use schema::useage::dsl as link;
-        diesel::insert_or_ignore_into(schema::useage::table)
+        use schema::usage::dsl as link;
+        diesel::insert_or_ignore_into(schema::usage::table)
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
@@ -897,7 +897,7 @@ impl Store {
             .first::<query::Entity>(connection)?)
     }
 
-    /// Get the named acitvity or the last started one, a useful context aware shortcut for the CLI
+    /// Get the named activity or the last started one, a useful context aware shortcut for the CLI
     #[instrument(skip(connection))]
     pub(crate) fn get_activity_by_name_or_last_started(
         &self,
@@ -929,7 +929,7 @@ impl Store {
             .first::<query::Agent>(connection)?)
     }
 
-    /// Get the last fully syncronised offset
+    /// Get the last fully synchronized offset
     #[instrument]
     pub fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
         use schema::ledgersync::dsl;
@@ -1101,9 +1101,9 @@ impl Store {
                 model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&generation), &id);
             }
 
-            for used in schema::useage::table
-                .filter(schema::useage::activity_id.eq(activity.id))
-                .order(schema::useage::activity_id.asc())
+            for used in schema::usage::table
+                .filter(schema::usage::activity_id.eq(activity.id))
+                .order(schema::usage::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
                 .load::<String>(connection)?
@@ -1113,7 +1113,7 @@ impl Store {
             }
         }
 
-        let entites = schema::entity::table
+        let entities = schema::entity::table
             .filter(schema::entity::namespace_id.eq(nsid))
             .load::<query::Entity>(connection)?;
 
@@ -1123,7 +1123,7 @@ impl Store {
             domaintype,
             name,
             attachment_id: _,
-        } in entites
+        } in entities
         {
             let attributes = schema::entity_attribute::table
                 .filter(schema::entity_attribute::entity_id.eq(&id))

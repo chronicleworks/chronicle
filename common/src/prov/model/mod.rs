@@ -342,7 +342,7 @@ impl Association {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Useage {
+pub struct Usage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
     pub time: Option<DateTime<Utc>>,
@@ -378,7 +378,7 @@ pub struct ProvModel {
     pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
     pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
-    pub useage: HashMap<NamespacedActivity, HashSet<Useage>>,
+    pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
 }
 
 impl ProvModel {
@@ -405,8 +405,8 @@ impl ProvModel {
             self.agents.insert(id, agent);
         }
 
-        for (id, acitvity) in other.activities {
-            self.activities.insert(id, acitvity);
+        for (id, activity) in other.activities {
+            self.activities.insert(id, activity);
         }
 
         for (id, entity) in other.entities {
@@ -463,8 +463,8 @@ impl ProvModel {
                 .or_insert(rhs);
         }
 
-        for (id, mut rhs) in other.useage {
-            self.useage
+        for (id, mut rhs) in other.usage {
+            self.usage
                 .entry(id.clone())
                 .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
@@ -568,10 +568,10 @@ impl ProvModel {
     }
 
     pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
-        self.useage
+        self.usage
             .entry((namespace, activity_id.clone()))
             .or_insert_with(HashSet::new)
-            .insert(Useage {
+            .insert(Usage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
                 time: None,
@@ -922,7 +922,7 @@ impl ProvModel {
                     self.add_entity(Entity::exists(namespace.clone(), id.clone()));
                 }
 
-                // Enmsure the used entity is in the graph
+                // Ensure the used entity is in the graph
                 if !self
                     .entities
                     .contains_key(&(namespace.clone(), used_id.clone()))
@@ -958,9 +958,9 @@ impl ProvModel {
 
                 self.activities
                     .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut acitvity| {
-                        acitvity.domaintypeid = attributes.typ.clone();
-                        acitvity.attributes = attributes.attributes.clone();
+                    .and_modify(|mut activity| {
+                        activity.domaintypeid = attributes.typ.clone();
+                        activity.attributes = attributes.attributes.clone();
                     })
                     .or_insert_with(|| {
                         Activity::exists(namespace, id.clone()).has_attributes(attributes)
