@@ -47,7 +47,8 @@ pub async fn main() {
           - Int
           - Bool
     roles:
-        - friend
+        - delegate
+        - responsible
      "#
     .to_string();
 
@@ -131,6 +132,7 @@ mod test {
                 actedOnBehalfOf(
                     responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
                     delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
+                    role: DELEGATE
                     ) {
                     context
                 }
@@ -152,9 +154,12 @@ mod test {
                         id
                         name
                         actedOnBehalfOf {
-                            ... on ProvAgent {
-                                id
+                            agent {
+                                ... on ProvAgent {
+                                    id
+                                }
                             }
+                            role
                         }
                     }
                 }
@@ -162,7 +167,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_json_snapshot!(derived.data);
     }
 
     #[tokio::test]
@@ -483,10 +488,15 @@ mod test {
                                 intAttribute
                                 boolAttribute
                                 wasAssociatedWith {
-                                    ... on Friend {
-                                        id
-                                        name
-                                    }
+                                        responsible {
+                                            agent {
+                                                ... on Friend {
+                                                    id
+                                                    name
+                                                }
+                                            }
+                                            role
+                                        }
                                 }
                                 used {
                                     ... on TheSea {

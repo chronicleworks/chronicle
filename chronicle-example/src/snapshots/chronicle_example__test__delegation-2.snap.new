@@ -1,0 +1,19 @@
+---
+source: chronicle-example/src/test.rs
+assertion_line: 170
+expression: derived.data
+---
+{
+  "agentById": {
+    "id": "http://blockchaintp.com/chronicle/ns#agent:responsible",
+    "name": "responsible",
+    "actedOnBehalfOf": [
+      {
+        "agent": {
+          "id": "http://blockchaintp.com/chronicle/ns#agent:delegate"
+        },
+        "role": "DELEGATE"
+      }
+    ]
+  }
+}

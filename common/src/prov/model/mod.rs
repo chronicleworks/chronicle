@@ -33,7 +33,7 @@ custom_error! {pub ProcessorError
     Compaction{source: CompactionError} = "Json Ld Error",
     Expansion{inner: String} = "Json Ld Error",
     IRef{source: iref::Error} = "Invalid IRI",
-    NotAChronicleIrir{source: id::ParseIriError } = "Not a Chronicle IRI",
+    NotAChronicleIri{source: id::ParseIriError } = "Not a Chronicle IRI",
     Tokio{source: JoinError} = "Tokio Error",
     MissingId{object: JsonValue} = "Missing @id",
     MissingProperty{iri: String, object: JsonValue} = "Missing property",

@@ -1,5 +1,6 @@
 mod graphlql_scalars;
 pub use graphlql_scalars::*;
+use tracing::debug;
 
 use std::{fmt::Display, str::FromStr};
 
@@ -270,6 +271,7 @@ impl FromStr for ChronicleIri {
     type Err = ParseIriError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        debug!("Parsing IRI: {}", s);
         //Compacted form, expand
         let iri = {
             if s.starts_with("chronicle:") {
@@ -445,11 +447,11 @@ impl<'a> TryFrom<Iri<'a>> for DelegationId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, delegate, responsible, _activity, role] => Ok(Self {
+            [_, delegate, responsible, role, activity] => Ok(Self {
                 delegate: Name::from(delegate),
                 responsible: Name::from(responsible),
-                activity: optional_component("activity", role)?.map(Name::from),
                 role: optional_component("role", role)?.map(Role::from),
+                activity: optional_component("activity", activity)?.map(Name::from),
             }),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
