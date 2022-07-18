@@ -1,6 +1,6 @@
 ---
 source: chronicle-example/src/test.rs
-assertion_line: 466
+assertion_line: 533
 expression: default_cursor
 ---
 {
@@ -23,8 +23,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -46,8 +51,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -69,8 +79,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -92,8 +107,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -115,8 +135,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -138,8 +163,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -161,8 +191,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -184,8 +219,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [
@@ -207,8 +247,13 @@ expression: default_cursor
             "boolAttribute": false,
             "wasAssociatedWith": [
               {
-                "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                "name": "ringo"
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
               }
             ],
             "used": [

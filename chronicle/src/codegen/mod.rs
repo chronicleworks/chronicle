@@ -949,7 +949,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             ctx: &#graphql_context<'a>,
             id: #activity_id,
             namespace: Option<String>,
-            agent: #agent_id,
+            agent: Option<#agent_id>,
             time: Option<DateTime<Utc>>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::start_activity(ctx, id, namespace, agent, time).await
@@ -960,11 +960,23 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             ctx: &#graphql_context<'a>,
             id: #activity_id,
             namespace: Option<String>,
-            agent: #agent_id,
+            agent: Option<#agent_id>,
             time: Option<DateTime<Utc>>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::end_activity(ctx, id, namespace, agent, time).await
         }
+
+        pub async fn was_associated_with<'a>(
+            &self,
+            ctx: &#graphql_context<'a>,
+            namespace: Option<String>,
+            responsible: #agent_id,
+            activity: #activity_id,
+            role: RoleType
+        ) -> async_graphql::#graphql_result<#submission> {
+            #impls::was_associated_with(ctx, namespace, responsible, activity, role.into()).await
+        }
+
 
         pub async fn used<'a>(
             &self,

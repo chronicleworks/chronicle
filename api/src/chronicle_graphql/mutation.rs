@@ -224,7 +224,7 @@ pub async fn start_activity<'a>(
     ctx: &Context<'a>,
     id: ActivityId,
     namespace: Option<String>,
-    agent: AgentId,
+    agent: Option<AgentId>,
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -236,7 +236,7 @@ pub async fn start_activity<'a>(
             id,
             namespace,
             time,
-            agent: Some(agent),
+            agent,
         }))
         .await?;
 
@@ -247,7 +247,7 @@ pub async fn end_activity<'a>(
     ctx: &Context<'a>,
     id: ActivityId,
     namespace: Option<String>,
-    agent: AgentId,
+    agent: Option<AgentId>,
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -259,7 +259,7 @@ pub async fn end_activity<'a>(
             id: Some(id),
             namespace,
             time,
-            agent: Some(agent),
+            agent,
         }))
         .await?;
 
@@ -268,10 +268,10 @@ pub async fn end_activity<'a>(
 
 pub async fn was_associated_with<'a>(
     ctx: &Context<'a>,
+    namespace: Option<String>,
     responsible: AgentId,
     activity: ActivityId,
     role: Option<Role>,
-    namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 

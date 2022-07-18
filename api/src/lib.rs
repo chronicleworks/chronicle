@@ -1005,15 +1005,15 @@ where
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store.agent_by_agent_name_and_namespace(
-                            connection,
-                            agent.name_part(),
-                            &namespace,
-                        )?
-                    } else {
                         api.store
-                            .get_current_agent(connection)
-                            .map_err(|_| ApiError::NoCurrentAgent {})?
+                            .agent_by_agent_name_and_namespace(
+                                connection,
+                                agent.name_part(),
+                                &namespace,
+                            )
+                            .ok()
+                    } else {
+                        api.store.get_current_agent(connection).ok()
                     }
                 };
 
@@ -1044,9 +1044,16 @@ where
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                to_apply.push(ChronicleOperation::WasAssociatedWith(
-                    WasAssociatedWith::new(&namespace, &id, &AgentId::from_name(&agent.name), None),
-                ));
+                if let Some(agent) = agent {
+                    to_apply.push(ChronicleOperation::WasAssociatedWith(
+                        WasAssociatedWith::new(
+                            &namespace,
+                            &id,
+                            &AgentId::from_name(&agent.name),
+                            None,
+                        ),
+                    ));
+                }
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
@@ -1085,15 +1092,18 @@ where
 
                 let agent = {
                     if let Some(agent) = agent {
-                        api.store.agent_by_agent_name_and_namespace(
-                            connection,
-                            agent.name_part(),
-                            &namespace,
-                        )?
+                        api.store
+                            .agent_by_agent_name_and_namespace(
+                                connection,
+                                agent.name_part(),
+                                &namespace,
+                            )
+                            .ok()
                     } else {
                         api.store
                             .get_current_agent(connection)
-                            .map_err(|_| ApiError::NoCurrentAgent {})?
+                            .map_err(|_| ApiError::NoCurrentAgent {})
+                            .ok()
                     }
                 };
 
@@ -1104,9 +1114,16 @@ where
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                to_apply.push(ChronicleOperation::WasAssociatedWith(
-                    WasAssociatedWith::new(&namespace, &id, &AgentId::from_name(&agent.name), None),
-                ));
+                if let Some(agent) = agent {
+                    to_apply.push(ChronicleOperation::WasAssociatedWith(
+                        WasAssociatedWith::new(
+                            &namespace,
+                            &id,
+                            &AgentId::from_name(&agent.name),
+                            None,
+                        ),
+                    ));
+                }
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 

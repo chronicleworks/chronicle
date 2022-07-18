@@ -122,7 +122,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn delegation() {
+    async fn agent_delegation() {
         let schema = test_schema().await;
 
         let created = schema
@@ -447,12 +447,28 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", agent: "http://blockchaintp.com/chronicle/ns#agent:ringo", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
                     context
                 }}
             }}
         "#,
                    from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() ,i
+                )))
+                .await;
+
+            assert_eq!(res.errors, vec![]);
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:ringo", activity: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                    context
+                }}
+            }}
+        "#, i
                 )))
                 .await;
 
