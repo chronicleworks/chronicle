@@ -229,6 +229,8 @@ impl LedgerWriter for InMemLedger {
 
         let mut deps_addresses: Vec<LedgerAddress> = vec![];
 
+        let mut operation_state = OperationState::new();
+
         for tx in tx {
             let deps = tx.dependencies();
 
@@ -237,6 +239,10 @@ impl LedgerWriter for InMemLedger {
                 .borrow()
                 .iter()
                 .filter(|(k, _v)| deps.contains(k))
+                .map(|(addr, json)| {
+                    operation_state.insert(addr, json.to_string().as_bytes());
+                    (addr, json)
+                })
                 .map(|(_addr, json)| StateInput::new(json.to_string().as_bytes().into()))
                 .into_iter()
                 .collect();
@@ -258,6 +264,7 @@ impl LedgerWriter for InMemLedger {
             .map(|state| (state.address.clone(), state))
             .collect::<BTreeMap<_, _>>()
             .into_iter()
+            .filter(|x| !operation_state.dirty(&x.1))
             .map(|x| x.1)
             .map(|s| match s.address.is_specified(&deps_addresses) {
                 true => Ok(s),
@@ -359,6 +366,51 @@ pub struct StateOutput {
 impl StateOutput {
     pub fn new(address: LedgerAddress, data: Vec<u8>) -> Self {
         Self { address, data }
+    }
+}
+
+/// For holding a cache of address data before processing an operation
+#[derive(Debug)]
+struct OperationState {
+    kv: HashMap<LedgerAddress, Vec<u8>>,
+    // dirty_state: HashSet<LedgerAddress>,
+}
+
+impl OperationState {
+    fn new() -> Self {
+        OperationState {
+            kv: HashMap::new(),
+            // dirty_state: HashSet::new(),
+        }
+    }
+
+    fn insert(&mut self, addr: &LedgerAddress, data: &[u8]) {
+        self.kv.insert(addr.clone(), data.to_vec());
+    }
+
+    fn try_get_address_value(&self, addr: &LedgerAddress) -> Result<&[u8], ()> {
+        if self.kv.get(addr).is_some() {
+            Ok(self.kv.get(addr).unwrap())
+        } else {
+            Err(())
+        }
+    }
+
+    /// Check if the data associated with an address has changed in processing
+    fn dirty(&mut self, s: &StateOutput) -> bool {
+        let addr = &s.address;
+        let data = &s.data;
+        if self.try_get_address_value(addr).is_ok() {
+            self.try_get_address_value(addr).unwrap() != data
+            // if self.try_get_address_value(addr).unwrap() != data {
+            //     self.dirty_state.insert(addr.clone());
+            //     true
+            // } else {
+            //     false
+            // }
+        } else {
+            false
+        }
     }
 }
 
