@@ -9,7 +9,7 @@ use diesel::{r2d2::ConnectionManager, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
-use k256::ecdsa::{signature::Signer, Signature};
+use common::k256::ecdsa::{signature::Signer, Signature};
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
@@ -58,6 +58,7 @@ custom_error! {pub ApiError
     Join{source: JoinError}                                     = "Blocking thread pool",
     Subscription{source: SubscriptionError}                     = "State update subscription",
     NotCurrentActivity{}                                        = "No appropriate activity to end",
+    EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -196,7 +197,7 @@ where
         uuidgen: U,
     ) -> Result<ApiDispatch, ApiError>
     where
-        R: LedgerReader + Send + 'static,
+        R: LedgerReader + Send + Clone + Sync + 'static,
         W: LedgerWriter + Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
@@ -217,58 +218,70 @@ where
             })
             .map_err(|migration| StoreError::DbMigration { migration })?;
 
+        let reuse_reader = ledger_reader.clone();
+
         tokio::task::spawn(async move {
             let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-
-            // Get last committed offset from the store before we attach it to ledger state updates and the api
-            let mut state_updates = ledger_reader
-                .state_updates(
-                    store
-                        .get_last_offset()
-                        .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
-                        .unwrap_or(Offset::Genesis),
-                )
-                .await
-                .unwrap();
 
             let mut api = Api::<U> {
                 tx: tx.clone(),
                 keystore,
                 ledger_writer: BlockingLedgerWriter::new(ledger_writer),
-                store,
+                store: store.clone(),
                 uuidsource: PhantomData::default(),
             };
 
             debug!(?api, "Api running on localset");
+
             loop {
-                select! {
-                        state = state_updates.next().fuse() =>{
-                            if let Some((offset, prov, correlation_id)) = state {
-                                    api.sync(&prov, offset.clone(),correlation_id.clone())
-                                        .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
-                                        .await
-                                        .map_err(|e| {
-                                            error!(?e, "Api sync to confirmed commit");
-                                        }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
-                            }
-                        },
-                        cmd = rx.recv().fuse() => {
-                            if let Some((command, reply)) = cmd {
+                let mut state_updates = reuse_reader
+                    .clone()
+                    .state_updates(
+                        store
+                            .get_last_offset()
+                            .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
+                            .unwrap_or(Offset::Genesis),
+                    )
+                    .await
+                    .unwrap();
 
-                            let result = api
-                                .dispatch(command)
-                                .await;
+                loop {
+                    select! {
+                            state = state_updates.next().fuse() =>{
 
-                            reply
-                                .send(result)
-                                .await
-                                .map_err(|e| {
-                                    warn!(?e, "Send reply to Api consumer failed");
-                                })
-                                .ok();
-                            }
+                                if state.is_none() {
+                                    warn!("Ledger reader disconnected");
+                                    break;
+                                }
+
+                                if let Some((offset, prov, correlation_id)) = state {
+                                        api.sync(&prov, offset.clone(),correlation_id.clone())
+                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
+                                            .await
+                                            .map_err(|e| {
+                                                error!(?e, "Api sync to confirmed commit");
+                                            }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
+                                }
+
+                            },
+                            cmd = rx.recv().fuse() => {
+                                if let Some((command, reply)) = cmd {
+
+                                let result = api
+                                    .dispatch(command)
+                                    .await;
+
+                                reply
+                                    .send(result)
+                                    .await
+                                    .map_err(|e| {
+                                        warn!(?e, "Send reply to Api consumer failed");
+                                    })
+                                    .ok();
+                                }
+                        }
+                        complete => break
                     }
-                    complete => break
                 }
             }
         });
@@ -331,8 +344,8 @@ where
 
                 let entity = api.store.entity_by_entity_name_and_namespace(
                     connection,
-                    id.name_part().clone(),
-                    namespace.clone(),
+                    id.name_part(),
+                    &namespace,
                 );
 
                 let name: Name = {
@@ -396,8 +409,8 @@ where
 
                     let entity = api.store.entity_by_entity_name_and_namespace(
                         connection,
-                        id.name_part().clone(),
-                        namespace.clone(),
+                        id.name_part(),
+                        &namespace,
                     );
 
                     let name: Name = {
@@ -804,8 +817,8 @@ where
                     .map(|agent| {
                         api.store.agent_by_agent_name_and_namespace(
                             &mut connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )
                     })
                     .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
@@ -814,7 +827,7 @@ where
 
                 let signer = api.keystore.agent_signing(&agent_id)?;
 
-                let signature: Signature = signer.sign(&*buf);
+                let signature: Signature = signer.try_sign(&*buf)?;
 
                 let tx = ChronicleOperation::EntityAttach(EntityAttach {
                     namespace,
@@ -822,9 +835,9 @@ where
                     agent: agent_id.clone(),
                     identityid: Some(IdentityId::from_name(
                         agent_id.name_part(),
-                        &*hex::encode_upper(signer.to_bytes()),
+                        &*hex::encode(signer.to_bytes()),
                     )),
-                    signature: Some(hex::encode_upper(signature)),
+                    signature: Some(hex::encode(signature)),
                     locator,
                     signature_time: Some(Utc::now()),
                 });
@@ -946,8 +959,8 @@ where
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
                             connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )?
                     } else {
                         api.store
@@ -1023,8 +1036,8 @@ where
                     if let Some(agent) = agent {
                         api.store.agent_by_agent_name_and_namespace(
                             connection,
-                            agent.name_part().clone(),
-                            namespace.clone(),
+                            agent.name_part(),
+                            &namespace,
                         )?
                     } else {
                         api.store
@@ -1086,7 +1099,6 @@ mod test {
     use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
     use diesel::{r2d2::ConnectionManager, SqliteConnection};
     use r2d2::Pool;
-    use telemetry::console_logging_trace;
     use tempfile::TempDir;
     use uuid::Uuid;
 
@@ -1123,7 +1135,7 @@ mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        console_logging_trace();
+        telemetry::telemetry(None, true);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
@@ -1289,7 +1301,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             - name: testagent
               public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
         had_identity: {}
-        has_attachment: {}
+        has_evidence: {}
         had_attachment: {}
         association: {}
         derivation: {}

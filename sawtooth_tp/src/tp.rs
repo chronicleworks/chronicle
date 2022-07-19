@@ -4,7 +4,7 @@ use common::{
     ledger::StateInput,
     prov::{operations::ChronicleOperation, ProvModel},
 };
-use sawtooth_protocol::address::{SawtoothAddress, PREFIX};
+use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
 
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
@@ -23,8 +23,8 @@ pub struct ChronicleTransactionHandler {
 impl ChronicleTransactionHandler {
     pub fn new() -> ChronicleTransactionHandler {
         ChronicleTransactionHandler {
-            family_name: "chronicle".into(),
-            family_versions: vec!["1.0".into()],
+            family_name: FAMILY.to_owned(),
+            family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
         }
     }
@@ -47,7 +47,10 @@ impl TransactionHandler for ChronicleTransactionHandler {
         name = "Process transaction",
         skip(request,context),
         fields(
-            correlation_id = %request.context_id,
+            transaction_id = %request.signature,
+            inputs = ?request.header.as_ref().map(|x| &x.inputs),
+            outputs = ?request.header.as_ref().map(|x| &x.outputs),
+            dependencies = ?request.header.as_ref().map(|x| &x.dependencies)
         )
     )]
     fn apply(
@@ -58,28 +61,35 @@ impl TransactionHandler for ChronicleTransactionHandler {
         let tx: Vec<ChronicleOperation> = serde_cbor::from_slice(request.get_payload())
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
-        let mut model = ProvModel::default();
-        let mut output = vec![];
-
-        for tx in tx {
-            debug!(?tx, "Processing");
-
-            let deps = tx.dependencies();
-
-            debug!(?deps, "Input addresses");
-
-            let input = context
+        //Prepare all state inputs for the transactions
+        let mut state = {
+            context
                 .get_state_entries(
-                    &deps
-                        .iter()
-                        .map(|x| SawtoothAddress::from(x).to_string())
+                    &tx.iter()
+                        .flat_map(|tx| tx.dependencies())
+                        .map(|x| SawtoothAddress::from(&x).to_string())
                         .collect::<Vec<_>>(),
                 )?
                 .into_iter()
-                .map(|(_, data)| StateInput::new(data))
-                .collect();
+                .collect::<BTreeMap<_, _>>()
+        };
 
-            debug!(?input, "Processing input state");
+        debug!(state_inputs = ?state.keys());
+
+        let mut model = ProvModel::default();
+
+        for tx in tx {
+            debug!(operation = ?tx);
+            let input = {
+                tx.dependencies()
+                    .iter()
+                    .flat_map(|x| {
+                        state
+                            .get(&SawtoothAddress::from(&*x).to_string())
+                            .map(|input| StateInput::new(input.clone()))
+                    })
+                    .collect()
+            };
 
             let (send, recv) = crossbeam::channel::bounded(1);
             Handle::current().spawn(async move {
@@ -90,43 +100,28 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 )
             });
 
-            let (mut tx_output, updated_model) = recv
+            let (tx_output, updated_model) = recv
                 .recv()
                 .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
-            output.append(&mut tx_output);
+            for output in tx_output {
+                let address = SawtoothAddress::from(&output.address).to_string();
+                debug!(state_output = ?output.address,
+                       state_output_sawtooth = ?&address);
+                *state.entry(address).or_insert_with(|| output.data.clone()) = output.data.clone();
+            }
+
             model = updated_model;
         }
 
-        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
-        let output = output
-            .into_iter()
-            .map(|state| (state.address.clone(), state))
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
-            .map(|x| x.1)
-            .collect::<Vec<_>>();
-
-        debug!(?output, "Storing output state");
-
         context.add_event(
             "chronicle/prov-update".to_string(),
-            vec![],
+            vec![("transaction_id".to_owned(), request.signature.clone())],
             &*serde_cbor::to_vec(&model)
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
         )?;
 
-        context.set_state_entries(
-            output
-                .into_iter()
-                .map(|output| {
-                    (
-                        SawtoothAddress::from(&output.address).to_string(),
-                        output.data,
-                    )
-                })
-                .collect(),
-        )?;
+        context.set_state_entries(state.into_iter().collect())?;
 
         Ok(())
     }

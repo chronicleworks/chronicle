@@ -1,14 +1,18 @@
+use std::collections::HashSet;
+
 use crate::{
-    address::SawtoothAddress, messages::MessageBuilder, sawtooth::ClientBatchSubmitRequest,
+    address::{SawtoothAddress, FAMILY, VERSION},
+    messages::MessageBuilder,
+    sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse},
 };
 
+use common::k256::ecdsa::SigningKey;
 use common::{
     ledger::{LedgerWriter, SubmissionError},
     prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
 use derivative::Derivative;
-use k256::ecdsa::SigningKey;
 use prost::Message as ProstMessage;
 
 use sawtooth_sdk::{
@@ -19,7 +23,7 @@ use sawtooth_sdk::{
     },
 };
 use tokio::task::JoinError;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -33,9 +37,10 @@ pub struct SawtoothSubmitter {
 custom_error! {pub SawtoothSubmissionError
     Send{source: SendError}                                 = "Submission failed to send to validator",
     Recv{source: ReceiveError}                              = "Submission failed to send to validator",
-    UnexpectedReply{}                                       = "Validator reply unexpected",
+    UnexpectedStatus{status: i32}                           = "Validator status unexpected {}",
     Join{source: JoinError}                                 = "Submission blocking thread pool",
     Ld{source: ProcessorError}                              = "Json LD processing",
+    Decode{source: prost::DecodeError}                      = "Response decoding",
 }
 
 impl From<SawtoothSubmissionError> for SubmissionError {
@@ -50,7 +55,7 @@ impl From<SawtoothSubmissionError> for SubmissionError {
 impl SawtoothSubmitter {
     #[allow(dead_code)]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
-        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
+        let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         SawtoothSubmitter { tx, rx, builder }
     }
@@ -60,29 +65,24 @@ impl SawtoothSubmitter {
         &mut self,
         transactions: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
-        let mut addresses = vec![];
+        let addresses = transactions
+            .iter()
+            .flat_map(|tx| tx.dependencies())
+            .map(|addr| (SawtoothAddress::from(&addr).to_string(), addr))
+            .collect::<HashSet<_>>();
 
-        for transaction in transactions {
-            addresses.append(
-                &mut transaction
-                    .dependencies()
-                    .iter()
-                    .map(SawtoothAddress::from)
-                    .map(|addr| addr.to_string())
-                    .collect::<Vec<_>>(),
-            );
-        }
+        debug!(address_map = ?addresses);
 
         let (sawtooth_transaction, tx_id) = self.builder.make_sawtooth_transaction(
-            addresses.clone(),
-            addresses,
+            addresses.iter().map(|x| x.0.clone()).collect(),
+            addresses.into_iter().map(|x| x.0).collect(),
             vec![],
             transactions,
         );
 
         let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
-        debug!(?batch, "Validator request");
+        trace!(?batch, "Validator request");
 
         let request = ClientBatchSubmitRequest {
             batches: vec![batch],
@@ -94,14 +94,20 @@ impl SawtoothSubmitter {
             &*request.encode_to_vec(),
         )?;
 
+        debug!(submit_transaction=%tx_id);
+
         let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
-        debug!(?result, "Validator response");
+        let response = ClientBatchSubmitResponse::decode(&*result.content)?;
 
-        if result.message_type == Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE {
+        debug!(validator_response=?response);
+
+        if response.status == 1 {
             Ok(tx_id)
         } else {
-            Err(SawtoothSubmissionError::UnexpectedReply {})
+            Err(SawtoothSubmissionError::UnexpectedStatus {
+                status: response.status,
+            })
         }
     }
 }

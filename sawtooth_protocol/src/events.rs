@@ -8,15 +8,17 @@ use std::{
 };
 
 use backoff::ExponentialBackoff;
+
 use common::{
     ledger::{LedgerReader, Offset, SubscriptionError},
-    prov::{ChronicleTransactionId, ProcessorError, ProvModel},
+    prov::{ChronicleTransactionId, ChronicleTransactionIdError, ProcessorError, ProvModel},
 };
 use custom_error::custom_error;
 use derivative::*;
 use futures::{stream, Stream, StreamExt, TryFutureExt};
 
-use k256::ecdsa::{Signature, SigningKey};
+use common::k256::ecdsa::SigningKey;
+use hex::FromHexError;
 use prost::{DecodeError, EncodeError, Message};
 use sawtooth_sdk::{
     messages::validator::Message_MessageType,
@@ -43,12 +45,14 @@ custom_error! {pub StateError
     RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator",
     MissingBlockNum{}                               = "Missing block_num in block commit",
     MissingTransactionId{}                          = "Missing transaction_id in prov-update",
-    InvalidTransactionId{source: k256::ecdsa::Error}
+    InvalidTransactionId{source: common::k256::ecdsa::Error}
                                                     = "Invalid transaction id (not a signature)",
     MissingData{}                                   = "Missing block_num in block commit",
     UnparsableBlockNum {}                           = "Unparsable block_num in block commit",
     UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data",
     Processor { source: ProcessorError }            = "Json LD processing",
+    Hex{ source: FromHexError }                     = "Hex decode",
+    Signature {source: ChronicleTransactionIdError }          = "Signature parse"
 }
 
 impl From<StateError> for SubscriptionError {
@@ -60,6 +64,7 @@ impl From<StateError> for SubscriptionError {
 }
 
 use crate::{
+    address::{FAMILY, VERSION},
     messages::MessageBuilder,
     sawtooth::{
         client_events_subscribe_response::Status, ClientEventsSubscribeResponse, EventList,
@@ -78,7 +83,7 @@ pub struct StateDelta {
 impl StateDelta {
     #[instrument]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
-        let builder = MessageBuilder::new(signer.to_owned(), "chronicle", "1.0");
+        let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         info!(?address, "Subscribing to state updates");
         StateDelta {
@@ -128,17 +133,23 @@ impl StateDelta {
         buf.reserve(request.encoded_len());
         request.encode(&mut buf)?;
 
-        let fut = self.tx.send(
-            Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
-            &uuid::Uuid::new_v4().to_string(),
-            &*buf,
-        )?;
-
-        let (_, response) = StateDelta::recv_from_messagefuture(fut).await.unwrap();
-
-        let response = ClientEventsSubscribeResponse::decode(response?.get_content())?;
-
-        debug!(?response, "Subscription response");
+        let response = {
+            loop {
+                let fut = self.tx.send(
+                    Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
+                    &uuid::Uuid::new_v4().to_string(),
+                    &*buf,
+                )?;
+                match StateDelta::recv_from_messagefuture(fut).await {
+                    Ok((_, response)) => {
+                        break ClientEventsSubscribeResponse::decode(response?.get_content())?;
+                    }
+                    Err(e) => {
+                        warn!(?e, "Subscription error");
+                    }
+                }
+            }
+        };
 
         if response.status() != Status::Ok {
             return Err(StateError::SubscribeError {
@@ -167,9 +178,7 @@ impl StateDelta {
                 let events = StateDelta::recv_from_channel(rx.clone()).await;
 
                 match events {
-                    Err(StateError::ZmqRxx { .. }) => {
-                        debug!("No events in time window");
-                    }
+                    Err(StateError::ZmqRxx { .. }) => {}
                     Ok(Ok(events)) => {
                         match EventList::decode(events.get_content()) {
                             Ok(events) => {
@@ -191,14 +200,8 @@ impl StateDelta {
                                                 .iter()
                                                 .find(|attr| attr.key == "transaction_id")
                                                 .ok_or(StateError::MissingTransactionId {})
-                                                .and_then(|transaction_id| {
-                                                    Signature::try_from(
-                                                        transaction_id.value.as_bytes(),
-                                                    )
-                                                    .map_err(StateError::from)
-                                                })
-                                                .map(|transaction_id| {
-                                                    ChronicleTransactionId::from(transaction_id)
+                                                .map(|attr| {
+                                                    ChronicleTransactionId::from(&*attr.value)
                                                 });
 
                                             transaction_id.and_then(|transaction_id| {
@@ -256,6 +259,7 @@ impl StateDelta {
                     Ok(Err(e)) => {
                         // recoverable error
                         warn!(?e, "Zmq recv error");
+                        return None;
                     }
                     Err(e) => {
                         // Non recoverable channel error, end stream
@@ -287,6 +291,6 @@ impl LedgerReader for StateDelta {
             })
         });
 
-        Ok(subscribe.await?.flat_map(stream::iter).boxed())
+        Ok(subscribe.await?.fuse().flat_map(stream::iter).boxed())
     }
 }

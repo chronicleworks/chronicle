@@ -248,16 +248,12 @@ pub async fn bootstrap<Query, Mutation>(
         print!("{}", gql.exportable_schema());
         std::process::exit(0);
     }
-
-    if matches.contains_id("console-logging") {
-        telemetry::console_logging_info();
-    }
-
-    if matches.contains_id("instrument") {
-        telemetry::telemetry(
-            Url::parse(&*matches.get_one::<String>("instrument").unwrap()).unwrap(),
-        );
-    }
+    telemetry::telemetry(
+        matches
+            .get_one::<String>("instrument")
+            .and_then(|s| Url::parse(&*s).ok()),
+        matches.contains_id("console-logging"),
+    );
 
     config_and_exec(gql, domain.into())
         .await
@@ -325,7 +321,7 @@ pub mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        telemetry::console_logging_trace();
+        telemetry::telemetry(None, true);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
@@ -776,7 +772,7 @@ pub mod test {
             - name: test_agent
               public_key: "[public]"
         had_identity: {}
-        has_attachment: {}
+        has_evidence: {}
         had_attachment: {}
         association: {}
         derivation: {}
@@ -938,10 +934,17 @@ pub mod test {
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": "prov:Agent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
+              "value": {
+                "TestBool": true,
+                "TestInt": 23,
+                "TestString": "test"
+              }
             },
             {
               "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
@@ -2322,10 +2325,17 @@ pub mod test {
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": "prov:Agent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
+              "value": {
+                "TestBool": true,
+                "TestInt": 40,
+                "TestString": "test"
+              }
             },
             {
               "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
@@ -2481,18 +2491,26 @@ pub mod test {
               "endTime": "2014-07-09T09:10:12+00:00",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "startTime": "2014-07-09T09:10:12+00:00",
+              "startTime": "2014-07-08T09:10:11+00:00",
               "value": {},
               "wasAssociatedWith": [
+                "chronicle:agent:testagent",
                 "chronicle:agent:testagent"
               ]
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": "prov:Agent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
+              "value": {
+                "TestBool": true,
+                "TestInt": 40,
+                "TestString": "test"
+              }
             },
             {
               "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
@@ -2633,10 +2651,17 @@ pub mod test {
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:testActivity"
+              ],
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
+              "value": {
+                "TestBool": true,
+                "TestInt": 40,
+                "TestString": "test"
+              }
             },
             {
               "@id": "chronicle:entity:testentity",
@@ -2796,13 +2821,20 @@ pub mod test {
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:testActivity"
+              ],
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
               "used": [
                 "chronicle:entity:testentity"
               ],
-              "value": {}
+              "value": {
+                "TestBool": true,
+                "TestInt": 40,
+                "TestString": "test"
+              }
             },
             {
               "@id": "chronicle:entity:testentity",
