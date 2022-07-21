@@ -22,7 +22,7 @@ use crate::{
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
     pin::Pin,
     str::{from_utf8, FromStr},
@@ -225,54 +225,24 @@ impl LedgerWriter for InMemLedger {
         let id = ChronicleTransactionId::from(Uuid::new_v4());
 
         let mut model = ProvModel::default();
-        let mut output = vec![];
-
-        let mut deps_addresses: Vec<LedgerAddress> = vec![];
-
-        let mut operation_state = OperationState::new();
+        let mut state = OperationState::new();
 
         for tx in tx {
             let deps = tx.dependencies();
 
-            let input: Vec<StateInput> = self
-                .kv
-                .borrow()
-                .iter()
-                .filter(|(k, _v)| deps.contains(k))
-                .map(|(addr, json)| {
-                    operation_state.insert(addr, json.to_string().as_bytes());
-                    (addr, json)
-                })
-                .map(|(_addr, json)| StateInput::new(json.to_string().as_bytes().into()))
-                .into_iter()
-                .collect();
+            state.append_input(&deps, self.kv.borrow().iter());
 
             debug!(
                 input_chronicle_addresses=?deps,
             );
 
-            let (mut tx_output, updated_model) = tx.process(model, input).await.unwrap();
+            let (tx_output, updated_model) = tx.process(model, state.input()).await.unwrap();
 
-            output.append(&mut tx_output);
+            state.append_output(tx_output);
             model = updated_model;
-            deps_addresses = deps.into_iter().collect();
         }
 
-        //Merge state output (last update wins) and sort by address, so push into a btree then iterate back to a vector
-        let output = output
-            .into_iter()
-            .map(|state| (state.address.clone(), state))
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
-            .filter(|x| !operation_state.dirty(&x.1))
-            .map(|x| x.1)
-            .map(|s| match s.address.is_specified(&deps_addresses) {
-                true => Ok(s),
-                _ => Err(ProcessorError::Address {}),
-            })
-            .collect::<Result<Vec<_>, ProcessorError>>()?;
-
-        for output in output {
+        for output in state.dirty() {
             let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
             debug!(output_address=?output.address);
             self.kv.borrow_mut().insert(output.address, state);
@@ -340,10 +310,6 @@ impl LedgerAddress {
             resource: resource.into(),
         }
     }
-
-    fn is_specified(&self, dependencies: &[LedgerAddress]) -> bool {
-        dependencies.iter().any(|addr| self == addr)
-    }
 }
 
 #[derive(Debug)]
@@ -369,48 +335,65 @@ impl StateOutput {
     }
 }
 
-/// For holding a cache of address data before processing an operation
-#[derive(Debug)]
+/// Hold a cache of `LedgerWriter::submit` input and output address data
+/// and each `LedgerAddress` specified by `ChronicleOperation::dependencies`
 struct OperationState {
-    kv: HashMap<LedgerAddress, Vec<u8>>,
-    // dirty_state: HashSet<LedgerAddress>,
+    input: BTreeMap<LedgerAddress, Vec<u8>>,
+    output: BTreeMap<LedgerAddress, Vec<u8>>,
+    deps: BTreeSet<LedgerAddress>,
 }
 
 impl OperationState {
     fn new() -> Self {
         OperationState {
-            kv: HashMap::new(),
-            // dirty_state: HashSet::new(),
+            input: BTreeMap::new(),
+            output: BTreeMap::new(),
+            deps: BTreeSet::new(),
         }
     }
 
-    fn insert(&mut self, addr: &LedgerAddress, data: &[u8]) {
-        self.kv.insert(addr.clone(), data.to_vec());
+    /// Load input values into `OperationState` and append new addresses
+    /// specified by `ChronicleOperation::dependencies` to `OperationState`
+    fn append_input<'a>(
+        &mut self,
+        deps: &[LedgerAddress],
+        input: impl Iterator<Item = (&'a LedgerAddress, &'a JsonValue)>,
+    ) {
+        let input_values: Vec<(LedgerAddress, Vec<u8>)> = input
+            .filter(|(k, _v)| deps.contains(k))
+            .map(|(addr, json)| (addr.clone(), json.to_string().as_bytes().into()))
+            .collect();
+        self.input.extend(input_values);
+
+        let mut deps: BTreeSet<LedgerAddress> = deps.iter().cloned().collect();
+        self.deps.append(&mut deps);
     }
 
-    fn try_get_address_value(&self, addr: &LedgerAddress) -> Result<&[u8], ()> {
-        if self.kv.get(addr).is_some() {
-            Ok(self.kv.get(addr).unwrap())
-        } else {
-            Err(())
+    /// Load processed output address and data values into maps in `OperationState`
+    fn append_output(&mut self, outputs: Vec<StateOutput>) {
+        for s in outputs {
+            self.output.insert(s.address, s.data);
         }
+    }
+
+    /// Return the byte vectors of input data held in `OperationState`
+    /// as a vector of `StateInput`s
+    fn input(&self) -> Vec<StateInput> {
+        self.input.values().cloned().map(StateInput::new).collect()
     }
 
     /// Check if the data associated with an address has changed in processing
-    fn dirty(&mut self, s: &StateOutput) -> bool {
-        let addr = &s.address;
-        let data = &s.data;
-        if self.try_get_address_value(addr).is_ok() {
-            self.try_get_address_value(addr).unwrap() != data
-            // if self.try_get_address_value(addr).unwrap() != data {
-            //     self.dirty_state.insert(addr.clone());
-            //     true
-            // } else {
-            //     false
-            // }
-        } else {
-            false
-        }
+    fn dirty(self) -> impl Iterator<Item = StateOutput> {
+        self.output
+            .into_iter()
+            .filter(|x| match (self.input.get(&x.0), &x.1) {
+                (Some(input), output) if input != output => true,
+                (None, _) => true,
+                _ => false,
+            })
+            .map(|x| StateOutput::new(x.0, x.1))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 
@@ -637,24 +620,21 @@ impl ChronicleOperation {
     }
 }
 
+/// Ensure ledgerwriter only writes dirty values back
 #[cfg(test)]
 pub mod test {
-    use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::str::from_utf8;
 
     use crate::{
-        attributes::{Attribute, Attributes},
-        ledger::{InMemLedger, LedgerWriter},
+        ledger::InMemLedger,
         prov::{
-            operations::{
-                ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateEntity,
-                CreateNamespace, DerivationType, EntityDerive, GenerateEntity, RegisterKey,
-                SetAttributes, StartActivity,
-            },
-            ActivityId, AgentId, DomaintypeId, EntityId, NamePart, NamespaceId,
+            operations::{ActsOnBehalfOf, ChronicleOperation, CreateAgent, CreateNamespace},
+            ActivityId, AgentId, Name, NamePart, NamespaceId, ProvModel,
         },
     };
     use uuid::Uuid;
+
+    use super::{OperationState, StateOutput};
     fn uuid() -> Uuid {
         let bytes = [
             0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
@@ -663,332 +643,220 @@ pub mod test {
         Uuid::from_slice(&bytes).unwrap()
     }
 
-    // #[tokio::test]
-    // async fn test_entity_attach() -> Result<(), String> {
-    //     let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-    //     let id = EntityId::from_name("test_entity");
-    //     let agent = AgentId::from_name("test_agent");
-    //     let op: ChronicleOperation = ChronicleOperation::EntityAttach(EntityAttach {
-    //         namespace,
-    //         identityid: None,
-    //         id,
-    //         locator: None,
-    //         agent,
-    //         signature: None,
-    //         signature_time: None,
-    //     });
-    //     let mut l = InMemLedger::new();
-    //     let tx = vec![op];
-    //     let id = l.submit(&tx).await;
-    //     if id.is_err() {
-    //         Err(format!("error: {id:?}"))
-    //     } else {
-    //         Ok(())
-    //     }
-    // }
-
-    #[tokio::test]
-    async fn test_create_namespace() -> Result<(), String> {
+    fn create_namespace_helper() -> ChronicleOperation {
         let name = "testns";
         let id = NamespaceId::from_name(name, uuid());
-
-        let op = ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid()));
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
+        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid()))
     }
 
-    #[tokio::test]
-    async fn test_create_agent() -> Result<(), String> {
-        let uuid = uuid();
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid);
-        let name: crate::prov::Name =
-            crate::prov::NamePart::name_part(&crate::prov::AgentId::from_name("test_agent"))
-                .clone();
-        let op: ChronicleOperation =
-            super::ChronicleOperation::CreateAgent(crate::prov::operations::CreateAgent {
-                namespace,
-                name,
-            });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
+    fn create_agent_helper() -> ChronicleOperation {
+        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
+        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
+        ChronicleOperation::CreateAgent(CreateAgent { namespace, name })
     }
 
-    #[tokio::test]
-    async fn test_agent_acts_on_behalf_of() -> Result<(), String> {
+    fn create_agent_acts_on_behalf_of() -> ChronicleOperation {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let id = AgentId::from_name("test_agent");
         let delegate_id = AgentId::from_name("test_delegate");
         let activity_id = Some(ActivityId::from_name("test_activity"));
-
-        let op: ChronicleOperation = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+        ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
             namespace,
             id,
             delegate_id,
             activity_id,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
+        })
     }
 
-    #[tokio::test]
-    async fn test_register_key() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = crate::prov::AgentId::from_name("test_agent");
-        let publickey =
-            "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
-
-        let op: ChronicleOperation = ChronicleOperation::RegisterKey(RegisterKey {
-            namespace,
-            id,
-            publickey,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
+    async fn transact_helper(
+        tx: &ChronicleOperation,
+        state: &mut OperationState,
+        l: &InMemLedger,
+        model: &mut ProvModel,
+    ) {
+        let deps = tx.dependencies();
+        state.append_input(&deps, l.kv.borrow().iter());
+        let (tx_output, updated_model) = tx.process(model.clone(), state.input()).await.unwrap();
+        state.append_output(tx_output);
+        *model = updated_model;
     }
 
-    #[tokio::test]
-    async fn test_create_activity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let name = NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
+    fn amend_ledger_helper(output: StateOutput, l: &mut InMemLedger) {
+        let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
 
-        let op: ChronicleOperation =
-            ChronicleOperation::CreateActivity(CreateActivity { namespace, name });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
-        }
+        l.kv.borrow_mut().insert(output.address, state);
     }
 
+    /// Create namespace should create one novel output
     #[tokio::test]
-    async fn start_activity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = ActivityId::from_name("test_activity");
-        let agent = AgentId::from_name("test_agent");
-        let time = chrono::DateTime::<chrono::Utc>::from_utc(
-            chrono::NaiveDateTime::from_timestamp(61, 0),
-            chrono::Utc,
-        );
-        let op: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
-            namespace,
-            id,
-            agent,
-            time,
-        });
+    async fn test_dirty_passes_novel_output() -> Result<(), String> {
+        let mut state = OperationState::new();
+        let mut model = ProvModel::default();
+        let mut tx: Vec<ChronicleOperation> = vec![];
         let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+
+        let op = create_namespace_helper();
+        tx.push(op);
+
+        let dirty_values = 1;
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
         }
+        let mut dirty_matches = 0;
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
+        }
+        l.head += 1;
+        assert!(dirty_matches == dirty_values);
+        Ok(())
     }
 
+    /// Repeating an operation should create no novel output
     #[tokio::test]
-    async fn test_end_activity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = ActivityId::from_name("test_activity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
-        let time = chrono::DateTime::<chrono::Utc>::from_utc(
-            chrono::NaiveDateTime::from_timestamp(61, 0),
-            chrono::Utc,
-        );
-        let op: ChronicleOperation =
-            super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
-                namespace,
-                id,
-                agent,
-                time,
-            });
+    async fn test_dirty_matches_non_novel_output() -> Result<(), String> {
+        let mut state = OperationState::new();
+        let mut model = ProvModel::default();
+        let mut tx: Vec<ChronicleOperation> = vec![];
         let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+
+        // operation - create namespace
+        let op = create_namespace_helper();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
         }
+
+        for output in state.dirty() {
+            amend_ledger_helper(output, &mut l);
+        }
+        l.head += 1;
+
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
+
+        // operation - re-create the same namespace
+        let dirty_values = 0;
+        let op = create_namespace_helper();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
+        }
+        let mut dirty_matches = 0;
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
+        }
+        l.head += 1;
+        assert!(dirty_matches == dirty_values);
+
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
+
+        // operation - agent acts on behalf of
+        let op = create_agent_acts_on_behalf_of();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
+        }
+
+        for output in state.dirty() {
+            amend_ledger_helper(output, &mut l);
+        }
+
+        l.head += 1;
+
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
+
+        // repeat operation - agent acts on behalf of - namespace made dirty by transaction
+        let dirty_values = 1;
+        let op = create_agent_acts_on_behalf_of();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
+        }
+        let mut dirty_matches = 0;
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
+        }
+        l.head += 1;
+        assert!(dirty_matches == dirty_values);
+        Ok(())
     }
 
+    /// Already existing 'dirty' values should not match
     #[tokio::test]
-    async fn test_activity_uses() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = EntityId::from_name("test_entity");
-        let activity = ActivityId::from_name("test_activity");
-        let op: ChronicleOperation = ChronicleOperation::ActivityUses(ActivityUses {
-            namespace,
-            id,
-            activity,
-        });
+    async fn test_dirty_passes_dirty_output() -> Result<(), String> {
+        let mut state = OperationState::new();
+        let mut model = ProvModel::default();
+        let mut tx: Vec<ChronicleOperation> = vec![];
         let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+
+        // operation - create namespace
+        let op = create_namespace_helper();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
         }
-    }
 
-    #[tokio::test]
-    async fn test_create_entity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
-        let op: ChronicleOperation = ChronicleOperation::CreateEntity(CreateEntity {
-            namespace,
-            name: id,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+        for output in state.dirty() {
+            amend_ledger_helper(output, &mut l);
         }
-    }
+        l.head += 1;
 
-    #[tokio::test]
-    async fn test_generate_entity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = EntityId::from_name("test_entity");
-        let activity = ActivityId::from_name("test_activity");
-        let op: ChronicleOperation = ChronicleOperation::GenerateEntity(GenerateEntity {
-            namespace,
-            id,
-            activity,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
+
+        // operation - create agent
+        let op = create_agent_helper();
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
         }
-    }
 
-    #[tokio::test]
-    async fn test_entity_derive() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = EntityId::from_name("test_entity");
-        let used_id = EntityId::from_name("test_used_entity");
-        let activity_id = Some(ActivityId::from_name("test_activity"));
-        let typ = Some(DerivationType::Revision);
-        let op: ChronicleOperation = ChronicleOperation::EntityDerive(EntityDerive {
-            namespace,
-            id,
-            used_id,
-            activity_id,
-            typ,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+        for output in state.dirty() {
+            amend_ledger_helper(output, &mut l);
         }
-    }
+        l.head += 1;
 
-    #[tokio::test]
-    async fn test_set_attributes_entity() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = EntityId::from_name("test_entity");
-        let domain = DomaintypeId::from_name("test_domain");
-        let attributes = Attributes {
-            typ: Some(domain),
-            attributes: BTreeMap::new(),
-        };
-        let op: ChronicleOperation = ChronicleOperation::SetAttributes(SetAttributes::Entity {
-            namespace,
-            id,
-            attributes,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
+
+        // operation - agent acts on behalf of
+        // uses namespace and agent that already exist as inputs
+        // and involve a delegate-agent and an activity
+        // the agent is amended by the transaction
+        let op = create_agent_acts_on_behalf_of();
+        let dirty_values = 3;
+
+        tx.push(op);
+
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
         }
-    }
 
-    #[tokio::test]
-    async fn test_set_attributes_entity_multiple_attributes() -> Result<(), String> {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = EntityId::from_name("test_entity");
-        let domain = DomaintypeId::from_name("test_domain");
-        let attrs = {
-            let mut h: BTreeMap<String, Attribute> = BTreeMap::new();
+        let mut dirty_matches = 0;
 
-            let attr = Attribute {
-                typ: "Bool".to_string(),
-                value: json!("Bool"),
-            };
-            h.insert("bool_attribute".to_string(), attr);
-
-            let attr = Attribute {
-                typ: "String".to_string(),
-                value: json!("String"),
-            };
-            h.insert("string_attribute".to_string(), attr);
-
-            let attr = Attribute {
-                typ: "Int".to_string(),
-                value: json!("Int"),
-            };
-            h.insert("int_attribute".to_string(), attr);
-
-            h
-        };
-
-        let attributes = Attributes {
-            typ: Some(domain),
-            attributes: attrs,
-        };
-        let op: ChronicleOperation = ChronicleOperation::SetAttributes(SetAttributes::Entity {
-            namespace,
-            id,
-            attributes,
-        });
-        let mut l = InMemLedger::new();
-        let tx = vec![op];
-        let id = l.submit(&tx).await;
-        if id.is_err() {
-            Err(format!("error: {id:?}"))
-        } else {
-            Ok(())
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
         }
+        l.head += 1;
+        assert!(dirty_matches == dirty_values);
+        Ok(())
     }
 }
