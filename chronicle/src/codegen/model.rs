@@ -228,12 +228,36 @@ impl ActivityDef {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleDef {
+    pub(crate) name: String,
+}
+
+impl RoleDef {
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self {
+            name: name.as_ref().to_string(),
+        }
+    }
+
+    pub fn from_role_file_input(name: String) -> Self {
+        RoleDef { name }
+    }
+}
+
+impl TypeName for &RoleDef {
+    fn as_type_name(&self) -> String {
+        to_pascal_case(&to_singular(&self.name))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChronicleDomainDef {
     name: String,
     pub(crate) attributes: Vec<AttributeDef>,
     pub(crate) agents: Vec<AgentDef>,
     pub(crate) entities: Vec<EntityDef>,
     pub(crate) activities: Vec<ActivityDef>,
+    pub(crate) roles: Vec<RoleDef>,
 }
 
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
@@ -317,10 +341,7 @@ impl Builder {
     pub fn new(name: impl AsRef<str>) -> Self {
         Builder(ChronicleDomainDef {
             name: name.as_ref().to_string(),
-            agents: vec![],
-            entities: vec![],
-            activities: vec![],
-            attributes: vec![],
+            ..Default::default()
         })
     }
 
@@ -367,6 +388,12 @@ impl Builder {
         self.0
             .activities
             .push(b(ActivityBuilder(&self.0, ActivityDef::new(name, vec![])))?.into());
+
+        Ok(self)
+    }
+
+    pub fn with_role(mut self, name: impl AsRef<str>) -> Result<Self, ModelError> {
+        self.0.roles.push(RoleDef::new(name));
 
         Ok(self)
     }
@@ -441,6 +468,7 @@ pub struct DomainFileInput {
     pub agents: BTreeMap<String, ResourceDef>,
     pub entities: BTreeMap<String, ResourceDef>,
     pub activities: BTreeMap<String, ResourceDef>,
+    pub roles: Vec<String>,
 }
 
 impl DomainFileInput {
@@ -492,6 +520,8 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
             .iter()
             .map(|x| (x.as_type_name(), ResourceDef::from(x)))
             .collect();
+
+        file.roles = domain.roles.iter().map(|x| x.as_type_name()).collect();
 
         file
     }
@@ -564,6 +594,10 @@ impl ChronicleDomainDef {
                 &model.attributes,
                 def.attributes.iter(),
             )?)
+        }
+
+        for role in model.roles {
+            builder.0.roles.push(RoleDef::from_role_file_input(role));
         }
 
         Ok(builder.build())
@@ -659,6 +693,8 @@ pub mod test {
           - String
           - Int
           - Bool
+    roles:
+      - drummer
      "#,
         )?;
         Ok(file)
@@ -686,6 +722,8 @@ pub mod test {
           gardening:
             attributes:
               - String
+        roles:
+          - drummer
          "#,
         )?;
         Ok(file)
@@ -726,7 +764,8 @@ pub mod test {
                       "String"
                     ]
                   }
-                }
+                },
+                "roles" : ["drummer"]
               }
              "#,
         )?;
@@ -766,6 +805,8 @@ pub mod test {
             attributes:
               - typ: String
                 primitive_type: String
+        roles:
+          - name: drummer
         "###);
 
         Ok(())
@@ -832,6 +873,8 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
+        roles:
+          - name: drummer
         "###);
 
         Ok(())
@@ -898,6 +941,8 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
+        roles:
+          - name: drummer
         "###);
 
         Ok(())
@@ -928,6 +973,8 @@ pub mod test {
           Gardening:
             attributes:
               - String
+        roles:
+          - Drummer
         "###);
 
         Ok(())
@@ -975,6 +1022,8 @@ pub mod test {
             attributes:
               - typ: String
                 primitive_type: String
+        roles:
+          - name: drummer
         "###);
 
         Ok(())
@@ -1007,6 +1056,8 @@ pub mod test {
             attributes:
               - typ: String
                 primitive_type: String
+        roles:
+          - name: drummer
         "###);
 
         Ok(())

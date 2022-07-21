@@ -41,6 +41,9 @@ fn main() {
           - String
           - Int
           - Bool
+    roles:
+      - delegate
+      - responsible
      "#
     .to_string();
 

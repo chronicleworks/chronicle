@@ -9,6 +9,7 @@ fn main() {
     agents: {}
     entities: {}
     activities: {}
+    roles: []
     "#
     .to_string();
 

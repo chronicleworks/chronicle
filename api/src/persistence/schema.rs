@@ -54,10 +54,10 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    association (offset, agent_id) {
-        offset -> Integer,
+    association (agent_id, activity_id, role) {
         agent_id -> Integer,
         activity_id -> Integer,
+        role -> Nullable<Text>,
     }
 }
 
@@ -79,12 +79,11 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    delegation (offset, delegate_id, responsible_id) {
-        offset -> Integer,
+    delegation (delegate_id, responsible_id, activity_id, role) {
         delegate_id -> Integer,
         responsible_id -> Integer,
         activity_id -> Nullable<Integer>,
-        typ -> Nullable<Text>,
+        role -> Nullable<Text>,
     }
 }
 
@@ -92,8 +91,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    derivation (offset, generated_entity_id) {
-        offset -> Integer,
+    derivation (activity_id, generated_entity_id, used_entity_id, typ) {
         activity_id -> Nullable<Integer>,
         generated_entity_id -> Integer,
         used_entity_id -> Integer,
@@ -129,8 +127,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    generation (offset, generated_entity_id) {
-        offset -> Integer,
+    generation (activity_id, generated_entity_id) {
         activity_id -> Integer,
         generated_entity_id -> Integer,
         typ -> Nullable<Text>,
@@ -194,8 +191,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    useage (offset, entity_id) {
-        offset -> Integer,
+    useage (activity_id, entity_id) {
         activity_id -> Integer,
         entity_id -> Integer,
     }

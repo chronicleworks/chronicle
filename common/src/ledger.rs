@@ -9,9 +9,9 @@ use crate::{
     context::PROV,
     prov::{
         operations::{
-            ActivityUses, ActsOnBehalfOf, ChronicleOperation, CreateActivity, CreateAgent,
-            CreateEntity, CreateNamespace, EndActivity, EntityAttach, EntityDerive, GenerateEntity,
-            RegisterKey, SetAttributes, StartActivity,
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence,
+            RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
@@ -338,7 +338,7 @@ impl ChronicleOperation {
             ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
                 vec![LedgerAddress::namespace(id)]
             }
-            ChronicleOperation::CreateAgent(CreateAgent {
+            ChronicleOperation::AgentExists(AgentExists {
                 namespace, name, ..
             }) => {
                 vec![
@@ -360,7 +360,7 @@ impl ChronicleOperation {
                     IdentityId::from_name(id.name_part(), publickey),
                 ),
             ],
-            ChronicleOperation::CreateActivity(CreateActivity {
+            ChronicleOperation::ActivityExists(ActivityExists {
                 namespace, name, ..
             }) => {
                 vec![
@@ -368,28 +368,28 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, ActivityId::from_name(name)),
                 ]
             }
-            ChronicleOperation::StartActivity(StartActivity {
-                namespace,
-                id,
-                agent,
-                ..
-            }) => {
+            ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
-                    LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
             }
-            ChronicleOperation::EndActivity(EndActivity {
-                namespace,
+            ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
                 id,
-                agent,
+                namespace,
+                activity_id,
+                agent_id,
                 ..
-            }) => {
+            }) => vec![
+                LedgerAddress::namespace(namespace),
+                LedgerAddress::in_namespace(namespace, id.clone()),
+                LedgerAddress::in_namespace(namespace, activity_id.clone()),
+                LedgerAddress::in_namespace(namespace, agent_id.clone()),
+            ],
+            ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, id.clone()),
-                    LedgerAddress::in_namespace(namespace, agent.clone()),
                 ]
             }
             ChronicleOperation::ActivityUses(ActivityUses {
@@ -403,13 +403,13 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, id.clone()),
                 ]
             }
-            ChronicleOperation::CreateEntity(CreateEntity { namespace, name }) => {
+            ChronicleOperation::EntityExists(EntityExists { namespace, name }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
                     LedgerAddress::in_namespace(namespace, EntityId::from_name(name)),
                 ]
             }
-            ChronicleOperation::GenerateEntity(GenerateEntity {
+            ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
                 activity,
@@ -418,7 +418,7 @@ impl ChronicleOperation {
                 LedgerAddress::in_namespace(namespace, activity.clone()),
                 LedgerAddress::in_namespace(namespace, id.clone()),
             ],
-            ChronicleOperation::EntityAttach(EntityAttach {
+            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,
                 agent,

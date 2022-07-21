@@ -1,4 +1,5 @@
 use async_graphql::Context;
+use common::prov::Role;
 use diesel::prelude::*;
 
 use crate::chronicle_graphql::{Identity, Namespace, Store};
@@ -41,7 +42,7 @@ pub async fn identity<'a>(
 pub async fn acted_on_behalf_of<'a>(
     id: i32,
     ctx: &Context<'a>,
-) -> async_graphql::Result<Vec<Agent>> {
+) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
     use crate::persistence::schema::{
         agent as agentdsl,
         delegation::{self, dsl},
@@ -53,10 +54,10 @@ pub async fn acted_on_behalf_of<'a>(
 
     Ok(delegation::table
         .filter(dsl::responsible_id.eq(id))
-        .order(dsl::offset)
         .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
-        .select(Agent::as_select())
-        .load::<Agent>(&mut connection)?)
+        .order(agentdsl::name)
+        .select((Agent::as_select(), dsl::role))
+        .load::<(Agent, Option<Role>)>(&mut connection)?)
 }
 
 pub async fn load_attribute<'a>(

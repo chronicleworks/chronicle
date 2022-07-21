@@ -46,6 +46,9 @@ pub async fn main() {
           - String
           - Int
           - Bool
+    roles:
+        - delegate
+        - responsible
      "#
     .to_string();
 
@@ -119,7 +122,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn delegation() {
+    async fn agent_delegation() {
         let schema = test_schema().await;
 
         let created = schema
@@ -129,6 +132,7 @@ mod test {
                 actedOnBehalfOf(
                     responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
                     delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
+                    role: DELEGATE
                     ) {
                     context
                 }
@@ -150,9 +154,12 @@ mod test {
                         id
                         name
                         actedOnBehalfOf {
-                            ... on ProvAgent {
-                                id
+                            agent {
+                                ... on ProvAgent {
+                                    id
+                                }
                             }
+                            role
                         }
                     }
                 }
@@ -160,7 +167,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_json_snapshot!(derived.data);
     }
 
     #[tokio::test]
@@ -440,12 +447,28 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", agent: "http://blockchaintp.com/chronicle/ns#agent:ringo", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
                     context
                 }}
             }}
         "#,
                    from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() ,i
+                )))
+                .await;
+
+            assert_eq!(res.errors, vec![]);
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
+            mutation {{
+                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:ringo", activity: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                    context
+                }}
+            }}
+        "#, i
                 )))
                 .await;
 
@@ -481,10 +504,15 @@ mod test {
                                 intAttribute
                                 boolAttribute
                                 wasAssociatedWith {
-                                    ... on Friend {
-                                        id
-                                        name
-                                    }
+                                        responsible {
+                                            agent {
+                                                ... on Friend {
+                                                    id
+                                                    name
+                                                }
+                                            }
+                                            role
+                                        }
                                 }
                                 used {
                                     ... on TheSea {

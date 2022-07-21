@@ -926,6 +926,9 @@ pub mod test {
               "@type": "prov:Activity",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
               "startTime": "2014-07-08T09:10:11+00:00",
               "value": {},
               "wasAssociatedWith": [
@@ -944,6 +947,15 @@ pub mod test {
                 "TestBool": true,
                 "TestInt": 23,
                 "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
               }
             },
             {
@@ -2317,6 +2329,9 @@ pub mod test {
               "@type": "prov:Activity",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
               "startTime": "2014-07-08T09:10:11+00:00",
               "value": {},
               "wasAssociatedWith": [
@@ -2335,6 +2350,15 @@ pub mod test {
                 "TestBool": true,
                 "TestInt": 40,
                 "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
               }
             },
             {
@@ -2370,7 +2394,7 @@ pub mod test {
         // Should end the last opened activity
         let id = ActivityId::from_name("testactivity");
         let command_line = format!(
-            r#"chronicle test-activity end --namespace testns --time 2014-07-09T09:10:12Z {id} "#
+            r#"chronicle test-activity end --namespace testns --time 2014-08-09T09:10:12Z {id} "#
         );
         let cmd = get_api_cmd(&command_line);
         let sorted = sort_prov_model(api.dispatch(cmd).await.unwrap().unwrap().0);
@@ -2488,13 +2512,14 @@ pub mod test {
             {
               "@id": "chronicle:activity:testactivity",
               "@type": "prov:Activity",
-              "endTime": "2014-07-09T09:10:12+00:00",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
               "startTime": "2014-07-08T09:10:11+00:00",
               "value": {},
               "wasAssociatedWith": [
-                "chronicle:agent:testagent",
                 "chronicle:agent:testagent"
               ]
             },
@@ -2510,6 +2535,15 @@ pub mod test {
                 "TestBool": true,
                 "TestInt": 40,
                 "TestString": "test"
+              }
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
               }
             },
             {
