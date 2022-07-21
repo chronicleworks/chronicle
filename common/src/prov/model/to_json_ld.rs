@@ -1054,12 +1054,12 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateNamespace",
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1087,18 +1087,18 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateAgent",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentExists",
+            "http://blockchaintp.com/chronicleoperations/ns#agentName": [
               {
                 "@value": "test_agent"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1131,29 +1131,34 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#AgentActsOnBehalfOf",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#DelegateId": [
+            "http://blockchaintp.com/chronicleoperations/ns#delegateId": [
               {
                 "@value": "test_delegate"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#responsibleId": [
+              {
+                "@value": "test_agent"
+              }
+            ],
+            "http://blockchaintp.com/chronicleoperations/ns#role": [
+              {
+                "@value": "test_role"
               }
             ]
           }
@@ -1181,22 +1186,22 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#RegisterKey",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+            "http://blockchaintp.com/chronicleoperations/ns#agentName": [
               {
                 "@value": "test_agent"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#PublicKey": [
+            "http://blockchaintp.com/chronicleoperations/ns#publicKey": [
               {
                 "@value": "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23"
               }
@@ -1220,18 +1225,18 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#ActivityExists",
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1262,27 +1267,22 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#StartActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#StartActivityTime": [
+            "http://blockchaintp.com/chronicleoperations/ns#startActivityTime": [
               {
                 "@value": "1970-01-01T00:01:01+00:00"
               }
@@ -1313,28 +1313,23 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#EndActivity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#endactivity",
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
-              {
-                "@value": "test_agent"
-              }
-            ],
-            "http://blockchaintp.com/chronicleoperations/ns#EndActivityTime": [
+            "http://blockchaintp.com/chronicleoperations/ns#endActivityTime": [
               {
                 "@value": "1970-01-01T00:01:01+00:00"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1362,22 +1357,22 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#ActivityUses",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1402,18 +1397,18 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#CreateEntity",
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityExists",
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1440,23 +1435,23 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#GenerateEntity",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#WasGeneratedBy",
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1488,23 +1483,23 @@ mod test {
         [
           {
             "@id": "_:n1",
-            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityAttach",
-            "http://blockchaintp.com/chronicleoperations/ns#AgentName": [
+            "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityHasEvidence",
+            "http://blockchaintp.com/chronicleoperations/ns#agentName": [
               {
                 "@value": "test_agent"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1536,32 +1531,32 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#EntityDerive",
-            "http://blockchaintp.com/chronicleoperations/ns#ActivityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#activityName": [
               {
                 "@value": "test_activity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#DerivationType": [
+            "http://blockchaintp.com/chronicleoperations/ns#derivationType": [
               {
                 "@value": "Revision"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#UsedEntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#usedEntityName": [
               {
                 "@value": "test_used_entity"
               }
@@ -1593,23 +1588,23 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#SetAttributes",
-            "http://blockchaintp.com/chronicleoperations/ns#Attributes": [],
-            "http://blockchaintp.com/chronicleoperations/ns#DomaintypeId": [
+            "http://blockchaintp.com/chronicleoperations/ns#attributes": [],
+            "http://blockchaintp.com/chronicleoperations/ns#domaintypeId": [
               {
                 "@value": "test_domain"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }
@@ -1665,7 +1660,7 @@ mod test {
           {
             "@id": "_:n1",
             "@type": "http://blockchaintp.com/chronicleoperations/ns#SetAttributes",
-            "http://blockchaintp.com/chronicleoperations/ns#Attributes": [
+            "http://blockchaintp.com/chronicleoperations/ns#attributes": [
               {
                 "@primitive_type": "\"Bool\"",
                 "@type": "Bool"
@@ -1679,22 +1674,22 @@ mod test {
                 "@type": "String"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#DomaintypeId": [
+            "http://blockchaintp.com/chronicleoperations/ns#domaintypeId": [
               {
                 "@value": "test_domain"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#EntityName": [
+            "http://blockchaintp.com/chronicleoperations/ns#entityName": [
               {
                 "@value": "test_entity"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceName": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceName": [
               {
                 "@value": "testns"
               }
             ],
-            "http://blockchaintp.com/chronicleoperations/ns#NamespaceUuid": [
+            "http://blockchaintp.com/chronicleoperations/ns#namespaceUuid": [
               {
                 "@value": "a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"
               }

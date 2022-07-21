@@ -1115,7 +1115,6 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
 
         let id = ActivityId::from_name("test_activity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
         let time = chrono::DateTime::<chrono::Utc>::from_utc(
             chrono::NaiveDateTime::from_timestamp(61, 0),
             chrono::Utc,
@@ -1144,7 +1143,6 @@ mod test {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
 
         let id = ActivityId::from_name("test_activity");
-        let agent = crate::prov::AgentId::from_name("test_agent");
         let time = chrono::DateTime::<chrono::Utc>::from_utc(
             chrono::NaiveDateTime::from_timestamp(61, 0),
             chrono::Utc,
