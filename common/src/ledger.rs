@@ -226,6 +226,7 @@ impl LedgerWriter for InMemLedger {
 
         let mut model = ProvModel::default();
         let mut state = OperationState::new();
+        let mut state_deps: Vec<LedgerAddress> = vec![];
 
         for tx in tx {
             let deps = tx.dependencies();
@@ -240,13 +241,26 @@ impl LedgerWriter for InMemLedger {
 
             state.append_output(tx_output);
             model = updated_model;
+            state_deps.append(
+                &mut deps
+                    .iter()
+                    .filter(|d| !state_deps.contains(d))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
         }
 
-        for output in state.dirty() {
-            let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-            debug!(output_address=?output.address);
-            self.kv.borrow_mut().insert(output.address, state);
-        }
+        state
+            .dirty()
+            .map(|output| output.address_is_specified(&state_deps))
+            .collect::<Result<Vec<_>, SubmissionError>>()
+            .into_iter()
+            .flat_map(|v| v.into_iter())
+            .for_each(|output| {
+                let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
+                debug!(output_address=?output.address);
+                self.kv.borrow_mut().insert(output.address, state);
+            });
 
         self.chan
             .send((Offset::from(&*self.head.to_string()), model, id.clone()))
@@ -333,6 +347,15 @@ impl StateOutput {
     pub fn new(address: LedgerAddress, data: Vec<u8>) -> Self {
         Self { address, data }
     }
+
+    fn address_is_specified(self, deps: &[LedgerAddress]) -> Result<Self, SubmissionError> {
+        match deps.contains(&self.address) {
+            true => Ok(self),
+            false => Err(SubmissionError::Processor {
+                source: ProcessorError::Address {},
+            }),
+        }
+    }
 }
 
 /// Hold a cache of `LedgerWriter::submit` input and output address data
@@ -372,13 +395,9 @@ impl OperationState {
         self.input.extend(input_values);
     }
 
-    /// Load input values into `OperationState` and append new addresses
-    ///
+    /// Load sawtooth_tp input values into `OperationState`
     pub fn append_tp_input(&mut self, input: impl Iterator<Item = (String, Vec<u8>)>) {
-        let input_values: Vec<(String, Vec<u8>)> = input
-            // .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        self.tp_input.extend(input_values);
+        self.tp_input.extend(input);
     }
 
     /// Load processed output address and data values into maps in `OperationState`
@@ -394,7 +413,7 @@ impl OperationState {
         self.input.values().cloned().map(StateInput::new).collect()
     }
 
-    /// Return the byte vectors of input data held in `OperationState`
+    /// Return the byte vectors of sawtooth_tp input data held in `OperationState`
     /// as a vector of `StateInput`s
     pub fn tp_input(&self) -> Vec<StateInput> {
         self.tp_input
