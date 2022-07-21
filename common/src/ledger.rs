@@ -628,8 +628,8 @@ pub mod test {
     use crate::{
         ledger::InMemLedger,
         prov::{
-            operations::{ActsOnBehalfOf, ChronicleOperation, CreateAgent, CreateNamespace},
-            ActivityId, AgentId, Name, NamePart, NamespaceId, ProvModel,
+            operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
+            ActivityId, AgentId, DelegationId, Name, NamePart, NamespaceId, ProvModel, Role,
         },
     };
     use uuid::Uuid;
@@ -649,22 +649,32 @@ pub mod test {
         ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid()))
     }
 
-    fn create_agent_helper() -> ChronicleOperation {
+    fn agent_exists_helper() -> ChronicleOperation {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
         let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
-        ChronicleOperation::CreateAgent(CreateAgent { namespace, name })
+        ChronicleOperation::AgentExists(AgentExists { namespace, name })
     }
 
     fn create_agent_acts_on_behalf_of() -> ChronicleOperation {
         let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let id = AgentId::from_name("test_agent");
+        let responsible_id = AgentId::from_name("test_agent");
         let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = Some(ActivityId::from_name("test_activity"));
+        let activity_id = ActivityId::from_name("test_activity");
+        let role = "test_role";
+        let id = DelegationId::from_component_ids(
+            &delegate_id,
+            &responsible_id,
+            Some(&activity_id),
+            Some(role),
+        );
+        let role = Role::from(role.to_string());
         ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
             namespace,
             id,
+            responsible_id,
             delegate_id,
-            activity_id,
+            activity_id: Some(activity_id),
+            role: Some(role),
         })
     }
 
@@ -820,7 +830,7 @@ pub mod test {
         let mut tx: Vec<ChronicleOperation> = vec![];
 
         // operation - create agent
-        let op = create_agent_helper();
+        let op = agent_exists_helper();
         tx.push(op);
 
         for tx in tx {
@@ -837,11 +847,11 @@ pub mod test {
         let mut tx: Vec<ChronicleOperation> = vec![];
 
         // operation - agent acts on behalf of
-        // uses namespace and agent that already exist as inputs
-        // and involve a delegate-agent and an activity
-        // the agent is amended by the transaction
+        // involves a delegation and an activity, writing to
+        // a namespace and agent that already exist as inputs,
+        // which are amended by the transaction
         let op = create_agent_acts_on_behalf_of();
-        let dirty_values = 3;
+        let dirty_values = 4;
 
         tx.push(op);
 

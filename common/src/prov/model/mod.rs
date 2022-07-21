@@ -342,7 +342,7 @@ impl Association {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Usage {
+pub struct Useage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
     pub time: Option<DateTime<Utc>>,
@@ -378,7 +378,7 @@ pub struct ProvModel {
     pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
     pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
-    pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
+    pub useage: HashMap<NamespacedActivity, HashSet<Useage>>,
 }
 
 impl ProvModel {
@@ -463,8 +463,8 @@ impl ProvModel {
                 .or_insert(rhs);
         }
 
-        for (id, mut rhs) in other.usage {
-            self.usage
+        for (id, mut rhs) in other.useage {
+            self.useage
                 .entry(id.clone())
                 .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
@@ -568,10 +568,10 @@ impl ProvModel {
     }
 
     pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
-        self.usage
+        self.useage
             .entry((namespace, activity_id.clone()))
             .or_insert_with(HashSet::new)
-            .insert(Usage {
+            .insert(Useage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
                 time: None,
