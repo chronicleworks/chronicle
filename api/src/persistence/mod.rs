@@ -11,7 +11,7 @@ use common::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
         EvidenceId, Generation, Identity, IdentityId, Name, NamePart, Namespace, NamespaceId,
-        ProvModel, PublicKeyPart, SignaturePart, Usage,
+        ProvModel, PublicKeyPart, SignaturePart, Useage,
     },
 };
 use custom_error::custom_error;
@@ -495,7 +495,7 @@ impl Store {
             }
         }
 
-        for ((namespaceid, _), usage) in model.usage.iter() {
+        for ((namespaceid, _), usage) in model.useage.iter() {
             for usage in usage.iter() {
                 self.apply_used(connection, namespaceid, usage)?;
             }
@@ -556,7 +556,7 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         namespace: &NamespaceId,
-        usage: &Usage,
+        usage: &Useage,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
@@ -570,8 +570,8 @@ impl Store {
             namespace,
         )?;
 
-        use schema::usage::dsl as link;
-        diesel::insert_or_ignore_into(schema::usage::table)
+        use schema::useage::dsl as link;
+        diesel::insert_or_ignore_into(schema::useage::table)
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
@@ -1055,9 +1055,9 @@ impl Store {
                 model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&asoc), &id);
             }
 
-            for used in schema::usage::table
-                .filter(schema::usage::activity_id.eq(activity.id))
-                .order(schema::usage::activity_id.asc())
+            for used in schema::useage::table
+                .filter(schema::useage::activity_id.eq(activity.id))
+                .order(schema::useage::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
                 .load_iter::<String>(connection)?
