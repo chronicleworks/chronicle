@@ -47,6 +47,14 @@ pub enum ChronicleOperations {
     ActivityUses,
     #[iri("chronicleop:entityName")]
     EntityName,
+    #[iri("chronicleop:signature")]
+    Signature,
+    #[iri("chronicleop:identity")]
+    Identity,
+    #[iri("chronicleop:signatureTime")]
+    SignatureTime,
+    #[iri("chronicleop:locator")]
+    Locator,
     #[iri("chronicleop:role")]
     Role,
     #[iri("chronicleop:EntityExists")]

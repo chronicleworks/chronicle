@@ -382,17 +382,28 @@ proptest! {
         max_shrink_iters: std::u32::MAX, verbose: 0, .. ProptestConfig::default()
     })]
     #[test]
-    fn operations(tx in operation_seq()) {
+    fn operations(operations in operation_seq()) {
         let mut prov = ProvModel::default();
 
+        let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
         // Apply each operation in order
-        for tx in tx.iter() {
-            prov.apply(tx);
+        for op in operations.iter() {
+            // Check that serialisation of operation is symmetric
+            let op_json = op.to_json().0;
+            prop_assert_eq!(op,
+                &rt.block_on(ChronicleOperation::from_json(op.to_json())).unwrap(),
+                "Serialised operation {}",json::stringify_pretty(op_json,2));
+
+            prov.apply(op);
         }
 
         // Now assert that the final prov object matches what we would expect from the input operations
-        for tx in tx.iter() {
-            match tx {
+        for op in operations.iter() {
+            match op {
                 ChronicleOperation::CreateNamespace(CreateNamespace{id,name,uuid}) => {
                     prop_assert!(prov.namespaces.contains_key(id));
                     let ns = prov.namespaces.get(id).unwrap();
