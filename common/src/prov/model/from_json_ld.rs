@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
-use iref::{AsIri, Iri, IriBuf};
+use iref::{AsIri, Iri, IriBuf, IriRefBuf};
 use json::JsonValue;
 use json_ld::{
     syntax::Term, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
@@ -14,7 +14,8 @@ use crate::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
+            WasGeneratedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamePart, NamespaceId,
@@ -494,10 +495,15 @@ trait Operation {
     fn operation_agent(&self) -> AgentId;
     fn operation_delegate(&self) -> AgentId;
     fn operation_responsible(&self) -> AgentId;
-    fn operation_activity(&self) -> Option<ActivityId>;
-    fn operation_role(&self) -> Option<Role>;
+    fn operation_optional_activity(&self) -> Option<ActivityId>;
+    fn operation_activity(&self) -> ActivityId;
+    fn operation_optional_role(&self) -> Option<Role>;
+    fn operation_identity(&self) -> Option<IdentityId>;
     fn operation_key(&self) -> String;
     fn operation_start_time(&self) -> String;
+    fn operation_locator(&self) -> Option<String>;
+    fn operation_signature(&self) -> Option<String>;
+    fn operation_signature_time(&self) -> Option<String>;
     fn operation_end_time(&self) -> String;
     fn operation_entity(&self) -> EntityId;
     fn operation_used_entity(&self) -> EntityId;
@@ -536,7 +542,7 @@ impl Operation for Node {
         AgentId::from_name(name)
     }
 
-    fn operation_activity(&self) -> Option<ActivityId> {
+    fn operation_optional_activity(&self) -> Option<ActivityId> {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ActivityName.as_iri().into(),
         ));
@@ -559,7 +565,6 @@ impl Operation for Node {
             ChronicleOperations::StartActivityTime.as_iri().into(),
         ));
         let time = objects.next().unwrap().as_str().unwrap();
-        eprint!("time!: {}", time);
         time.to_owned()
     }
 
@@ -568,7 +573,6 @@ impl Operation for Node {
             ChronicleOperations::EndActivityTime.as_iri().into(),
         ));
         let time = objects.next().unwrap().as_str().unwrap();
-        eprint!("time!: {}", time);
         time.to_owned()
     }
 
@@ -618,21 +622,27 @@ impl Operation for Node {
     }
 
     fn operation_attributes(&self) -> BTreeMap<String, Attribute> {
-        let objects = self.get(&Reference::Id(
+        self.get(&Reference::Id(
             ChronicleOperations::Attributes.as_iri().into(),
-        ));
-        let mut a: BTreeMap<String, Attribute> = BTreeMap::new();
-        for o in objects {
-            let j = o.as_json();
-            let x = j["@type"][0].to_string();
-            let value = serde_json::json!(x);
-            let attr = Attribute {
-                typ: x.clone(),
-                value,
-            };
-            a.insert(format!("{}_attribute", x.to_lowercase()), attr);
-        }
-        a
+        ))
+        .map(|o| {
+            let serde_object = serde_json::from_str(&*o.as_json()["@value"].to_string()).unwrap();
+
+            if let serde_json::Value::Object(object) = serde_object {
+                Ok(object
+                    .into_iter()
+                    .map(|(typ, value)| Attribute { typ, value })
+                    .collect::<Vec<_>>())
+            } else {
+                Err(ProcessorError::NotAnObject {})
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .map(|attr| (attr.typ.clone(), attr))
+        .collect()
     }
 
     fn operation_responsible(&self) -> AgentId {
@@ -643,8 +653,75 @@ impl Operation for Node {
         AgentId::from_name(name)
     }
 
-    fn operation_role(&self) -> Option<Role> {
-        todo!()
+    fn operation_optional_role(&self) -> Option<Role> {
+        let mut name_objects = self.get(&Reference::Id(ChronicleOperations::Role.as_iri().into()));
+        let object = match name_objects.next() {
+            Some(object) => object,
+            None => return None,
+        };
+        Some(Role::from(object.as_str().unwrap()))
+    }
+
+    fn operation_activity(&self) -> ActivityId {
+        let mut name_objects = self.get(&Reference::Id(
+            ChronicleOperations::ActivityName.as_iri().into(),
+        ));
+        let name = name_objects.next().unwrap().as_str().unwrap();
+        ActivityId::from_name(name)
+    }
+
+    fn operation_identity(&self) -> Option<IdentityId> {
+        let mut id_objects = self.get(&Reference::Id(
+            ChronicleOperations::Identity.as_iri().into(),
+        ));
+        let id = match id_objects.next() {
+            Some(id) => id,
+            None => return None,
+        };
+        Some(
+            IdentityId::try_from(
+                IriRefBuf::from_string(id.as_str().unwrap().to_owned())
+                    .unwrap()
+                    .as_iri()
+                    .unwrap(),
+            )
+            .unwrap(),
+        )
+    }
+
+    fn operation_locator(&self) -> Option<String> {
+        let mut objects = self.get(&Reference::Id(ChronicleOperations::Locator.as_iri().into()));
+
+        let locator = match objects.next() {
+            Some(object) => object,
+            None => return None,
+        };
+
+        Some(locator.as_str().unwrap().to_owned())
+    }
+
+    fn operation_signature(&self) -> Option<String> {
+        let mut objects = self.get(&Reference::Id(
+            ChronicleOperations::Signature.as_iri().into(),
+        ));
+        let signature = match objects.next() {
+            Some(object) => object,
+            None => return None,
+        };
+
+        Some(signature.as_str().unwrap().to_owned())
+    }
+
+    fn operation_signature_time(&self) -> Option<String> {
+        let mut objects = self.get(&Reference::Id(
+            ChronicleOperations::SignatureTime.as_iri().into(),
+        ));
+        let time = match objects.next() {
+            Some(object) => object,
+            None => return None,
+        };
+
+        Some(time.as_str().unwrap().to_owned())
     }
 }
 
@@ -688,7 +765,7 @@ impl ChronicleOperation {
                 let namespace = o.operation_namespace();
                 let delegate_id = o.operation_delegate();
                 let responsible_id = o.operation_responsible();
-                let activity_id = o.operation_activity();
+                let activity_id = o.operation_optional_activity();
 
                 Ok(ChronicleOperation::AgentActsOnBehalfOf(
                     ActsOnBehalfOf::new(
@@ -696,7 +773,7 @@ impl ChronicleOperation {
                         &responsible_id,
                         &delegate_id,
                         activity_id.as_ref(),
-                        None,
+                        o.operation_optional_role(),
                     ),
                 ))
             } else if o.has_type(&Reference::Id(
@@ -714,7 +791,7 @@ impl ChronicleOperation {
                 ChronicleOperations::ActivityExists.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
-                let activity_id = o.operation_activity().unwrap();
+                let activity_id = o.operation_optional_activity().unwrap();
                 let name = activity_id.name_part().to_owned();
                 Ok(ChronicleOperation::ActivityExists(ActivityExists {
                     namespace,
@@ -724,7 +801,7 @@ impl ChronicleOperation {
                 ChronicleOperations::StartActivity.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
-                let id = o.operation_activity().unwrap();
+                let id = o.operation_optional_activity().unwrap();
                 let time: DateTime<Utc> = o.operation_start_time().parse().unwrap();
                 Ok(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
@@ -735,7 +812,7 @@ impl ChronicleOperation {
                 ChronicleOperations::EndActivity.as_iri().into(),
             )) {
                 let namespace = o.operation_namespace();
-                let id = o.operation_activity().unwrap();
+                let id = o.operation_optional_activity().unwrap();
                 let time: DateTime<Utc> = o.operation_end_time().parse().unwrap();
                 Ok(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
@@ -747,7 +824,7 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
-                let activity = o.operation_activity().unwrap();
+                let activity = o.operation_optional_activity().unwrap();
                 Ok(ChronicleOperation::ActivityUses(ActivityUses {
                     namespace,
                     id,
@@ -768,7 +845,7 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
-                let activity = o.operation_activity().unwrap();
+                let activity = o.operation_optional_activity().unwrap();
                 Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id,
@@ -780,14 +857,15 @@ impl ChronicleOperation {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
                 let agent = o.operation_agent();
+                let signature_time = o.operation_signature_time().map(|t| t.parse().unwrap());
                 Ok(ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                     namespace,
-                    identityid: None,
+                    identityid: o.operation_identity(),
                     id,
-                    locator: None,
+                    locator: o.operation_locator(),
                     agent,
-                    signature: None,
-                    signature_time: None,
+                    signature: o.operation_signature(),
+                    signature_time,
                 }))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::EntityDerive.as_iri().into(),
@@ -795,7 +873,7 @@ impl ChronicleOperation {
                 let namespace = o.operation_namespace();
                 let id = o.operation_entity();
                 let used_id = o.operation_used_entity();
-                let activity_id = o.operation_activity();
+                let activity_id = o.operation_optional_activity();
                 let typ = o.operation_derivation();
                 Ok(ChronicleOperation::EntityDerive(EntityDerive {
                     namespace,
@@ -836,7 +914,7 @@ impl ChronicleOperation {
                             attributes,
                         }
                     } else {
-                        let id = o.operation_activity().unwrap();
+                        let id = o.operation_optional_activity().unwrap();
                         SetAttributes::Activity {
                             namespace,
                             id,
@@ -846,435 +924,22 @@ impl ChronicleOperation {
                 };
 
                 Ok(ChronicleOperation::SetAttributes(actor))
+            } else if o.has_type(&Reference::Id(
+                ChronicleOperations::WasAssociatedWith.as_iri().into(),
+            )) {
+                Ok(ChronicleOperation::WasAssociatedWith(
+                    WasAssociatedWith::new(
+                        &o.operation_namespace(),
+                        &o.operation_activity(),
+                        &o.operation_agent(),
+                        o.operation_optional_role(),
+                    ),
+                ))
             } else {
                 unreachable!()
             }
         } else {
             Err(ProcessorError::NotANode {})
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::collections::BTreeMap;
-
-    use uuid::Uuid;
-
-    use crate::{
-        attributes::{Attribute, Attributes},
-        prov::{
-            operations::{
-                ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-                CreateNamespace, DerivationType, EntityDerive, EntityExists, EntityHasEvidence,
-                RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
-            },
-            to_json_ld::ToJson,
-            ActivityId, AgentId, DelegationId, DomaintypeId, EntityId, Name, NamePart, NamespaceId,
-            ProcessorError, Role,
-        },
-    };
-
-    #[tokio::test]
-    async fn test_set_attributes_activity_multiple_attributes() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = ActivityId::from_name("test_activity");
-        let domain = DomaintypeId::from_name("test_domain");
-
-        let attrs = {
-            let mut h: BTreeMap<String, Attribute> = BTreeMap::new();
-
-            let attr = Attribute {
-                typ: "Bool".to_string(),
-                value: serde_json::json!("Bool"),
-            };
-            h.insert("bool_attribute".to_string(), attr);
-
-            let attr = Attribute {
-                typ: "String".to_string(),
-                value: serde_json::json!("String"),
-            };
-            h.insert("string_attribute".to_string(), attr);
-
-            let attr = Attribute {
-                typ: "Int".to_string(),
-                value: serde_json::json!("Int"),
-            };
-            h.insert("int_attribute".to_string(), attr);
-
-            h
-        };
-        let attributes = Attributes {
-            typ: Some(domain),
-            attributes: attrs,
-        };
-        let operation: ChronicleOperation =
-            ChronicleOperation::SetAttributes(SetAttributes::Activity {
-                namespace,
-                id,
-                attributes,
-            });
-
-        let serialized_operation = operation.to_json();
-
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_set_attributes_agent_empty_attributes() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = AgentId::from_name("test_agent");
-        let domain = DomaintypeId::from_name("test_domain");
-        let attributes = Attributes {
-            typ: Some(domain),
-            attributes: BTreeMap::new(),
-        };
-        let operation: ChronicleOperation =
-            ChronicleOperation::SetAttributes(SetAttributes::Agent {
-                namespace,
-                id,
-                attributes,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_set_attributes_entity_empty_attributes() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = EntityId::from_name("test_entity");
-        let domain = DomaintypeId::from_name("test_domain");
-        let attributes = Attributes {
-            typ: Some(domain),
-            attributes: BTreeMap::new(),
-        };
-        let operation: ChronicleOperation =
-            ChronicleOperation::SetAttributes(SetAttributes::Entity {
-                namespace,
-                id,
-                attributes,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_entity_derive() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = EntityId::from_name("test_entity");
-        let used_id = EntityId::from_name("test_used_entity");
-        let activity_id = Some(ActivityId::from_name("test_activity"));
-        let typ = Some(DerivationType::Revision);
-        let operation: ChronicleOperation = ChronicleOperation::EntityDerive(EntityDerive {
-            namespace,
-            id,
-            used_id,
-            activity_id,
-            typ,
-        });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_entity_attach() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = EntityId::from_name("test_entity");
-        let agent = AgentId::from_name("test_agent");
-        let operation: ChronicleOperation =
-            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                namespace,
-                identityid: None,
-                id,
-                locator: None,
-                agent,
-                signature: None,
-                signature_time: None,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_generate_entity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = EntityId::from_name("test_entity");
-        let activity = ActivityId::from_name("test_activity");
-        let operation: ChronicleOperation =
-            super::ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
-                namespace,
-                id,
-                activity,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_create_entity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = NamePart::name_part(&EntityId::from_name("test_entity")).to_owned();
-        let operation: ChronicleOperation = ChronicleOperation::EntityExists(EntityExists {
-            namespace,
-            name: id,
-        });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_activity_uses() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = EntityId::from_name("test_entity");
-        let activity = ActivityId::from_name("test_activity");
-        let operation: ChronicleOperation = ChronicleOperation::ActivityUses(ActivityUses {
-            namespace,
-            id,
-            activity,
-        });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_end_activity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = ActivityId::from_name("test_activity");
-        let time = chrono::DateTime::<chrono::Utc>::from_utc(
-            chrono::NaiveDateTime::from_timestamp(61, 0),
-            chrono::Utc,
-        );
-        let operation: ChronicleOperation =
-            super::ChronicleOperation::EndActivity(crate::prov::operations::EndActivity {
-                namespace,
-                id,
-                time,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_start_activity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-
-        let id = ActivityId::from_name("test_activity");
-        let time = chrono::DateTime::<chrono::Utc>::from_utc(
-            chrono::NaiveDateTime::from_timestamp(61, 0),
-            chrono::Utc,
-        );
-        let operation: ChronicleOperation = ChronicleOperation::StartActivity(StartActivity {
-            namespace,
-            id,
-            time,
-        });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_create_activity() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let name = NamePart::name_part(&ActivityId::from_name("test_activity")).to_owned();
-
-        let operation: ChronicleOperation =
-            ChronicleOperation::ActivityExists(ActivityExists { namespace, name });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_register_key() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let id = AgentId::from_name("test_agent");
-        let publickey =
-            "02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23".to_string();
-        let operation: ChronicleOperation = ChronicleOperation::RegisterKey(RegisterKey {
-            namespace,
-            id,
-            publickey,
-        });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_create_agent_acts_on_behalf_of() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let responsible_id = AgentId::from_name("test_agent");
-        let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = ActivityId::from_name("test_activity");
-        let role = Role::from("test_role");
-
-        let id = DelegationId::from_component_ids(
-            &delegate_id,
-            &responsible_id,
-            Some(&activity_id),
-            Some(&role),
-        );
-
-        let operation: ChronicleOperation =
-            ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
-                namespace,
-                delegate_id,
-                activity_id: Some(activity_id),
-                role: Some(role),
-                responsible_id,
-                id,
-            });
-
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_create_agent_from_json() -> Result<(), ProcessorError> {
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid.unwrap());
-        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
-        let operation: ChronicleOperation =
-            ChronicleOperation::AgentExists(AgentExists { namespace, name });
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_create_namespace_from_json() -> Result<(), ProcessorError> {
-        let name = "testns";
-        let uuid =
-            Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").map_err(|e| eprintln!("{}", e));
-        let id = NamespaceId::from_name(name, uuid.unwrap());
-
-        let operation =
-            ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid.unwrap()));
-        let serialized_operation = operation.to_json();
-        let deserialized_operation = ChronicleOperation::from_json(serialized_operation).await?;
-        assert!(
-            ChronicleOperation::from_json(deserialized_operation.to_json()).await?
-                == deserialized_operation
-        );
-        Ok(())
     }
 }
