@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    ledger::StateInput,
+    ledger::OperationState,
     prov::{operations::ChronicleOperation, ProvModel},
 };
 use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
@@ -58,38 +58,33 @@ impl TransactionHandler for ChronicleTransactionHandler {
         request: &TpProcessRequest,
         context: &mut dyn TransactionContext,
     ) -> Result<(), ApplyError> {
-        let tx: Vec<ChronicleOperation> = serde_cbor::from_slice(request.get_payload())
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
-
-        //Prepare all state inputs for the transactions
-        let mut state = {
-            context
-                .get_state_entries(
-                    &tx.iter()
-                        .flat_map(|tx| tx.dependencies())
-                        .map(|x| SawtoothAddress::from(&x).to_string())
-                        .collect::<Vec<_>>(),
-                )?
-                .into_iter()
-                .collect::<BTreeMap<_, _>>()
-        };
-
-        debug!(state_inputs = ?state.keys());
+        let transactions: Vec<ChronicleOperation> =
+            serde_cbor::from_slice(request.get_payload())
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
         let mut model = ProvModel::default();
 
-        for tx in tx {
+        let mut state = OperationState::new();
+
+        for tx in transactions {
             debug!(operation = ?tx);
-            let input = {
-                tx.dependencies()
-                    .iter()
-                    .flat_map(|x| {
-                        state
-                            .get(&SawtoothAddress::from(&*x).to_string())
-                            .map(|input| StateInput::new(input.clone()))
-                    })
-                    .collect()
-            };
+
+            let deps = tx.dependencies();
+
+            state.append_tp_input(
+                context
+                    .get_state_entries(
+                        &deps
+                            .iter()
+                            .map(|x| SawtoothAddress::from(x).to_string())
+                            .collect::<Vec<_>>(),
+                    )?
+                    .into_iter()
+                    .collect::<BTreeMap<_, _>>()
+                    .into_iter(),
+            );
+
+            let input = state.tp_input();
 
             let (send, recv) = crossbeam::channel::bounded(1);
             Handle::current().spawn(async move {
@@ -104,12 +99,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .recv()
                 .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
-            for output in tx_output {
-                let address = SawtoothAddress::from(&output.address).to_string();
-                debug!(state_output = ?output.address,
-                       state_output_sawtooth = ?&address);
-                *state.entry(address).or_insert_with(|| output.data.clone()) = output.data.clone();
-            }
+            state.append_output(tx_output);
 
             model = updated_model;
         }
@@ -121,7 +111,17 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
         )?;
 
-        context.set_state_entries(state.into_iter().collect())?;
+        context.set_state_entries(
+            state
+                .tp_dirty()
+                .map(|output| {
+                    (
+                        SawtoothAddress::from(&output.address).to_string(),
+                        output.data,
+                    )
+                })
+                .collect(),
+        )?;
 
         Ok(())
     }

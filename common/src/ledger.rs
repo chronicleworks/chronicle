@@ -14,15 +14,15 @@ use crate::{
             RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
-        NamespaceId, ParseIriError, ProcessorError, ProvModel,
+        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId,
+        NamePart, NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     fmt::Display,
     pin::Pin,
     str::{from_utf8, FromStr},
@@ -337,18 +337,24 @@ impl StateOutput {
 
 /// Hold a cache of `LedgerWriter::submit` input and output address data
 /// and each `LedgerAddress` specified by `ChronicleOperation::dependencies`
-struct OperationState {
+pub struct OperationState {
     input: BTreeMap<LedgerAddress, Vec<u8>>,
     output: BTreeMap<LedgerAddress, Vec<u8>>,
-    deps: BTreeSet<LedgerAddress>,
+    tp_input: BTreeMap<String, Vec<u8>>,
+}
+
+impl Default for OperationState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OperationState {
-    fn new() -> Self {
+    pub fn new() -> Self {
         OperationState {
             input: BTreeMap::new(),
             output: BTreeMap::new(),
-            deps: BTreeSet::new(),
+            tp_input: BTreeMap::new(),
         }
     }
 
@@ -364,13 +370,19 @@ impl OperationState {
             .map(|(addr, json)| (addr.clone(), json.to_string().as_bytes().into()))
             .collect();
         self.input.extend(input_values);
+    }
 
-        let mut deps: BTreeSet<LedgerAddress> = deps.iter().cloned().collect();
-        self.deps.append(&mut deps);
+    /// Load input values into `OperationState` and append new addresses
+    ///
+    pub fn append_tp_input(&mut self, input: impl Iterator<Item = (String, Vec<u8>)>) {
+        let input_values: Vec<(String, Vec<u8>)> = input
+            // .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        self.tp_input.extend(input_values);
     }
 
     /// Load processed output address and data values into maps in `OperationState`
-    fn append_output(&mut self, outputs: Vec<StateOutput>) {
+    pub fn append_output(&mut self, outputs: Vec<StateOutput>) {
         for s in outputs {
             self.output.insert(s.address, s.data);
         }
@@ -380,6 +392,16 @@ impl OperationState {
     /// as a vector of `StateInput`s
     fn input(&self) -> Vec<StateInput> {
         self.input.values().cloned().map(StateInput::new).collect()
+    }
+
+    /// Return the byte vectors of input data held in `OperationState`
+    /// as a vector of `StateInput`s
+    pub fn tp_input(&self) -> Vec<StateInput> {
+        self.tp_input
+            .values()
+            .cloned()
+            .map(StateInput::new)
+            .collect()
     }
 
     /// Check if the data associated with an address has changed in processing
@@ -395,6 +417,48 @@ impl OperationState {
             .collect::<Vec<_>>()
             .into_iter()
     }
+
+    /// Check if the data associated with an address has changed in processing
+    pub fn tp_dirty(self) -> impl Iterator<Item = StateOutput> {
+        self.output
+            .into_iter()
+            .filter(|x| {
+                match (
+                    self.tp_input.get(
+                        &placeholder_for_when_i_figure_out_how_to_use_sawtooth_address_here(&x.0),
+                    ),
+                    &x.1,
+                ) {
+                    (Some(input), output) if input != output => true,
+                    (None, _) => true,
+                    _ => false,
+                }
+            })
+            .map(|x| StateOutput::new(x.0, x.1))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+}
+
+use openssl::sha::Sha256;
+
+lazy_static::lazy_static! {
+    pub static ref PREFIX: String = {
+        let mut sha = Sha256::new();
+        sha.update("chronicle".as_bytes());
+        hex::encode(sha.finish())[..6].to_string()
+    };
+}
+
+fn placeholder_for_when_i_figure_out_how_to_use_sawtooth_address_here(
+    addr: &LedgerAddress,
+) -> String {
+    let mut sha = Sha256::new();
+    if let Some(ns) = addr.namespace_part().as_ref() {
+        sha.update(ns.compact().as_bytes())
+    }
+    sha.update(addr.resource_part().compact().as_bytes());
+    format!("{}{}", &*PREFIX, hex::encode(sha.finish()))
 }
 
 impl ChronicleOperation {
