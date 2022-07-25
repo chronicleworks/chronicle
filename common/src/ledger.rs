@@ -14,8 +14,8 @@ use crate::{
             RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, AsCompact, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId,
-        NamePart, NamespaceId, ParseIriError, ProcessorError, ProvModel,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
+        NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -231,7 +231,18 @@ impl LedgerWriter for InMemLedger {
         for tx in tx {
             let deps = tx.dependencies();
 
-            state.append_input(&deps, self.kv.borrow().iter());
+            state.append_input(
+                &deps
+                    .iter()
+                    .map(|x| x.to_operation_state_input_string())
+                    .collect::<Vec<_>>(),
+                self.kv.borrow().iter().map(|(k, v)| {
+                    (
+                        k.to_operation_state_input_string(),
+                        v.to_string().as_bytes().to_vec(),
+                    )
+                }),
+            );
 
             debug!(
                 input_chronicle_addresses=?deps,
@@ -324,6 +335,18 @@ impl LedgerAddress {
             resource: resource.into(),
         }
     }
+
+    /// Create a String representation of a LedgerAddress
+    /// -- LedgerAddress.namespace.to_string() + &LedgerAddress.resource.to_string() --
+    pub(crate) fn to_operation_state_input_string(&self) -> String {
+        if let Some(namespace) = &self.namespace {
+            let ns = namespace.to_string();
+            let resource = self.resource.to_string();
+            ns + &resource
+        } else {
+            self.resource.to_string()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -348,7 +371,8 @@ impl StateOutput {
         Self { address, data }
     }
 
-    fn address_is_specified(self, deps: &[LedgerAddress]) -> Result<Self, SubmissionError> {
+    /// Check if a LedgerAddress is specified in a slice of LedgerAddresses
+    pub fn address_is_specified(self, deps: &[LedgerAddress]) -> Result<Self, SubmissionError> {
         match deps.contains(&self.address) {
             true => Ok(self),
             false => Err(SubmissionError::Processor {
@@ -359,11 +383,11 @@ impl StateOutput {
 }
 
 /// Hold a cache of `LedgerWriter::submit` input and output address data
-/// and each `LedgerAddress` specified by `ChronicleOperation::dependencies`
+/// String here could be either a SawtoothAddress(String) or a String
+/// representation of a LedgerAddress for matching purposes
 pub struct OperationState {
-    input: BTreeMap<LedgerAddress, Vec<u8>>,
+    input: BTreeMap<String, Vec<u8>>,
     output: BTreeMap<LedgerAddress, Vec<u8>>,
-    tp_input: BTreeMap<String, Vec<u8>>,
 }
 
 impl Default for OperationState {
@@ -377,27 +401,21 @@ impl OperationState {
         OperationState {
             input: BTreeMap::new(),
             output: BTreeMap::new(),
-            tp_input: BTreeMap::new(),
         }
     }
 
     /// Load input values into `OperationState` and append new addresses
     /// specified by `ChronicleOperation::dependencies` to `OperationState`
-    fn append_input<'a>(
+    pub fn append_input(
         &mut self,
-        deps: &[LedgerAddress],
-        input: impl Iterator<Item = (&'a LedgerAddress, &'a JsonValue)>,
+        deps: &[String],
+        input: impl Iterator<Item = (String, Vec<u8>)>,
     ) {
-        let input_values: Vec<(LedgerAddress, Vec<u8>)> = input
+        let input_values: Vec<(String, Vec<u8>)> = input
             .filter(|(k, _v)| deps.contains(k))
-            .map(|(addr, json)| (addr.clone(), json.to_string().as_bytes().into()))
+            .map(|(addr, data)| (addr, data))
             .collect();
         self.input.extend(input_values);
-    }
-
-    /// Load sawtooth_tp input values into `OperationState`
-    pub fn append_tp_input(&mut self, input: impl Iterator<Item = (String, Vec<u8>)>) {
-        self.tp_input.extend(input);
     }
 
     /// Load processed output address and data values into maps in `OperationState`
@@ -409,75 +427,25 @@ impl OperationState {
 
     /// Return the byte vectors of input data held in `OperationState`
     /// as a vector of `StateInput`s
-    fn input(&self) -> Vec<StateInput> {
+    pub fn input(&self) -> Vec<StateInput> {
         self.input.values().cloned().map(StateInput::new).collect()
     }
 
-    /// Return the byte vectors of sawtooth_tp input data held in `OperationState`
-    /// as a vector of `StateInput`s
-    pub fn tp_input(&self) -> Vec<StateInput> {
-        self.tp_input
-            .values()
-            .cloned()
-            .map(StateInput::new)
-            .collect()
-    }
-
     /// Check if the data associated with an address has changed in processing
-    fn dirty(self) -> impl Iterator<Item = StateOutput> {
+    pub fn dirty(self) -> impl Iterator<Item = StateOutput> {
         self.output
             .into_iter()
-            .filter(|x| match (self.input.get(&x.0), &x.1) {
-                (Some(input), output) if input != output => true,
-                (None, _) => true,
-                _ => false,
-            })
-            .map(|x| StateOutput::new(x.0, x.1))
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
-    /// Check if the data associated with an address has changed in processing
-    pub fn tp_dirty(self) -> impl Iterator<Item = StateOutput> {
-        self.output
-            .into_iter()
-            .filter(|x| {
-                match (
-                    self.tp_input.get(
-                        &placeholder_for_when_i_figure_out_how_to_use_sawtooth_address_here(&x.0),
-                    ),
-                    &x.1,
-                ) {
+            .filter(
+                |x| match (self.input.get(&x.0.to_operation_state_input_string()), &x.1) {
                     (Some(input), output) if input != output => true,
                     (None, _) => true,
                     _ => false,
-                }
-            })
+                },
+            )
             .map(|x| StateOutput::new(x.0, x.1))
             .collect::<Vec<_>>()
             .into_iter()
     }
-}
-
-use openssl::sha::Sha256;
-
-lazy_static::lazy_static! {
-    pub static ref PREFIX: String = {
-        let mut sha = Sha256::new();
-        sha.update("chronicle".as_bytes());
-        hex::encode(sha.finish())[..6].to_string()
-    };
-}
-
-fn placeholder_for_when_i_figure_out_how_to_use_sawtooth_address_here(
-    addr: &LedgerAddress,
-) -> String {
-    let mut sha = Sha256::new();
-    if let Some(ns) = addr.namespace_part().as_ref() {
-        sha.update(ns.compact().as_bytes())
-    }
-    sha.update(addr.resource_part().compact().as_bytes());
-    format!("{}{}", &*PREFIX, hex::encode(sha.finish()))
 }
 
 impl ChronicleOperation {
@@ -717,7 +685,7 @@ pub mod test {
     };
     use uuid::Uuid;
 
-    use super::{OperationState, StateOutput};
+    use super::{LedgerAddress, OperationState, StateOutput};
     fn uuid() -> Uuid {
         let bytes = [
             0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
@@ -767,8 +735,20 @@ pub mod test {
         l: &InMemLedger,
         model: &mut ProvModel,
     ) {
-        let deps = tx.dependencies();
-        state.append_input(&deps, l.kv.borrow().iter());
+        let deps = tx
+            .dependencies()
+            .iter()
+            .map(LedgerAddress::to_operation_state_input_string)
+            .collect::<Vec<_>>();
+        state.append_input(
+            &deps,
+            l.kv.borrow().iter().map(|(k, v)| {
+                (
+                    k.to_operation_state_input_string(),
+                    v.to_string().as_bytes().to_vec(),
+                )
+            }),
+        );
         let (tx_output, updated_model) = tx.process(model.clone(), state.input()).await.unwrap();
         state.append_output(tx_output);
         *model = updated_model;

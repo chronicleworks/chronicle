@@ -41,7 +41,6 @@ k256 = { version = "0.11.3", features = [
   "pem",
 ] }
 lazy_static = "1.4.0"
-openssl      = "0.10.38"
 percent-encoding = "2.1.0"
 pkcs8 = { version = "*", features = ["std", "alloc"] }
 rand = { version = "0.8.5", features = ["getrandom"] }

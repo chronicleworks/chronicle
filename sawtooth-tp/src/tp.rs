@@ -1,7 +1,5 @@
-use std::collections::BTreeMap;
-
 use common::{
-    ledger::OperationState,
+    ledger::{LedgerAddress, OperationState, SubmissionError},
     prov::{operations::ChronicleOperation, ProvModel},
 };
 use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
@@ -66,25 +64,31 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
         let mut state = OperationState::new();
 
+        let mut state_deps: Vec<LedgerAddress> = vec![];
+
         for tx in transactions {
             debug!(operation = ?tx);
 
             let deps = tx.dependencies();
 
-            state.append_tp_input(
-                context
-                    .get_state_entries(
-                        &deps
-                            .iter()
-                            .map(|x| SawtoothAddress::from(x).to_string())
-                            .collect::<Vec<_>>(),
-                    )?
-                    .into_iter()
-                    .collect::<BTreeMap<_, _>>()
-                    .into_iter(),
+            let entries = context
+                .get_state_entries(
+                    &deps
+                        .iter()
+                        .map(|x| SawtoothAddress::from(x).to_string())
+                        .collect::<Vec<_>>(),
+                )?
+                .into_iter();
+
+            state.append_input(
+                &deps
+                    .iter()
+                    .map(|x| SawtoothAddress::from(x).to_string())
+                    .collect::<Vec<_>>(),
+                entries,
             );
 
-            let input = state.tp_input();
+            let input = state.input();
 
             let (send, recv) = crossbeam::channel::bounded(1);
             Handle::current().spawn(async move {
@@ -102,6 +106,13 @@ impl TransactionHandler for ChronicleTransactionHandler {
             state.append_output(tx_output);
 
             model = updated_model;
+
+            state_deps.append(
+                &mut deps
+                    .into_iter()
+                    .filter(|d| !state_deps.contains(d))
+                    .collect::<Vec<_>>(),
+            );
         }
 
         context.add_event(
@@ -113,7 +124,11 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
         context.set_state_entries(
             state
-                .tp_dirty()
+                .dirty()
+                .map(|output| output.address_is_specified(&state_deps))
+                .collect::<Result<Vec<_>, SubmissionError>>()
+                .into_iter()
+                .flat_map(|v| v.into_iter())
                 .map(|output| {
                     (
                         SawtoothAddress::from(&output.address).to_string(),
