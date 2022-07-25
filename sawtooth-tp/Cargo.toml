@@ -31,7 +31,7 @@ opentelemetry-jaeger = { version = "0.16.0", features = [
   "collector_client",
 ] }
 prost = "0.10.0"
-proto = { path = "../sawtooth_protocol" }
+proto = { path = "../sawtooth-protocol" }
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
 sawtooth-sdk = "0.5.2"

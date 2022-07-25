@@ -1049,9 +1049,9 @@ impl Store {
                 .order(schema::generation::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(connection)?
+                .load::<String>(connection)?
             {
-                let asoc = generation?;
+                let asoc = generation;
                 model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&asoc), &id);
             }
 
@@ -1060,9 +1060,9 @@ impl Store {
                 .order(schema::useage::activity_id.asc())
                 .inner_join(schema::entity::table)
                 .select(schema::entity::name)
-                .load_iter::<String>(connection)?
+                .load::<String>(connection)?
             {
-                let used = used?;
+                let used = used;
                 model.used(namespaceid.clone(), &id, &EntityId::from_name(&used));
             }
         }
