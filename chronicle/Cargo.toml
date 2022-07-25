@@ -34,7 +34,7 @@ opentelemetry-jaeger = { version = "0.16.0", features = [
   "collector_client",
   "reqwest_collector_client",
 ] }
-proto = { path = "../sawtooth_protocol" }
+proto = { path = "../sawtooth-protocol" }
 question = "0.2.2"
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"

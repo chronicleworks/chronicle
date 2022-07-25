@@ -6,8 +6,8 @@ members = [
   "chronicle",
   "chronicle-example",
   "chronicle-untyped",
-  "sawtooth_protocol",
-  "sawtooth_tp",
+  "sawtooth-protocol",
+  "sawtooth-tp",
   "telemetry",
 ]
 
