@@ -937,17 +937,10 @@ pub mod test {
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:testAgent"
-              ],
+              "@type": "prov:Agent",
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "TestBool": true,
-                "TestInt": 23,
-                "TestString": "test"
-              }
+              "value": {}
             },
             {
               "@id": "chronicle:association:testagent:testactivity:role=",
@@ -2340,17 +2333,10 @@ pub mod test {
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:testAgent"
-              ],
+              "@type": "prov:Agent",
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "TestBool": true,
-                "TestInt": 40,
-                "TestString": "test"
-              }
+              "value": {}
             },
             {
               "@id": "chronicle:association:testagent:testactivity:role=",
@@ -2512,12 +2498,13 @@ pub mod test {
             {
               "@id": "chronicle:activity:testactivity",
               "@type": "prov:Activity",
+              "endTime": "2014-08-09T09:10:12+00:00",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
               "prov:qualifiedAssociation": {
                 "@id": "chronicle:association:testagent:testactivity:role="
               },
-              "startTime": "2014-07-08T09:10:11+00:00",
+              "startTime": "2014-08-09T09:10:12+00:00",
               "value": {},
               "wasAssociatedWith": [
                 "chronicle:agent:testagent"
@@ -2525,17 +2512,10 @@ pub mod test {
             },
             {
               "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:testAgent"
-              ],
+              "@type": "prov:Agent",
               "label": "testagent",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "TestBool": true,
-                "TestInt": 40,
-                "TestString": "test"
-              }
+              "value": {}
             },
             {
               "@id": "chronicle:association:testagent:testactivity:role=",
@@ -2685,17 +2665,10 @@ pub mod test {
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:testActivity"
-              ],
+              "@type": "prov:Activity",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "TestBool": true,
-                "TestInt": 40,
-                "TestString": "test"
-              }
+              "value": {}
             },
             {
               "@id": "chronicle:entity:testentity",
@@ -2855,20 +2828,13 @@ pub mod test {
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:testActivity"
-              ],
+              "@type": "prov:Activity",
               "label": "testactivity",
               "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
               "used": [
                 "chronicle:entity:testentity"
               ],
-              "value": {
-                "TestBool": true,
-                "TestInt": 40,
-                "TestString": "test"
-              }
+              "value": {}
             },
             {
               "@id": "chronicle:entity:testentity",

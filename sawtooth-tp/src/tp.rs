@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use common::{
-    ledger::{LedgerAddress, OperationState, SubmissionError},
+    ledger::OperationState,
     prov::{operations::ChronicleOperation, ProvModel},
 };
 use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
@@ -64,29 +66,37 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
         let mut state = OperationState::new();
 
-        let mut state_deps: Vec<LedgerAddress> = vec![];
-
         for tx in transactions {
             debug!(operation = ?tx);
 
             let deps = tx.dependencies();
 
-            let entries = context
+            // order of `get_state_entries` should be in order in which sent
+            let sawtooth_entries = context
                 .get_state_entries(
                     &deps
                         .iter()
                         .map(|x| SawtoothAddress::from(x).to_string())
                         .collect::<Vec<_>>(),
                 )?
+                .into_iter()
+                .collect::<Vec<_>>()
+                .into_iter()
+                .collect::<BTreeMap<_, _>>();
+
+            assert!(sawtooth_entries
+                .keys()
+                .enumerate()
+                .all(|(i, x)| x == &SawtoothAddress::from(&deps[i]).to_string()));
+
+            let entries = sawtooth_entries
+                .into_iter()
+                .enumerate()
+                .map(|(i, (_k, v))| (deps[i].clone(), v))
+                .collect::<BTreeMap<_, _>>()
                 .into_iter();
 
-            state.append_input(
-                &deps
-                    .iter()
-                    .map(|x| SawtoothAddress::from(x).to_string())
-                    .collect::<Vec<_>>(),
-                entries,
-            );
+            state.append_input(entries);
 
             let input = state.input();
 
@@ -103,39 +113,33 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .recv()
                 .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
-            state.append_output(tx_output);
+            state.append_output(
+                tx_output
+                    .into_iter()
+                    .map(|output| output.into())
+                    .collect::<BTreeMap<_, _>>()
+                    .into_iter(),
+            );
 
             model = updated_model;
-
-            state_deps.append(
-                &mut deps
-                    .into_iter()
-                    .filter(|d| !state_deps.contains(d))
-                    .collect::<Vec<_>>(),
-            );
         }
 
+        context.set_state_entries(
+            state
+                .dirty()
+                .map(|output| {
+                    let address = output.address;
+                    (SawtoothAddress::from(&address).to_string(), output.data)
+                })
+                .collect(),
+        )?;
+
+        // Events should be after state updates, generally
         context.add_event(
             "chronicle/prov-update".to_string(),
             vec![("transaction_id".to_owned(), request.signature.clone())],
             &*serde_cbor::to_vec(&model)
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
-        )?;
-
-        context.set_state_entries(
-            state
-                .dirty()
-                .map(|output| output.address_is_specified(&state_deps))
-                .collect::<Result<Vec<_>, SubmissionError>>()
-                .into_iter()
-                .flat_map(|v| v.into_iter())
-                .map(|output| {
-                    (
-                        SawtoothAddress::from(&output.address).to_string(),
-                        output.data,
-                    )
-                })
-                .collect(),
         )?;
 
         Ok(())
