@@ -17,7 +17,6 @@ use common::{
 use custom_error::custom_error;
 use derivative::*;
 
-use diesel::upsert::excluded;
 use diesel::{
     connection::SimpleConnection,
     dsl::max,
