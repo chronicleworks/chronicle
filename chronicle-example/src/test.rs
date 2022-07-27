@@ -10,55 +10,46 @@ mod main;
 #[tokio::main]
 pub async fn main() {
     let s = r#"
-name: "chronicle"
-attributes:
-  Title:
-    type: "String"
-  Location:
-    type: "String"
-  PurchaseValue:
-    type: "String"
-  PurchaseValueCurrency:
-    type: "String"
-  Description:
-    type: "String"
-  Name:
-    type: "String"
-agents:
-  Member:
+    name: "chronicle"
     attributes:
-      - Name
-  Artist:
-    attributes:
-      - Name
-entities:
-  Artwork:
-    attributes:
-      - Title
-  ArtworkDetails:
-    attributes:
-      - Title
-      - Description
-activities:
-  Exhibited:
-    attributes:
-      - Location
-  Created:
-    attributes:
-      - Title
-  Sold:
-    attributes:
-      - PurchaseValue
-      - PurchaseValueCurrency
-  Transferred:
-    attributes: []
-roles:
-  - Buyer
-  - Seller
-  - Broker
-  - Editor
-  - Creator
-"#
+      String:
+        type: "String"
+      Int:
+        type: "Int"
+      Bool:
+        type: "Bool"
+    agents:
+      friend:
+        attributes:
+          - String
+          - Int
+          - Bool
+    entities:
+      octopi:
+        attributes:
+          - String
+          - Int
+          - Bool
+      the sea:
+        attributes:
+          - String
+          - Int
+          - Bool
+    activities:
+      gardening:
+        attributes:
+          - String
+          - Int
+          - Bool
+      swim about:
+        attributes:
+          - String
+          - Int
+          - Bool
+    roles:
+        - delegate
+        - responsible
+     "#
     .to_string();
 
     let model = ChronicleDomainDef::from_input_string(&s).unwrap();
