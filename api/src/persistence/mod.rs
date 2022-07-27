@@ -144,6 +144,27 @@ impl Store {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
+        let existing = self
+            .activity_by_activity_name_and_namespace(connection, &*name, namespaceid)
+            .ok();
+
+        let resolved_domain_type = domaintypeid
+            .as_ref()
+            .map(|x| x.name_part().clone())
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .and_then(|x| x.domaintype.as_ref().map(Name::from))
+            });
+
+        let resolved_started = started
+            .map(|x| x.naive_utc())
+            .or_else(|| existing.as_ref().and_then(|x| x.started));
+
+        let resolved_ended = ended
+            .map(|x| x.naive_utc())
+            .or_else(|| existing.as_ref().and_then(|x| x.ended));
+
         diesel::insert_into(schema::activity::table)
             .values((
                 dsl::name.eq(name),
@@ -155,9 +176,9 @@ impl Store {
             .on_conflict((dsl::name, dsl::namespace_id))
             .do_update()
             .set((
-                dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())),
-                dsl::started.eq(started.map(|t| t.naive_utc())),
-                dsl::ended.eq(ended.map(|t| t.naive_utc())),
+                dsl::domaintype.eq(resolved_domain_type),
+                dsl::started.eq(resolved_started),
+                dsl::ended.eq(resolved_ended),
             ))
             .execute(connection)?;
 
@@ -183,7 +204,7 @@ impl Store {
     }
 
     /// Apply an agent to persistent storage, name + namespace are a key, so we update publickey + domaintype on conflict
-    /// current is a special case, only relevent to local CLI context. A possibly improved design would be to store this in another table given its scope
+    /// current is a special case, only relevant to local CLI context. A possibly improved design would be to store this in another table given its scope
     #[instrument(name = "Apply agent", skip(self, connection, ns))]
     fn apply_agent(
         &self,
@@ -201,6 +222,19 @@ impl Store {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
+        let existing = self
+            .agent_by_agent_name_and_namespace(connection, name, namespaceid)
+            .ok();
+
+        let resolved_domain_type = domaintypeid
+            .as_ref()
+            .map(|x| x.name_part().clone())
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .and_then(|x| x.domaintype.as_ref().map(Name::from))
+            });
+
         diesel::insert_into(schema::agent::table)
             .values((
                 dsl::name.eq(name),
@@ -210,7 +244,7 @@ impl Store {
             ))
             .on_conflict((dsl::namespace_id, dsl::name))
             .do_update()
-            .set(dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())))
+            .set(dsl::domaintype.eq(resolved_domain_type))
             .execute(connection)?;
 
         let query::Agent { id, .. } =
@@ -294,6 +328,19 @@ impl Store {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) = self.namespace_by_name(connection, namespaceid.name_part())?;
 
+        let existing = self
+            .entity_by_entity_name_and_namespace(connection, name, namespaceid)
+            .ok();
+
+        let resolved_domain_type = domaintypeid
+            .as_ref()
+            .map(|x| x.name_part().clone())
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .and_then(|x| x.domaintype.as_ref().map(Name::from))
+            });
+
         diesel::insert_into(schema::entity::table)
             .values((
                 dsl::name.eq(&name),
@@ -302,7 +349,7 @@ impl Store {
             ))
             .on_conflict((dsl::namespace_id, dsl::name))
             .do_update()
-            .set(dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.name_part())))
+            .set(dsl::domaintype.eq(resolved_domain_type))
             .execute(connection)?;
 
         let query::Entity { id, .. } =
@@ -1051,8 +1098,7 @@ impl Store {
                 .select(schema::entity::name)
                 .load::<String>(connection)?
             {
-                let asoc = generation;
-                model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&asoc), &id);
+                model.was_generated_by(namespaceid.clone(), &EntityId::from_name(&generation), &id);
             }
 
             for used in schema::useage::table
@@ -1112,7 +1158,7 @@ impl Store {
         Ok(model)
     }
 
-    /// Set the last fully syncronised offset
+    /// Set the last fully synchronized offset
     #[instrument]
     pub fn set_last_offset(
         &self,

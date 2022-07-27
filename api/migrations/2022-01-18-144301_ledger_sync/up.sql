@@ -82,6 +82,7 @@ create table delegation (
     foreign key(responsible_id) references agent(id),
     foreign key(activity_id) references activity(id),
     primary key(responsible_id,delegate_id,activity_id,role)
+    unique(responsible_id,delegate_id,activity_id,role)
 );
 
 create table derivation (
@@ -93,6 +94,7 @@ create table derivation (
     foreign key(generated_entity_id) references entity(id),
     foreign key(used_entity_id) references entity(id),
     primary key(activity_id,used_entity_id,generated_entity_id,typ)
+    unique(activity_id,used_entity_id,generated_entity_id,typ)
 );
 
 create table generation (
@@ -111,6 +113,7 @@ create table association (
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
     primary key(agent_id, activity_id, role)
+    unique(agent_id, activity_id, role)
 );
 
 create table useage (
