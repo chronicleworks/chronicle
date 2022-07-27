@@ -84,11 +84,6 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .into_iter()
                 .collect::<BTreeMap<_, _>>();
 
-            assert!(sawtooth_entries
-                .keys()
-                .enumerate()
-                .all(|(i, x)| x == &SawtoothAddress::from(&deps[i]).to_string()));
-
             let entries = sawtooth_entries
                 .into_iter()
                 .enumerate()

@@ -296,7 +296,6 @@ pub struct LedgerAddress {
     // Namespaces do not have a namespace
     namespace: Option<NamespaceId>,
     resource: ChronicleIri,
-    is_dirty: bool,
 }
 
 pub trait NameSpacePart {
@@ -328,7 +327,6 @@ impl LedgerAddress {
                 None
             },
             resource: ChronicleIri::from_str(resource)?,
-            is_dirty: false,
         })
     }
 
@@ -336,7 +334,6 @@ impl LedgerAddress {
         Self {
             namespace: None,
             resource: ns.clone().into(),
-            is_dirty: false,
         }
     }
 
@@ -344,16 +341,7 @@ impl LedgerAddress {
         Self {
             namespace: Some(ns.clone()),
             resource: resource.into(),
-            is_dirty: false,
         }
-    }
-
-    fn set_dirty(&mut self) {
-        self.is_dirty = true
-    }
-
-    fn check_dirty(&self) -> bool {
-        self.is_dirty
     }
 }
 
@@ -420,18 +408,7 @@ impl OperationState {
 
     /// Load processed output address and data values into maps in `OperationState`
     pub fn append_output(&mut self, outputs: impl Iterator<Item = (LedgerAddress, Vec<u8>)>) {
-        let mut output = outputs
-            .map(|(mut addr, data)| {
-                if match (self.input.get(&addr), &data) {
-                    (Some(input), output) if input != output => true,
-                    (None, _) => true,
-                    _ => false,
-                } {
-                    addr.set_dirty();
-                }
-                (addr, data)
-            })
-            .collect::<BTreeMap<_, _>>();
+        let mut output = outputs.collect::<BTreeMap<_, _>>();
         self.output.append(&mut output);
     }
 
@@ -440,7 +417,11 @@ impl OperationState {
     pub fn dirty(self) -> impl Iterator<Item = StateOutput> {
         self.output
             .into_iter()
-            .filter(|(addr, _data)| addr.check_dirty())
+            .filter(|(addr, data)| match (self.input.get(addr), &data) {
+                (Some(input), output) if input != *output => true,
+                (None, _) => true,
+                _ => false,
+            })
             .map(|(k, v)| StateOutput::new(k, v))
             .collect::<Vec<_>>()
             .into_iter()
@@ -676,7 +657,7 @@ pub mod test {
     use std::{collections::BTreeMap, str::from_utf8};
 
     use crate::{
-        ledger::InMemLedger,
+        ledger::{InMemLedger, StateInput},
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
             ActivityId, AgentId, DelegationId, Name, NamePart, NamespaceId, ProvModel, Role,
@@ -684,7 +665,7 @@ pub mod test {
     };
     use uuid::Uuid;
 
-    use super::{OperationState, StateOutput};
+    use super::{LedgerAddress, OperationState, StateOutput};
     fn uuid() -> Uuid {
         let bytes = [
             0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
@@ -693,9 +674,18 @@ pub mod test {
         Uuid::from_slice(&bytes).unwrap()
     }
 
-    fn create_namespace_helper() -> ChronicleOperation {
-        let name = "testns";
-        let id = NamespaceId::from_name(name, uuid());
+    fn create_namespace_id_helper(tag: Option<i32>) -> NamespaceId {
+        let name = if tag.is_none() || tag == Some(0) {
+            "testns".to_string()
+        } else {
+            format!("testns{}", tag.unwrap())
+        };
+        NamespaceId::from_name(&name, uuid())
+    }
+
+    fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
+        let id = create_namespace_id_helper(tag);
+        let name = &id.name_part().to_string();
         ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid()))
     }
 
@@ -764,7 +754,7 @@ pub mod test {
         let mut tx: Vec<ChronicleOperation> = vec![];
         let mut l = InMemLedger::new();
 
-        let op = create_namespace_helper();
+        let op = create_namespace_helper(None);
         tx.push(op);
 
         let dirty_values = 1;
@@ -791,7 +781,7 @@ pub mod test {
         let mut l = InMemLedger::new();
 
         // operation - create namespace
-        let op = create_namespace_helper();
+        let op = create_namespace_helper(None);
         tx.push(op);
 
         for tx in tx {
@@ -799,7 +789,6 @@ pub mod test {
         }
 
         for output in state.dirty() {
-            eprintln!("dirty value: {:?}", output.data);
             amend_ledger_helper(output, &mut l);
         }
         l.head += 1;
@@ -809,8 +798,8 @@ pub mod test {
         let mut tx: Vec<ChronicleOperation> = vec![];
 
         // operation - re-create the same namespace
-        // let dirty_values = 0;
-        let op = create_namespace_helper();
+        let dirty_values = 0;
+        let op = create_namespace_helper(None);
         tx.push(op);
 
         for tx in tx {
@@ -818,52 +807,52 @@ pub mod test {
         }
         let mut dirty_matches = 0;
         for output in state.dirty() {
-            eprintln!("dirty value: {:?}", output.data);
             dirty_matches += 1;
             amend_ledger_helper(output, &mut l);
         }
-        eprintln!("dirty values: {}", dirty_matches);
 
         l.head += 1;
-        // assert!(dirty_matches == dirty_values);
+        assert!(dirty_matches == dirty_values);
 
-        // // reinitialize state
-        // let mut state = OperationState::new();
-        // let mut tx: Vec<ChronicleOperation> = vec![];
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
 
-        // // operation - agent acts on behalf of
-        // let op = create_agent_acts_on_behalf_of();
-        // tx.push(op);
+        // operation - agent acts on behalf of
+        let op = create_agent_acts_on_behalf_of();
+        tx.push(op);
+        let dirty_values = 4;
 
-        // for tx in tx {
-        //     transact_helper(&tx, &mut state, &l, &mut model).await;
-        // }
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
+        }
+        let mut dirty_matches = 0;
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
+        }
+        assert!(dirty_matches == dirty_values);
+        l.head += 1;
 
-        // for output in state.dirty() {
-        //     amend_ledger_helper(output, &mut l);
-        // }
+        // reinitialize state
+        let mut state = OperationState::new();
+        let mut tx: Vec<ChronicleOperation> = vec![];
 
-        // l.head += 1;
+        // repeat operation - agent acts on behalf of
+        let dirty_values = 0;
+        let op = create_agent_acts_on_behalf_of();
+        tx.push(op);
 
-        // // reinitialize state
-        // let mut state = OperationState::new();
-        // let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // // repeat operation - agent acts on behalf of - namespace made dirty by transaction
-        // let dirty_values = 1;
-        // let op = create_agent_acts_on_behalf_of();
-        // tx.push(op);
-
-        // for tx in tx {
-        //     transact_helper(&tx, &mut state, &l, &mut model).await;
-        // }
-        // let mut dirty_matches = 0;
-        // for output in state.dirty() {
-        //     dirty_matches += 1;
-        //     amend_ledger_helper(output, &mut l);
-        // }
-        // l.head += 1;
-        // assert!(dirty_matches == dirty_values);
+        for tx in tx {
+            transact_helper(&tx, &mut state, &l, &mut model).await;
+        }
+        let mut dirty_matches = 0;
+        for output in state.dirty() {
+            dirty_matches += 1;
+            amend_ledger_helper(output, &mut l);
+        }
+        l.head += 1;
+        assert!(dirty_matches == dirty_values);
         Ok(())
     }
 
@@ -876,7 +865,7 @@ pub mod test {
         let mut l = InMemLedger::new();
 
         // operation - create namespace
-        let op = create_namespace_helper();
+        let op = create_namespace_helper(None);
         tx.push(op);
 
         for tx in tx {
@@ -914,7 +903,7 @@ pub mod test {
         // a namespace and agent that already exist as inputs,
         // which are amended by the transaction
         let op = create_agent_acts_on_behalf_of();
-        // let dirty_values = 4;
+        let dirty_values = 4;
 
         tx.push(op);
 
@@ -922,14 +911,142 @@ pub mod test {
             transact_helper(&tx, &mut state, &l, &mut model).await;
         }
 
-        // let mut dirty_matches = 0;
+        let mut dirty_matches = 0;
 
         for output in state.dirty() {
-            // dirty_matches += 1;
+            dirty_matches += 1;
             amend_ledger_helper(output, &mut l);
         }
         l.head += 1;
-        // assert!(dirty_matches == dirty_values);
+        assert!(dirty_matches == dirty_values);
         Ok(())
+    }
+
+    fn init_n_unique_ledgeraddresses(n: i32) -> BTreeMap<LedgerAddress, Vec<u8>> {
+        let addresses = {
+            (0..n)
+                .into_iter()
+                .map(|i| LedgerAddress::namespace(&create_namespace_id_helper(Some(i))))
+                .collect::<Vec<_>>()
+        };
+        let data: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![4], vec![5]];
+
+        addresses
+            .into_iter()
+            .zip(data.into_iter())
+            .collect::<BTreeMap<_, _>>()
+    }
+
+    #[test]
+    fn test_operationstate_append_output_passes_dirty_values_and_dirty_only_outputs_dirty_values() {
+        let mut state = OperationState::new();
+
+        assert!(state.input.is_empty());
+        assert!(state.output.is_empty());
+
+        let input = init_n_unique_ledgeraddresses(5);
+
+        state.append_input(input.clone().into_iter().take(3));
+
+        let state_data = state.input.clone();
+
+        assert!(state_data.len() == 3);
+
+        state.append_output(input.clone().into_iter());
+
+        assert!(state.output.len() == 5);
+
+        let dirty_output = state.dirty().collect::<Vec<_>>();
+        assert!(dirty_output.len() == 2);
+
+        let dirty_output = dirty_output
+            .into_iter()
+            .map(|output| output.into())
+            .collect::<BTreeMap<LedgerAddress, Vec<u8>>>();
+        let dirty_input = input
+            .into_iter()
+            .skip(3)
+            .collect::<BTreeMap<LedgerAddress, Vec<u8>>>();
+
+        dirty_output
+            .into_iter()
+            .zip(dirty_input.into_iter())
+            .for_each(|(left, right)| {
+                assert_eq!(left.0, right.0);
+                assert_eq!(left.1, right.1);
+            });
+    }
+
+    #[test]
+    fn test_operationstate_input() {
+        let mut state = OperationState::new();
+
+        let input = init_n_unique_ledgeraddresses(5);
+
+        state.append_input(input.clone().into_iter());
+
+        let state_data = state.input();
+        let input_as_stateinput = input.values().cloned().map(StateInput::new);
+
+        state_data
+            .into_iter()
+            .zip(input_as_stateinput.into_iter())
+            .for_each(|(left, right)| {
+                assert_eq!(left.data, right.data);
+            });
+    }
+
+    #[test]
+    fn test_append_output() {
+        let mut state = OperationState::new();
+
+        let input = init_n_unique_ledgeraddresses(5);
+
+        state.append_input(input.clone().into_iter());
+
+        assert!(state.input == input);
+    }
+
+    #[test]
+    fn test_operationstate_append_input_and_input() {
+        let mut state = OperationState::new();
+
+        let addresses = {
+            (0..5)
+                .into_iter()
+                .map(|i| LedgerAddress::namespace(&create_namespace_id_helper(Some(i))))
+                .collect::<Vec<_>>()
+        };
+        let data: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![4], vec![5]];
+
+        let input = addresses
+            .into_iter()
+            .zip(data.clone().into_iter())
+            .collect::<BTreeMap<_, _>>();
+
+        state.append_input(input.clone().into_iter());
+
+        // check if the input is as expected by comparing with cloned values
+        assert_eq!(state.input, input);
+        // check `OperationState::input` outputs data consistent with original input data
+        assert_eq!(
+            state
+                .input()
+                .into_iter()
+                .map(|input| input.data)
+                .collect::<Vec<Vec<u8>>>(),
+            data
+        );
+    }
+
+    #[test]
+    fn test_from_stateoutput_for_ledger_data_tuple() {
+        let id = create_namespace_id_helper(None);
+        let addr = LedgerAddress::namespace(&id);
+        let data: Vec<u8> = vec![1];
+        let output = StateOutput::new(addr.clone(), data.clone());
+        let (addr_from_output, data_from_output) = output.into();
+        assert_eq!(addr_from_output, addr);
+        assert_eq!(data_from_output, data);
     }
 }

@@ -1,5 +1,6 @@
 ---
 source: chronicle-example/src/test.rs
+assertion_line: 533
 expression: default_cursor
 ---
 {
@@ -8,10 +9,263 @@ expression: default_cursor
       "pageInfo": {
         "hasPreviousPage": false,
         "hasNextPage": false,
-        "startCursor": null,
-        "endCursor": null
+        "startCursor": "0",
+        "endCursor": "8"
       },
-      "edges": []
+      "edges": [
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening1",
+            "name": "gardening1",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "0"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+            "name": "gardening2",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "1"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening3",
+            "name": "gardening3",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "2"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+            "name": "gardening4",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "3"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening5",
+            "name": "gardening5",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "4"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+            "name": "gardening6",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "5"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening7",
+            "name": "gardening7",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "6"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+            "name": "gardening8",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "7"
+        },
+        {
+          "node": {
+            "__typename": "Gardening",
+            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening9",
+            "name": "gardening9",
+            "stringAttribute": "String",
+            "intAttribute": 1,
+            "boolAttribute": false,
+            "wasAssociatedWith": [
+              {
+                "responsible": {
+                  "agent": {
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                    "name": "ringo"
+                  },
+                  "role": "RESPONSIBLE"
+                }
+              }
+            ],
+            "used": [
+              {
+                "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                "name": "coral"
+              }
+            ]
+          },
+          "cursor": "8"
+        }
+      ]
     }
   }
 }
