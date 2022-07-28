@@ -305,11 +305,11 @@ impl ToJson for ProvModel {
                     .ok();
             }
 
-            if let Some(useage) = self.useage.get(&(namespace.to_owned(), id.to_owned())) {
+            if let Some(usage) = self.useage.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
-                for useage in useage.iter() {
-                    ids.push(object! {"@id": useage.entity_id.to_string()});
+                for usage in usage.iter() {
+                    ids.push(object! {"@id": usage.entity_id.to_string()});
                 }
 
                 activitydoc

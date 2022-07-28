@@ -2871,6 +2871,20 @@ pub mod test {
               }
             },
             {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:testAgent"
+              ],
+              "label": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "TestBool": true,
+                "TestInt": 40,
+                "TestString": "test"
+              }
+            },
+            {
               "@id": "chronicle:entity:testentity",
               "@type": "prov:Entity",
               "label": "testentity",

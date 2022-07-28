@@ -30,6 +30,7 @@ use super::{
 pub mod to_json_ld;
 
 custom_error! {pub ProcessorError
+    Address{} = "Invalid address",
     Compaction{source: CompactionError} = "Json Ld Error",
     Expansion{inner: String} = "Json Ld Error",
     IRef{source: iref::Error} = "Invalid IRI",
@@ -404,8 +405,8 @@ impl ProvModel {
             self.agents.insert(id, agent);
         }
 
-        for (id, acitvity) in other.activities {
-            self.activities.insert(id, acitvity);
+        for (id, activity) in other.activities {
+            self.activities.insert(id, activity);
         }
 
         for (id, entity) in other.entities {
@@ -921,7 +922,7 @@ impl ProvModel {
                     self.add_entity(Entity::exists(namespace.clone(), id.clone()));
                 }
 
-                // Enmsure the used entity is in the graph
+                // Ensure the used entity is in the graph
                 if !self
                     .entities
                     .contains_key(&(namespace.clone(), used_id.clone()))
@@ -957,9 +958,9 @@ impl ProvModel {
 
                 self.activities
                     .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut acitvity| {
-                        acitvity.domaintypeid = attributes.typ.clone();
-                        acitvity.attributes = attributes.attributes.clone();
+                    .and_modify(|mut activity| {
+                        activity.domaintypeid = attributes.typ.clone();
+                        activity.attributes = attributes.attributes.clone();
                     })
                     .or_insert_with(|| {
                         Activity::exists(namespace, id.clone()).has_attributes(attributes)
