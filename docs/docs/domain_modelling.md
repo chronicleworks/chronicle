@@ -1,5 +1,9 @@
 # Modelling your provenance domain with Chronicle
 
+## Conceptual design
+
+Provenance is *immutable*. Once you have recorded it there is no way to contradict the provenance you have recorded. When translating your domain to provenance, your activities should be things that have either already take place, or in progress - so choose the past tense.
+
 ## Domain model file structure
 
 Chronicle domain models are specified in YAML format with the following structure:
