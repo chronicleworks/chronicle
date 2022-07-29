@@ -2,7 +2,7 @@
 
 ## Immutability
 
-Chronicle provenance is immutable. Once entered you cannot contradict it, only add additional provenance.
+Chronicle provenance is immutable. Once recorded you cannot contradict it - only add additional provenance.
 
 ## Open world model
 
@@ -87,9 +87,152 @@ Here we attempt to change the value of an attribute - one of these operations wi
 
 Where a provenance term has been recorded with attributes, and the domain has been extended to include new attributes it is valid to append new attributes, as long as the values of the already recorded ones are unchanged.
 
-``` graphql title="Not a contradiction - "
+``` graphql
+
     mutation {
-        endActivity(id:"")
+        writer(id: "chronicle:agent:poet", attributes: {
+            name: "Tennyson"
+        })
+    }
+
+    mutation {
+        writer(id: "chronicle:agent:poet", attributes: {
+            name: "Tennyson",
+            heightInCentimeters: "185"
+        })
     }
 ```
 
+## Operations
+
+### Example domain
+
+For this section we will use a highly simplified domain model for recording the provenance of evidenced documentation. We have a number of people who may be any combination of authors, editors or researchers collaborating to produce documents from evidence produced by a search process. An external CMS is being used that has identifiers for documents and users.
+
+TODO!: Lift this up into another doc about provenance domain design
+
+
+``` yaml
+name: "documentation"
+attributes:
+    Name:
+        type: String
+    CmsId:
+        type: String
+    DOI:
+        type: String
+    Email:
+        type: String
+    Title:
+        type: String
+    SearchParameters:
+        type: String
+    Version:
+        type: Integer
+agents:
+    Person:
+        attributes:
+            - CmsId
+entities:
+    Document:
+        attributes:
+            - Title
+            - CmsId
+            - Version
+    Evidence:
+        attributes:
+            - DOI
+            - Reference
+activities:
+    Search:
+        attributes:
+            - SearchParameters
+    Authoring:
+        attributes:
+            - Version
+    Publishing:
+        attributes:
+            - Version
+roles:
+    - Researcher
+    - Author
+    - Editor
+```
+
+### The `name` parameter
+
+The definition mutations for `entities`, `activities` and `agents` are all supplied with a `name` parameter. This should be something meaningful to the domain you are recording provenance for - a unique identifier from an external system or a natural key.
+
+### Graphql mutation result - `Submission`
+
+All Chronicle mutations
+
+### The commit notification subscription
+
+The `correlationId` from the
+
+
+### Define an Entity
+
+Chronicle will have generated two entity subtypes for us, `Document` and `Evidence` as a graphql union called `Entity`. The definition mutations `document` and `evidence` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+
+The following example mutation `document` will define an `Entity` of subtype `Document`, along with its attributes.
+
+``` graphql title="Define a document entity with graphql"
+mutation {
+    document(name: "evidence-summary-2313", attributes: {
+        titleAttribute: "Evidence Summary",
+        cmsIdAttribute: "2312",
+        versionAttribute: 0
+    })
+}
+```
+
+And the equivalent operation using the command line interface is
+
+``` bash title="Define a document entity with the CLI"
+chronicle document define evidence-summary-2313 --title-attr "Evidence Summary" --cms-id-attr "2313" --version-attr 0
+
+```
+
+
+### Define an Activity
+
+Chronicle will have generated three `Activity` subtypes for us, `Search`, `Authoring` and `Publishing` as a graphql union called `Activity`. The definition mutations `search` `authoring` and `publishing` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+
+The following example mutation `authoring` will define an `Activity` of subtype `Authoring`
+
+``` graphql title="Define a document entity with graphql"
+mutation {
+    authoring(name: "september-2018-review", attributes: {
+        versionAttribute: 14,
+    })
+}
+```
+
+And the equivalent operation using the command line interface is:
+
+``` bash title="Define a document entity with the CLI"
+chronicle authoring define september-2018-review --version-attr 14
+```
+
+
+### Define an Agent
+
+Chronicle will have generated one `Agent` subtype for us, `Person` as a graphql union called `Agent`. The definition mutation `person` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+
+The following example mutation `person` will define an `Agent` of subtype `Person`, along with its attribute.
+
+``` graphql title="Define a document entity with graphql"
+mutation {
+    document(name: "janet-jones-3212", attributes: {
+        cmsIdAttribute: "3212",
+    })
+}
+```
+
+And the equivalent operation using the command line interface is:
+
+``` bash title="Define a document entity with the CLI"
+chronicle person define janet-jones-3212 --cms-id-attr "3212"
+```
