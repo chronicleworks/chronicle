@@ -2,7 +2,7 @@
 
 ## Immutability
 
-Chronicle provenance is immutable. Once recorded you cannot contradict it - only add additional provenance.
+Chronicle provenance is immutable. Once recorded you cannot contradict it - only record additional provenance.
 
 ## Open world model
 
@@ -45,7 +45,7 @@ mutation {
 
 These three Chronicle mutations can be executed in *any* order - Chronicle will assume the existence of the Agent and Activities referred to even if they have not yet been recorded by their `person` and `writing` mutation.
 
-## Contradiction of activity time
+## Contradiction
 
 Chronicle will not allow you to record provenance that contradicts previously recorded provenance. For example - you cannot change the start / end dates of activities once set, or alter the value of an attributes. You can however record identical provenance any number of times, as this does not cause contradiction, or change the state of Chronicle meaningfully.
 

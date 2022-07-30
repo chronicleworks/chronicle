@@ -1,0 +1,10 @@
+@startuml
+
+actor "Researcher"
+
+Researcher -> "Search Parameters" : Decides
+"Search Parameters" -> "Search Engine" : Supplied to
+Researcher <- "Search Engine" : Results
+Researcher -> Evidence : References
+
+@enduml

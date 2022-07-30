@@ -9,6 +9,10 @@ markdown_extensions:
 plugins:
   - search
   - build_plantuml:
+      theme_enabled: true
+      theme_folder: "include/themes"
+      theme_light: "light.puml"
+      theme_dark: "dark.puml"
       render: "server" # or "local" for local rendering
       bin_path: "/usr/local/bin/plantuml" # ignored when render: server
       server: "http://www.plantuml.com/plantuml" # offical plantuml server
