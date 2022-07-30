@@ -1,0 +1,9 @@
+@startuml
+
+actor "Stakeholder"
+actor "Clinician"
+
+Stakeholder -> Question : Asks
+Clinician -> Question : Authors
+
+@enduml
