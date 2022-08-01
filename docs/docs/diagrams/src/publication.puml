@@ -1,0 +1,9 @@
+@startuml
+
+actor "Stakeholder"
+actor "Clinician"
+
+Editor -> Guidance: Approves
+Stakeholder -> Editor: Advises
+
+@enduml

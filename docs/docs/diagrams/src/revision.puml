@@ -1,0 +1,14 @@
+@startuml
+
+actor "Stakeholder"
+actor "Clinician"
+
+Author -> Question : Has context
+Author -> Guidance : Creates version
+Author -> Evidence : Reviews
+Author -> Guidance : Authors
+
+Stakeholder -> Question : Asks
+Clinician -> Question : Authors
+
+@enduml
