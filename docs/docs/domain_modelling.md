@@ -52,18 +52,33 @@ When determining entities, a useful approach from [process mapping](https://www.
 
 The initial question that forms the basis of all research, informing guidance via research.
 
+Has attributes:
+
+* CmdId
+* Content
+
 #### Evidence
 
 A reference to evidence gathered from a search engine.
+
+Has attributes:
+
+* SearchParameters
+* Reference
 
 #### Guidance
 
 The source text of a document, either in the process of authoring or potentially published.
 
+Has attributes:
+* Title
+* Revision
+
 #### PublishedGuidance
 
 A published guidance document, containing a digital signature of the released PDF.
 
+Has no attributes.
 
 ### Activities
 
@@ -91,11 +106,28 @@ This activity models the publication of a particular revision of Guidance, appro
 
 > An agent is something that bears some form of responsibility for an activity taking place, for the existence of an entity, or for another agent's activity.
 
-### Person
+For our example domain, actors are best modelled as Roles rather than Agents - People and Organizations can participate in multiple ways. So we will specify the following agents:
+
+#### Person
+
+An individual person
+
+#### Organization
+
+A named organization consisting of one or more persons, the details of the organizational model are not required to be recorded in provenance.
 
 
-### Organization
+### Roles
 
+When participating in activities, when either directly responsible or via delegation, Agents can have a Role. Agents form the who, whereas Roles are the 'what'. Agents may have multiple roles in the same Activity. From our example domain we can identify the following roles:
+
+#### Stakeholder
+
+#### Author
+
+#### Researcher
+
+#### Editor
 
 
 ## Domain model file structure
@@ -155,6 +187,11 @@ agents:
   Organization:
     attributes:
       - Title
+roles:
+  - Stakeholder
+  - Author
+  - Researcher
+  - Editor
 ```
 
 ### Name
