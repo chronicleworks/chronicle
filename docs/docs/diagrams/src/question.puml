@@ -4,6 +4,6 @@ actor "Stakeholder"
 actor "Clinician"
 
 Stakeholder -> Question : Asks
-Clinician -> Question : Authors
+Author -> Question : Transcribes
 
 @enduml

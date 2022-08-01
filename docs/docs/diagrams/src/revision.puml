@@ -3,12 +3,11 @@
 actor "Stakeholder"
 actor "Clinician"
 
-Author -> Question : Has context
+Guidance -> Question : Has context
 Author -> Guidance : Creates version
 Author -> Evidence : Reviews
 Author -> Guidance : Authors
-
-Stakeholder -> Question : Asks
-Clinician -> Question : Authors
+Guidance -> Evidence : References
+Editor -> Author: Helps refine
 
 @enduml
