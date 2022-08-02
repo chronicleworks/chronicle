@@ -47,7 +47,7 @@ These three Chronicle mutations can be executed in *any* order - Chronicle will 
 
 ## Contradiction
 
-Chronicle will not allow you to record provenance that contradicts previously recorded provenance. For example - you cannot change the start / end dates of activities once set, or alter the value of an attributes. You can however record identical provenance any number of times, as this does not cause contradiction, or change the state of Chronicle meaningfully.
+Chronicle will not allow you to record provenance that contradicts previously recorded provenance. For example - you cannot change the start / end dates of activities once set, or alter the value of an attribute. You can however record identical provenance any number of times, as this does not cause contradiction, or change the state of Chronicle meaningfully.
 
 ### Contradiction of attribute time
 
@@ -161,7 +161,7 @@ chronicle document define evidence-summary-2313 --title-attr "Evidence Summary" 
 
 ### Define an Activity
 
-Chronicle will have generated three `Activity` subtypes for us, `Search`, `Authoring` and `Publishing` as a graphql union called `Activity`. The definition mutations `search` `authoring` and `publishing` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+Chronicle will have generated three `Activity` subtypes for us, `Search`, `Authoring` and `Publishing` as a graphql union called `Activity`. The definition mutations `search`, `authoring` and `publishing` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
 
 The following example mutation `authoring` will define an `Activity` of subtype `Authoring`
 
