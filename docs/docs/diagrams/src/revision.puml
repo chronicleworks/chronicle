@@ -1,7 +1,7 @@
 @startuml
 
-actor "Stakeholder"
-actor "Clinician"
+actor "Editor"
+actor "Author"
 
 Guidance -> Question : Has context
 Author -> Guidance : Creates version

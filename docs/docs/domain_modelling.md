@@ -123,11 +123,19 @@ When participating in activities, when either directly responsible or via delega
 
 #### Stakeholder
 
+A stakeholder is an Organization or Person involved in the formulation of a Question and the approval of Publication.
+
 #### Author
+
+An Author is a Person who creates a Revision of Guidance supervised by an Editor.
 
 #### Researcher
 
+A researcher is a Person who submits SearchParameters to a search engine and then creates References to Evidence.
+
 #### Editor
+
+An editor is a Person who approves Publication after consulting one or more Stakeholders and supervises Authors creating Revisions of Guidance.
 
 
 ## Domain model file structure
@@ -204,19 +212,31 @@ name: "evidence"
 
 ## Attributes
 
-Attributes are used to assign additional data to the prov terms - `Agent`, `Activity` and `Entity`. They are defined by their name - in the following example `AStringAttribute`, `AnIntegerAttribute` or `ABooleanAttribute`. They are assigned a primitive type of either `String`, `Integer` or `Boolean`. `Integer` is a 32 bit signed integer, `String` and `Boolean` should be self explanatory.
+Attributes are used to assign additional data to the prov terms - `Agent`, `Activity` and `Entity`. They are defined by their name and Primitive type, one of:
 
-Attribute names should be meaningful to your domain - choose things like 'Title' or 'Description', and they can be re-used between any prov terms.
+* String
+* Integer
+* Boolean
+
+Attribute names should be meaningful to your domain - choose things like 'Title' or 'Description', they can be re-used between any of prov terms - Entity, Activity and Agent.
 
 
 ``` yaml
 attributes:
-  AStringAttribute:
-    type: "String"
-  AnIntegerAttribute:
-    type: "Integer"
-  ABooleanAttribute:
-    type: "Boolean"
+  Content:
+    type: String
+  CmsId:
+    type: String
+  DOI:
+    type: String
+  Title:
+    type: String
+  SearchParameters:
+    type: String
+  Reference:
+    type: String
+  Version:
+    type: Integer
 ```
 
 ## Agent
@@ -225,41 +245,53 @@ Using Chronicle's domain model definitions an Agent can be subtyped and associat
 
 ``` yaml
 agents:
-  Author:
-   attributes:
-      - Name
-  Editor:
+  Person:
     attributes:
-      - Name
+      - CmsId
+  Organization:
+    attributes:
+      - Title
 ```
 
 ## Entity
 
+
+``` graphql
 entities:
-  Artwork:
+  Question:
+    attributes:
+      - CmsId
+      - Content
+  Evidence:
+    attributes:
+      - SearchParameters
+      - Reference
+  Guidance:
     attributes:
       - Title
-  ArtworkDetails:
-    attributes:
-      - Title
-      - Description
+      - Revision
+  PublishedGuidance:
+    attributes: []
+
+```
 
 ## Activity
 
 ``` yaml
 activities:
-  Exhibited:
+  QuestionAsked:
     attributes:
-      - Location
-  Created:
+      - Content
+  Researched:
     attributes:
-      - Title
-  Sold:
+      - SearchParameters
+  Evidence:
     attributes:
-      - PurchaseValue
-      - PurchaseValueCurrency
-  Transferred:
-    attributes: []
+      - Reference
+  Revised:
+    attributes:
+      - CmsId
+      - Version
 ```
 
 
@@ -267,11 +299,10 @@ activities:
 
 ``` yaml
 roles:
-  - Buyer
-  - Seller
-  - Broker
+  - Stakeholder
+  - Author
+  - Researcher
   - Editor
-  - Creator
 ```
 
-*[Guidance]: Authoritative and evidenced recommendations for clinical practice.
+
