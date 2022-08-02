@@ -1,4 +1,4 @@
-# Recording Provenance using Chronicle
+# Recording Provenance using Chronicle
 
 ## Immutability
 
@@ -641,4 +641,3 @@ mutation {
 #### Had evidence
 
 Evidence is a Chronicle specific provenance feature that simplifies the association of a cryptographic signature with an Entity. You will need a graphql client with multipart support for the attachment to sign.
-
