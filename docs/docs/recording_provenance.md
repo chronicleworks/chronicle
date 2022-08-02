@@ -107,67 +107,30 @@ Where a provenance term has been recorded with attributes, and the domain has be
 
 ### Example domain
 
-For this section we will use a highly simplified domain model for recording the provenance of evidenced documentation. We have a number of people who may be any combination of authors, editors or researchers collaborating to produce documents from evidence produced by a search process. An external CMS is being used that has identifiers for documents and users.
-
-TODO!: Lift this up into another doc about provenance domain design
-
-
-``` yaml
-name: "documentation"
-attributes:
-    Name:
-        type: String
-    CmsId:
-        type: String
-    DOI:
-        type: String
-    Email:
-        type: String
-    Title:
-        type: String
-    SearchParameters:
-        type: String
-    Version:
-        type: Integer
-agents:
-    Person:
-        attributes:
-            - CmsId
-entities:
-    Document:
-        attributes:
-            - Title
-            - CmsId
-            - Version
-    Evidence:
-        attributes:
-            - DOI
-            - Reference
-activities:
-    Search:
-        attributes:
-            - SearchParameters
-    Authoring:
-        attributes:
-            - Version
-    Publishing:
-        attributes:
-            - Version
-roles:
-    - Researcher
-    - Author
-    - Editor
-```
+For this section we will use a our simplified [domain model for recording the provenance of medical guidance](./domain_modelling.md). We have a number of people who may be any combination of authors, editors or researchers collaborating to produce documents from evidence produced by a search process. An external CMS is being used that has identifiers for documents and users.
 
 ### The `name` parameter
 
-The definition mutations for `entities`, `activities` and `agents` are all supplied with a `name` parameter. This should be something meaningful to the domain you are recording provenance for - a unique identifier from an external system or a natural key.
+The definition mutations for prov terms -  Entity, Activity and Agent are all supplied with a `name` parameter. This should be something meaningful to the domain you are recording provenance for - a unique identifier from an external system or a natural key. This will form part of the identity of the term.
 
 ### Graphql mutation result - `Submission`
 
-All Chronicle mutations
+All Chronicle mutations return a `Submission` type defined by:
 
-### The commit notification subscription
+``` graphql
+type Submission {
+	context: String!
+	correlationId: String!
+}
+```
+
+The `context` property here will be the identity of the Chronicle term you have changed in the mutation. i.e calling `agent(..)` will return the identity of the agent, calling `startActivity(..)` the identity of the started activity.
+
+### Commit notification subscriptions
+
+``` graphql
+
+```
 
 The `correlationId` from the
 
