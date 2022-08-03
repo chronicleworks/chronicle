@@ -126,6 +126,8 @@ type Submission {
 
 The `context` property here will be the identity of the Chronicle term you have changed in the mutation. i.e calling `agent(..)` will return the identity of the agent, calling `startActivity(..)` the identity of the started activity.
 
+The `correlationId` property
+
 ### Commit notification subscriptions
 
 ``` graphql
