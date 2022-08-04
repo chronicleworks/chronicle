@@ -1,9 +1,9 @@
 use std::{collections::BTreeMap, path::Path, str::FromStr};
 
-use inflector::cases::kebabcase::to_kebab_case;
-use inflector::cases::pascalcase::to_pascal_case;
-use inflector::cases::snakecase::to_snake_case;
-use inflector::string::singularize::to_singular;
+use inflector::{
+    cases::{kebabcase::to_kebab_case, pascalcase::to_pascal_case, snakecase::to_snake_case},
+    string::singularize::to_singular,
+};
 use serde::{Deserialize, Serialize};
 
 custom_error::custom_error! {pub ModelError

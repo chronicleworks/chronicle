@@ -18,17 +18,55 @@ Various actors and processes are involved in the production of the question, but
 
 The `Question` is then used to inform the `Research` for the production of `Guidance`.
 
+To model and record this process you will need the Chronicle domain model definition explained here, along with the following operations:
+
+* [question](./recording_provenance.md/#define-an-entity) - define an Entity of subtype Question
+* [questionAsked](./recording_provenance.md#define-an-activity) - define an Activity of subtype QuestionAsked
+* [person or organization](./recording_provenance.md#define-an-agent) - define an Agent of subtype Person or Organization to act as  Stakeholders
+* [person](./recording_provenance.md#define-an-agent)  - define an Agent of subtype Person to act as Authors
+* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the QuestionAsked Activity produced the Question
+* [wasAssociatedWith](./recording_provenance.md/#association) - specify that the Person who authored and the Organizations that asked
+* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the question was asked at a point in time
+
+This process represented as provenance will look like:
+
+
+![file](diagrams/out/question_as_prov.svg)
+
 
 ### Research
 The `Question` is used to inform one or more searches to a search engine by a researcher, the parameters to the search engine are recorded, and the results are used to create references to `Evidence`.
 
 ![file](diagrams/out/evidence.svg)
 
+To model and record this process you will need the Chronicle domain model definition explained here, along with the following operations:
+
+* [question](./recording_provenance.md/#define-an-entity) - define an Entity of subtype Question
+* [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
+* [researched](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Researched
+* [person](./recording_provenance.md#define-an-agent)  - define an Agent of subtype Person
+* [used](./recording_provenance.md/#generation) - specify that the Research Activity used the Question
+* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Research Activity produced the Evidence
+* [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
+* [startedAtTime](./recording_provenance.md/#started-at-time) - specify the research began at a point in time
+* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the research ended at a point in time
+
 #### Revision
 
 Revision, like authorship is triggered by research - in this case for changes or additions to the evidence base. Evidence is used to inform a new revision of the Guidance document
 
 ![file](diagrams/out/revision.svg)
+
+To model and record this process you will need the Chronicle domain model definition explained here, along with the following operations:
+
+* [question](./recording_provenance.md/#define-an-entity) - define an Entity of subtype Question
+* [guidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype Guidance
+* [revised](./recording_provenance.md#define-an-activity)  - define an Agent of subtype Researcher
+* [used](./recording_provenance.md/#generation) - specify that the Research Activity used the Question
+* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Research Activity produced the Evidence
+* [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
+* [startedAtTime](./recording_provenance.md/#started-at-time) - specify the research began at a point in time
+* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the research ended at a point in time
 
 ### Publication
 
@@ -37,9 +75,38 @@ A version of Guidance can be approved for Publication by one or more Editors or 
 ![file](diagrams/out/publication.svg)
 
 
+
+
 ## Conceptual design
 
 Provenance is *immutable*. Once you have recorded it there is no way to contradict the provenance you have recorded. When translating your domain to provenance, your activities should be things that have either already take place, or in progress - so choose the past tense. From the process descriptions above we can create the following provenance domain:
+
+### Attributes
+
+
+### Content
+
+Plaintext content of an external resource.
+
+### CmsId
+
+An opaque identifier from the Cms being used to author and publish documents.
+
+### Title
+
+A plain text title.
+
+### SearchParameters
+
+The input to a search engine.
+
+### Reference
+
+A [BibTex](http://www.bibtex.org/) reference to evidence.
+
+### Version
+
+A simple incrementing integer representing a version number
 
 ### Entities
 
@@ -71,6 +138,7 @@ Has attributes:
 The source text of a document, either in the process of authoring or potentially published.
 
 Has attributes:
+
 * Title
 * Revision
 
@@ -171,7 +239,7 @@ entities:
   Guidance:
     attributes:
       - Title
-      - Revision
+      - Version
   PublishedGuidance:
     attributes: []
 activities:
@@ -227,8 +295,6 @@ attributes:
     type: String
   CmsId:
     type: String
-  DOI:
-    type: String
   Title:
     type: String
   SearchParameters:
@@ -241,7 +307,7 @@ attributes:
 
 ## Agent
 
-Using Chronicle's domain model definitions an Agent can be subtyped and associated with attributes like other provenance terms. In the following example we define two Agent subtypes with a name attribute.
+Using Chronicle's domain model definitions an Agent can be subtyped and associated with attributes like other provenance terms. In the following example we define the two Agent subtypes, Person has an id from the Cms, Organization a text title.
 
 ``` yaml
 agents:
@@ -255,8 +321,10 @@ agents:
 
 ## Entity
 
+Using Chronicle's domain model definitions an Entity can be subtyped and associated with attributes like other provenance terms. In the following example we define the four Entity subtypes, Question has an id from the Cms and its content,  Evidence the search parameters and reference. Guidance a title and version and PublishedGuidance needs no attributes.
 
-``` graphql
+
+``` yaml
 entities:
   Question:
     attributes:
@@ -269,13 +337,16 @@ entities:
   Guidance:
     attributes:
       - Title
-      - Revision
+      - Version
   PublishedGuidance:
     attributes: []
 
 ```
 
 ## Activity
+
+Using Chronicle's domain model definitions an Activity can be subtyped and associated with attributes like other provenance terms. In the following example we define the four Activity subtypes, Question has an id from the Cms and its content,  Evidence the search parameters and reference, Guidance a title and version and PublishedGuidance needs no attributes.
+
 
 ``` yaml
 activities:
@@ -294,8 +365,10 @@ activities:
       - Version
 ```
 
-
 ## Role
+
+Corresponding to actors in the example domain we specify the following roles:
+
 
 ``` yaml
 roles:
@@ -304,5 +377,9 @@ roles:
   - Researcher
   - Editor
 ```
+
+
+Supplying this as a YAML file to the chronicle build image as documented in [building chronicle](./building.md) will produce a well-typed API for your domain. The next step is then [recording provenance](./recording_provenance.md).
+
 
 

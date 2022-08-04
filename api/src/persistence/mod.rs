@@ -1,5 +1,8 @@
-use std::collections::BTreeMap;
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+    time::Duration,
+};
 
 use chrono::DateTime;
 

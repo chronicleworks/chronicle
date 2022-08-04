@@ -126,26 +126,41 @@ type Submission {
 
 The `context` property here will be the identity of the Chronicle term you have changed in the mutation. i.e calling `agent(..)` will return the identity of the agent, calling `startActivity(..)` the identity of the started activity.
 
-The `correlationId` property
+The `correlationId` property corresponds to the transaction id when running chronicle with a backend ledger, or a randomly generated uuid when used in [in memory](./chronicle_architecture.md/#development) mode.
 
 ### Commit notification subscriptions
 
+Chronicle provides a [graphql subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/) to notify clients when a chronicle operation has completed.
+
 ``` graphql
+
+subscription {
+    commitNotifications {
+        correlationId
+    }
+}
+
 
 ```
 
-The `correlationId` from the
+The `correlationId` on this subscription will match the correlationId from the [Submission](#graphql-mutation-result---submission). Clients that wish to know the result of an operation should await both the [Submission](#graphql-mutation-result---submission) and the corresponding correlation id from a commit notification.
 
 
 ### Define an Entity
 
+> In PROV, things we want to describe the provenance of are called entities and have some fixed aspects. The term "things" encompasses a broad diversity of notions, including digital objects such as a file or web page, physical things such as a mountain, a building, a printed book, or a car as well as abstract concepts and ideas.
+> An entity is a physical, digital, conceptual, or other kind of thing with some fixed aspects; entities may be real or imaginary.
+
+See [provenance concepts](./provenance_concepts.md#entity)
+
+
 Chronicle will have generated two entity subtypes for us, `Document` and `Evidence` as a graphql union called `Entity`. The definition mutations `document` and `evidence` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
 
-The following example mutation `document` will define an `Entity` of subtype `Document`, along with its attributes.
+The following example mutation `question` will define an `Entity` of subtype `Question`, along with its attributes.
 
-``` graphql title="Define a document entity with graphql"
+``` graphql title="Define a Question entity with graphql"
 mutation {
-    document(name: "evidence-summary-2313", attributes: {
+    document(name: "", attributes: {
         titleAttribute: "Evidence Summary",
         cmsIdAttribute: "2312",
         versionAttribute: 0

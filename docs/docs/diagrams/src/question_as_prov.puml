@@ -1,0 +1,20 @@
+@startuml
+
+abstract Entity
+abstract Agent
+abstract Activity
+
+Question <|-- Entity
+Person <|-- Agent
+Organization <|-- Agent
+QuestionAsked <|-- Activity
+
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Organization -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Author)
+Question -> QuestionAsked : wasGeneratedBy
+
+@enduml

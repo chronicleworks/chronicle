@@ -4,6 +4,6 @@ actor "Stakeholder"
 actor "Author"
 
 Stakeholder -> Question : Asks
-Author -> Question : Transcribes
+Author -> Question : Authors
 
 @enduml
