@@ -37,7 +37,7 @@ This process represented as provenance will look like:
 ### Research
 The `Question` is used to inform one or more searches to a search engine by a researcher, the parameters to the search engine are recorded, and the results are used to create references to `Evidence`.
 
-![file](diagrams/out/evidence.svg)
+![file](diagrams/out/research.svg)
 
 To model and record this process you will need the Chronicle domain model definition explained here, along with the following operations:
 
@@ -45,15 +45,21 @@ To model and record this process you will need the Chronicle domain model defini
 * [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
 * [researched](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Researched
 * [person](./recording_provenance.md#define-an-agent)  - define an Agent of subtype Person
-* [used](./recording_provenance.md/#generation) - specify that the Research Activity used the Question
+* [used](./recording_provenance.md/#used) - specify that the Research Activity used the Question
 * [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Research Activity produced the Evidence
 * [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
 * [startedAtTime](./recording_provenance.md/#started-at-time) - specify the research began at a point in time
 * [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the research ended at a point in time
 
-#### Revision
+This process represented as provenance will look like:
 
-Revision, like authorship is triggered by research - in this case for changes or additions to the evidence base. Evidence is used to inform a new revision of the Guidance document
+
+![file](diagrams/out/research_as_prov.svg)
+
+
+#### Guidance
+
+Guidance, like authorship is triggered by research - in this case for changes or additions to the evidence base. Evidence is used to inform a new revision of the Guidance document
 
 ![file](diagrams/out/revision.svg)
 
@@ -61,12 +67,20 @@ To model and record this process you will need the Chronicle domain model defini
 
 * [question](./recording_provenance.md/#define-an-entity) - define an Entity of subtype Question
 * [guidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype Guidance
-* [revised](./recording_provenance.md#define-an-activity)  - define an Agent of subtype Researcher
-* [used](./recording_provenance.md/#generation) - specify that the Research Activity used the Question
-* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Research Activity produced the Evidence
+* [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
+* [revised](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Revised
+* [used](./recording_provenance.md/#used) - specify that the Guidance Activity used the Question
+* [used](./recording_provenance.md/#used) - specify that the Guidance Activity used the Evidence
+* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Guidance Activity produced the Guidance
 * [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
-* [startedAtTime](./recording_provenance.md/#started-at-time) - specify the research began at a point in time
-* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the research ended at a point in time
+* [wasRevisionOf](./recording_provenance.md/#revision) - specify that the Guidance is possibly a Revision of previous Guidance
+* [hadPrimarySource](./recording_provenance.md/#primarySource) - specify that the Guidance possibly has a primary source of the Question (for the first version)
+* [startedAtTime](./recording_provenance.md/#started-at-time) - specify the Guidance process began at a point in time
+* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the Guidance process ended at a point in time
+
+This process represented as provenance will look like:
+
+![file](diagrams/out/revision_as_prov.svg)
 
 ### Publication
 
@@ -75,7 +89,23 @@ A version of Guidance can be approved for Publication by one or more Editors or 
 ![file](diagrams/out/publication.svg)
 
 
+* [guidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype Guidance
+* [publishedGuidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype PublishedGuidance
+* [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
+* [published](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Published
+* [used](./recording_provenance.md/#used) - specify that the Published Activity used the Guidance
+* [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Published Activity produced the PublishedGuidance
+* [wasAssociatedWith](./recording_provenance.md/#association) - specify that the Publication was done by a Person acting as an Editor
+* [actedOnBehalfOf](./recording_provenance.md/#delegation) - specify that the Publication was done by on behalf of on or more Stakeholders
+* [hadPrimarySource](./recording_provenance.md/#primarySource) - specify that the PublishedGuidance has a primary source of the Guidance
+* [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the Published process happened at a point in time
+* [hadEvidence](./recording_provenance.md/#had-evidence) - attach a signature of the published PDF document to the PublishedGuidance activity
 
+
+This process represented as provenance will look like:
+
+
+![file](diagrams/out/publication_as_prov.svg)
 
 ## Conceptual design
 
@@ -140,7 +170,7 @@ The source text of a document, either in the process of authoring or potentially
 Has attributes:
 
 * Title
-* Revision
+* Guidance
 
 #### PublishedGuidance
 
@@ -195,7 +225,7 @@ A stakeholder is an Organization or Person involved in the formulation of a Ques
 
 #### Author
 
-An Author is a Person who creates a Revision of Guidance supervised by an Editor.
+An Author is a Person who creates a Guidance of Guidance supervised by an Editor.
 
 #### Researcher
 
@@ -203,7 +233,7 @@ A researcher is a Person who submits SearchParameters to a search engine and the
 
 #### Editor
 
-An editor is a Person who approves Publication after consulting one or more Stakeholders and supervises Authors creating Revisions of Guidance.
+An editor is a Person who approves Publication after consulting one or more Stakeholders and supervises Authors creating Guidances of Guidance.
 
 
 ## Domain model file structure

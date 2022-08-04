@@ -1,0 +1,24 @@
+@startuml
+
+abstract Entity
+abstract Agent
+abstract Activity
+
+Guidance <|-- Entity
+PublishedGuidance <|-- Entity
+Person <|-- Agent
+Publication <|-- Activity
+
+
+Person -> Publication: wasAssociatedWith
+note on link: (role=Stakeholder)
+Person -> Person: actedOnBehalfOf
+note on link: (role=Stakeholder)
+Person -> Publication: wasAssociatedWith
+note on link: (role=Editor)
+PublishedGuidance -> Revision: hadPrimarySource
+Publication -> Guidance : used
+PublishedGuidance -> Publication: wasGeneratedBy
+PublishedGuidance -> Document: hadEvidence
+
+@enduml
