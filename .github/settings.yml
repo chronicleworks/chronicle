@@ -20,7 +20,7 @@ repository:
 
   # Either `true` to enable downloads for this repository, `false` to disable
   # them.
-  has_downloads: true
+  has_downloads: false
 
   # Updates the default branch for this repository.
   default_branch: main
@@ -37,6 +37,7 @@ repository:
   # rebase-merging.
   allow_rebase_merge: false
 
+  allow_auto_merge: true
   # Either `true` to enable automatic deletion of branches on merge, or `false`
   # to disable
   delete_branch_on_merge: true
@@ -54,11 +55,25 @@ repository:
 # for available options
 collaborators:
 
-  # - username: hubot
-  #   permission: pull
+# - username: hubot
+#   permission: pull
 
-  # Note: `permission` is only valid on organization-owned repositories.
-  # The permission to grant the collaborator. Can be one of:
+# Note: `permission` is only valid on organization-owned repositories.
+# The permission to grant the collaborator. Can be one of:
+# * `pull` - can pull, but not push to or administer this repository.
+# * `push` - can pull and push, but not administer this repository.
+# * `admin` - can pull, push and administer this repository.
+# * `maintain` - Recommended for project managers who need to manage the
+#                repository without access to sensitive or destructive
+#                actions.
+# * `triage` - Recommended for contributors who need to proactively manage
+#              issues and pull requests without write access.
+
+# See
+# https://docs.github.com/en/rest/reference/teams#add-or-update-team-repository-permissions
+# for available options
+teams:
+  # The permission to grant the team. Can be one of:
   # * `pull` - can pull, but not push to or administer this repository.
   # * `push` - can pull and push, but not administer this repository.
   # * `admin` - can pull, push and administer this repository.
@@ -67,20 +82,6 @@ collaborators:
   #                actions.
   # * `triage` - Recommended for contributors who need to proactively manage
   #              issues and pull requests without write access.
-
-# See
-# https://docs.github.com/en/rest/reference/teams#add-or-update-team-repository-permissions
-# for available options
-teams:
-    # The permission to grant the team. Can be one of:
-    # * `pull` - can pull, but not push to or administer this repository.
-    # * `push` - can pull and push, but not administer this repository.
-    # * `admin` - can pull, push and administer this repository.
-    # * `maintain` - Recommended for project managers who need to manage the
-    #                repository without access to sensitive or destructive
-    #                actions.
-    # * `triage` - Recommended for contributors who need to proactively manage
-    #              issues and pull requests without write access.
   - name: btp-engineering
     permission: maintain
   - name: btp-documentation
@@ -122,8 +123,10 @@ branches:
         # Required. The list of status checks to require in order to merge into
         # this branch
         contexts:
-          - License Compliance
           - DCO
+          - pre-commit
+          - Commit Message Lint
+          - License Compliance
           - cargo-checkmate
           - continuous-integration/jenkins/pr-head
       # Required. Enforce all configured restrictions for administrators. Set
@@ -132,10 +135,19 @@ branches:
       enforce_admins: true
       # Prevent merge commits from being pushed to matching branches
       required_linear_history: false
+      required_signatures: true
+      required_conversation_resolution: true
       # Required. Restrict who can push to this branch. Team and user
       # restrictions are only available for organization-owned repositories.
       # Set to null to disable.
       restrictions:
-        # apps: []
-        # users: []
-        # teams: []
+
+autolinks:
+  - key_prefix: 'SXT-'
+    url_template: 'https://blockchaintp.atlassian.net/browse/SXT-<num>'
+  - key_prefix: 'BCP-'
+    url_template: 'https://blockchaintp.atlassian.net/browse/BCP-<num>'
+  - key_prefix: 'CHRON-'
+    url_template: 'https://blockchaintp.atlassian.net/browse/CHRON-<num>'
+  - key_prefix: 'DCP-'
+    url_template: 'https://blockchaintp.atlassian.net/browse/DCP-<num>'
