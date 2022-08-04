@@ -26,7 +26,7 @@ FROM builder AS base
 COPY . .
 
 ARG BUILD_ARGS
-RUN cargo build --release ${BUILD_ARGS}
+RUN cargo build --release $BUILD_ARGS
 
 FROM ubuntu:focal AS chronicle
 WORKDIR /
