@@ -1,0 +1,361 @@
+union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revised
+type ActivityConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ActivityEdge]
+}
+"""
+An edge in a connection.
+"""
+type ActivityEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Activity!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+scalar ActivityID
+enum ActivityType {
+	PROV_ACTIVITY
+	PUBLISHED
+	QUESTION_ASKED
+	RESEARCHED
+	REVISED
+}
+union Agent = | ProvAgent | Organization | Person
+type AgentConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AgentEdge]
+}
+"""
+An edge in a connection.
+"""
+type AgentEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Agent!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+scalar AgentID
+type AgentRef {
+	role: RoleType!
+	agent: Agent!
+}
+enum AgentType {
+	PROV_AGENT
+	ORGANIZATION
+	PERSON
+}
+type Association {
+	responsible: AgentRef!
+	delegate: AgentRef
+}
+type ChronicleEvidence {
+	signatureTime: DateTime!
+	signature: String!
+	locator: String
+}
+scalar CmsIdAttribute
+type CommitNotification {
+	correlationId: String!
+}
+scalar ContentAttribute
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+scalar DomaintypeID
+union Entity = | ProvEntity | Evidence | Guidance | PublishedGuidance | Question
+scalar EntityID
+type Evidence {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	searchParametersAttribute: SearchParameterAttribute
+	referenceAttribute: ReferenceAttribute
+}
+input EvidenceAttributes {
+	searchParametersAttribute: String!
+	referenceAttribute: String!
+}
+type Guidance {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	titleAttribute: TitleAttribute
+	versionAttribute: VersionAttribute
+}
+input GuidanceAttributes {
+	titleAttribute: String!
+	versionAttribute: Int!
+}
+type Identity {
+	publicKey: String!
+}
+type Mutation {
+	agent(name: String!, namespace: String, attributes: ProvAgentAttributes!): Submission!
+	organization(name: String!, namespace: String, attributes: OrganizationAttributes!): Submission!
+	person(name: String!, namespace: String, attributes: PersonAttributes!): Submission!
+	activity(name: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
+	published(name: String!, namespace: String, attributes: PublishedAttributes!): Submission!
+	questionAsked(name: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
+	researched(name: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
+	revised(name: String!, namespace: String, attributes: RevisedAttributes!): Submission!
+	entity(name: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
+	evidence(name: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
+	guidance(name: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
+	publishedGuidance(name: String!, namespace: String): Submission!
+	question(name: String!, namespace: String, attributes: QuestionAttributes!): Submission!
+	actedOnBehalfOf(namespace: String, responsible: AgentID!, delegate: AgentID!, activity: ActivityID, role: RoleType!): Submission!
+	wasDerivedFrom(namespace: String, generatedEntity: EntityID!, usedEntity: EntityID!): Submission!
+	wasRevisionOf(namespace: String, generatedEntity: EntityID!, usedEntity: EntityID!): Submission!
+	hadPrimarySource(namespace: String, generatedEntity: EntityID!, usedEntity: EntityID!): Submission!
+	wasQuotedFrom(namespace: String, generatedEntity: EntityID!, usedEntity: EntityID!): Submission!
+	generateKey(id: AgentID!, namespace: String): Submission!
+	startActivity(id: ActivityID!, namespace: String, agent: AgentID, time: DateTime): Submission!
+	endActivity(id: ActivityID!, namespace: String, agent: AgentID, time: DateTime): Submission!
+	wasAssociatedWith(namespace: String, responsible: AgentID!, activity: ActivityID!, role: RoleType!): Submission!
+	used(activity: ActivityID!, id: EntityID!, namespace: String): Submission!
+	wasGeneratedBy(activity: ActivityID!, id: EntityID!, namespace: String): Submission!
+	hasAttachment(id: EntityID!, namespace: String, attachment: Upload!, agent: AgentID!, locator: String!): Submission!
+}
+type Namespace {
+	name: String!
+	uuid: String!
+}
+type Organization {
+	id: AgentID!
+	name: String!
+	namespace: Namespace!
+	identity: Identity
+	actedOnBehalfOf: [AgentRef!]!
+	titleAttribute: TitleAttribute
+	type: DomaintypeID
+}
+input OrganizationAttributes {
+	titleAttribute: String!
+}
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+type Person {
+	id: AgentID!
+	name: String!
+	namespace: Namespace!
+	identity: Identity
+	actedOnBehalfOf: [AgentRef!]!
+	cmsIdAttribute: CmsIdAttribute
+	type: DomaintypeID
+}
+input PersonAttributes {
+	cmsIdAttribute: String!
+}
+type ProvActivity {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+}
+input ProvActivityAttributes {
+	type: String
+}
+type ProvAgent {
+	id: AgentID!
+	name: String!
+	namespace: Namespace!
+	identity: Identity
+	actedOnBehalfOf: [AgentRef!]!
+	type: DomaintypeID
+}
+input ProvAgentAttributes {
+	type: String
+}
+type ProvEntity {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
+input ProvEntityAttributes {
+	type: String
+}
+type Published {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	versionAttribute: VersionAttribute
+}
+input PublishedAttributes {
+	versionAttribute: Int!
+}
+type PublishedGuidance {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
+type Query {
+	activityTimeline(activityTypes: [ActivityType!]!, forEntity: [EntityID!]!, from: DateTime, to: DateTime, namespace: ID, after: String, before: String, first: Int, last: Int): ActivityConnection!
+	agentsByType(agentType: AgentType!, namespace: String, after: String, before: String, first: Int, last: Int): AgentConnection!
+	agentById(id: AgentID!, namespace: String): Agent
+	entityById(id: EntityID!, namespace: String): Entity
+}
+type Question {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	cmsIdAttribute: CmsIdAttribute
+	contentAttribute: ContentAttribute
+}
+type QuestionAsked {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	contentAttribute: ContentAttribute
+}
+input QuestionAskedAttributes {
+	contentAttribute: String!
+}
+input QuestionAttributes {
+	cmsIdAttribute: String!
+	contentAttribute: String!
+}
+scalar ReferenceAttribute
+type Researched {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	searchParametersAttribute: SearchParameterAttribute
+}
+input ResearchedAttributes {
+	searchParametersAttribute: String!
+}
+type Revised {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	cmsIdAttribute: CmsIdAttribute
+	versionAttribute: VersionAttribute
+}
+input RevisedAttributes {
+	cmsIdAttribute: String!
+	versionAttribute: Int!
+}
+enum RoleType {
+	UNSPECIFIED
+	STAKEHOLDER
+	AUTHOR
+	RESEARCHER
+	EDITOR
+}
+scalar SearchParameterAttribute
+type Submission {
+	context: String!
+	correlationId: String!
+}
+type Subscription {
+	commitNotifications: CommitNotification!
+}
+scalar TitleAttribute
+scalar Upload
+scalar VersionAttribute
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
+}

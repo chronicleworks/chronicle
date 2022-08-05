@@ -57,8 +57,8 @@ fn gen_association_unions() -> rust::Tokens {
 }
 
 fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
-    let graphql_enum = &rust::import("chronicle::async_graphql", "Enum");
-    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let graphql_enum = &rust::import("chronicle::async_graphql", "Enum").qualified();
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId").qualified();
     let prov_role = &rust::import("chronicle::common::prov", "Role").qualified();
     quote! {
 
@@ -202,14 +202,14 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
         &rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
     let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "activity").qualified();
     let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
-    let activity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
 
     let object = rust::import("chronicle::async_graphql", "Object").qualified();
     let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
-    let date_time = &rust::import("chronicle::chrono", "DateTime");
-    let utc = &rust::import("chronicle::chrono", "Utc");
+    let date_time = &rust::import("chronicle::chrono", "DateTime").qualified();
+    let utc = &rust::import("chronicle::chrono", "Utc").qualified();
     quote! {
     #(register(activity_impl))
 
@@ -291,13 +291,13 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let abstract_entity = &rust::import("chronicle::api::chronicle_graphql", "Entity").qualified();
     let entity_impl = &rust::import("chronicle::api::chronicle_graphql", "entity").qualified();
     let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
-    let evidence = &rust::import("chronicle::api::chronicle_graphql", "Evidence");
+    let evidence = &rust::import("chronicle::api::chronicle_graphql", "Evidence").qualified();
     let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
 
     let object = rust::import("chronicle::async_graphql", "Object").qualified();
     let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
-    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId").qualified();
 
     quote! {
 
@@ -407,8 +407,8 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     let object = rust::import("chronicle::async_graphql", "Object").qualified();
     let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
-    let agent_id = &rust::import("chronicle::common::prov", "AgentId");
-    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let agent_id = &rust::import("chronicle::common::prov", "AgentId").qualified();
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId").qualified();
 
     quote! {
 
@@ -476,7 +476,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
     let input_object = &rust::import("chronicle::async_graphql", "InputObject").qualified();
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
-    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId").qualified();
     quote! {
     #[derive(#input_object, Clone)]
     pub struct ProvAgentAttributes {
@@ -533,8 +533,8 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
     let input_object = rust::import("chronicle::async_graphql", "InputObject").qualified();
-    let domain_type_id = rust::import("chronicle::common::prov", "DomaintypeId");
-    let serde_value = &rust::import("chronicle::serde_json", "Value");
+    let domain_type_id = rust::import("chronicle::common::prov", "DomaintypeId").qualified();
+    let serde_value = &rust::import("chronicle::serde_json", "Value").qualified();
 
     if attributes.is_empty() {
         return quote! {};
@@ -648,16 +648,20 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
 fn gen_query() -> rust::Tokens {
     let query_impl = &rust::import("chronicle::api::chronicle_graphql", "query").qualified();
 
-    let graphql_object = &rust::import("chronicle::async_graphql", "Object");
-    let graphql_result = &rust::import("chronicle::async_graphql", "Result");
-    let graphql_id = &rust::import("chronicle::async_graphql", "ID");
-    let graphql_context = &rust::import("chronicle::async_graphql", "Context");
-    let graphql_connection = &rust::import("chronicle::async_graphql::connection", "Connection");
+    let graphql_object = &rust::import("chronicle::async_graphql", "Object").qualified();
+    let graphql_result = &rust::import("chronicle::async_graphql", "Result").qualified();
+    let graphql_id = &rust::import("chronicle::async_graphql", "ID").qualified();
+    let graphql_context = &rust::import("chronicle::async_graphql", "Context").qualified();
+    let graphql_connection =
+        &rust::import("chronicle::async_graphql::connection", "Connection").qualified();
 
-    let agent_id = &rust::import("chronicle::common::prov", "AgentId");
-    let entity_id = &rust::import("chronicle::common::prov", "EntityId");
+    let agent_id = &rust::import("chronicle::common::prov", "AgentId").qualified();
+    let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
     let empty_fields =
         &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
+
+    let date_time = &rust::import("chronicle::chrono", "DateTime").qualified();
+    let utc = &rust::import("chronicle::chrono", "Utc").qualified();
 
     quote! {
     #[derive(Copy, Clone)]
@@ -671,10 +675,10 @@ fn gen_query() -> rust::Tokens {
         &self,
         ctx: &#graphql_context<'a>,
         activity_types: Vec<ActivityType>,
-        for_entity: Vec<EntityId>,
-        from: Option<DateTime<Utc>>,
-        to: Option<DateTime<Utc>>,
-        namespace: Option<ID>,
+        for_entity: Vec<#entity_id>,
+        from: Option<#date_time<#utc>>,
+        to: Option<#date_time<#utc>>,
+        namespace: Option<#graphql_id>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -701,7 +705,7 @@ fn gen_query() -> rust::Tokens {
         &self,
         ctx: &#graphql_context<'a>,
         agent_type: AgentType,
-        namespace: Option<#graphql_id>,
+        namespace: Option<String>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -739,19 +743,22 @@ fn gen_query() -> rust::Tokens {
 }
 
 fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
-    let graphql_object = &rust::import("chronicle::async_graphql", "Object");
+    let graphql_object = &rust::import("chronicle::async_graphql", "Object").qualified();
 
-    let graphql_result = &rust::import("chronicle::async_graphql", "Result");
-    let graphql_upload = &rust::import("chronicle::async_graphql", "Upload");
-    let graphql_context = &rust::import("chronicle::async_graphql", "Context");
+    let graphql_result = &rust::import("chronicle::async_graphql", "Result").qualified();
+    let graphql_upload = &rust::import("chronicle::async_graphql", "Upload").qualified();
+    let graphql_context = &rust::import("chronicle::async_graphql", "Context").qualified();
 
-    let submission = &rust::import("chronicle::api::chronicle_graphql", "Submission");
-    let impls = &rust::import("chronicle::api::chronicle_graphql", "mutation");
+    let submission = &rust::import("chronicle::api::chronicle_graphql", "Submission").qualified();
+    let impls = &rust::import("chronicle::api::chronicle_graphql", "mutation").qualified();
 
-    let entity_id = &rust::import("chronicle::common::prov", "EntityId");
-    let agent_id = &rust::import("chronicle::common::prov", "AgentId");
-    let activity_id = &rust::import("chronicle::common::prov", "ActivityId");
-    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+    let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
+    let agent_id = &rust::import("chronicle::common::prov", "AgentId").qualified();
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
+    let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId").qualified();
+
+    let date_time = &rust::import("chronicle::chrono", "DateTime").qualified();
+    let utc = &rust::import("chronicle::chrono", "Utc").qualified();
 
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
@@ -768,7 +775,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             name: String,
             namespace: Option<String>,
             attributes: ProvAgentAttributes,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::agent(ctx, name, namespace, attributes.into()).await
         }
 
@@ -779,7 +786,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 name: String,
                 namespace: Option<String>,
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::agent(ctx, name, namespace,
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(agent.as_type_name())))
@@ -793,7 +800,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 name: String,
                 namespace: Option<String>,
                 attributes: #(agent.attributes_type_name()),
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::agent(ctx, name, namespace, attributes.into()).await
             }
             }
@@ -806,7 +813,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             name: String,
             namespace: Option<String>,
             attributes: ProvActivityAttributes,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::activity(ctx, name, namespace, attributes.into()).await
         }
 
@@ -817,7 +824,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 name: String,
                 namespace: Option<String>,
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::activity(ctx, name, namespace,
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(activity.as_type_name())))
@@ -831,7 +838,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 name: String,
                 namespace: Option<String>,
                 attributes: #(activity.attributes_type_name()),
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::activity(ctx, name, namespace, attributes.into()).await
             }
             }
@@ -844,7 +851,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             name: String,
             namespace: Option<String>,
             attributes: ProvEntityAttributes,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::entity(ctx, name, namespace, attributes.into()).await
         }
 
@@ -855,7 +862,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 name: String,
                 namespace: Option<String>,
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::entity(ctx, name, namespace,
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(entity.as_type_name())))
@@ -869,7 +876,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 name: String,
                 namespace: Option<String>,
                 attributes: #(entity.attributes_type_name()),
-            ) -> async_graphql::#graphql_result<#submission> {
+            ) -> #graphql_result<#submission> {
                 #impls::entity(ctx, name, namespace, attributes.into()).await
             }
             }
@@ -884,7 +891,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             delegate: #agent_id,
             activity: Option<#activity_id>,
             role: RoleType,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate, activity, role.into()).await
         }
 
@@ -894,7 +901,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             generated_entity: #entity_id,
             used_entity: #entity_id,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::was_derived_from(ctx, namespace, generated_entity, used_entity)
                 .await
         }
@@ -905,7 +912,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             generated_entity: #entity_id,
             used_entity: #entity_id,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::was_revision_of(ctx, namespace, generated_entity, used_entity)
                 .await
         }
@@ -915,7 +922,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             generated_entity: #entity_id,
             used_entity: #entity_id,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::had_primary_source(
                 ctx,
                 namespace,
@@ -930,7 +937,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             generated_entity: #entity_id,
             used_entity: #entity_id,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::was_quoted_from(ctx, namespace, generated_entity, used_entity)
                 .await
         }
@@ -940,7 +947,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             ctx: &#graphql_context<'a>,
             id: #agent_id,
             namespace: Option<String>,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::generate_key(ctx, id, namespace).await
         }
 
@@ -950,8 +957,8 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             id: #activity_id,
             namespace: Option<String>,
             agent: Option<#agent_id>,
-            time: Option<DateTime<Utc>>,
-        ) -> async_graphql::#graphql_result<#submission> {
+            time: Option<#date_time<#utc>>,
+        ) -> #graphql_result<#submission> {
             #impls::start_activity(ctx, id, namespace, agent, time).await
         }
 
@@ -961,8 +968,8 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             id: #activity_id,
             namespace: Option<String>,
             agent: Option<#agent_id>,
-            time: Option<DateTime<Utc>>,
-        ) -> async_graphql::#graphql_result<#submission> {
+            time: Option<#date_time<#utc>>,
+        ) -> #graphql_result<#submission> {
             #impls::end_activity(ctx, id, namespace, agent, time).await
         }
 
@@ -973,7 +980,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             responsible: #agent_id,
             activity: #activity_id,
             role: RoleType
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::was_associated_with(ctx, namespace, responsible, activity, role.into()).await
         }
 
@@ -984,7 +991,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             activity: #activity_id,
             id: #entity_id,
             namespace: Option<String>,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::used(ctx, activity, id, namespace).await
         }
 
@@ -994,7 +1001,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             activity: #activity_id,
             id: #entity_id,
             namespace: Option<String>,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::was_generated_by(ctx, activity, id, namespace).await
         }
 
@@ -1006,7 +1013,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             attachment: #graphql_upload,
             agent: #agent_id,
             locator: String,
-        ) -> async_graphql::#graphql_result<#submission> {
+        ) -> #graphql_result<#submission> {
             #impls::has_attachment(ctx, id, namespace, attachment, agent, locator)
                 .await
         }

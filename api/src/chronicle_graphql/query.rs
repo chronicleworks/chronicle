@@ -92,7 +92,7 @@ pub async fn activity_timeline<'a>(
 pub async fn agents_by_type<'a>(
     ctx: &Context<'a>,
     typ: Option<DomaintypeId>,
-    namespace: Option<ID>,
+    namespace: Option<String>,
     after: Option<String>,
     before: Option<String>,
     first: Option<i32>,
@@ -115,7 +115,7 @@ pub async fn agents_by_type<'a>(
         last,
         agent::table.inner_join(nsdsl::namespace).filter(
             nsdsl::name
-                .eq(&**ns)
+                .eq(ns.as_str())
                 .and(agent::domaintype.eq(typ.as_ref().map(|x| x.name_part().to_owned())))
         ),
         agent::name.asc(),

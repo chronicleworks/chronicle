@@ -45,7 +45,7 @@ To model and record this process you will need the Chronicle domain model defini
 * [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
 * [researched](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Researched
 * [person](./recording_provenance.md#define-an-agent)  - define an Agent of subtype Person
-* [used](./recording_provenance.md/#used) - specify that the Research Activity used the Question
+* [used](./recording_provenance.md/#usage) - specify that the Research Activity used the Question
 * [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Research Activity produced the Evidence
 * [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
 * [startedAtTime](./recording_provenance.md/#started-at-time) - specify the research began at a point in time
@@ -69,12 +69,12 @@ To model and record this process you will need the Chronicle domain model defini
 * [guidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype Guidance
 * [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
 * [revised](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Revised
-* [used](./recording_provenance.md/#used) - specify that the Guidance Activity used the Question
-* [used](./recording_provenance.md/#used) - specify that the Guidance Activity used the Evidence
+* [used](./recording_provenance.md/#usage) - specify that the Guidance Activity used the Question
+* [used](./recording_provenance.md/#usage) - specify that the Guidance Activity used the Evidence
 * [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Guidance Activity produced the Guidance
 * [wasAssociatedWith](./recording_provenance.md/#association) - specify that the research was done by a Person acting as a researcher
 * [wasRevisionOf](./recording_provenance.md/#revision) - specify that the Guidance is possibly a Revision of previous Guidance
-* [hadPrimarySource](./recording_provenance.md/#primarySource) - specify that the Guidance possibly has a primary source of the Question (for the first version)
+* [hadPrimarySource](./recording_provenance.md/#primary-source) - specify that the Guidance possibly has a primary source of the Question (for the first version)
 * [startedAtTime](./recording_provenance.md/#started-at-time) - specify the Guidance process began at a point in time
 * [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the Guidance process ended at a point in time
 
@@ -93,7 +93,7 @@ A version of Guidance can be approved for Publication by one or more Editors or 
 * [publishedGuidance](./recording_provenance.md#define-an-entity) - define an Entity of subtype PublishedGuidance
 * [evidence](./recording_provenance.md#define-an-entity) - define an Entity of subtype Evidence
 * [published](./recording_provenance.md#define-an-activity)  - define an Activity of subtype Published
-* [used](./recording_provenance.md/#used) - specify that the Published Activity used the Guidance
+* [used](./recording_provenance.md/#usage) - specify that the Published Activity used the Guidance
 * [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the Published Activity produced the PublishedGuidance
 * [wasAssociatedWith](./recording_provenance.md/#association) - specify that the Publication was done by a Person acting as an Editor
 * [actedOnBehalfOf](./recording_provenance.md/#delegation) - specify that the Publication was done by on behalf of on or more Stakeholders
@@ -113,28 +113,27 @@ Provenance is *immutable*. Once you have recorded it there is no way to contradi
 
 ### Attributes
 
-
-### Content
+#### Content
 
 Plaintext content of an external resource.
 
-### CmsId
+#### CmsId
 
 An opaque identifier from the Cms being used to author and publish documents.
 
-### Title
+#### Title
 
 A plain text title.
 
-### SearchParameters
+#### SearchParameters
 
 The input to a search engine.
 
-### Reference
+#### Reference
 
 A [BibTex](http://www.bibtex.org/) reference to evidence.
 
-### Version
+#### Version
 
 A simple incrementing integer representing a version number
 
@@ -235,10 +234,9 @@ A researcher is a Person who submits SearchParameters to a search engine and the
 
 An editor is a Person who approves Publication after consulting one or more Stakeholders and supervises Authors creating Guidances of Guidance.
 
+## Domain model format
 
-## Domain model file structure
-
-We will now translate this conceptual design into Chronicle's domain modelling syntax. Chronicle domain models are specified in YAML format, a complete model for the conceptual design can be written like this:
+We will now translate this conceptual design into Chronicle's domain modelling syntax. Chronicle domain models are specified in YAML, a complete model for the conceptual design can be written like this:
 
 ``` yaml
 name: 'evidence'
@@ -247,8 +245,6 @@ attributes:
     type: String
   CmsId:
     type: String
-  DOI:
-    type: String
   Title:
     type: String
   SearchParameters:
@@ -256,7 +252,7 @@ attributes:
   Reference:
     type: String
   Version:
-    type: Integer
+    type: Int
 entities:
   Question:
     attributes:
@@ -313,8 +309,8 @@ name: "evidence"
 Attributes are used to assign additional data to the prov terms - `Agent`, `Activity` and `Entity`. They are defined by their name and Primitive type, one of:
 
 * String
-* Integer
-* Boolean
+* Int
+* Bool
 
 Attribute names should be meaningful to your domain - choose things like 'Title' or 'Description', they can be re-used between any of prov terms - Entity, Activity and Agent.
 
@@ -411,5 +407,7 @@ roles:
 
 Supplying this as a YAML file to the chronicle build image as documented in [building chronicle](./building.md) will produce a well-typed API for your domain. The next step is then [recording provenance](./recording_provenance.md).
 
+
+## Evolution
 
 

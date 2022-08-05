@@ -140,7 +140,6 @@ subscription {
     }
 }
 
-
 ```
 
 The `correlationId` on this subscription will match the correlationId from the [Submission](#graphql-mutation-result---submission). Clients that wish to know the result of an operation should await both the [Submission](#graphql-mutation-result---submission) and the corresponding correlation id from a commit notification.
@@ -153,17 +152,103 @@ The `correlationId` on this subscription will match the correlationId from the [
 
 See [provenance concepts](./provenance_concepts.md#entity)
 
+Using our example domain, Chronicle will have generated three entity subtypes for us, `Question`, `Guidance` and `Evidence` as a graphql union called `Entity`. The union also contains an untyped entity `ProvEntity`. The untyped entity can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
 
-Chronicle will have generated two entity subtypes for us, `Document` and `Evidence` as a graphql union called `Entity`. The definition mutations `document` and `evidence` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+The definition mutations `question`, `guidance` and `evidence` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
 
-The following example mutation `question` will define an `Entity` of subtype `Question`, along with its attributes.
+``` graphql
 
+scalar EntityID
+scalar DomaintypeID
+type Evidence {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	searchParametersAttribute: SearchParameterAttribute
+	referenceAttribute: ReferenceAttribute
+}
+input EvidenceAttributes {
+	searchParametersAttribute: String!
+	referenceAttribute: String!
+}
+type Guidance {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	titleAttribute: TitleAttribute
+	versionAttribute: VersionAttribute
+}
+input GuidanceAttributes {
+	titleAttribute: String!
+	versionAttribute: Int!
+}
+
+input PublishedAttributes {
+	versionAttribute: Int!
+}
+type PublishedGuidance {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
+
+type Question {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+	cmsIdAttribute: CmsIdAttribute
+	contentAttribute: ContentAttribute
+}
+
+input QuestionAttributes {
+	cmsIdAttribute: String!
+	contentAttribute: String!
+}
+
+mutation {
+	entity(name: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
+	evidence(name: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
+	guidance(name: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
+	publishedGuidance(name: String!, namespace: String): Submission!
+	question(name: String!, namespace: String, attributes: QuestionAttributes!): Submission!
+}
+
+```
+
+Executing the following example mutation `question` will define an `Entity` of subtype `Question`, along with its attributes.
 ``` graphql title="Define a Question entity with graphql"
 mutation {
-    document(name: "", attributes: {
-        titleAttribute: "Evidence Summary",
-        cmsIdAttribute: "2312",
-        versionAttribute: 0
+    question(name: "anaphylaxis-referral", attributes: {
+        cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
+        contentAttribute: "How best to assess and refer patients who have required emergency treatment for Anaphylaxis",
     })
 }
 ```
@@ -171,12 +256,17 @@ mutation {
 And the equivalent operation using the command line interface is
 
 ``` bash title="Define a document entity with the CLI"
-chronicle document define evidence-summary-2313 --title-attr "Evidence Summary" --cms-id-attr "2313" --version-attr 0
+chronicle question define anaphylaxis-referral --cms-id-attribute "How best to assess and refer patients who have required emergency treatment for Anaphylaxis" --cms-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
 
 ```
 
+Either operation will return the ID of the newly defined question
 
 ### Define an Activity
+
+> An activity is something that occurs over a period of time and acts upon or with entities; it may include consuming, processing, transforming, modifying, relocating, using, or generating entities. Just as entities cover a broad range of notions, activities can cover a broad range of notions: information processing activities may for example move, copy, or duplicate digital entities; physical activities can include driving a car between two locations or printing a book.
+
+See [provenance concepts](./provenance_concepts.md#activity)
 
 Chronicle will have generated three `Activity` subtypes for us, `Search`, `Authoring` and `Publishing` as a graphql union called `Activity`. The definition mutations `search` `authoring` and `publishing` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
 
@@ -199,6 +289,10 @@ chronicle authoring define september-2018-review --version-attr 14
 
 ### Define an Agent
 
+> An agent is something that bears some form of responsibility for an activity taking place, for the existence of an entity, or for another agent's activity.
+
+See [provenance concepts](./provenance_concepts.md#agent)
+
 Chronicle will have generated one `Agent` subtype for us, `Person` as a graphql union called `Agent`. The definition mutation `person` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
 
 The following example mutation `person` will define an `Agent` of subtype `Person`, along with its attribute.
@@ -216,3 +310,62 @@ And the equivalent operation using the command line interface is:
 ``` bash title="Define a document entity with the CLI"
 chronicle person define janet-jones-3212 --cms-id-attr "3212"
 ```
+
+
+### Used
+
+> Usage is the beginning of utilizing an entity by an activity. Before usage, the activity had not begun to utilize this entity and could not have been affected by the entity.
+
+See [provenance concepts](./provenance_concepts.md#used)
+
+
+### Generation
+
+> Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.
+
+See [provenance concepts](./provenance_concepts.md#generation)
+
+
+### Started at time
+
+> Start is when an activity is deemed to have been started by an entity, known as trigger. The activity did not exist before its start. Any usage, generation, or invalidation involving an activity follows the activity's start. A start may refer to a trigger entity that set off the activity, or to an activity, known as starter, that generated the trigger.
+
+See [provenance concepts](./provenance_concepts.md#started-at-time)
+
+### Ended at time
+
+> End is when an activity is deemed to have been ended by an entity, known as trigger. The activity no longer exists after its end. Any usage, generation, or invalidation involving an activity precedes the activity's end. An end may refer to a trigger entity that terminated the activity, or to an activity, known as ender that generated the trigger.
+
+See [provenance concepts](./provenance_concepts.md#ended-at-time)
+
+### Association
+
+> An activity association is an assignment of responsibility to an agent for an activity, indicating that the agent had a role in the activity.
+
+See [provenance concepts](./provenance_concepts.md#association)
+
+### Usage
+
+> Usage is the beginning of utilizing an entity by an activity. Before usage, the activity had not begun to utilize this entity and could not have been affected by the entity.
+
+See [provenance concepts](./provenance_concepts.md#usage)
+
+### Derivation
+
+#### Primary Source
+
+> A primary source for a topic refers to something produced by some agent with direct experience and knowledge about the topic, at the time of the topic's study, without benefit from hindsight. Because of the directness of primary sources, they 'speak for themselves' in ways that cannot be captured through the filter of secondary sources. As such, it is important for secondary sources to reference those primary sources from which they were derived, so that their reliability can be investigated. A primary source relation is a particular case of derivation of secondary materials from their primary sources. It is recognized that the determination of primary sources can be up to interpretation, and should be done according to conventions accepted within the application's domain.
+
+#### Revision
+
+> A revision is a derivation for which the resulting entity is a revised version of some original. The implication here is that the resulting entity contains substantial content from the original. Revision is a particular case of derivation.
+
+#### Quotation
+
+> A quotation is the repeat of (some or all of) an entity, such as text or image, by someone who may or may not be its original author. Quotation is a particular case of derivation.
+
+
+### Had evidence
+
+Evidence is a Chronicle specific provenance feature that simplifies the association of a cryptographic signature with an Entity.
+

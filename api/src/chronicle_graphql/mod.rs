@@ -87,7 +87,7 @@ pub struct Evidence {
     locator: Option<String>,
 }
 
-#[Object]
+#[Object(name = "ChronicleEvidence")]
 impl Evidence {
     async fn signature_time(&self) -> DateTime<Utc> {
         DateTime::from_utc(self.signature_time, Utc)
