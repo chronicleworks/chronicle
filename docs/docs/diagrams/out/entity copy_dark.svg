@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="101px" preserveAspectRatio="none" style="width:93px;height:101px;background:#FFFFFF;" version="1.1" viewBox="0 0 93 101" width="93px" zoomAndPan="magnify"><defs/><g><!--MD5=[be996cdb8e6bf2fc7cb89c555f2cd144]
+class Entity--><g id="elem_Entity"><rect codeLine="1" fill="#F1F1F1" height="80.5938" id="Entity" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="72" x="7" y="7"/><ellipse cx="22" cy="23" fill="#A9DCDF" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M24.0781,24.8125 L24.4688,25.7969 L24.0781,25.7969 C23.625,25.7969 23.5156,25.8125 23.3594,25.9219 C23.1094,26.0781 22.9531,26.3594 22.9531,26.6563 C22.9531,26.9219 23.0938,27.1719 23.3125,27.3281 C23.4531,27.4531 23.6563,27.5 24.0781,27.5 L26.4375,27.5 C26.7969,27.5 27.0156,27.4688 27.1563,27.375 C27.4063,27.2344 27.5625,26.9375 27.5625,26.6563 C27.5625,26.375 27.4219,26.125 27.2031,25.9688 C27.0313,25.8281 26.875,25.7969 26.4063,25.7969 L23.0156,17.5938 L19.3438,17.5938 C18.8906,17.5938 18.7656,17.6094 18.6094,17.7031 C18.3594,17.875 18.2031,18.1563 18.2031,18.4375 C18.2031,18.7188 18.3438,18.9688 18.5625,19.1406 C18.7344,19.25 18.9063,19.2813 19.3438,19.2813 L20.4219,19.2813 L17.7813,25.7969 C17.3594,25.7969 17.2031,25.8125 17.0469,25.9219 C16.7969,26.0781 16.6406,26.3594 16.6406,26.6563 C16.6406,27.2188 17.0156,27.5 17.7656,27.5 L20.0313,27.5 C20.3906,27.5 20.6094,27.4688 20.7344,27.375 C21,27.2344 21.1406,26.9375 21.1406,26.6563 C21.1406,26.375 21.0156,26.125 20.7969,25.9531 C20.625,25.8281 20.4844,25.7969 20.0313,25.7969 L19.6406,25.7969 L20.0313,24.8125 L24.0781,24.8125 Z M23.375,23.1094 L20.7031,23.1094 L22.0469,19.8438 L23.375,23.1094 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="40" x="36" y="27.8467">Entity</text><line style="stroke:#181818;stroke-width:0.5;" x1="8" x2="78" y1="39" y2="39"/><ellipse cx="18" cy="50" fill="none" rx="3" ry="3" style="stroke:#038048;stroke-width:1.0;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="13" x="27" y="55.9951">id</text><ellipse cx="18" cy="66.2969" fill="none" rx="3" ry="3" style="stroke:#038048;stroke-width:1.0;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="40" x="27" y="72.292">name</text><line style="stroke:#181818;stroke-width:0.5;" x1="8" x2="78" y1="79.5938" y2="79.5938"/></g><!--MD5=[bf353a71c0fb25006acf66c90b18ca35]
+@startuml
+abstract Entity {
++ id
++ name
+}
+@enduml
+
+PlantUML version 1.2022.7beta2(Unknown compile time)
+(GPL source distribution)
+Java Runtime: Java(TM) SE Runtime Environment
+JVM: Java HotSpot(TM) 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

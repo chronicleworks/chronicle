@@ -1,0 +1,14 @@
+
+@startuml
+
+!include ../include/agent.iuml
+!include ../include/activity.iuml
+
+abstract wasAssociatedWith{
+    + role
+}
+
+Agent -> wasAssociatedWith
+wasAssociatedWith -> Activity
+
+@enduml

@@ -233,6 +233,25 @@ input QuestionAttributes {
 	contentAttribute: String!
 }
 
+type ProvEntity {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
+
+input ProvEntityAttributes {
+	type: String
+}
+
+union Entity = | ProvEntity | Evidence | Guidance | PublishedGuidance | Question
+
 mutation {
 	entity(name: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
 	evidence(name: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
@@ -268,7 +287,14 @@ Either operation will return the ID of the newly defined question
 
 See [provenance concepts](./provenance_concepts.md#activity)
 
-Chronicle will have generated three `Activity` subtypes for us, `Search`, `Authoring` and `Publishing` as a graphql union called `Activity`. The definition mutations `search` `authoring` and `publishing` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`, `Researched`, `Revised` and `Published` as a graphql union called `Activity`. The union also contains an untyped activity `ProvActivity`. The untyped activity can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
+
+ The definition mutations `questionAsked` `researched`, `revised` and `published` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
+
+``` graphql
+
+
+```
 
 The following example mutation `authoring` will define an `Activity` of subtype `Authoring`
 
@@ -343,6 +369,12 @@ See [provenance concepts](./provenance_concepts.md#ended-at-time)
 > An activity association is an assignment of responsibility to an agent for an activity, indicating that the agent had a role in the activity.
 
 See [provenance concepts](./provenance_concepts.md#association)
+
+### Delegation
+
+> Delegation is the assignment of authority and responsibility to an agent (by itself or by another agent) to carry out a specific activity as a delegate or representative, while the agent it acts on behalf of retains some responsibility for the outcome of the delegated work. For example, a student acted on behalf of his supervisor, who acted on behalf of the department chair, who acted on behalf of the university; all those agents are responsible in some way for the activity that took place but we do not say explicitly who bears responsibility and to what degree.
+
+See [provenance concepts](./provenance_concepts.md#delegation)
 
 ### Usage
 

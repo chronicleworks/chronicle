@@ -1,8 +1,8 @@
 @startuml
 
-abstract Entity
-abstract Agent
-abstract Activity
+!include ../include/agent.iuml
+!include ../include/activity.iuml
+!include ../include/entity.iuml
 
 Guidance <|-- Entity
 PublishedGuidance <|-- Entity

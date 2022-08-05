@@ -273,11 +273,10 @@ activities:
     attributes:
       - Content
   Researched:
+    attributes: []
+  Published:
     attributes:
-      - SearchParameters
-  Evidence:
-    attributes:
-      - Reference
+      - Version
   Revised:
     attributes:
       - CmsId
@@ -304,7 +303,7 @@ A string that names your domain, used to coordinate deployments that require mul
 name: "evidence"
 ```
 
-## Attributes
+### Attributes
 
 Attributes are used to assign additional data to the prov terms - `Agent`, `Activity` and `Entity`. They are defined by their name and Primitive type, one of:
 
@@ -328,10 +327,10 @@ attributes:
   Reference:
     type: String
   Version:
-    type: Integer
+    type: Int
 ```
 
-## Agent
+### Agent
 
 Using Chronicle's domain model definitions an Agent can be subtyped and associated with attributes like other provenance terms. In the following example we define the two Agent subtypes, Person has an id from the Cms, Organization a text title.
 
@@ -345,7 +344,7 @@ agents:
       - Title
 ```
 
-## Entity
+### Entity
 
 Using Chronicle's domain model definitions an Entity can be subtyped and associated with attributes like other provenance terms. In the following example we define the four Entity subtypes, Question has an id from the Cms and its content,  Evidence the search parameters and reference. Guidance a title and version and PublishedGuidance needs no attributes.
 
@@ -369,7 +368,7 @@ entities:
 
 ```
 
-## Activity
+### Activity
 
 Using Chronicle's domain model definitions an Activity can be subtyped and associated with attributes like other provenance terms. In the following example we define the four Activity subtypes, Question has an id from the Cms and its content,  Evidence the search parameters and reference, Guidance a title and version and PublishedGuidance needs no attributes.
 
@@ -380,18 +379,17 @@ activities:
     attributes:
       - Content
   Researched:
+    attributes: []
+  Published:
     attributes:
-      - SearchParameters
-  Evidence:
-    attributes:
-      - Reference
+      - Version
   Revised:
     attributes:
       - CmsId
       - Version
 ```
 
-## Role
+### Role
 
 Corresponding to actors in the example domain we specify the following roles:
 
@@ -404,10 +402,23 @@ roles:
   - Editor
 ```
 
-
 Supplying this as a YAML file to the chronicle build image as documented in [building chronicle](./building.md) will produce a well-typed API for your domain. The next step is then [recording provenance](./recording_provenance.md).
 
 
 ## Evolution
 
+Re definition of a Chronicle domain with existing data is possible, with some caveats:
 
+### Type removal
+
+You can remove a prov term (Entity, Agent or Activity), but as Chronicle data is immutable it will still exist on the back end. Terms can still be returned via queries, but will be as their Untyped variant - ProvEntity, ProvAgent and ProvActivity and their attributes will no longer be available via graphql.
+
+### Attribute removal
+
+You can remove an attribute, but again it will still exist in provenance you have already recorded.
+
+### Attribute addition
+
+You can add new attributes, and add their values to both existing and new data
+
+This conforms to most reasonable models of interface and protocol evolution, where you should design for extension rather than modification.

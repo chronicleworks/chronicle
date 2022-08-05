@@ -4,22 +4,46 @@ Chronicle uses the [W3C Provenance Ontology](https://www.w3.org/TR/prov-o/) as t
 
 ## Agent
 
+![file](diagrams/out/agent.svg)
+
 > An agent is something that bears some form of responsibility for an activity taking place, for the existence of an entity, or for another agent's activity.
+
 
 Agents in chronicle can be subtyped and contain attributes, specified [by the domain model agents section](./domain_modelling.md#agent). Agents can be recorded using [the typed agent mutations](./recording_provenance.md#agent) or can be left [untyped](./untyped_chronicle.md#creating-an-agent-in-untyped-chronicle).
 
 
 ## Activity
 
+![file](diagrams/out/activity.svg)
+
 > An activity is something that occurs over a period of time and acts upon or with entities; it may include consuming, processing, transforming, modifying, relocating, using, or generating entities. Just as entities cover a broad range of notions, activities can cover a broad range of notions: information processing activities may for example move, copy, or duplicate digital entities; physical activities can include driving a car between two locations or printing a book.
+
 
 Activities in Chronicle can be subtyped and contain attributes, specified [by the domain model section](./domain_modelling.md#activity). Agents can be recorded using [the typed activity mutations](./recording_provenance.md#activity) or can be left [untyped](./untyped_chronicle.md#creating-an-activity-in-untyped-chronicle).
 
 
 ## Entity
 
+![file](diagrams/out/entity.svg)
+
 > In PROV, things we want to describe the provenance of are called entities and have some fixed aspects. The term "things" encompasses a broad diversity of notions, including digital objects such as a file or web page, physical things such as a mountain, a building, a printed book, or a car as well as abstract concepts and ideas.
 > An entity is a physical, digital, conceptual, or other kind of thing with some fixed aspects; entities may be real or imaginary.
 
+
 Entities in Chronicle can be subtyped and contain attributes, specified [by the domain model section](./domain_modelling.md#entity). Agents can be recorded using [the typed activity mutations](./recording_provenance.md#entity) or can be left [untyped](./untyped_chronicle.md#creating-an-entity-in-untyped-chronicle).
+
+
+## Association
+
+![file](diagrams/out/association.svg)
+
+> An activity association is an assignment of responsibility to an agent for an activity, indicating that the agent had a role in the activity.
+
+
+## Delegation
+
+![file](diagrams/out/delegation.svg)
+
+> Delegation is the assignment of authority and responsibility to an agent (by itself or by another agent) to carry out a specific activity as a delegate or representative, while the agent it acts on behalf of retains some responsibility for the outcome of the delegated work. For example, a student acted on behalf of his supervisor, who acted on behalf of the department chair, who acted on behalf of the university; all those agents are responsible in some way for the activity that took place but we do not say explicitly who bears responsibility and to what degree.
+
 
