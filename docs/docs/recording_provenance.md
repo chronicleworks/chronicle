@@ -519,17 +519,64 @@ chronicle revision end "chronicle:activity:september-2018-review" --time "2002-1
 
 See [provenance concepts](./provenance_concepts.md#association)
 
+Association and [delegation](#delegation) accept an optional `Role`. These will have been generated from the domain model, and using the example domain results in:
+
+```
+enum RoleType {
+	UNSPECIFIED
+	STAKEHOLDER
+	AUTHOR
+	RESEARCHER
+	EDITOR
+}
+
+```
+
+To record the asking of a question, we relate an Organization to a `QuestionAsked` activity, using the `Role` `STAKEHOLDER`.
+
+``` graphql
+mutation {
+	wasAssociatedWith(
+		responsible: "chronicle:agent:ncsa",
+		activity: "chronicle:activity:anaphylaxis-assessment",
+		role: STAKEHOLDER
+	)
+}
+
+```
+
 ### Delegation
 
 > Delegation is the assignment of authority and responsibility to an agent (by itself or by another agent) to carry out a specific activity as a delegate or representative, while the agent it acts on behalf of retains some responsibility for the outcome of the delegated work. For example, a student acted on behalf of his supervisor, who acted on behalf of the department chair, who acted on behalf of the university; all those agents are responsible in some way for the activity that took place but we do not say explicitly who bears responsibility and to what degree.
 
 See [provenance concepts](./provenance_concepts.md#delegation)
 
-### Usage
+Delegation and [association](#association) accept an optional `Role`. These will have been generated from the domain model, and using the example domain results in:
 
-> Usage is the beginning of utilizing an entity by an activity. Before usage, the activity had not begun to utilize this entity and could not have been affected by the entity.
+```
+enum RoleType {
+	UNSPECIFIED
+	STAKEHOLDER
+	AUTHOR
+	RESEARCHER
+	EDITOR
+}
 
-See [provenance concepts](./provenance_concepts.md#usage)
+```
+
+To record the responsibility of an `Editor` supervising an `Author`, we relate a responsible `Person` to another delegate `Person` Agent, using the `Role` `EDITOR` and specify a particular `Revision` activity. The activity is not a required parameter - generic delegation between agents can be recorded.
+
+``` graphql
+mutation {
+	actedOnBehalfOf(
+		responsible: "chronicle:agent:john-roberts",
+		delegate: "chronicle:agent:janet-flynn",
+		activity: "chronicle:activity:september-2018-review",
+		role: EDITOR
+	)
+}
+
+```
 
 ### Derivation
 
@@ -539,11 +586,35 @@ See [provenance concepts](./provenance_concepts.md#usage)
 
 See [provenance concepts](./provenance_concepts.md#primary-source)
 
+Primary sources can be recorded bin chronicle using the `hadPrimarySource` mutation, which takes two entities - the generatedEntity having a primary source of the useEntity.
+
+``` graphql
+mutation {
+	hadPrimarySource {
+		usedEntity: "chronicle:entity:anaphylaxis-assessment-question",
+		generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
+	}
+}
+```
+
 #### Revision
 
 > A revision is a derivation for which the resulting entity is a revised version of some original. The implication here is that the resulting entity contains substantial content from the original. Revision is a particular case of derivation.
 
 See [provenance concepts](./provenance_concepts.md#revision)
+
+
+Revision can be recorded bin chronicle using the `wasRevisionOf` mutation, which takes two entities - the generatedEntity being a revision of the usedEntity.
+
+``` graphql
+mutation {
+	revision {
+		usedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
+		generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
+	}
+}
+```
+
 
 #### Quotation
 
@@ -551,7 +622,23 @@ See [provenance concepts](./provenance_concepts.md#revision)
 
 See [provenance concepts](./provenance_concepts.md#quotation)
 
-### Had evidence
 
-Evidence is a Chronicle specific provenance feature that simplifies the association of a cryptographic signature with an Entity.
+Quotation can be recorded bin chronicle using the `wasQuotedFrom` mutation, which takes two entities - the generatedEntity having quoted from the usedEntity.
+
+``` graphql
+mutation {
+	revision {
+		usedEntity: "chronicle:entity:evidence-2321231",
+		generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
+	}
+}
+```
+
+### Chronicle specific cryptographic operations
+
+#### Has identity
+
+#### Had evidence
+
+Evidence is a Chronicle specific provenance feature that simplifies the association of a cryptographic signature with an Entity. You will need a graphql client with multipart support for the attachment to sign.
 
