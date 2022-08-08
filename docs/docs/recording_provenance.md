@@ -437,14 +437,14 @@ To apply using graphql:
 
 ``` graphql
 mutation {
-	used(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-guidance-9-2018")
+	used(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-evidence-12114")
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
 ``` bash
-chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
+chronicle revised use "chronicle:entity:anaphylaxis-evidence-12114" "chronicle:activity:september-2018-review"
 ```
 
 
@@ -454,12 +454,29 @@ chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:
 
 See [provenance concepts](./provenance_concepts.md#generation)
 
+Generation operations in Chronicle can be applied to all subtypes of Entity and Activity.
 
+To apply using graphql:
+
+``` graphql
+mutation {
+	wasGeneratedBy(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-guidance-9-2018")
+}
+```
+
+And the equivalent operation using the command line interface is:
+
+``` bash
+chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
+```
 ### Started at time
 
 > Start is when an activity is deemed to have been started by an entity, known as trigger. The activity did not exist before its start. Any usage, generation, or invalidation involving an activity follows the activity's start. A start may refer to a trigger entity that set off the activity, or to an activity, known as starter, that generated the trigger.
 
 See [provenance concepts](./provenance_concepts.md#started-at-time)
+
+Chronicle
+
 
 ### Ended at time
 

@@ -1,3 +1,4 @@
 pymdown-extensions
 mkdocs
 mkdocs-build-plantuml-plugin
+jinja2 < 3.1.0
