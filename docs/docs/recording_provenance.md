@@ -385,7 +385,7 @@ mutation {
 }
 ```
 
-The following example mutation `authoring` will define an `Activity` of subtype `Authoring`
+The following example mutation `revised` will define an `Activity` of subtype `Revised`
 
 ``` graphql title="Define a revised activity with graphql"
 mutation {
@@ -467,7 +467,7 @@ mutation {
 And the equivalent operation using the command line interface is:
 
 ``` bash
-chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
+chronicle revised generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
 ```
 ### Started at time
 
@@ -475,14 +475,43 @@ chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:
 
 See [provenance concepts](./provenance_concepts.md#started-at-time)
 
-Chronicle
+Chronicle allows you to specify the start time of an activity when you need to model a time range. If you want an instantaneous activity, simply call [ended at time](#ended-at-time). Eliding the time parameter will use the current system time. Time stamps should be in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html) format.
 
+Started at time operations also take an optional `AgentId`, to associate the activity with the agent - there is no current way to record a role with this however, so prefer [wasAssociatedWith](#association) if you need role based modelling.
+
+``` graphql
+mutation {
+	startActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+}
+```
+
+And the equivalent command line operation. See [command line context](#command-line-context) for differences from graphql behavior.
+``` bash
+chronicle revision start "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+
+```
 
 ### Ended at time
 
 > End is when an activity is deemed to have been ended by an entity, known as trigger. The activity no longer exists after its end. Any usage, generation, or invalidation involving an activity precedes the activity's end. An end may refer to a trigger entity that terminated the activity, or to an activity, known as ender that generated the trigger.
 
 See [provenance concepts](./provenance_concepts.md#ended-at-time)
+
+Chronicle allows you to specify the end time of an activity when you need to model a time range. If you want an instantaneous activity, simply call this operation. Eliding the time parameter will use the current system time. Time stamps should be in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html) format.
+
+Ended at time operations also take an optional `AgentId`, to associate the activity with the agent - there is no current way to record a role with this however, so prefer [wasAssociatedWith](#association) if you need role based modelling.
+
+``` graphql
+mutation {
+	endActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+}
+```
+
+And the equivalent command line operation. See [command line context](#command-line-context) for differences from graphql behavior.
+``` bash
+chronicle revision end "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+
+```
 
 ### Association
 
