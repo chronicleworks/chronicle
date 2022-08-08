@@ -113,6 +113,10 @@ For this section we will use a our simplified [domain model for recording the pr
 
 The definition mutations for prov terms -  Entity, Activity and Agent are all supplied with a `name` parameter. This should be something meaningful to the domain you are recording provenance for - a unique identifier from an external system or a natural key. This will form part of the identity of the term.
 
+### A note on identities
+
+Chronicle identities will contain an encoded form of the name parameter, but should be treated as opaque. Under no circumstances should you attempt to synthesize an identity from Chronicle in client code as the scheme may be subject to change.
+
 ### Graphql mutation result - `Submission`
 
 All Chronicle mutations return a `Submission` type defined by:
@@ -134,6 +138,11 @@ Chronicle provides a [graphql subscription](https://graphql.org/blog/subscriptio
 
 ``` graphql
 
+type Submission {
+	context: String!
+	correlationId: String!
+}
+
 subscription {
     commitNotifications {
         correlationId
@@ -152,9 +161,9 @@ The `correlationId` on this subscription will match the correlationId from the [
 
 See [provenance concepts](./provenance_concepts.md#entity)
 
-Using our example domain, Chronicle will have generated three entity subtypes for us, `Question`, `Guidance` and `Evidence` as a graphql union called `Entity`. The union also contains an untyped entity `ProvEntity`. The untyped entity can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
+Using our example domain, Chronicle will have generated four entity subtypes for us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence` as a graphql union called `Entity`. The union also contains an untyped entity `ProvEntity`. The untyped entity can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
 
-The definition mutations `question`, `guidance` and `evidence` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
+The definition mutations `question`, `guidance`, `publishedGuidance` and `evidence` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
 
 ``` graphql
 
@@ -292,15 +301,95 @@ Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`, 
  The definition mutations `questionAsked` `researched`, `revised` and `published` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
 
 ``` graphql
+union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revised
 
+type ProvEntity {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
+input ProvEntityAttributes {
+	type: String
+}
+type Published {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	versionAttribute: VersionAttribute
+}
+input PublishedAttributes {
+	versionAttribute: Int!
+}
+type PublishedGuidance {
+	id: EntityID!
+	namespace: Namespace!
+	name: String!
+	type: DomaintypeID
+	evidence: ChronicleEvidence
+	wasGeneratedBy: [Activity!]!
+	wasDerivedFrom: [Entity!]!
+	hadPrimarySource: [Entity!]!
+	wasRevisionOf: [Entity!]!
+	wasQuotedFrom: [Entity!]!
+}
 
+type Researched {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	searchParametersAttribute: SearchParameterAttribute
+}
+input ResearchedAttributes {
+	searchParametersAttribute: String!
+}
+type Revised {
+	id: ActivityID!
+	namespace: Namespace!
+	name: String!
+	started: DateTime
+	ended: DateTime
+	type: DomaintypeID
+	wasAssociatedWith: [Association!]!
+	used: [Entity!]!
+	cmsIdAttribute: CmsIdAttribute
+	versionAttribute: VersionAttribute
+}
+input RevisedAttributes {
+	cmsIdAttribute: String!
+	versionAttribute: Int!
+}
+
+mutation {
+	activity(name: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
+	published(name: String!, namespace: String, attributes: PublishedAttributes!): Submission!
+	questionAsked(name: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
+	researched(name: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
+	revised(name: String!, namespace: String, attributes: RevisedAttributes!): Submission!
+}
 ```
 
 The following example mutation `authoring` will define an `Activity` of subtype `Authoring`
 
-``` graphql title="Define a document entity with graphql"
+``` graphql title="Define a revised activity with graphql"
 mutation {
-    authoring(name: "september-2018-review", attributes: {
+    revised(name: "september-2018-review", attributes: {
         versionAttribute: 14,
     })
 }
@@ -309,9 +398,8 @@ mutation {
 And the equivalent operation using the command line interface is:
 
 ``` bash title="Define a document entity with the CLI"
-chronicle authoring define september-2018-review --version-attr 14
+chronicle revised define september-2018-review --version-attr 14
 ```
-
 
 ### Define an Agent
 
@@ -319,22 +407,21 @@ chronicle authoring define september-2018-review --version-attr 14
 
 See [provenance concepts](./provenance_concepts.md#agent)
 
-Chronicle will have generated one `Agent` subtype for us, `Person` as a graphql union called `Agent`. The definition mutation `person` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
+Chronicle will have generated two `Agent` subtypes for us, `Person` and `Organization` as a graphql union called `Agent`. The union also contains an untyped activity `ProvAgent`. The untyped agent can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
 
-The following example mutation `person` will define an `Agent` of subtype `Person`, along with its attribute.
+The definition mutations `person` and `organization` will also have been created. See [domain modelling](./domain_modelling.md/#graphql_generation) for details on the generated graphql SDL.
 
-``` graphql title="Define a document entity with graphql"
+
+``` graphql title="Define an organization agent with graphql"
 mutation {
-    document(name: "janet-jones-3212", attributes: {
-        cmsIdAttribute: "3212",
-    })
+    organization(name: "health-trust", attributes: {})
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
-``` bash title="Define a document entity with the CLI"
-chronicle person define janet-jones-3212 --cms-id-attr "3212"
+``` bash title="Define an organization entity with the CLI"
+chronicle organization define health-trust
 ```
 
 
@@ -343,6 +430,22 @@ chronicle person define janet-jones-3212 --cms-id-attr "3212"
 > Usage is the beginning of utilizing an entity by an activity. Before usage, the activity had not begun to utilize this entity and could not have been affected by the entity.
 
 See [provenance concepts](./provenance_concepts.md#used)
+
+Usage operations in Chronicle can applied to all subtypes of Entity and Activity.
+
+To apply using graphql:
+
+``` graphql
+mutation {
+	used(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-guidance-9-2018")
+}
+```
+
+And the equivalent operation using the command line interface is:
+
+``` bash
+chronicle revised use "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
+```
 
 
 ### Generation
@@ -388,14 +491,19 @@ See [provenance concepts](./provenance_concepts.md#usage)
 
 > A primary source for a topic refers to something produced by some agent with direct experience and knowledge about the topic, at the time of the topic's study, without benefit from hindsight. Because of the directness of primary sources, they 'speak for themselves' in ways that cannot be captured through the filter of secondary sources. As such, it is important for secondary sources to reference those primary sources from which they were derived, so that their reliability can be investigated. A primary source relation is a particular case of derivation of secondary materials from their primary sources. It is recognized that the determination of primary sources can be up to interpretation, and should be done according to conventions accepted within the application's domain.
 
+See [provenance concepts](./provenance_concepts.md#primary-source)
+
 #### Revision
 
 > A revision is a derivation for which the resulting entity is a revised version of some original. The implication here is that the resulting entity contains substantial content from the original. Revision is a particular case of derivation.
+
+See [provenance concepts](./provenance_concepts.md#revision)
 
 #### Quotation
 
 > A quotation is the repeat of (some or all of) an entity, such as text or image, by someone who may or may not be its original author. Quotation is a particular case of derivation.
 
+See [provenance concepts](./provenance_concepts.md#quotation)
 
 ### Had evidence
 
