@@ -49,11 +49,26 @@ Entities in Chronicle can be subtyped and contain attributes, specified [by the 
 
 ## Derivation
 
+![file](diagrams/out/derivation.svg)
+
+> A derivation is a transformation of an entity into another, an update of an entity resulting in a new one, or the construction of a new entity based on a pre-existing entity.
+
+Chronicle allows the three standard prov subtypes of derivation:
 
 ### Quotation
 
+![file](diagrams/out/was_quoted_from.svg)
+
+> A quotation is the repeat of (some or all of) an entity, such as text or image, by someone who may or may not be its original author. Quotation is a particular case of derivation.
 
 ### Revision
 
+![file](diagrams/out/was_revision_of.svg)
+
+> A revision is a derivation for which the resulting entity is a revised version of some original. The implication here is that the resulting entity contains substantial content from the original. Revision is a particular case of derivation.
 
 ### Primary Source
+
+![file](diagrams/out/had_primary_source.svg)
+
+> A primary source for a topic refers to something produced by some agent with direct experience and knowledge about the topic, at the time of the topic's study, without benefit from hindsight. Because of the directness of primary sources, they 'speak for themselves' in ways that cannot be captured through the filter of secondary sources. As such, it is important for secondary sources to reference those primary sources from which they were derived, so that their reliability can be investigated. A primary source relation is a particular case of derivation of secondary materials from their primary sources. It is recognized that the determination of primary sources can be up to interpretation, and should be done according to conventions accepted within the application's domain.
