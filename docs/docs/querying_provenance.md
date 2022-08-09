@@ -11,12 +11,29 @@ type Query {
 }
 ```
 
-The majority of the work for provenance retrieval will be with the activityTimeline query.
+The majority of the work for provenance retrieval will be with the [activity timeline](#activity-timeline) query.
 
 Familiarizing yourself with GraphQL is necessary to make good use of Chronicle. Chronicle makes extensive use of [relay cursors](https://relay.dev/graphql/connections.htm) and [union types](https://www.apollographql.com/docs/apollo-server/schema/unions-interfaces/).
 
 
-## activityTimeline
+## Activity timeline
+
+### Parameters
+
+#### activityTypes
+
+A list of ActivityTypes to filter the returned timeline by, leaving this empty will return all activity types. The `PROV_ACTIVITY` activity type can be used to return activities that are not currently specified in the Chronicle domain.
+
+``` graphql
+enum ActivityType {
+	PROV_ACTIVITY
+	PUBLISHED
+	QUESTION_ASKED
+	RESEARCHED
+	REVISED
+}
+
+```
 
 ## agentsByType
 
@@ -24,4 +41,12 @@ Familiarizing yourself with GraphQL is necessary to make good use of Chronicle. 
 
 ## entityById
 
+
+## Returned objects
+
+### Entity subtypes
+
+### Activity subtypes
+
+### Agent subtypes
 

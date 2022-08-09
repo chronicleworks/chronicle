@@ -13,4 +13,7 @@ ignore = [
 
   #CBOR will be replaced with proto for TP events before long
   "RUSTSEC-2021-0127",
+
+  #TODO: deal with upgrade to async-graphql 4
+  "RUSTSEC-2022-0037",
 ]
