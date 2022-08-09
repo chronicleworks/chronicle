@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 179
+source: chronicle-domain-test/src/test.rs
+assertion_line: 238
 expression: created
 ---
 [data.hadPrimarySource]

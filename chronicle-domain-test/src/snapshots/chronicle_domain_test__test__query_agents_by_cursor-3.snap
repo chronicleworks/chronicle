@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 450
+source: chronicle-domain-test/src/test.rs
+assertion_line: 658
 expression: out_of_bound_cursor
 ---
 {

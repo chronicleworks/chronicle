@@ -465,7 +465,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "chronicle-example"
+name = "chronicle-domain-test"
 version = "0.1.0"
 dependencies = [
  "chronicle",

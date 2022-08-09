@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 533
+source: chronicle-domain-test/src/test.rs
+assertion_line: 539
 expression: default_cursor
 ---
 {
@@ -16,7 +16,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening1",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening1",
             "name": "gardening1",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -44,7 +44,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
             "name": "gardening2",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -72,7 +72,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening3",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening3",
             "name": "gardening3",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -100,7 +100,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
             "name": "gardening4",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -128,7 +128,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening5",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening5",
             "name": "gardening5",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -156,7 +156,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
             "name": "gardening6",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -184,7 +184,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening7",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening7",
             "name": "gardening7",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -212,7 +212,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
             "name": "gardening8",
             "stringAttribute": "String",
             "intAttribute": 1,
@@ -240,7 +240,7 @@ expression: default_cursor
         {
           "node": {
             "__typename": "Gardening",
-            "id": "http://blockchaintp.com/chronicle/ns#entity:gardening9",
+            "id": "http://blockchaintp.com/chronicle/ns#activity:gardening9",
             "name": "gardening9",
             "stringAttribute": "String",
             "intAttribute": 1,

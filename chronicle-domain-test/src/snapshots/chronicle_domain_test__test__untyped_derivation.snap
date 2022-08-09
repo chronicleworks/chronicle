@@ -1,7 +1,7 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 261
+source: chronicle-domain-test/src/test.rs
+assertion_line: 196
 expression: created
 ---
-[data.wasQuotedFrom]
+[data.wasDerivedFrom]
 context = 'http://blockchaintp.com/chronicle/ns#entity:generated'

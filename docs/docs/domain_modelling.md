@@ -57,7 +57,7 @@ This process represented as provenance will look like:
 ![file](diagrams/out/research_as_prov.svg)
 
 
-#### Guidance
+### Revision
 
 Guidance, like authorship is triggered by research - in this case for changes or additions to the evidence base. Evidence is used to inform a new revision of the Guidance document
 

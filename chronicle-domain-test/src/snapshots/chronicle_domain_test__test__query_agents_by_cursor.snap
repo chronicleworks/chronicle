@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 356
+source: chronicle-domain-test/src/test.rs
+assertion_line: 594
 expression: default_cursor
 ---
 {

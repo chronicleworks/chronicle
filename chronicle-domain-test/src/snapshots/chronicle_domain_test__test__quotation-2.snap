@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 167
+source: chronicle-domain-test/src/test.rs
+assertion_line: 360
 expression: derived
 ---
 [data.entityById]
@@ -8,4 +8,7 @@ id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
 name = 'generated'
 
 [[data.entityById.wasDerivedFrom]]
+id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+
+[[data.entityById.wasQuotedFrom]]
 id = 'http://blockchaintp.com/chronicle/ns#entity:used'

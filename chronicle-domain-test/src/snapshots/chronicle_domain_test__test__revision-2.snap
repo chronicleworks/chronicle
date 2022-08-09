@@ -1,5 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
+source: chronicle-domain-test/src/test.rs
+assertion_line: 313
 expression: derived
 ---
 [data.entityById]

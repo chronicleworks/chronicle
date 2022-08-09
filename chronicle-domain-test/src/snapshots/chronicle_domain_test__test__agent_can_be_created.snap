@@ -1,6 +1,6 @@
 ---
-source: chronicle-example/src/test.rs
-assertion_line: 301
+source: chronicle-domain-test/src/test.rs
+assertion_line: 379
 expression: create
 ---
 [data.agent]
