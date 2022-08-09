@@ -6,20 +6,28 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
       - id: check-yaml
         exclude: "charts/.*"
         args:
           - --allow-multiple-documents
-      - id: check-added-large-files
-      - id: check-json
-      - id: check-merge-conflict
       - id: detect-aws-credentials
+        args:
+          - --allow-missing-credentials
       - id: detect-private-key
+      - id: end-of-file-fixer
       - id: mixed-line-ending
+      - id: no-commit-to-branch
+        args:
+          - --pattern
+          - '^(?!((fix|feature|refactor)\/[a-zA-Z0-9\-]+)$).*'
+      - id: trailing-whitespace
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v2.27.0
+    rev: v2.29.3
     hooks:
       - id: commitizen
         stages: [commit-msg]
@@ -28,7 +36,7 @@ repos:
     hooks:
       - id: helmlint
   - repo: https://github.com/gherynos/pre-commit-java
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: checkstyle
         args:
@@ -40,7 +48,7 @@ repos:
       - id: pmd
         exclude: ".*/src/test/.*"
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
-    rev: 2.1.6
+    rev: 3.0.0
     hooks:
       - id: forbid-binary
         exclude: ".*.(png|jpg|jpeg)$"
@@ -63,28 +71,11 @@ repos:
     hooks:
       - id: markdownlint
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v8.15.0
+    rev: v8.21.0
     hooks:
       - id: eslint
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.2.0
-    hooks:
-      - id: check-added-large-files
-      - id: check-case-conflict
-      - id: check-executables-have-shebangs
-      - id: check-json
-      - id: check-merge-conflict
-      - id: detect-aws-credentials
-      - id: detect-private-key
-      - id: end-of-file-fixer
-      - id: mixed-line-ending
-      - id: no-commit-to-branch
-        args:
-          - --pattern
-          - '^(?!((fix|feature)\/[a-zA-Z0-9\-]+)$).*'
-      - id: trailing-whitespace
   - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.2.0
+    rev: v1.3.0
     hooks:
       - id: forbid-tabs
         exclude: "^(.*/?Makefile|.*.mk|.*.go)$"
@@ -100,7 +91,7 @@ repos:
       - id: fmt
       - id: cargo-check
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.26.3
+    rev: v1.27.1
     hooks:
       - id: yamllint
         exclude: ".*/templates/.*"
@@ -112,8 +103,8 @@ repos:
       - id: docker-compose-check
         files: "^docker/.*yaml$"
   - repo: https://gitlab.com/daverona/pre-commit/cpp
-    rev: 0.8.0 # use the most recent version
+    rev: 0.8.0
     hooks:
-      - id: docker-cppcheck # cppcheck in Docker container
+      - id: docker-cppcheck
         args:
           - --force
