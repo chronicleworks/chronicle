@@ -125,7 +125,7 @@ An opaque identifier from the Cms being used to author and publish documents.
 
 A plain text title.
 
-#### SearchParameters
+#### SearchParameter
 
 The input to a search engine.
 
@@ -159,7 +159,7 @@ A reference to evidence gathered from a search engine.
 
 Has attributes:
 
-* SearchParameters
+* SearchParameter
 * Reference
 
 #### Guidance
@@ -228,7 +228,7 @@ An Author is a Person who creates a Guidance of Guidance supervised by an Editor
 
 #### Researcher
 
-A researcher is a Person who submits SearchParameters to a search engine and then creates References to Evidence.
+A researcher is a Person who submits SearchParameter to a search engine and then creates References to Evidence.
 
 #### Editor
 
@@ -247,7 +247,7 @@ attributes:
     type: String
   Title:
     type: String
-  SearchParameters:
+  SearchParameter:
     type: String
   Reference:
     type: String
@@ -260,7 +260,7 @@ entities:
       - Content
   Evidence:
     attributes:
-      - SearchParameters
+      - SearchParameter
       - Reference
   Guidance:
     attributes:
@@ -322,7 +322,7 @@ attributes:
     type: String
   Title:
     type: String
-  SearchParameters:
+  SearchParameter:
     type: String
   Reference:
     type: String
@@ -357,7 +357,7 @@ entities:
       - Content
   Evidence:
     attributes:
-      - SearchParameters
+      - SearchParameter
       - Reference
   Guidance:
     attributes:
