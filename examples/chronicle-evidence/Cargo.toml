@@ -1,0 +1,25 @@
+[package]
+build   = "build.rs"
+edition = "2021"
+name    = "chronicle-evidence"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "chronicle"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies]
+chronicle = { path = "../../chronicle" }
+
+[build-dependencies]
+change-detection = "1.2.0"
+chronicle        = { path = "../../chronicle" }
+
+[features]
+strict = []
+# Pass the inmem feature flag to chronicle
+inmem = ["chronicle/inmem"]

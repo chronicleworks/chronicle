@@ -1,0 +1,54 @@
+name: "evidence"
+attributes:
+  Content:
+    type: String
+  CmsId:
+    type: String
+  Title:
+    type: String
+  SearchParameter:
+    type: String
+  Reference:
+    type: String
+  Version:
+    type: Int
+entities:
+  Question:
+    attributes:
+      - CmsId
+      - Content
+  Evidence:
+    attributes:
+      - SearchParameter
+      - Reference
+  Guidance:
+    attributes:
+      - Title
+      - Version
+  PublishedGuidance:
+    attributes: []
+activities:
+  QuestionAsked:
+    attributes:
+      - Content
+  Researched:
+    attributes: []
+  Published:
+    attributes:
+      - Version
+  Revised:
+    attributes:
+      - CmsId
+      - Version
+agents:
+  Person:
+    attributes:
+      - CmsId
+  Organization:
+    attributes:
+      - Title
+roles:
+  - Stakeholder
+  - Author
+  - Researcher
+  - Editor
