@@ -2,16 +2,16 @@
 version: '3'
 services:
   chronicle:
-    image: chronicle:${ISOLATION_ID:-local}
+    image: chronicle-tp:${ISOLATION_ID:-local}
     build:
       context: ../
       args:
         BUILD_ARGS: ""
       dockerfile: docker/chronicle.dockerfile
-  chronicle-inmem:
-    image: chronicle-inmem:${ISOLATION_ID:-local}
+      target: chronicle-tp
+  chronicle-builder:
+    image: chronicle-builder:${ISOLATION_ID:-local}
     build:
       context: ../
-      args:
-        BUILD_ARGS: "--features inmem"
       dockerfile: docker/chronicle.dockerfile
+      target: chronicle-builder

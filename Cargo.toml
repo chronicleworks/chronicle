@@ -5,12 +5,11 @@ members = [
   "api",
   "chronicle",
   "chronicle-example",
-  "chronicle-untyped",
+  "chronicle-domain",
   "sawtooth-protocol",
   "sawtooth-tp",
   "telemetry",
 ]
-
 
 [profile.release]
 codegen-units = 1
