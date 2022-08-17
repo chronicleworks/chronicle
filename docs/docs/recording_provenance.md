@@ -47,7 +47,7 @@ These three Chronicle mutations can be executed in *any* order - Chronicle will 
 
 ## Contradiction
 
-Chronicle will not allow you to record provenance that contradicts previously recorded provenance. For example - you cannot change the start / end dates of activities once set, or alter the value of an attributes. You can however record identical provenance any number of times, as this does not cause contradiction, or change the state of Chronicle meaningfully.
+Chronicle will not allow you to record provenance that contradicts previously recorded provenance. For example - you cannot change the start / end dates of activities once set, or alter the value of an attribute. You can however record identical provenance any number of times, as this does not cause contradiction, or change the state of Chronicle meaningfully.
 
 ### Contradiction of attribute time
 
@@ -163,7 +163,7 @@ See [provenance concepts](./provenance_concepts.md#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence` as a graphql union called `Entity`. The union also contains an untyped entity `ProvEntity`. The untyped entity can be potentially returned where the domain definition has evolved, see [evolving your domain](domain_modelling.md#evolution).
 
-The definition mutations `question`, `guidance`, `publishedGuidance` and `evidence` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
+The definition mutations `question`, `guidance`, `publishedGuidance`, and `evidence` will also have been created to allow you to define an instance of each subtype and their attributes. The generated graphql mutations and their associated types will look like this:
 
 ``` graphql
 
