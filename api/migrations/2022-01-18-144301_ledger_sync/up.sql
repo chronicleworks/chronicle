@@ -164,7 +164,3 @@ create table activity_attribute (
     foreign key(activity_id ) references activity(id),
     primary key(activity_id,typename)
 );
-
-
-
-
