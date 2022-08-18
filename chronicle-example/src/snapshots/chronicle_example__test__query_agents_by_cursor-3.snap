@@ -1,6 +1,5 @@
 ---
 source: chronicle-example/src/test.rs
-assertion_line: 450
 expression: out_of_bound_cursor
 ---
 {
@@ -9,8 +8,8 @@ expression: out_of_bound_cursor
       "pageInfo": {
         "hasPreviousPage": true,
         "hasNextPage": false,
-        "startCursor": "91",
-        "endCursor": "99"
+        "startCursor": "0",
+        "endCursor": "8"
       },
       "edges": [
         {
@@ -22,7 +21,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "91"
+          "cursor": "0"
         },
         {
           "node": {
@@ -33,7 +32,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "92"
+          "cursor": "1"
         },
         {
           "node": {
@@ -44,7 +43,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "93"
+          "cursor": "2"
         },
         {
           "node": {
@@ -55,7 +54,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "94"
+          "cursor": "3"
         },
         {
           "node": {
@@ -66,7 +65,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "95"
+          "cursor": "4"
         },
         {
           "node": {
@@ -77,7 +76,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "96"
+          "cursor": "5"
         },
         {
           "node": {
@@ -88,7 +87,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "97"
+          "cursor": "6"
         },
         {
           "node": {
@@ -99,7 +98,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "98"
+          "cursor": "7"
         },
         {
           "node": {
@@ -110,7 +109,7 @@ expression: out_of_bound_cursor
             "intAttribute": 1,
             "boolAttribute": false
           },
-          "cursor": "99"
+          "cursor": "8"
         }
       ]
     }
