@@ -680,9 +680,12 @@ fn gen_query() -> rust::Tokens {
         first: Option<i32>,
         last: Option<i32>,
     ) -> #graphql_result<#graphql_connection<i32, #(activity_union_type_name()), #empty_fields, #empty_fields>> {
-            Ok(#query_impl::activity_timeline(
+            let connection = #query_impl::activity_timeline(
                 ctx,
-                activity_types.into_iter().filter_map(|x| x.into()).collect(),
+                activity_types
+                    .into_iter()
+                    .filter_map(|x| x.into())
+                    .collect(),
                 for_entity,
                 from,
                 to,
@@ -692,8 +695,20 @@ fn gen_query() -> rust::Tokens {
                 first,
                 last,
             )
-            .await?
-            .map_node(map_activity_to_domain_type))
+            .await?;
+
+            let mut new_edges = Vec::with_capacity(connection.edges.len());
+
+            for (i, edge) in connection.edges.into_iter().enumerate() {
+                let new_node = map_activity_to_domain_type(edge.node);
+                new_edges.push(connection::Edge::with_additional_fields(i as i32, new_node, #empty_fields));
+            }
+
+            let mut new_connection = #graphql_connection::new(connection.has_previous_page, connection.has_next_page);
+
+            new_connection.edges.extend(new_edges);
+
+            Ok(new_connection)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -707,11 +722,29 @@ fn gen_query() -> rust::Tokens {
         first: Option<i32>,
         last: Option<i32>,
     ) -> #graphql_result<#graphql_connection<i32, #(agent_union_type_name()), #empty_fields, #empty_fields>> {
-        Ok(#query_impl::agents_by_type(
-            ctx, agent_type.into(), namespace, after, before, first, last,
+        let connection = #query_impl::agents_by_type(
+            ctx,
+            agent_type.into(),
+            namespace,
+            after,
+            before,
+            first,
+            last,
         )
-        .await?
-        .map_node(map_agent_to_domain_type))
+        .await?;
+
+        let mut new_edges = Vec::with_capacity(connection.edges.len());
+
+        for (i, edge) in connection.edges.into_iter().enumerate() {
+            let new_node = map_agent_to_domain_type(edge.node);
+            new_edges.push(connection::Edge::with_additional_fields(i as i32, new_node, #empty_fields));
+        }
+
+        let mut new_connection = #graphql_connection::new(connection.has_previous_page, connection.has_next_page);
+
+        new_connection.edges.extend(new_edges);
+
+        Ok(new_connection)
     }
     pub async fn agent_by_id<'a>(
         &self,

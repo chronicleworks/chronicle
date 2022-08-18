@@ -13,7 +13,7 @@ async-graphql = { features = [
   "unblock",
   "default",
   "uuid",
-], version = "3.0.38" }
+], version = "4.0.9" }
 async-trait = "0.1.53"
 chrono = { version = "0.4.19", features = ["serde"] }
 custom_error = "1.9.2"
