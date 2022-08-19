@@ -1,3 +1,4 @@
+---
 site_name: "Chronicle"
 theme: readthedocs
 markdown_extensions:
@@ -15,12 +16,20 @@ plugins:
       theme_folder: "include/themes"
       theme_light: "light.puml"
       theme_dark: "dark.puml"
-      render: "server" # or "local" for local rendering
-      bin_path: "/usr/local/bin/plantuml" # ignored when render: server
-      server: "http://www.plantuml.com/plantuml" # offical plantuml server
-      disable_ssl_certificate_validation: true # for self-signed and invalid certs
-      output_format: "svg" # or "png"
-      diagram_root: "docs/diagrams" # should reside under docs_dir
+      # or "local" for local rendering
+      render: "server"
+      # ignored when render: server
+      bin_path: "/usr/local/bin/plantuml"
+      # offical plantuml server
+      server: "http://www.plantuml.com/plantuml"
+      # for self-signed and invalid certs
+      disable_ssl_certificate_validation: true
+      # or "png"
+      output_format: "svg"
+      # should reside under docs_dir
+      diagram_root: "docs/diagrams"
       output_folder: "out"
       input_folder: "src"
-      input_extensions: "" # comma separated list of extensions to parse, by default every file is parsed
+      # comma separated list of extensions to parse,
+      # by default every file is parsed
+      input_extensions: ""
