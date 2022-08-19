@@ -1,0 +1,35 @@
+---
+site_name: "Chronicle"
+theme: readthedocs
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      auto_append:
+        - docs/includes/glosary.md
+  - pymdownx.superfences
+plugins:
+  - search
+  - build_plantuml:
+      theme_enabled: true
+      theme_folder: "include/themes"
+      theme_light: "light.puml"
+      theme_dark: "dark.puml"
+      # or "local" for local rendering
+      render: "server"
+      # ignored when render: server
+      bin_path: "/usr/local/bin/plantuml"
+      # offical plantuml server
+      server: "http://www.plantuml.com/plantuml"
+      # for self-signed and invalid certs
+      disable_ssl_certificate_validation: true
+      # or "png"
+      output_format: "svg"
+      # should reside under docs_dir
+      diagram_root: "docs/diagrams"
+      output_folder: "out"
+      input_folder: "src"
+      # comma separated list of extensions to parse,
+      # by default every file is parsed
+      input_extensions: ""
