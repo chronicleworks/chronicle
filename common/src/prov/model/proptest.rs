@@ -283,7 +283,7 @@ prop_compose! {
         let activity_id = ActivityId::from_name(&activity);
         let id = AssociationId::from_component_ids(&agent_id, &activity_id,  role.as_ref().map(|x| x.as_str()));
 
-        WasAssociatedWith{id,agent_id,activity_id,role:role.as_ref().map(|x|Role::from(x)), namespace }
+        WasAssociatedWith{id,agent_id,activity_id,role:role.as_ref().map(Role::from), namespace }
 
     }
 }

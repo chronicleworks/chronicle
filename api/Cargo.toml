@@ -12,8 +12,8 @@ async-graphql = { features = [
   "unblock",
   "default",
   "uuid",
-], version = "3.0.38" }
-async-graphql-poem = "3.0.38"
+], version = "4.0.9" }
+async-graphql-poem = "4.0.9"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
 chrono = "0.4.19"
