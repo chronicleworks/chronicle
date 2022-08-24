@@ -1,7 +1,0 @@
----
-source: chronicle-example/src/test.rs
-assertion_line: 261
-expression: created
----
-[data.wasQuotedFrom]
-context = 'http://blockchaintp.com/chronicle/ns#entity:generated'

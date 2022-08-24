@@ -141,7 +141,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(created);
+        insta::assert_toml_snapshot!(created, @r###"
+        [data.actedOnBehalfOf]
+        context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -167,7 +170,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_json_snapshot!(derived.data);
+        insta::assert_json_snapshot!(derived.data, @"");
     }
 
     #[tokio::test]
@@ -187,7 +190,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(created);
+        insta::assert_toml_snapshot!(created, @r###"
+        [data.wasDerivedFrom]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         let derived = schema
@@ -209,7 +215,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_toml_snapshot!(derived, @"");
     }
 
     #[tokio::test]
@@ -229,7 +235,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(created);
+        insta::assert_toml_snapshot!(created, @r###"
+        [data.hadPrimarySource]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         let derived = schema
@@ -257,7 +266,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_toml_snapshot!(derived, @"");
     }
 
     #[tokio::test]
@@ -277,7 +286,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(created);
+        insta::assert_toml_snapshot!(created, @r###"
+        [data.wasRevisionOf]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         let derived = schema
@@ -304,7 +316,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_toml_snapshot!(derived, @"");
     }
 
     #[tokio::test]
@@ -324,7 +336,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(created);
+        insta::assert_toml_snapshot!(created, @r###"
+        [data.wasQuotedFrom]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         let derived = schema
@@ -351,7 +366,7 @@ mod test {
         "#,
             ))
             .await;
-        insta::assert_toml_snapshot!(derived);
+        insta::assert_toml_snapshot!(derived, @"");
     }
 
     #[tokio::test]
@@ -370,7 +385,10 @@ mod test {
             ))
             .await;
 
-        insta::assert_toml_snapshot!(create);
+        insta::assert_toml_snapshot!(create, @r###"
+        [data.agent]
+        context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'
+        "###);
     }
 
     #[tokio::test]
@@ -382,6 +400,22 @@ mod test {
                     r#"
             mutation {
                 friend(name:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                    context
+                }
+            }
+        "#,
+                ))
+                .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let res = schema
+                .execute(Request::new(
+                    r#"
+            mutation {
+                friend(name:"john", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                     context
                 }
             }
@@ -409,34 +443,78 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
+        let res = schema
+                .execute(Request::new(
+                    r#"
+            mutation {
+                theSea(name:"fish", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                    context
+                }
+            }
+        "#,
+                ))
+                .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
         let from = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(1968, 9, 1).and_hms(0, 0, 0), Utc);
 
         for i in 1..10 {
-            let res = schema
-                .execute(Request::new(format!(
-                    r#"
-            mutation {{
-                gardening(name:"gardening{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
-                    context
-                }}
-            }}
-        "#,
-                    i
-                )))
-                .await;
-            assert_eq!(res.errors, vec![]);
+            let activity_name = if i % 2 == 0 {
+                format!("gardening{}", i)
+            } else {
+                format!("swimming{}", i)
+            };
+
+            if (i % 2) == 0 {
+                let res = schema
+                    .execute(Request::new(
+                        &format!(
+                            r#"
+                    mutation {{
+                        gardening(name:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                            context
+                        }}
+                    }}
+                "#,
+                            activity_name
+                        ),
+                    ))
+                    .await;
+
+                assert_eq!(res.errors, vec![]);
+            } else {
+                let res = schema
+                    .execute(Request::new(
+                        &format!(
+                            r#"
+                    mutation {{
+                        swimAbout(name:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                            context
+                        }}
+                    }}
+                "#,
+                            activity_name
+                        ),
+                    ))
+                    .await;
+
+                assert_eq!(res.errors, vec![]);
+            }
 
             tokio::time::sleep(Duration::from_millis(100)).await;
             let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: "http://blockchaintp.com/chronicle/ns#entity:coral", activity: "http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                used(id: "http://blockchaintp.com/chronicle/ns#entity:coral", activity: "http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
                 }}
             }}
         "#,
-                    i
+                    activity_name
                 )))
                 .await;
             assert_eq!(res.errors, vec![]);
@@ -447,12 +525,12 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
                 }}
             }}
         "#,
-                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() ,i
+                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
                 )))
                 .await;
 
@@ -460,15 +538,17 @@ mod test {
 
             tokio::time::sleep(Duration::from_millis(100)).await;
 
+            let agent = if i % 2 == 0 { "ringo" } else { "john" };
+
             let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:ringo", activity: "http://http://blockchaintp.com/chronicle/ns#activity:gardening{}") {{
+                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:{}", activity: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
                 }}
             }}
-        "#, i
+        "#, agent, activity_name
                 )))
                 .await;
 
@@ -479,14 +559,15 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let default_cursor = schema
+        let entire_timeline_in_order = schema
             .execute(Request::new(
                 r#"
                 query {
-                activityTimeline(forEntity: ["http://blockchaintp.com/chronicle/ns#entity:coral"],
-                                from: "1968-01-01T00:00:00Z",
-                                to: "2030-01-01T00:00:00Z",
-                                activityTypes: [GARDENING],
+                activityTimeline(
+                  forEntity: [],
+                  forAgent: [],
+                  order: OLDEST_FIRST,
+                  activityTypes: [],
                                 ) {
                     pageInfo {
                         hasPreviousPage
@@ -503,6 +584,8 @@ mod test {
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
+                                started
+                                ended
                                 wasAssociatedWith {
                                         responsible {
                                             agent {
@@ -530,7 +613,543 @@ mod test {
             ))
             .await;
 
-        insta::assert_json_snapshot!(default_cursor);
+        insta::assert_json_snapshot!(entire_timeline_in_order, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "8"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+                    "name": "gardening2",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-03T00:00:00+00:00",
+                    "ended": "1968-09-03T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+                    "name": "gardening4",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-05T00:00:00+00:00",
+                    "ended": "1968-09-05T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+                    "name": "gardening6",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-07T00:00:00+00:00",
+                    "ended": "1968-09-07T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+                    "name": "gardening8",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-09T00:00:00+00:00",
+                    "ended": "1968-09-09T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "8"
+                }
+              ]
+            }
+          }
+        }
+        "###);
+
+        let entire_timeline_reverse_order = schema
+            .execute(Request::new(
+                r#"
+                query {
+                activityTimeline(
+                  forEntity: [],
+                  forAgent: [],
+                  order: NEWEST_FIRST,
+                  activityTypes: [],
+                                ) {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            __typename
+                            ... on Gardening {
+                                id
+                                name
+                                stringAttribute
+                                intAttribute
+                                boolAttribute
+                                started
+                                ended
+                                wasAssociatedWith {
+                                        responsible {
+                                            agent {
+                                                ... on Friend {
+                                                    id
+                                                    name
+                                                }
+                                            }
+                                            role
+                                        }
+                                }
+                                used {
+                                    ... on TheSea {
+                                        id
+                                        name
+                                    }
+                                }
+                            }
+                       }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(entire_timeline_reverse_order, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "8"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+                    "name": "gardening8",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-09T00:00:00+00:00",
+                    "ended": "1968-09-09T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+                    "name": "gardening6",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-07T00:00:00+00:00",
+                    "ended": "1968-09-07T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+                    "name": "gardening4",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-05T00:00:00+00:00",
+                    "ended": "1968-09-05T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "Gardening",
+                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+                    "name": "gardening2",
+                    "stringAttribute": "string",
+                    "intAttribute": 1,
+                    "boolAttribute": false,
+                    "started": "1968-09-03T00:00:00+00:00",
+                    "ended": "1968-09-03T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
+                            "name": "ringo"
+                          },
+                          "role": "RESPONSIBLE"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
+                        "name": "coral"
+                      }
+                    ]
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "8"
+                }
+              ]
+            }
+          }
+        }
+        "###);
+
+        let by_activity_type = schema
+            .execute(Request::new(
+                r#"
+                query {
+                activityTimeline(
+                  forEntity: [],
+                  forAgent: [],
+                  order: NEWEST_FIRST,
+                  activityTypes: [SWIM_ABOUT],
+                                ) {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            __typename
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(by_activity_type, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "4"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "4"
+                }
+              ]
+            }
+          }
+        }
+        "###);
+
+        let by_agent = schema
+            .execute(Request::new(
+                r#"
+                query {
+                activityTimeline(
+                  forEntity: [],
+                  forAgent: ["http://blockchaintp.com/chronicle/ns#agent:john"],
+                  order: NEWEST_FIRST,
+                  activityTypes: [],
+                                ) {
+                    pageInfo {
+                        hasPreviousPage
+                        hasNextPage
+                        startCursor
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            __typename
+                        }
+                        cursor
+                    }
+                }
+                }
+        "#,
+            ))
+            .await;
+
+        insta::assert_json_snapshot!(by_agent, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "4"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "SwimAbout"
+                  },
+                  "cursor": "4"
+                }
+              ]
+            }
+          }
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -585,7 +1204,132 @@ mod test {
             ))
             .await;
 
-        insta::assert_json_snapshot!(default_cursor);
+        insta::assert_json_snapshot!(default_cursor, @r###"
+        {
+          "data": {
+            "agentsByType": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": true,
+                "startCursor": "0",
+                "endCursor": "9"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
+                    "name": "bobross0",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
+                    "name": "bobross1",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
+                    "name": "bobross10",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
+                    "name": "bobross11",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
+                    "name": "bobross12",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
+                    "name": "bobross13",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
+                    "name": "bobross14",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
+                    "name": "bobross15",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
+                    "name": "bobross16",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "8"
+                },
+                {
+                  "node": {
+                    "__typename": "Friend",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
+                    "name": "bobross17",
+                    "stringAttribute": "String",
+                    "intAttribute": 1,
+                    "boolAttribute": false
+                  },
+                  "cursor": "9"
+                }
+              ]
+            }
+          }
+        }
+        "###);
 
         let middle_cursor = schema
             .execute(Request::new(
@@ -617,7 +1361,7 @@ mod test {
             ))
             .await;
 
-        insta::assert_json_snapshot!(middle_cursor);
+        insta::assert_json_snapshot!(middle_cursor, @"");
 
         let out_of_bound_cursor = schema
             .execute(Request::new(
@@ -649,6 +1393,6 @@ mod test {
             ))
             .await;
 
-        insta::assert_json_snapshot!(out_of_bound_cursor);
+        insta::assert_json_snapshot!(out_of_bound_cursor , @"");
     }
 }

@@ -659,6 +659,9 @@ fn gen_query() -> rust::Tokens {
     let empty_fields =
         &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
 
+    let timeline_order =
+        &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
+
     quote! {
     #[derive(Copy, Clone)]
     pub struct Query;
@@ -672,8 +675,10 @@ fn gen_query() -> rust::Tokens {
         ctx: &#graphql_context<'a>,
         activity_types: Vec<ActivityType>,
         for_entity: Vec<EntityId>,
+        for_agent: Vec<AgentId>,
         from: Option<DateTime<Utc>>,
         to: Option<DateTime<Utc>>,
+        order: Option<#timeline_order>,
         namespace: Option<ID>,
         after: Option<String>,
         before: Option<String>,
@@ -686,9 +691,11 @@ fn gen_query() -> rust::Tokens {
                     .into_iter()
                     .filter_map(|x| x.into())
                     .collect(),
+                for_agent,
                 for_entity,
                 from,
                 to,
+                order,
                 namespace,
                 after,
                 before,
