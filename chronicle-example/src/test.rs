@@ -1,6 +1,6 @@
-use chronicle::codegen::ChronicleDomainDef;
-use chronicle::tokio;
-use chronicle::{api::chronicle_graphql::ChronicleGraphQl, bootstrap};
+use chronicle::{
+    api::chronicle_graphql::ChronicleGraphQl, bootstrap, codegen::ChronicleDomainDef, tokio,
+};
 use main::{Mutation, Query};
 
 #[allow(dead_code)]
@@ -60,15 +60,21 @@ pub async fn main() {
 #[cfg(test)]
 mod test {
     use super::{Mutation, Query};
-    use chronicle::api::chronicle_graphql::{Store, Subscription};
-    use chronicle::api::{Api, ConnectionOptions, UuidGen};
-    use chronicle::async_graphql::{Request, Schema};
-    use chronicle::chrono::{DateTime, NaiveDate, Utc};
-    use chronicle::common::ledger::InMemLedger;
-    use chronicle::tokio;
-    use chronicle::uuid::Uuid;
-    use diesel::r2d2::Pool;
-    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use chronicle::{
+        api::{
+            chronicle_graphql::{Store, Subscription},
+            Api, ConnectionOptions, UuidGen,
+        },
+        async_graphql::{Request, Schema},
+        chrono::{DateTime, NaiveDate, Utc},
+        common::ledger::InMemLedger,
+        tokio,
+        uuid::Uuid,
+    };
+    use diesel::{
+        r2d2::{ConnectionManager, Pool},
+        SqliteConnection,
+    };
     use std::time::Duration;
     use tempfile::TempDir;
 

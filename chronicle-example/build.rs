@@ -1,7 +1,6 @@
 use std::process::Command;
 
-use chronicle::codegen::ChronicleDomainDef;
-use chronicle::generate_chronicle_domain_schema;
+use chronicle::{codegen::ChronicleDomainDef, generate_chronicle_domain_schema};
 
 fn main() {
     let s = r#"

@@ -7,9 +7,6 @@ use diesel::{
 };
 use r2d2::PooledConnection;
 
-
-
-
 type Conn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 const DEFAULT_PAGE_SIZE: i32 = 10;

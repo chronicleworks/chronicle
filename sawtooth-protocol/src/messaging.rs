@@ -6,8 +6,8 @@ use crate::{
     sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse},
 };
 
-use common::k256::ecdsa::SigningKey;
 use common::{
+    k256::ecdsa::SigningKey,
     ledger::{LedgerWriter, SubmissionError},
     prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
