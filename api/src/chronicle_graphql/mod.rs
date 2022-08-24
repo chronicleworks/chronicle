@@ -1,7 +1,7 @@
 use async_graphql::{
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject, Subscription,
+    Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject, Subscription,
 };
 use async_graphql_poem::{GraphQL, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -135,6 +135,12 @@ impl Submission {
     async fn correlation_id(&self) -> &str {
         &self.correlation_id
     }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum TimelineOrder {
+    NewestFirst,
+    OldestFirst,
 }
 
 custom_error! {pub GraphQlError

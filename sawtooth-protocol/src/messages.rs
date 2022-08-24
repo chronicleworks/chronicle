@@ -1,5 +1,5 @@
-use common::k256::ecdsa::{signature::Signer, Signature, SigningKey};
 use common::{
+    k256::ecdsa::{signature::Signer, Signature, SigningKey},
     ledger::Offset,
     prov::{operations::ChronicleOperation, ChronicleTransactionId},
 };
@@ -138,10 +138,12 @@ impl MessageBuilder {
 
 #[cfg(test)]
 mod test {
-    use common::k256::{ecdsa::SigningKey, SecretKey};
-    use common::prov::{
-        operations::{ChronicleOperation, CreateNamespace},
-        NamespaceId,
+    use common::{
+        k256::{ecdsa::SigningKey, SecretKey},
+        prov::{
+            operations::{ChronicleOperation, CreateNamespace},
+            NamespaceId,
+        },
     };
     use openssl::sha::Sha512;
     use prost::Message;

@@ -1,7 +1,0 @@
----
-source: chronicle-example/src/test.rs
-assertion_line: 301
-expression: create
----
-[data.agent]
-context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'

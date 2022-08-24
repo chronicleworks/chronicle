@@ -1,35 +1,41 @@
 use async_graphql::{
-    connection::{Connection, EmptyFields},
+    connection::{query, Connection, EmptyFields},
     Context, ID,
 };
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use common::prov::{AgentId, DomaintypeId, EntityId, NamePart};
-use diesel::prelude::*;
-use tracing::instrument;
+use diesel::{debug_query, prelude::*, sqlite::Sqlite};
+use tracing::{debug, instrument};
+
+use crate::chronicle_graphql::cursor_query::{project_to_nodes, Cursorize};
 
 use crate::{
-    chronicle_graphql::{Activity, Store},
+    chronicle_graphql::{Activity, GraphQlError, Store},
     persistence::schema::generation,
 };
 
-use super::{Agent, Entity};
+use super::{Agent, Entity, TimelineOrder};
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(ctx))]
 pub async fn activity_timeline<'a>(
     ctx: &Context<'a>,
     activity_types: Vec<DomaintypeId>,
+    for_agent: Vec<AgentId>,
     for_entity: Vec<EntityId>,
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
+    order: Option<TimelineOrder>,
     namespace: Option<ID>,
     after: Option<String>,
     before: Option<String>,
     first: Option<i32>,
     last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
-    use crate::persistence::schema::{activity, entity, namespace::dsl as nsdsl, useage};
+    use crate::persistence::schema::{
+        activity, agent, association, delegation, entity, namespace::dsl as nsdsl, useage,
+    };
 
     let store = ctx.data_unchecked::<Store>();
 
@@ -49,43 +55,93 @@ pub async fn activity_timeline<'a>(
 
     let to = to.or_else(|| Some(Utc::now()));
 
-    gql_cursor!(
+    let mut sql_query = activity::table
+        .left_join(useage::table.on(useage::activity_id.eq(activity::id)))
+        .left_join(generation::table.on(generation::activity_id.eq(activity::id)))
+        .left_join(association::table.on(association::activity_id.eq(activity::id)))
+        .left_join(
+            delegation::table.on(delegation::activity_id
+                .nullable()
+                .eq(activity::id.nullable())),
+        )
+        .left_join(
+            entity::table.on(entity::id
+                .eq(useage::entity_id)
+                .or(entity::id.eq(generation::generated_entity_id))),
+        )
+        .left_join(
+            agent::table.on(agent::id
+                .eq(association::agent_id)
+                .or(agent::id.eq(delegation::delegate_id))
+                .or(agent::id.eq(delegation::responsible_id))),
+        )
+        .inner_join(nsdsl::namespace.on(activity::namespace_id.eq(nsdsl::id)))
+        .filter(nsdsl::name.eq(&**ns))
+        .filter(activity::started.ge(from.map(|x| x.naive_utc())))
+        .filter(activity::ended.le(to.map(|x| x.naive_utc())))
+        .select(Activity::as_select())
+        .into_boxed();
+
+    if !for_entity.is_empty() {
+        sql_query = sql_query.filter(
+            entity::name.eq_any(
+                for_entity
+                    .iter()
+                    .map(|x| x.name_part().clone())
+                    .collect::<Vec<_>>(),
+            ),
+        )
+    };
+
+    if !for_agent.is_empty() {
+        sql_query = sql_query.filter(
+            agent::name.eq_any(
+                for_agent
+                    .iter()
+                    .map(|x| x.name_part().clone())
+                    .collect::<Vec<_>>(),
+            ),
+        )
+    };
+
+    if !activity_types.is_empty() {
+        sql_query = sql_query.filter(
+            activity::domaintype.eq_any(
+                activity_types
+                    .iter()
+                    .map(|x| x.name_part().clone())
+                    .collect::<Vec<_>>(),
+            ),
+        );
+    }
+
+    if order.unwrap_or(TimelineOrder::NewestFirst) == TimelineOrder::NewestFirst {
+        sql_query = sql_query.order_by(activity::started.desc());
+    } else {
+        sql_query = sql_query.order_by(activity::started.asc());
+    };
+
+    query(
         after,
         before,
         first,
         last,
-        activity::table
-            .left_join(useage::table.on(useage::activity_id.eq(activity::id)))
-            .left_join(generation::table.on(generation::activity_id.eq(activity::id)))
-            .left_join(
-                entity::table.on(entity::id
-                    .eq(useage::entity_id)
-                    .or(entity::id.eq(generation::generated_entity_id))),
-            )
-            .inner_join(nsdsl::namespace.on(activity::namespace_id.eq(nsdsl::id)))
-            .filter(
-                entity::name.eq_any(
-                    for_entity
-                        .iter()
-                        .map(|x| x.name_part().clone())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .filter(
-                activity::domaintype.eq_any(
-                    activity_types
-                        .iter()
-                        .map(|x| x.name_part().clone())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .filter(nsdsl::name.eq(&**ns))
-            .filter(activity::started.ge(from.map(|x| x.naive_utc())))
-            .filter(activity::ended.le(to.map(|x| x.naive_utc()))),
-        activity::started.asc(),
-        Activity,
-        connection
+        |after, before, first, last| async move {
+            debug!(
+                "Cursor query {}",
+                debug_query::<Sqlite, _>(&sql_query).to_string()
+            );
+            let rx = sql_query.cursor(after, before, first, last);
+
+            let start = rx.start;
+            let limit = rx.limit;
+
+            let rx = rx.load::<(Activity, i64)>(&mut connection)?;
+
+            Ok::<_, GraphQlError>(project_to_nodes(rx, start, limit))
+        },
     )
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -108,20 +164,37 @@ pub async fn agents_by_type<'a>(
     let mut connection = store.pool.get()?;
     let ns = namespace.unwrap_or_else(|| "default".into());
 
-    gql_cursor!(
+    let sql_query = agent::table
+        .inner_join(nsdsl::namespace)
+        .filter(
+            nsdsl::name
+                .eq(&**ns)
+                .and(agent::domaintype.eq(typ.as_ref().map(|x| x.name_part().to_owned()))),
+        )
+        .select(Agent::as_select())
+        .order_by(agent::name.asc());
+
+    query(
         after,
         before,
         first,
         last,
-        agent::table.inner_join(nsdsl::namespace).filter(
-            nsdsl::name
-                .eq(&**ns)
-                .and(agent::domaintype.eq(typ.as_ref().map(|x| x.name_part().to_owned())))
-        ),
-        agent::name.asc(),
-        Agent,
-        connection
+        |after, before, first, last| async move {
+            debug!(
+                "Cursor query {}",
+                debug_query::<Sqlite, _>(&sql_query).to_string()
+            );
+            let rx = sql_query.cursor(after, before, first, last);
+
+            let start = rx.start;
+            let limit = rx.limit;
+
+            let rx = rx.load::<(Agent, i64)>(&mut connection)?;
+
+            Ok::<_, GraphQlError>(project_to_nodes(rx, start, limit))
+        },
     )
+    .await
 }
 
 pub async fn agent_by_id<'a>(

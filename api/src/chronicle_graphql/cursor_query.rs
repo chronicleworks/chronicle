@@ -1,3 +1,7 @@
+use async_graphql::{
+    connection::{Edge, EmptyFields},
+    OutputType,
+};
 use diesel::{
     prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt, sqlite::Sqlite,
 };
@@ -13,64 +17,7 @@ pub struct CursorPosition<T> {
     pub(crate) start: i64,
     pub(crate) limit: i64,
 }
-
-macro_rules! gql_cursor {
-    ($after:expr, $before: expr, $first: expr, $last: expr, $query:expr, $order:expr, $node_type:tt,$connection: expr) => {{
-        use crate::chronicle_graphql::{cursor_query::Cursorise, GraphQlError};
-        use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-        use diesel::{debug_query, sqlite::Sqlite};
-        use tracing::debug;
-        query(
-            $after,
-            $before,
-            $first,
-            $last,
-            |after, before, first, last| async move {
-                debug!(
-                    "Cursor query {}",
-                    debug_query::<Sqlite, _>(&$query).to_string()
-                );
-                let rx = $query
-                    .order($order)
-                    .select(<$node_type>::as_select())
-                    .cursor(after, before, first, last);
-
-                let start = rx.start;
-                let limit = rx.limit;
-
-                let rx = rx.load::<($node_type, i64)>(&mut $connection)?;
-
-                let mut gql = Connection::new(
-                    rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
-                    rx.first()
-                        .map(|(_, total)| ((start as i64) + (limit as i64)) < *total)
-                        .unwrap_or(false),
-                );
-
-                gql.edges.append(
-                    &mut rx
-                        .into_iter()
-                        .enumerate()
-                        .map(
-                            (|(pos, (agent, _count))| {
-                                Edge::with_additional_fields(
-                                    (pos as i32) + (start as i32),
-                                    agent,
-                                    EmptyFields,
-                                )
-                            }),
-                        )
-                        .collect(),
-                );
-
-                Ok::<_, GraphQlError>(gql)
-            },
-        )
-        .await
-    }};
-}
-
-pub trait Cursorise: Sized {
+pub trait Cursorize: Sized {
     fn cursor(
         self,
         after: Option<i32>,
@@ -80,7 +27,36 @@ pub trait Cursorise: Sized {
     ) -> CursorPosition<Self>;
 }
 
-impl<T> Cursorise for T {
+pub fn project_to_nodes<T, I>(
+    rx: I,
+    start: i64,
+    limit: i64,
+) -> async_graphql::connection::Connection<i32, T, EmptyFields, EmptyFields>
+where
+    T: OutputType,
+    I: IntoIterator<Item = (T, i64)>,
+{
+    let rx = Vec::from_iter(rx.into_iter());
+    let mut gql = async_graphql::connection::Connection::new(
+        rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
+        rx.first()
+            .map(|(_, total)| ((start as i64) + (limit as i64)) < *total)
+            .unwrap_or(false),
+    );
+
+    gql.edges.append(
+        &mut rx
+            .into_iter()
+            .enumerate()
+            .map(|(pos, (agent, _count))| {
+                Edge::with_additional_fields((pos as i32) + (start as i32), agent, EmptyFields)
+            })
+            .collect(),
+    );
+    gql
+}
+
+impl<T> Cursorize for T {
     fn cursor(
         self,
         after: Option<i32>,
