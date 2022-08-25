@@ -1,15 +1,17 @@
 ---
 version: '3'
 services:
-  chronicle:
+  chronicle-tp:
     image: chronicle-tp:${ISOLATION_ID:-local}
     build:
       context: ../
       args:
         BUILD_ARGS: ""
       dockerfile: docker/chronicle.dockerfile
+      target: chronicle-tp
   builder:
     image: builder:${ISOLATION_ID:-local}
     build:
       context: ../
       dockerfile: docker/chronicle.dockerfile
+      target: builder
