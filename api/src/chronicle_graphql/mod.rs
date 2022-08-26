@@ -148,6 +148,7 @@ custom_error! {pub GraphQlError
     R2d2{source: r2d2::Error }                                  = "Connection pool error",
     DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
     Api{source: crate::ApiError}                                = "API",
+    Io{source: std::io::Error}                                  = "I/O",
 }
 
 impl GraphQlError {
