@@ -34,6 +34,7 @@ iref = "2.1.2"
 iref-enum = "2.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
+libsqlite3-sys = { version = "*", features = ["bundled"] }
 open = "2.1.1"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"

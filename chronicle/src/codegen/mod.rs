@@ -686,8 +686,7 @@ fn gen_query() -> rust::Tokens {
     let empty_fields =
         &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
 
-    let timeline_order =
-        &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
+    let timeline_order = &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder");
 
     quote! {
     #[derive(Copy, Clone)]
