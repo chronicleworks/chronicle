@@ -1,4 +1,4 @@
-FROM rust:latest as chef
+FROM rust:latest as builder
 
 WORKDIR /app
 
@@ -17,14 +17,6 @@ RUN apt-get update && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 
-FROM chef AS planner
-COPY . .
-#RUN cargo chef prepare --recipe-path recipe.json
-
-FROM chef AS builder
-#COPY --from=planner /app/recipe.json recipe.json
-# This is the layer cached by cargo dependency
-#RUN cargo chef cook --release --recipe-path recipe.json
 FROM builder AS test
 COPY . .
 RUN cargo test --release
