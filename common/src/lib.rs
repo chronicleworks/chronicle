@@ -8,6 +8,7 @@ pub mod attributes;
 pub mod commands;
 pub mod context;
 pub mod ledger;
+pub mod protocol;
 pub mod prov;
 pub mod signing;
 

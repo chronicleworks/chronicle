@@ -1,0 +1,16 @@
+// a place to keep protocol version information (that’s not the address space)
+// and send along an opentelemetry distributed span id -- a leverage point for
+// future protocol versioning and a way of sneaking in a OTEL span id
+// for distributed tracing as there’s no sawtooth native way of smuggling in metadata
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "sawtooth.sdk.protobuf";
+option go_package = "batch_pb2";
+
+message Submission {
+    string version = 1;
+    string span_id = 2;
+    string body = 3;
+}
