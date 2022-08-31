@@ -126,7 +126,7 @@ impl StateDelta {
         impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, ChronicleTransactionId)>>,
         StateError,
     > {
-        let request = self.builder.make_subcription_request(offset);
+        let request = self.builder.make_subscription_request(offset);
 
         debug!(?request, "Subscription request");
         let mut buf = Vec::new();
