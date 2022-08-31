@@ -284,8 +284,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
                 #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
-                    .await
-                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                    .await?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
                     .map(#(attribute.as_scalar_type())),
         }))
@@ -307,9 +306,9 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
 
     let async_graphql_error_extensions =
+    let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
-    quote! {
 
     #(register(entity_impl))
     pub struct #(&entity.as_type_name())(#abstract_entity);
@@ -321,7 +320,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         }
 
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
-            #entity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #entity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))   #entity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         async fn name(&self) -> &str {
@@ -334,7 +333,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         }
 
         async fn evidence<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#evidence>> {
-            #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))   #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         async fn was_generated_by<'a>(
@@ -343,8 +342,8 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         ) -> #async_result<Vec<#(activity_union_type_name())>> {
             Ok(#entity_impl::was_generated_by(self.0.id, ctx)
                 .await
+                .await
                 .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-                .into_iter()
                 .map(map_activity_to_domain_type)
                 .collect())
         }
@@ -352,8 +351,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         async fn was_derived_from<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
             Ok(#entity_impl::was_derived_from(self.0.id, ctx)
                 .await
-                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-                .into_iter()
+                .await?
                 .map(map_entity_to_domain_type)
                 .collect())
         }
@@ -366,8 +364,8 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                 #entity_impl::had_primary_source(self.0.id, ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-                    .into_iter()
-                    .map(map_entity_to_domain_type)
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .collect(),
             )
         }
@@ -376,8 +374,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
             Ok(#entity_impl::was_revision_of(self.0.id, ctx)
                 .await
                 .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-                .into_iter()
-                .map(map_entity_to_domain_type)
+                .await?
                 .collect())
         }
         async fn was_quoted_from<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
@@ -385,8 +382,8 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                 .await
                 .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 .into_iter()
-                .map(map_entity_to_domain_type)
-                .collect())
+                .await
+                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
         }
 
         #(for attribute in &entity.attributes =>
@@ -397,20 +394,20 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
-                    .map(#(attribute.as_scalar_type())),
-              PrimitiveType::Bool =>
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
-                    .map(#(attribute.as_scalar_type())),
-              PrimitiveType::Int =>
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
-                    .map(#(attribute.as_scalar_type())),
-        }))
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
         })
     }
     }
@@ -431,9 +428,9 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
-    quote! {
+    let async_graphql_error_extensions =
+        &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
-    #(register(agent_impl))
 
     pub struct #(agent.as_type_name())(#abstract_agent);
 
@@ -448,11 +445,11 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
         }
 
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
-            #agent_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+          an#agimp_lmpl::nmmespacesace(.0.sdmap|ace_yn, cgx).awaraerror_extensions::extend(&e))
         }
 
         async fn identity<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#identity>> {
-            #agent_impl::identity(self.0.identity_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+          an#tgm:tiimpl::identity0iden.0.identity_idtity_).awai).map_.rr(|e|err(|e| g#aphqn_rrror_extl_sions::exeend(&r))tensions::extend(&e))
         }
 
         async fn acted_on_behalf_of<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<AgentRef>> {
@@ -460,8 +457,8 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
                 .await
                 .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 .into_iter()
-                .map(|(agent,role)|(Self(agent),role))
-                .map(|(agent,role)| AgentRef {agent : #agent_union_type::from(agent), role: role.into()})
+                .await
+                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 .collect())
         }
 
@@ -473,19 +470,20 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
-                    .map(#(attribute.as_scalar_type())),
-              PrimitiveType::Bool =>
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
-                    .map(#(attribute.as_scalar_type())),
-              PrimitiveType::Int =>
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                 #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
-                    .map(#(attribute.as_scalar_type())),
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
         }))
         })
 
@@ -680,15 +678,17 @@ fn gen_query() -> rust::Tokens {
     let graphql_connection = &rust::import("chronicle::async_graphql::connection", "Connection");
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
+    let async_graphql_error_extensions =
+        &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
+    let agent_id = &rust::import("chronicle::common::prov", "AgentId").qualified();
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
+    let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
 
-    let agent_id = &rust::import("chronicle::common::prov", "AgentId");
-    let entity_id = &rust::import("chronicle::common::prov", "EntityId");
-    let empty_fields =
-        &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
-
-    let timeline_order = &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder");
-
-    quote! {
+    let timeline_order =
+        &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
+    let timeline_order =
+        &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
     #[derive(Copy, Clone)]
     pub struct Query;
 
@@ -705,7 +705,7 @@ fn gen_query() -> rust::Tokens {
         from: Option<DateTime<Utc>>,
         to: Option<DateTime<Utc>>,
         order: Option<#timeline_order>,
-        namespace: Option<ID>,
+        namaspacpace: Opti#g<aphql_#daphql_id>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -730,8 +730,8 @@ fn gen_query() -> rust::Tokens {
             )
             .await
             .map_err(|e| #async_graphql_error_extensions::extend(&e))?;
-
-            let mut new_edges = Vec::with_capacity(connection.edges.len());
+            .await
+            .map_err(|e| #async_graphql_error_extensions::extend(&e))?;
 
             for (i, edge) in connection.edges.into_iter().enumerate() {
                 let new_node = map_activity_to_domain_type(edge.node);
@@ -767,8 +767,8 @@ fn gen_query() -> rust::Tokens {
         )
         .await
         .map_err(|e| #async_graphql_error_extensions::extend(&e))?;
-
-        let mut new_edges = Vec::with_capacity(connection.edges.len());
+        .await
+        .map_err(|e| #async_graphql_error_extensions::extend(&e))?;
 
         for (i, edge) in connection.edges.into_iter().enumerate() {
             let new_node = map_agent_to_domain_type(edge.node);
@@ -790,7 +790,21 @@ fn gen_query() -> rust::Tokens {
         Ok(#query_impl::agent_by_id(ctx, id, namespace)
             .await
             .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-            .map(map_agent_to_domain_type))
+            .await
+            .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+
+    pub async fn activity_by_id<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        id: #activity_id,
+        namespace: Option<String>,
+    ) -> #graphql_result<Option<#(activity_union_type_name())>> {
+        Ok(#query_impl::activity_by_id(ctx, id, namespace)
+            .await
+
+
+            .await?
+            .map(map_activity_to_domain_type))
     }
 
     pub async fn entity_by_id<'a>(
@@ -802,8 +816,7 @@ fn gen_query() -> rust::Tokens {
         Ok(#query_impl::entity_by_id(ctx, id, namespace)
             .await
             .map_err(|e| #async_graphql_error_extensions::extend(&e))?
-            .map(map_entity_to_domain_type))
-    }
+            .await?
     }
     }
 }
@@ -817,8 +830,8 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
-    let submission = &rust::import("chronicle::api::chronicle_graphql", "Submission");
-    let impls = &rust::import("chronicle::api::chronicle_graphql", "mutation");
+    let async_graphql_error_extensions =
+        &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
     let entity_id = &rust::import("chronicle::common::prov", "EntityId");
     let agent_id = &rust::import("chronicle::common::prov", "AgentId");
@@ -841,7 +854,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             attributes: ProvAgentAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+          i #impls::mpls:(ctx,:game,ena(espcce, attributes.txto()), wait.map_err(|e| #async_nraphql_arror_exeen,nons::examnds&ep), attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for agent in domain.agents.iter() =>
@@ -856,7 +869,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(agent.as_type_name())))
                     ))
-                ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                ).await.ma _err(|e| #).awa_grephql_error_extr( iyns::cxgenda&ephror_extensions::extend(&e))
             }
             } else {
             pub async fn #(&agent.as_property())<'a>(
@@ -866,7 +879,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 namespace: Option<String>,
                 attributes: #(agent.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e)    #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -879,7 +892,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             attributes: ProvActivityAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+             impls::mpls::ac(ctx,tvame,ina(espcce, attributes.txto()), wait.map_err(|e| #asynn_graphql_error_ex anmsons::expande&e),tributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for activity in domain.activities.iter() =>
@@ -894,7 +907,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(activity.as_type_name())))
                     ))
-                ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+              im).ewae|#map_err(|e| #asyncygranhql_erc_r_rxpensions::extendq&el__extensions::extend(&e))
             }
             } else {
             pub async fn #(&activity.as_property())<'a>(
@@ -904,7 +917,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 namespace: Option<String>,
                 attributes: #(activity.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e)    #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -917,7 +930,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
             attributes: ProvEntityAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+             impls::mpls::(ctx,etame,ina(espcce, attributes.txto()),await.map_ rr(|e| #async_graphql_error_exe nnmons::exesnda&e)cattributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for entity in domain.entities.iter() =>
@@ -932,7 +945,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                     #abstract_attributes::type_only(Some(
                         #domain_type_id::from_name(#_(#(entity.as_type_name())))
                     ))
-                ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+              im).awa(||map_err(|e| # #yncagrashql_erynr__xrensions::extendp&ehqor_extensions::extend(&e))
             }
             } else {
             pub async fn #(&entity.as_property())<'a>(
@@ -942,7 +955,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 namespace: Option<String>,
                 attributes: #(entity.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e)    #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -957,7 +970,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             activity: Option<#activity_id>,
             role: RoleType,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::acted_on_behalf_of(ctx, namespace, responsible, delegate, activity, role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #im ls::acted_on_ ehalf_of(ctx, n#meipace, respopsible, delegate, altivity,srole.i:to()).actit.map_err(|e| #aeyncdgraphql_onror_extens_ons::extenhx&e)), namespace, responsible, delegate, activity, role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         pub async fn was_derived_from<'a>(
@@ -968,7 +981,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             used_entity: #entity_id,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_derived_from(ctx, namespace, generated_entity, used_entity)
-                .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                .await.ma _err(|e| #    ._gr.phqlaerrop__xtenr(|es::extendc&e))_graphql_error_extensions::extend(&e))
         }
 
         pub async fn was_revision_of<'a>(
@@ -979,7 +992,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             used_entity: #entity_id,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_revision_of(ctx, namespace, generated_entity, used_entity)
-                .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                .awaitwait.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
         pub async fn had_primary_source<'a>(
             &self,
@@ -997,7 +1010,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
         pub async fn was_quoted_from<'a>(
-            &self,
+            .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             ctx: &#graphql_context<'a>,
             namespace: Option<String>,
             generated_entity: #entity_id,
@@ -1007,7 +1020,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn generate_key<'a>(
+                .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             id: #agent_id,
@@ -1016,7 +1029,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::generate_key(ctx, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn start_activity<'a>(
+            #impls::generate_key(ctx, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             id: #activity_id,
@@ -1027,7 +1040,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::start_activity(ctx, id, namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn end_activity<'a>(
+            #impls::start_activity(ctx, id, namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             id: #activity_id,
@@ -1038,7 +1051,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::end_activity(ctx, id, namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn was_associated_with<'a>(
+            #impls::end_activity(ctx, id, namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             namespace: Option<String>,
@@ -1049,7 +1062,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_associated_with(ctx, namespace, responsible, activity, role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-
+            #impls::was_associated_with(ctx, namespace, responsible, activity, role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         pub async fn used<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1060,7 +1073,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::used(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn was_generated_by<'a>(
+            #impls::used(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             activity: #activity_id,
@@ -1070,7 +1083,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_generated_by(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        pub async fn has_attachment<'a>(
+            #impls::was_generated_by(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             &self,
             ctx: &#graphql_context<'a>,
             id: #entity_id,
@@ -1083,7 +1096,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
     }
-    }
+                .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
 }
 
 fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
