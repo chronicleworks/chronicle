@@ -5,7 +5,7 @@ mod submission {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
-pub fn submit(op: ChronicleOperation) -> submission::Submission {
+pub fn submit(op: &ChronicleOperation) -> submission::Submission {
     let mut submission = submission::Submission::default();
     let protocol_version = "1".to_string();
     submission.version = protocol_version;
