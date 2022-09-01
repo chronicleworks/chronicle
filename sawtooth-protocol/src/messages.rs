@@ -98,7 +98,7 @@ impl MessageBuilder {
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
     ) -> (Transaction, ChronicleTransactionId) {
-        let bytes = serde_cbor::to_vec(&payload).unwrap();
+        let bytes = common::protocol::submit(&payload[0]).encode_to_vec();
 
         let mut hasher = Sha512::new();
         hasher.update(&*bytes);
