@@ -9,7 +9,7 @@ pub fn submit(op: ChronicleOperation) -> submission::Submission {
     let mut submission = submission::Submission::default();
     let protocol_version = "1".to_string();
     submission.version = protocol_version;
-    submission.span_id = "SOMEHOW GET A TRACING SPAN ID".to_string();
+    submission.span_id = "".to_string();
     submission.body = op.to_json().0.to_string();
     submission
 }
