@@ -818,9 +818,13 @@ impl SubCommand for CliModel {
                     .value_hint(ValueHint::Url)
                     .help("Instrument using RUST_LOG environment"),
             )
-            .arg(Arg::new("console-logging").long("console-logging").help(
-                "Instrument using RUST_LOG environment, writing in human readable format to stdio",
-            ))
+            .arg(Arg::new("console-logging").long("console-logging")
+                .takes_value(true)
+                .possible_values(&["pretty","json"])
+                .default_value("pretty")
+                .help(
+                    "Instrument using RUST_LOG environment, writing in either human readable format or structured json to stdio",
+             ))
             .subcommand(
                 Command::new("completions")
                     .about("Generate shell completions and exit")

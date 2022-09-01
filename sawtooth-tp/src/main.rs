@@ -3,6 +3,7 @@ mod tp;
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
+use ::telemetry::ConsoleLogging;
 use telemetry::telemetry;
 use tp::ChronicleTransactionHandler;
 use url::Url;
@@ -49,7 +50,14 @@ async fn main() {
         matches
             .get_one::<String>("instrument")
             .and_then(|s| Url::parse(&*s).ok()),
-        matches.contains_id("console-logging"),
+        match matches.get_one::<String>("console-logging") {
+            Some(level) => match level.as_str() {
+                "pretty" => ConsoleLogging::Pretty,
+                "json" => ConsoleLogging::Json,
+                _ => ConsoleLogging::Off,
+            },
+            _ => ConsoleLogging::Off,
+        },
     );
 
     let handler = ChronicleTransactionHandler::new();

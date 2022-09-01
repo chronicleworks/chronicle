@@ -1206,7 +1206,7 @@ mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        telemetry::telemetry(None, true);
+        telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
