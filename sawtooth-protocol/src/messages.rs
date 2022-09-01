@@ -1,6 +1,7 @@
 use common::{
     k256::ecdsa::{signature::Signer, Signature, SigningKey},
     ledger::Offset,
+    protocol::{create_operation_submission_request, serialize_submission},
     prov::{operations::ChronicleOperation, ChronicleTransactionId},
 };
 use custom_error::custom_error;
@@ -98,7 +99,8 @@ impl MessageBuilder {
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
     ) -> (Transaction, ChronicleTransactionId) {
-        let bytes = common::protocol::submit(&payload[0]).encode_to_vec();
+        let submission = create_operation_submission_request(&payload[0]);
+        let bytes = serialize_submission(&submission);
 
         let mut hasher = Sha512::new();
         hasher.update(&*bytes);
