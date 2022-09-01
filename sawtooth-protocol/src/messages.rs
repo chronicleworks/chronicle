@@ -98,7 +98,8 @@ impl MessageBuilder {
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
     ) -> (Transaction, ChronicleTransactionId) {
-        let bytes = common::protocol::submit(&payload[0]).encode_to_vec();
+        let bytes =
+            common::protocol::create_operation_submission_request(&payload[0]).encode_to_vec();
 
         let mut hasher = Sha512::new();
         hasher.update(&*bytes);
