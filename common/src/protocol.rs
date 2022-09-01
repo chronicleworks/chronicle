@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use prost::Message;
 
 use crate::prov::{operations::ChronicleOperation, to_json_ld::ToJson};
@@ -21,4 +23,8 @@ pub fn serialize_submission(submission: &submission::Submission) -> Vec<u8> {
     buf.reserve(submission.encoded_len());
     submission.encode(&mut buf).unwrap();
     buf
+}
+
+pub fn deserialize_submission(buf: &[u8]) -> Result<submission::Submission, prost::DecodeError> {
+    submission::Submission::decode(&mut Cursor::new(buf))
 }
