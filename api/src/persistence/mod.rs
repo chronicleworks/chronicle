@@ -97,6 +97,23 @@ pub struct Store {
 }
 
 impl Store {
+    #[instrument(name = "Bind namespace", skip(self))]
+    pub fn namespace_binding(&self, name: &str, uuid: Uuid) -> Result<(), StoreError> {
+        use schema::namespace::dsl;
+
+        let uuid = uuid.to_string();
+        self.connection()?.immediate_transaction(|conn| {
+            diesel::insert_into(dsl::namespace)
+                .values((dsl::name.eq(name), dsl::uuid.eq(&uuid)))
+                .on_conflict(dsl::name)
+                .do_update()
+                .set(dsl::uuid.eq(&uuid))
+                .execute(conn)
+        })?;
+
+        Ok(())
+    }
+
     /// Fetch the activity record for the IRI
     pub fn activity_by_activity_name_and_namespace(
         &self,

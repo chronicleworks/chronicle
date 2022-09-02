@@ -15,7 +15,10 @@ use common::{
 };
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
-use std::{convert::Infallible, marker::PhantomData, net::AddrParseError, path::Path, sync::Arc};
+use std::{
+    collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
+    path::Path, sync::Arc,
+};
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
@@ -198,6 +201,7 @@ where
         ledger_reader: R,
         secret_path: &Path,
         uuidgen: U,
+        namespace_bindings: HashMap<String, Uuid>,
     ) -> Result<ApiDispatch, ApiError>
     where
         R: LedgerReader + Send + Clone + Sync + 'static,
@@ -220,6 +224,10 @@ where
                 connection.run_pending_migrations(MIGRATIONS).map(|_| ())
             })
             .map_err(|migration| StoreError::DbMigration { migration })?;
+
+        for (ns, uuid) in namespace_bindings {
+            store.namespace_binding(&ns, uuid)?
+        }
 
         let reuse_reader = ledger_reader.clone();
 
@@ -1156,6 +1164,8 @@ where
 #[cfg(test)]
 mod test {
 
+    use std::collections::HashMap;
+
     use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
@@ -1228,9 +1238,16 @@ mod test {
             )))
             .unwrap();
 
-        let dispatch = Api::new(pool, ledger, reader, &secretpath.into_path(), SameUuid)
-            .await
-            .unwrap();
+        let dispatch = Api::new(
+            pool,
+            ledger,
+            reader,
+            &secretpath.into_path(),
+            SameUuid,
+            HashMap::default(),
+        )
+        .await
+        .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
     }
