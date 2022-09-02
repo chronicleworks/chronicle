@@ -9,12 +9,19 @@ mod submission {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
-pub fn create_operation_submission_request(op: &ChronicleOperation) -> submission::Submission {
+pub fn create_operation_submission_request(
+    payload: &[ChronicleOperation],
+) -> submission::Submission {
     let mut submission = submission::Submission::default();
     let protocol_version = "1".to_string();
     submission.version = protocol_version;
     submission.span_id = "".to_string();
-    submission.body = op.to_json().0.to_string();
+    let mut ops = Vec::with_capacity(payload.len());
+    for op in payload {
+        let op_string = op.to_json().0.to_string();
+        ops.push(op_string);
+    }
+    submission.body = ops;
     submission
 }
 

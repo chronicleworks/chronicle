@@ -99,7 +99,7 @@ impl MessageBuilder {
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
     ) -> (Transaction, ChronicleTransactionId) {
-        let submission = create_operation_submission_request(&payload[0]);
+        let submission = create_operation_submission_request(payload);
         let bytes = serialize_submission(&submission);
 
         let mut hasher = Sha512::new();

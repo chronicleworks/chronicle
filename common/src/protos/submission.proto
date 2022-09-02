@@ -12,5 +12,5 @@ option go_package = "batch_pb2";
 message Submission {
     string version = 1;
     string span_id = 2;
-    string body = 3;
+    repeated string body = 3;
 }
