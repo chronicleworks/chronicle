@@ -1,10 +1,7 @@
-use tracing::{subscriber::set_global_default};
+use tracing::subscriber::set_global_default;
 use tracing_elastic_apm::config::Config;
 use tracing_log::{log::LevelFilter, LogTracer};
-use tracing_subscriber::{
-    prelude::*,
-    EnvFilter, Registry,
-};
+use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 use url::Url;
 
 #[derive(Debug, Clone, Copy)]

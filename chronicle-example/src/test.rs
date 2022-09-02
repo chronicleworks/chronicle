@@ -88,7 +88,7 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        telemetry::telemetry(None, true);
+        telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
 
