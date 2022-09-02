@@ -75,7 +75,7 @@ mod test {
         r2d2::{ConnectionManager, Pool},
         SqliteConnection,
     };
-    use std::time::Duration;
+    use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
 
     #[derive(Debug, Clone)]
@@ -117,6 +117,7 @@ mod test {
             reader,
             &secretpath.into_path(),
             SameUuid,
+            HashMap::default(),
         )
         .await
         .unwrap();
