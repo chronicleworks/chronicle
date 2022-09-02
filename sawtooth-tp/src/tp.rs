@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use common::{
     ledger::OperationState,
-    prov::{operations::ChronicleOperation, ProvModel},
+    protocol::{chronicle_operations_from_submission, deserialize_submission},
+    prov::ProvModel,
 };
 use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
 
@@ -58,9 +59,28 @@ impl TransactionHandler for ChronicleTransactionHandler {
         request: &TpProcessRequest,
         context: &mut dyn TransactionContext,
     ) -> Result<(), ApplyError> {
-        let transactions: Vec<ChronicleOperation> =
-            serde_cbor::from_slice(request.get_payload())
-                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        let submission = deserialize_submission(request.get_payload())
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        let _protocol_version = submission.version;
+
+        let _span_id = submission.span_id;
+
+        let submission_body = submission.body;
+
+        let (send, recv) = crossbeam::channel::bounded(1);
+
+        Handle::current().spawn(async move {
+            send.send(
+                chronicle_operations_from_submission(submission_body)
+                    .await
+                    .map_err(|e| ApplyError::InternalError(e.to_string())),
+            )
+        });
+
+        let transactions = recv
+            .recv()
+            .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
         let mut model = ProvModel::default();
 
