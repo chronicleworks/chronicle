@@ -21,7 +21,7 @@ FROM builder AS test
 COPY . .
 RUN cargo test --release
 
-FROM builder AS chronicle-base
+FROM builder AS base
 # Build tp
 COPY . .
 
@@ -30,4 +30,4 @@ RUN cargo build --release ${BUILD_ARGS}
 
 FROM ubuntu:focal AS chronicle
 WORKDIR /
-COPY --from=chronicle-base /app/target/release/chronicle /usr/local/bin
+COPY --from=base /app/target/release/chronicle /usr/local/bin
