@@ -126,7 +126,7 @@ mod test {
 
     #[tokio::test]
     async fn test_submission_serialization_deserialization() -> Result<(), ApplyError> {
-        // Mock transaction payload of `CreateNamespace`,
+        // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
         let tx = vec![
             create_namespace_helper(None),
