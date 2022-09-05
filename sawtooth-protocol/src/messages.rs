@@ -92,14 +92,14 @@ impl MessageBuilder {
     }
 
     #[instrument]
-    pub fn make_sawtooth_transaction(
+    pub async fn make_sawtooth_transaction(
         &mut self,
         input_addresses: Vec<String>,
         output_addresses: Vec<String>,
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
     ) -> (Transaction, ChronicleTransactionId) {
-        let submission = create_operation_submission_request(payload);
+        let submission = create_operation_submission_request(payload).await;
         let bytes = serialize_submission(&submission);
 
         let mut hasher = Sha512::new();
@@ -157,8 +157,8 @@ mod test {
 
     use super::MessageBuilder;
 
-    #[test]
-    fn sawtooth_batch_roundtrip() {
+    #[tokio::test]
+    async fn sawtooth_batch_roundtrip() {
         let secret = SecretKey::random(StdRng::from_entropy());
         let mut builder = MessageBuilder::new(SigningKey::from(secret), "name", "version");
 
@@ -174,12 +174,14 @@ mod test {
         let output_addresses = vec!["outtwo".to_owned(), "outtwo".to_owned()];
         let dependencies = vec!["dependency".to_owned()];
 
-        let (proto_tx, _id) = builder.make_sawtooth_transaction(
-            input_addresses,
-            output_addresses,
-            dependencies,
-            batch.as_slice(),
-        );
+        let (proto_tx, _id) = builder
+            .make_sawtooth_transaction(
+                input_addresses,
+                output_addresses,
+                dependencies,
+                batch.as_slice(),
+            )
+            .await;
 
         let batch = builder.wrap_tx_as_sawtooth_batch(proto_tx);
 

@@ -61,7 +61,7 @@ impl SawtoothSubmitter {
     }
 
     #[instrument]
-    fn submit(
+    async fn submit(
         &mut self,
         transactions: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
@@ -73,12 +73,15 @@ impl SawtoothSubmitter {
 
         debug!(address_map = ?addresses);
 
-        let (sawtooth_transaction, tx_id) = self.builder.make_sawtooth_transaction(
-            addresses.iter().map(|x| x.0.clone()).collect(),
-            addresses.into_iter().map(|x| x.0).collect(),
-            vec![],
-            transactions,
-        );
+        let (sawtooth_transaction, tx_id) = self
+            .builder
+            .make_sawtooth_transaction(
+                addresses.iter().map(|x| x.0.clone()).collect(),
+                addresses.into_iter().map(|x| x.0).collect(),
+                vec![],
+                transactions,
+            )
+            .await;
 
         let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
@@ -120,6 +123,6 @@ impl LedgerWriter for SawtoothSubmitter {
         &mut self,
         tx: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SubmissionError> {
-        self.submit(tx).map_err(SawtoothSubmissionError::into)
+        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
     }
 }
