@@ -2,8 +2,12 @@ use super::{CliError, CliModel, SubCommand};
 use common::signing::DirectoryStoredKeys;
 use question::{Answer, Question};
 use serde_derive::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use url::Url;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,6 +30,7 @@ pub struct Config {
     pub secrets: SecretConfig,
     pub store: StoreConfig,
     pub validator: ValidatorConfig,
+    pub namespace_bindings: HashMap<String, Uuid>,
 }
 
 pub fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
@@ -117,12 +122,13 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
 
             let config = format!(
                 r#"
-            [secrets]
-            path = "{}"
-            [store]
-            path = "{}"
-            [validator]
-            address = "{}"
+[secrets]
+path = "{}"
+[store]
+path = "{}"
+[validator]
+address = "{}"
+[namespace_bindings]
             "#,
                 &*secretpath.to_string_lossy(),
                 &*dbpath.to_string_lossy(),

@@ -2,7 +2,7 @@ create table namespace (
     id integer primary key not null,
     name text not null,
     uuid text not null,
-    unique(name,uuid)
+    unique(name)
 );
 
 create unique index namespace_idx on namespace(name,uuid);

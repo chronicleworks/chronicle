@@ -122,6 +122,7 @@ pub async fn api(
         state,
         &config.secrets.path,
         UniqueUuid,
+        config.namespace_bindings.clone(),
     )
     .await
 }
@@ -141,6 +142,7 @@ pub async fn api(
         state,
         &config.secrets.path,
         UniqueUuid,
+        config.namespace_bindings.clone(),
     )
     .await
 }
@@ -284,6 +286,8 @@ pub async fn bootstrap<Query, Mutation>(
 /// configuration + server execution would get a little tricky in the context of a unit test.
 #[cfg(test)]
 pub mod test {
+    use std::collections::HashMap;
+
     use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
@@ -356,9 +360,16 @@ pub mod test {
             )))
             .unwrap();
 
-        let dispatch = Api::new(pool, ledger, reader, &secretpath.into_path(), SameUuid)
-            .await
-            .unwrap();
+        let dispatch = Api::new(
+            pool,
+            ledger,
+            reader,
+            &secretpath.into_path(),
+            SameUuid,
+            HashMap::default(),
+        )
+        .await
+        .unwrap();
 
         TestDispatch(dispatch, ProvModel::default())
     }
