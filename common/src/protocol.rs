@@ -8,7 +8,7 @@ use crate::prov::{
 
 // Include the `submission` module, which is
 // generated from ./protos/submission.proto.
-mod submission {
+pub mod submission {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
