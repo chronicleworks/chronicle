@@ -19,6 +19,7 @@ repos:
         args:
           - --allow-missing-credentials
       - id: detect-private-key
+        exclude: "api/src/lib.rs"
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: no-commit-to-branch

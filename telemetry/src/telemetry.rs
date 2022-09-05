@@ -1,53 +1,82 @@
 use tracing::subscriber::set_global_default;
+use tracing_elastic_apm::config::Config;
 use tracing_log::{log::LevelFilter, LogTracer};
-use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 use url::Url;
 
-pub fn telemetry(collector_endpoint: Option<Url>, console_logging: bool) {
+#[derive(Debug, Clone, Copy)]
+pub enum ConsoleLogging {
+    Off,
+    Pretty,
+    Json,
+}
+
+macro_rules! console_layer {
+    () => {
+        tracing_subscriber::fmt::layer()
+            .with_level(true)
+            .with_target(true)
+            .with_thread_ids(true)
+    };
+}
+
+macro_rules! apm_layer {
+    ( $address: expr ) => {
+        tracing_elastic_apm::new_layer(
+            "chronicle".to_string(),
+            // remember to use desired protocol below, e.g. http://
+            Config::new($address.to_string()),
+        )
+        .unwrap()
+    };
+}
+
+pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLogging) {
     LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     match (collector_endpoint, console_logging) {
-        (Some(otel), true) => {
-            let console = tracing_subscriber::fmt::layer()
-                .with_level(true) // don't include levels in formatted output
-                .with_target(true) // don't include targets
-                .with_thread_ids(true) // include the thread ID of the current thread
-                .pretty();
-            let otel = OpenTelemetryLayer::new(
-                opentelemetry_jaeger::new_pipeline()
-                    .with_service_name("chronicle_api")
-                    .with_collector_endpoint(otel.as_str())
-                    .install_batch(opentelemetry::runtime::Tokio)
-                    .unwrap(),
-            );
-
+        (Some(otel), ConsoleLogging::Json) => {
             set_global_default(
                 Registry::default()
                     .with(env_filter)
-                    .with(otel)
-                    .with(console),
+                    .with(apm_layer!(otel))
+                    .with(console_layer!().json()),
             )
             .ok();
         }
-        (None, true) => {
-            let console = tracing_subscriber::fmt::layer()
-                .with_level(true) // don't include levels in formatted output
-                .with_target(true) // don't include targets
-                .with_thread_ids(true) // include the thread ID of the current thread
-                .pretty();
-            set_global_default(Registry::default().with(env_filter).with(console)).ok();
+        (Some(otel), ConsoleLogging::Pretty) => {
+            set_global_default(
+                Registry::default()
+                    .with(env_filter)
+                    .with(apm_layer!(otel.as_str()))
+                    .with(console_layer!().pretty()),
+            )
+            .ok();
         }
-        (Some(otel), false) => {
-            let otel = OpenTelemetryLayer::new(
-                opentelemetry_jaeger::new_pipeline()
-                    .with_service_name("chronicle_api")
-                    .with_collector_endpoint(otel.as_str())
-                    .install_batch(opentelemetry::runtime::Tokio)
-                    .unwrap(),
-            );
-            set_global_default(Registry::default().with(env_filter).with(otel)).ok();
+        (Some(otel), ConsoleLogging::Off) => {
+            set_global_default(
+                Registry::default()
+                    .with(env_filter)
+                    .with(apm_layer!(otel.as_str())),
+            )
+            .ok();
+        }
+        (None, ConsoleLogging::Json) => {
+            set_global_default(
+                Registry::default()
+                    .with(env_filter)
+                    .with(console_layer!().json()),
+            )
+            .ok();
+        }
+        (None, ConsoleLogging::Pretty) => {
+            set_global_default(
+                Registry::default()
+                    .with(env_filter)
+                    .with(console_layer!().pretty()),
+            )
+            .ok();
         }
         _ => (),
     }

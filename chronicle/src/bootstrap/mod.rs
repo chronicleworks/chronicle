@@ -22,7 +22,7 @@ use diesel::{
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
-use telemetry;
+use telemetry::{self, ConsoleLogging};
 use url::Url;
 
 use common::prov::to_json_ld::ToJson;
@@ -252,7 +252,20 @@ pub async fn bootstrap<Query, Mutation>(
         matches
             .get_one::<String>("instrument")
             .and_then(|s| Url::parse(&*s).ok()),
-        matches.contains_id("console-logging"),
+        if matches.contains_id("console-logging") {
+            match matches.get_one::<String>("console-logging") {
+                Some(level) => match level.as_str() {
+                    "pretty" => ConsoleLogging::Pretty,
+                    "json" => ConsoleLogging::Json,
+                    _ => ConsoleLogging::Off,
+                },
+                _ => ConsoleLogging::Off,
+            }
+        } else if matches.subcommand_name() == Some("serve-graphql") {
+            ConsoleLogging::Pretty
+        } else {
+            ConsoleLogging::Off
+        },
     );
 
     config_and_exec(gql, domain.into())
@@ -321,7 +334,7 @@ pub mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        telemetry::telemetry(None, true);
+        telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
         // We need to use a real file for sqlite, as in mem either re-creates between
