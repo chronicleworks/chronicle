@@ -12,11 +12,9 @@ pub mod submission {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
-/// Envelope a payload of `ChronicleOperations`
-/// in a `Submission` protocol buffer along with
-/// placeholders for protocol version and a
-/// tracing span id.
-pub fn create_operation_submission_request(
+/// Envelope a payload of `ChronicleOperations` in a `Submission` protocol buffer,
+/// along with placeholders for protocol version info and a tracing span id.
+pub async fn create_operation_submission_request(
     payload: &[ChronicleOperation],
 ) -> submission::Submission {
     let mut submission = submission::Submission::default();
@@ -25,8 +23,11 @@ pub fn create_operation_submission_request(
     submission.span_id = "".to_string();
     let mut ops = Vec::with_capacity(payload.len());
     for op in payload {
-        let op_string = op.to_json().0.to_string();
-        ops.push(op_string);
+        let op_json = op.to_json();
+        let compact_json_string = op_json.compact().await.unwrap().0.to_string();
+        // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
+        // which calls here from `sawtooth-protocol::messages` being non-fallible
+        ops.push(compact_json_string);
     }
     submission.body = ops;
     submission
@@ -53,8 +54,9 @@ pub async fn chronicle_operations_from_submission(
     let mut ops = Vec::with_capacity(submission_body.len());
     for op in submission_body.iter() {
         let json = json::parse(op)?;
-        let exp_json = ExpandedJson(json);
-        let op = ChronicleOperation::from_json(exp_json).await?;
+        // The inner json value should be in compacted form,
+        // wrapping in `ExpandedJson`, as required by `ChronicleOperation::from_json`
+        let op = ChronicleOperation::from_json(ExpandedJson(json)).await?;
         ops.push(op);
     }
     Ok(ops)
@@ -135,7 +137,7 @@ mod test {
         ];
 
         // Serialize operations payload to protocol buffer
-        let submission = create_operation_submission_request(&tx);
+        let submission = create_operation_submission_request(&tx).await;
         let serialized_sub = serialize_submission(&submission);
 
         // Test that serialisation to and from protocol buffer is symmetric
