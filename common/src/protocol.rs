@@ -6,11 +6,16 @@ use crate::prov::{
     operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, ProcessorError,
 };
 
-// Include the `submission` module, which is generated from ./protos/submission.proto.
+// Include the `submission` module, which is
+// generated from ./protos/submission.proto.
 mod submission {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 
+/// Envelope a payload of `ChronicleOperations`
+/// in a `Submission` protocol buffer along with
+/// placeholders for protocol version and a
+/// tracing span id.
 pub fn create_operation_submission_request(
     payload: &[ChronicleOperation],
 ) -> submission::Submission {
@@ -27,6 +32,7 @@ pub fn create_operation_submission_request(
     submission
 }
 
+/// `Submission` protocol buffer serializer
 pub fn serialize_submission(submission: &submission::Submission) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.reserve(submission.encoded_len());
@@ -34,10 +40,13 @@ pub fn serialize_submission(submission: &submission::Submission) -> Vec<u8> {
     buf
 }
 
+/// `Submission` protocol buffer deserializer
 pub fn deserialize_submission(buf: &[u8]) -> Result<submission::Submission, prost::DecodeError> {
     submission::Submission::decode(&mut Cursor::new(buf))
 }
 
+/// Convert a `Submission` payload from a vector of
+/// strings to a vector of `ChronicleOperation`s
 pub async fn chronicle_operations_from_submission(
     submission_body: Vec<String>,
 ) -> Result<Vec<ChronicleOperation>, ProcessorError> {
