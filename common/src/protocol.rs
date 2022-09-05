@@ -59,3 +59,98 @@ pub async fn chronicle_operations_from_submission(
     }
     Ok(ops)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::prov::{
+        operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
+        ActivityId, AgentId, DelegationId, Name, NamePart, NamespaceId, Role,
+    };
+    use api::UuidGen;
+    use sawtooth_sdk::processor::handler::ApplyError;
+    use uuid::Uuid;
+
+    #[derive(Debug, Clone)]
+    struct SameUuid;
+
+    impl UuidGen for SameUuid {
+        fn uuid() -> Uuid {
+            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+        }
+    }
+
+    fn create_namespace_id_helper(tag: Option<i32>) -> NamespaceId {
+        let name = if tag.is_none() || tag == Some(0) {
+            "testns".to_string()
+        } else {
+            format!("testns{}", tag.unwrap())
+        };
+        NamespaceId::from_name(&name, SameUuid::uuid())
+    }
+
+    fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
+        let id = create_namespace_id_helper(tag);
+        let name = &id.name_part().to_string();
+        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, SameUuid::uuid()))
+    }
+
+    fn agent_exists_helper() -> ChronicleOperation {
+        let namespace: NamespaceId = NamespaceId::from_name("testns", SameUuid::uuid());
+        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
+        ChronicleOperation::AgentExists(AgentExists { namespace, name })
+    }
+
+    fn create_agent_acts_on_behalf_of() -> ChronicleOperation {
+        let namespace: NamespaceId = NamespaceId::from_name("testns", SameUuid::uuid());
+        let responsible_id = AgentId::from_name("test_agent");
+        let delegate_id = AgentId::from_name("test_delegate");
+        let activity_id = ActivityId::from_name("test_activity");
+        let role = "test_role";
+        let id = DelegationId::from_component_ids(
+            &delegate_id,
+            &responsible_id,
+            Some(&activity_id),
+            Some(role),
+        );
+        let role = Role::from(role.to_string());
+        ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+            namespace,
+            id,
+            responsible_id,
+            delegate_id,
+            activity_id: Some(activity_id),
+            role: Some(role),
+        })
+    }
+
+    #[tokio::test]
+    async fn test_submission_serialization_deserialization() -> Result<(), ApplyError> {
+        // Mock transaction payload of `CreateNamespace`,
+        // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
+        let tx = vec![
+            create_namespace_helper(None),
+            agent_exists_helper(),
+            create_agent_acts_on_behalf_of(),
+        ];
+
+        // Serialize operations payload to protocol buffer
+        let submission = create_operation_submission_request(&tx);
+        let serialized_sub = serialize_submission(&submission);
+
+        // Test that serialisation to and from protocol buffer is symmetric
+        assert_eq!(
+            tx,
+            chronicle_operations_from_submission(
+                deserialize_submission(&serialized_sub)
+                    // handle DecodeError
+                    .map_err(|e| ApplyError::InternalError(e.to_string()))?
+                    .body
+            )
+            .await
+            // handle ProcessorError
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?
+        );
+        Ok(())
+    }
+}
