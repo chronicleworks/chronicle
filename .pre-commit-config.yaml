@@ -86,11 +86,6 @@ repos:
       - id: fmt
       - id: vet
       - id: fix
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
-    hooks:
-      - id: fmt
-      - id: cargo-check
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.27.1
     hooks:

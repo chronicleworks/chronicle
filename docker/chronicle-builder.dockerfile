@@ -1,5 +1,4 @@
-FROM rust:latest as builder
-
+FROM rust:latest as chef
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -17,17 +16,6 @@ RUN apt-get update && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 
-FROM builder AS test
+FROM chef AS builder
 COPY . .
-RUN cargo test --release
-
-FROM builder AS base
-# Build tp
-COPY . .
-
-ARG BUILD_ARGS
-RUN cargo build --release ${BUILD_ARGS}
-
-FROM ubuntu:focal AS chronicle
-WORKDIR /
-COPY --from=base /app/target/release/chronicle /usr/local/bin
+RUN cargo build --release

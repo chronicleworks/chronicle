@@ -28,6 +28,6 @@ COPY . .
 ARG BUILD_ARGS
 RUN cargo build --release ${BUILD_ARGS}
 
-FROM ubuntu:focal AS chronicle
+FROM ubuntu:focal AS chronicle-tp
 WORKDIR /
-COPY --from=base /app/target/release/chronicle /usr/local/bin
+COPY --from=base /app/target/release/chronicle_sawtooth_tp /usr/local/bin

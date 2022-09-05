@@ -58,6 +58,7 @@ dependencies = [
  "iref-enum",
  "json",
  "json-ld",
+ "libsqlite3-sys",
  "open",
  "opentelemetry",
  "parking_lot",
@@ -439,6 +440,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chronicle-domain"
+version = "0.1.0"
+dependencies = [
+ "chronicle",
+ "insta",
+ "tempfile",
+]
+
+[[package]]
 name = "chronicle-example"
 version = "0.1.0"
 dependencies = [
@@ -450,15 +460,6 @@ dependencies = [
  "tracing",
  "tracing-log",
  "uuid 1.1.2",
-]
-
-[[package]]
-name = "chronicle-untyped"
-version = "0.1.0"
-dependencies = [
- "chronicle",
- "insta",
- "tempfile",
 ]
 
 [[package]]
@@ -1605,6 +1606,7 @@ version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f0455f2c1bc9a7caa792907026e469c1d91761fb0ea37cbb16427c77280cf35"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
