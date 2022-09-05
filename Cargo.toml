@@ -4,7 +4,7 @@ members = [
   "common",
   "api",
   "chronicle",
-  "chronicle-example",
+  "chronicle-domain-test",
   "chronicle-domain",
   "sawtooth-protocol",
   "sawtooth-tp",
