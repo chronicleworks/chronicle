@@ -560,6 +560,7 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "api",
  "async-graphql",
  "async-trait",
  "chrono",
@@ -583,6 +584,7 @@ dependencies = [
  "prost-build",
  "rand 0.8.5",
  "rand_core 0.6.3",
+ "sawtooth-sdk",
  "serde",
  "serde_derive",
  "serde_json",
