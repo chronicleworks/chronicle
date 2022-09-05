@@ -589,7 +589,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "static-iref",
- "telemetry",
  "tokio",
  "tracing",
  "url",
