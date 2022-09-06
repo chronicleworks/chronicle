@@ -4,7 +4,7 @@ use async_graphql::{
 };
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use common::prov::{AgentId, DomaintypeId, EntityId, NamePart};
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, NamePart};
 use diesel::{debug_query, prelude::*, sqlite::Sqlite};
 use tracing::{debug, instrument};
 
@@ -217,6 +217,29 @@ pub async fn agent_by_id<'a>(
         .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
         .select(Agent::as_select())
         .first::<Agent>(&mut connection)
+        .optional()?)
+}
+
+pub async fn activity_by_id<'a>(
+    ctx: &Context<'a>,
+    id: ActivityId,
+    namespace: Option<String>,
+) -> async_graphql::Result<Option<Activity>> {
+    use crate::persistence::schema::{
+        activity::{self, dsl},
+        namespace::dsl as nsdsl,
+    };
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let ns = namespace.unwrap_or_else(|| "default".into());
+    let mut connection = store.pool.get()?;
+
+    Ok(activity::table
+        .inner_join(nsdsl::namespace)
+        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
+        .select(Activity::as_select())
+        .first::<Activity>(&mut connection)
         .optional()?)
 }
 

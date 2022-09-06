@@ -683,10 +683,12 @@ fn gen_query() -> rust::Tokens {
 
     let agent_id = &rust::import("chronicle::common::prov", "AgentId");
     let entity_id = &rust::import("chronicle::common::prov", "EntityId");
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId");
     let empty_fields =
         &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
 
-    let timeline_order = &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder");
+    let timeline_order =
+        &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
 
     quote! {
     #[derive(Copy, Clone)]
@@ -791,6 +793,17 @@ fn gen_query() -> rust::Tokens {
             .await
             .map_err(|e| #async_graphql_error_extensions::extend(&e))?
             .map(map_agent_to_domain_type))
+    }
+    pub async fn activity_by_id<'a>(
+        &self,
+        ctx: &#graphql_context<'a>,
+        id: #activity_id,
+        namespace: Option<String>,
+    ) -> #graphql_result<Option<#(activity_union_type_name())>> {
+        Ok(#query_impl::activity_by_id(ctx, id, namespace)
+            .await
+            .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+            .map(map_activity_to_domain_type))
     }
 
     pub async fn entity_by_id<'a>(
