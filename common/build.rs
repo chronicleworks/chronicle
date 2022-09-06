@@ -1,8 +1,15 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, io::Result, path::PathBuf};
 
 include!("./src/context.rs");
 
-fn main() {
+fn main() -> Result<()> {
+    let protos = glob::glob("./src/protos/*.proto")
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap())
+        .collect::<Vec<_>>();
+    prost_build::compile_protos(&protos, &["./src/protos"])?;
+
     let out_str = env::var("OUT_DIR").unwrap();
     let out_path = PathBuf::from(&out_str);
     let mut out_path = out_path.ancestors().nth(3).unwrap().to_owned();
@@ -20,6 +27,6 @@ fn main() {
             out_path.as_os_str().to_string_lossy(),
         )),
         context.pretty(2),
-    )
-    .unwrap();
+    )?;
+    Ok(())
 }
