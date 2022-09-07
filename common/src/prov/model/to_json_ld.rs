@@ -284,13 +284,13 @@ impl ToJson for ProvModel {
                     .ok();
             }
 
-            if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
+            if let Some(assoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
                 let mut qualified_ids = json::Array::new();
-                for asoc in asoc.iter() {
-                    ids.push(object! {"@id": asoc.agent_id.to_string()});
-                    qualified_ids.push(object! {"@id": asoc.id.to_string()});
+                for assoc in assoc.iter() {
+                    ids.push(object! {"@id": assoc.agent_id.to_string()});
+                    qualified_ids.push(object! {"@id": assoc.id.to_string()});
                 }
 
                 activitydoc
@@ -326,6 +326,22 @@ impl ToJson for ProvModel {
             activitydoc
                 .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
                 .ok();
+
+            if let Some(activities) = self
+                .was_informed_by
+                .get(&(namespace.to_owned(), id.to_owned()))
+            {
+                let mut values = json::Array::new();
+
+                for (_, activity) in activities {
+                    values.push(object! {
+                        "@id": JsonValue::String(activity.to_string()),
+                    });
+                }
+                activitydoc
+                    .insert(Iri::from(Prov::WasInformedBy).as_str(), values)
+                    .ok();
+            }
 
             Self::write_attributes(&mut activitydoc, activity.attributes.values());
 
@@ -485,6 +501,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::AgentExists(AgentExists { namespace, name }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::AgentExists);
 
@@ -502,6 +519,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                 namespace,
                 id: _, // This is derivable from components
@@ -545,6 +563,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::RegisterKey(RegisterKey {
                 namespace,
                 id,
@@ -574,6 +593,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::ActivityExists(ActivityExists { namespace, name }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::ActivityExists);
 
@@ -594,6 +614,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
                 id,
@@ -623,6 +644,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,
@@ -652,6 +674,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
                 id,
@@ -681,6 +704,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::EntityExists(EntityExists { namespace, name }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EntityExists);
 
@@ -701,6 +725,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
@@ -730,6 +755,37 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
+            ChronicleOperation::WasInformedBy(WasInformedBy {
+                namespace,
+                activity,
+                informing_activity,
+            }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::WasInformedBy);
+
+                o.has_value(
+                    OperationValue::string(namespace.name_part()),
+                    ChronicleOperations::NamespaceName,
+                );
+
+                o.has_value(
+                    OperationValue::string(namespace.uuid_part()),
+                    ChronicleOperations::NamespaceUuid,
+                );
+
+                o.has_value(
+                    OperationValue::string(activity.name_part()),
+                    ChronicleOperations::ActivityName,
+                );
+
+                o.has_value(
+                    OperationValue::string(informing_activity.name_part()),
+                    ChronicleOperations::InformingActivityName,
+                );
+
+                o
+            }
+
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 identityid,
@@ -791,6 +847,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
                 id,
@@ -833,6 +890,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Entity {
                 namespace,
                 id,
@@ -864,6 +922,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Activity {
                 namespace,
                 id,
@@ -895,6 +954,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Agent {
                 namespace,
                 id,
@@ -926,6 +986,7 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+
             ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
                 id: _,
                 role,
@@ -962,7 +1023,9 @@ impl ToJson for ChronicleOperation {
                 o
             }
         };
+
         operation.push(o);
+
         super::ExpandedJson(operation.into())
     }
 }

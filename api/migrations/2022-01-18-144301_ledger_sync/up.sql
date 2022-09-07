@@ -124,6 +124,13 @@ create table usage (
     primary key(activity_id,entity_id)
 );
 
+create table wasinformedby (
+    activity_id integer not null,
+    informing_activity_id integer not null,
+    foreign key(activity_id) references activity(id),
+    primary key(activity_id,informing_activity_id)
+);
+
 create table hadidentity (
     agent_id integer not null,
     identity_id integer not null,

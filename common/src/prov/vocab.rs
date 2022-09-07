@@ -79,6 +79,10 @@ pub enum ChronicleOperations {
     DomaintypeId,
     #[iri("chronicleop:WasInformedBy")]
     WasInformedBy,
+    #[iri("chronicleop:informedActivityName")]
+    InformedActivityName,
+    #[iri("chronicleop:informingActivityName")]
+    InformingActivityName,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]

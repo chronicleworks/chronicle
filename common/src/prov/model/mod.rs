@@ -21,7 +21,7 @@ use super::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
         EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-        WasGeneratedBy,
+        WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
     IdentityId, Name, NamePart, NamespaceId, PublicKeyPart, Role, UuidPart,
@@ -76,7 +76,7 @@ impl From<&str> for ChronicleTransactionId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ChronicleTransaction {
     pub tx: Vec<ChronicleOperation>,
 }
@@ -378,6 +378,7 @@ pub struct ProvModel {
     pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
     pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
+    pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
     pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
 }
 
@@ -465,6 +466,13 @@ impl ProvModel {
 
         for (id, mut rhs) in other.usage {
             self.usage
+                .entry(id.clone())
+                .and_modify(|xs| xs.extend(rhs.drain()))
+                .or_insert(rhs);
+        }
+
+        for (id, mut rhs) in other.was_informed_by {
+            self.was_informed_by
                 .entry(id.clone())
                 .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
@@ -578,6 +586,18 @@ impl ProvModel {
             });
     }
 
+    pub fn was_informed_by(
+        &mut self,
+        namespace: NamespaceId,
+        activity: &ActivityId,
+        informing_activity: &ActivityId,
+    ) {
+        self.was_informed_by
+            .entry((namespace.clone(), activity.clone()))
+            .or_insert_with(HashSet::new)
+            .insert((namespace, informing_activity.clone()));
+    }
+
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
         self.had_identity
             .entry((namespace.clone(), agent.clone()))
@@ -682,6 +702,7 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&id);
             }
+
             ChronicleOperation::AgentExists(AgentExists {
                 namespace, name, ..
             }) => {
@@ -692,6 +713,7 @@ impl ProvModel {
                     Agent::exists(namespace, id),
                 );
             }
+
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                 id: _,
                 namespace,
@@ -724,6 +746,7 @@ impl ProvModel {
                     role,
                 )
             }
+
             ChronicleOperation::RegisterKey(RegisterKey {
                 namespace,
                 id,
@@ -737,6 +760,7 @@ impl ProvModel {
                     .or_insert_with(|| Agent::exists(namespace.clone(), id.clone()));
                 self.new_identity(&namespace, &id, &publickey);
             }
+
             ChronicleOperation::ActivityExists(ActivityExists {
                 namespace, name, ..
             }) => {
@@ -747,6 +771,7 @@ impl ProvModel {
                     .entry((namespace.clone(), id.clone()))
                     .or_insert_with(|| Activity::exists(namespace, id));
             }
+
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
                 id,
@@ -770,6 +795,7 @@ impl ProvModel {
                         activity
                     });
             }
+
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
                 id,
@@ -797,6 +823,7 @@ impl ProvModel {
                         activity
                     });
             }
+
             ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
                 id: _,
                 role,
@@ -816,6 +843,7 @@ impl ProvModel {
 
                 self.qualified_association(&namespace, &activity_id, &agent_id, role);
             }
+
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
                 id,
@@ -834,6 +862,7 @@ impl ProvModel {
 
                 self.used(namespace, &activity, &id);
             }
+
             ChronicleOperation::EntityExists(EntityExists {
                 namespace, name, ..
             }) => {
@@ -844,6 +873,7 @@ impl ProvModel {
                     Entity::exists(namespace, id),
                 );
             }
+
             ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
                 id,
@@ -862,6 +892,29 @@ impl ProvModel {
 
                 self.was_generated_by(namespace, &id, &activity)
             }
+
+            ChronicleOperation::WasInformedBy(WasInformedBy {
+                namespace,
+                activity,
+                informing_activity,
+            }) => {
+                self.namespace_context(&namespace);
+                if !self
+                    .activities
+                    .contains_key(&(namespace.clone(), activity.clone()))
+                {
+                    self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
+                }
+                self.was_informed_by
+                    .entry((namespace.clone(), activity.clone()))
+                    .or_insert_with(|| {
+                        let mut values = HashSet::new();
+                        values.insert((namespace.clone(), informing_activity.clone()));
+                        values
+                    });
+                self.was_informed_by(namespace, &activity, &informing_activity);
+            }
+
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,
@@ -908,6 +961,7 @@ impl ProvModel {
                     signature_time.unwrap(),
                 );
             }
+
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
                 id,
@@ -932,6 +986,7 @@ impl ProvModel {
 
                 self.was_derived_from(namespace, typ, used_id, id, activity_id);
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Entity {
                 namespace,
                 id,
@@ -949,6 +1004,7 @@ impl ProvModel {
                         Entity::exists(namespace, id.clone()).has_attributes(attributes)
                     });
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Activity {
                 namespace,
                 id,
@@ -966,6 +1022,7 @@ impl ProvModel {
                         Activity::exists(namespace, id.clone()).has_attributes(attributes)
                     });
             }
+
             ChronicleOperation::SetAttributes(SetAttributes::Agent {
                 namespace,
                 id,

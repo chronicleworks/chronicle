@@ -802,6 +802,7 @@ pub mod test {
         derivation: {}
         delegation: {}
         generation: {}
+        was_informed_by: {}
         usage: {}
         "###);
     }

@@ -289,6 +289,22 @@ prop_compose! {
 }
 
 prop_compose! {
+    fn was_informed_by() (
+        // we probably should disallow reflexivity for `wasInformedBy`
+        activity1 in name(),
+        activity2 in name(),
+        namespace in namespace(),
+    ) -> WasInformedBy {
+
+        WasInformedBy{
+            namespace,
+            activity: ActivityId::from_name(&activity1),
+            informing_activity: ActivityId::from_name(&activity2),
+        }
+    }
+}
+
+prop_compose! {
     fn entity_attributes() (
         name in name(),
         namespace in namespace(),
@@ -333,21 +349,22 @@ prop_compose! {
 fn transaction() -> impl Strategy<Value = ChronicleOperation> {
     prop_oneof![
         1 => create_namespace().prop_map(ChronicleOperation::CreateNamespace),
-        2 => create_agent().prop_map(ChronicleOperation::AgentExists),
-        2 => register_key().prop_map(ChronicleOperation::RegisterKey),
-        4 => create_activity().prop_map(ChronicleOperation::ActivityExists),
-        4 => start_activity().prop_map(ChronicleOperation::StartActivity),
-        4 => end_activity().prop_map(ChronicleOperation::EndActivity),
-        4 => used().prop_map(ChronicleOperation::ActivityUses),
-        2 => create_entity().prop_map(ChronicleOperation::EntityExists),
-        4 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
-        2 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
-        2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
-        2 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
-        2 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
-        2 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
-        2 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
-        2 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => create_agent().prop_map(ChronicleOperation::AgentExists),
+        1 => register_key().prop_map(ChronicleOperation::RegisterKey),
+        1 => create_activity().prop_map(ChronicleOperation::ActivityExists),
+        1 => start_activity().prop_map(ChronicleOperation::StartActivity),
+        1 => end_activity().prop_map(ChronicleOperation::EndActivity),
+        1 => used().prop_map(ChronicleOperation::ActivityUses),
+        1 => create_entity().prop_map(ChronicleOperation::EntityExists),
+        1 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
+        1 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
+        1 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
+        1 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
+        1 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
+        1 => was_informed_by().prop_map(ChronicleOperation::WasInformedBy),
+        1 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
     ]
 }
 
@@ -397,7 +414,6 @@ proptest! {
             prop_assert_eq!(op,
                 &rt.block_on(ChronicleOperation::from_json(op.to_json())).unwrap(),
                 "Serialised operation {}",json::stringify_pretty(op_json,2));
-
             prov.apply(op);
         }
 
@@ -411,6 +427,7 @@ proptest! {
                     prop_assert_eq!(&ns.name, name);
                     prop_assert_eq!(&ns.uuid, uuid);
                 },
+
                 ChronicleOperation::AgentExists(
                     AgentExists { namespace, name}) => {
                     let agent = &prov.agents.get(&(namespace.to_owned(),AgentId::from_name(name)));
@@ -419,6 +436,7 @@ proptest! {
                     prop_assert_eq!(&agent.name, name);
                     prop_assert_eq!(&agent.namespaceid, namespace);
                 },
+
                 ChronicleOperation::AgentActsOnBehalfOf(
                     ActsOnBehalfOf {namespace,id: _,delegate_id,activity_id, role, responsible_id }
                 ) => {
@@ -447,7 +465,8 @@ proptest! {
 
                     prop_assert!(has_delegation);
 
-                }
+                },
+
                 ChronicleOperation::RegisterKey(
                     RegisterKey { namespace, id, publickey}) => {
                         let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
@@ -464,6 +483,7 @@ proptest! {
                         prop_assert_eq!(&agent.namespaceid, &namespace.clone());
                         prop_assert_eq!(&identity.public_key, &publickey.clone());
                 },
+
                 ChronicleOperation::ActivityExists(
                     ActivityExists { namespace,  name }) => {
                     let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_name(name)));
@@ -472,6 +492,7 @@ proptest! {
                     prop_assert_eq!(&activity.name, name);
                     prop_assert_eq!(&activity.namespaceid, namespace);
                 },
+
                 ChronicleOperation::StartActivity(
                     StartActivity { namespace, id, time }) =>  {
                     let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
@@ -484,6 +505,7 @@ proptest! {
                     prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
 
                 },
+
                 ChronicleOperation::EndActivity(
                     EndActivity { namespace, id, time }) => {
                     let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
@@ -495,7 +517,8 @@ proptest! {
                     prop_assert!(activity.ended == Some(time.to_owned()));
                     prop_assert!(activity.started.unwrap() <= *time);
 
-                }
+                },
+
                 ChronicleOperation::WasAssociatedWith(WasAssociatedWith { id : _, role, namespace, activity_id, agent_id }) => {
                     let has_asoc = prov.association.get(&(namespace.to_owned(), activity_id.to_owned()))
                         .unwrap()
@@ -507,7 +530,8 @@ proptest! {
                         );
 
                     prop_assert!(has_asoc);
-                }
+                },
+
                 ChronicleOperation::ActivityUses(
                     ActivityUses { namespace, id, activity }) => {
                     let activity_id = activity;
@@ -533,6 +557,7 @@ proptest! {
 
                     prop_assert!(has_usage);
                 },
+
                 ChronicleOperation::EntityExists(
                     EntityExists { namespace, name}) => {
                     let entity = &prov.entities.get(&(namespace.to_owned(),EntityId::from_name(name)));
@@ -541,30 +566,47 @@ proptest! {
                     prop_assert_eq!(&entity.name, name);
                     prop_assert_eq!(&entity.namespaceid, namespace);
                 },
+
                 ChronicleOperation::WasGeneratedBy(WasGeneratedBy{namespace, id, activity}) => {
                     let activity_id = activity;
-                    let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
+                    let entity = &prov.entities.get(&(namespace.to_owned(), id.to_owned()));
                     prop_assert!(entity.is_some());
                     let entity = entity.unwrap();
                     prop_assert_eq!(&entity.name, id.name_part());
                     prop_assert_eq!(&entity.namespaceid, namespace);
 
-                    let activity = &prov.activities.get(&(namespace.to_owned(),activity.to_owned()));
+                    let activity = &prov.activities.get(&(namespace.to_owned(), activity.to_owned()));
                     prop_assert!(activity.is_some());
                     let activity = activity.unwrap();
                     prop_assert_eq!(&activity.name, activity_id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     let has_generation = prov.generation.get(
-                        &(namespace.clone(),id.clone()))
+                        &(namespace.clone(), id.clone()))
                         .unwrap()
-                        .contains(& Generation {
+                        .contains(&Generation {
                             activity_id: activity_id.clone(),
                             generated_id: id.clone(),
                             time: None });
 
                     prop_assert!(has_generation);
-                }
+                },
+
+                ChronicleOperation::WasInformedBy(WasInformedBy{namespace, activity, informing_activity}) => {
+                    let informed_activity = &prov.activities.get(&(namespace.to_owned(), activity.to_owned()));
+                    prop_assert!(informed_activity.is_some());
+                    let informed_activity = informed_activity.unwrap();
+                    prop_assert_eq!(&informed_activity.name, activity.name_part());
+                    prop_assert_eq!(&informed_activity.namespaceid, namespace);
+
+                    let has_communication = prov.was_informed_by.get(
+                        &(namespace.clone(), activity.clone()))
+                        .unwrap()
+                        .contains(&(namespace.to_owned(), informing_activity.to_owned()));
+
+                    prop_assert!(has_communication);
+                },
+
                 ChronicleOperation::EntityHasEvidence(
                     EntityHasEvidence{
                     namespace,
@@ -588,6 +630,7 @@ proptest! {
                     prop_assert_eq!(&agent.name, agent_id.name_part());
                     prop_assert_eq!(&agent.namespaceid, namespace);
                 },
+
                 ChronicleOperation::EntityDerive(EntityDerive {
                   namespace,
                   id,
@@ -613,7 +656,8 @@ proptest! {
                     });
 
                     prop_assert!(has_derivation);
-                }
+                },
+
                 ChronicleOperation::SetAttributes(
                     SetAttributes::Entity  { namespace, id, attributes}) => {
                     let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
@@ -622,6 +666,7 @@ proptest! {
 
                     prop_assert_eq!(&entity.domaintypeid, &attributes.typ);
                 },
+
                 ChronicleOperation::SetAttributes(SetAttributes::Activity{ namespace, id, attributes}) => {
                     let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(activity.is_some());
@@ -629,6 +674,7 @@ proptest! {
 
                     prop_assert_eq!(&activity.domaintypeid, &attributes.typ);
                 },
+
                 ChronicleOperation::SetAttributes(SetAttributes::Agent { namespace, id, attributes}) => {
                     let agent = &prov.agents.get(&(namespace.to_owned(),id.to_owned()));
                     prop_assert!(agent.is_some());
@@ -646,6 +692,6 @@ proptest! {
 
         let serialized_prov = prov_from_json_ld(lhs_json.clone());
 
-        prop_assert_eq!(&prov,&serialized_prov,"Prov reserialisation compact: \n{} expanded \n {}",json::stringify_pretty(lhs_json, 2), json::stringify_pretty(lhs_json_expanded, 2));
+        prop_assert_eq!(&prov, &serialized_prov, "Prov reserialisation compact: \n{} expanded \n {}", json::stringify_pretty(lhs_json, 2), json::stringify_pretty(lhs_json_expanded, 2));
     }
 }

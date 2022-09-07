@@ -15,7 +15,7 @@ use crate::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-            WasGeneratedBy,
+            WasGeneratedBy, WasInformedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamePart, NamespaceId,
@@ -95,6 +95,7 @@ impl ProvModel {
                 .try_cast::<Node>()
                 .map_err(|_| ProcessorError::NotANode {})?
                 .into_inner();
+
             if o.has_type(&Reference::Id(Chronicle::Namespace.as_iri().into())) {
                 self.apply_node_as_namespace(&o)?;
             }
@@ -298,6 +299,11 @@ impl ProvModel {
             .map(|id| EntityId::try_from(id.as_iri()))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let was_informed_by = extract_reference_ids(&Prov::WasInformedBy, activity)?
+            .into_iter()
+            .map(|id| ActivityId::try_from(id.as_iri()))
+            .collect::<Result<Vec<_>, _>>()?;
+
         let attributes = Self::extract_attributes(activity)?;
 
         let mut activity = Activity::exists(namespaceid.clone(), id).has_attributes(attributes);
@@ -312,6 +318,10 @@ impl ProvModel {
 
         for entity in used {
             self.used(namespaceid.clone(), &activity.id, &entity);
+        }
+
+        for informing_activity in was_informed_by {
+            self.was_informed_by(namespaceid.clone(), &activity.id, &informing_activity);
         }
 
         self.add_activity(activity);
@@ -491,29 +501,30 @@ impl ProvModel {
 }
 
 trait Operation {
-    fn operation_namespace(&self) -> NamespaceId;
-    fn operation_agent(&self) -> AgentId;
-    fn operation_delegate(&self) -> AgentId;
-    fn operation_responsible(&self) -> AgentId;
-    fn operation_optional_activity(&self) -> Option<ActivityId>;
-    fn operation_activity(&self) -> ActivityId;
-    fn operation_optional_role(&self) -> Option<Role>;
-    fn operation_identity(&self) -> Option<IdentityId>;
-    fn operation_key(&self) -> String;
-    fn operation_start_time(&self) -> String;
-    fn operation_locator(&self) -> Option<String>;
-    fn operation_signature(&self) -> Option<String>;
-    fn operation_signature_time(&self) -> Option<String>;
-    fn operation_end_time(&self) -> String;
-    fn operation_entity(&self) -> EntityId;
-    fn operation_used_entity(&self) -> EntityId;
-    fn operation_derivation(&self) -> Option<DerivationType>;
-    fn operation_domain(&self) -> Option<DomaintypeId>;
-    fn operation_attributes(&self) -> BTreeMap<String, Attribute>;
+    fn namespace(&self) -> NamespaceId;
+    fn agent(&self) -> AgentId;
+    fn delegate(&self) -> AgentId;
+    fn responsible(&self) -> AgentId;
+    fn optional_activity(&self) -> Option<ActivityId>;
+    fn activity(&self) -> ActivityId;
+    fn optional_role(&self) -> Option<Role>;
+    fn identity(&self) -> Option<IdentityId>;
+    fn key(&self) -> String;
+    fn start_time(&self) -> String;
+    fn locator(&self) -> Option<String>;
+    fn signature(&self) -> Option<String>;
+    fn signature_time(&self) -> Option<String>;
+    fn end_time(&self) -> String;
+    fn entity(&self) -> EntityId;
+    fn used_entity(&self) -> EntityId;
+    fn derivation(&self) -> Option<DerivationType>;
+    fn domain(&self) -> Option<DomaintypeId>;
+    fn attributes(&self) -> BTreeMap<String, Attribute>;
+    fn informing_activity(&self) -> ActivityId;
 }
 
 impl Operation for Node {
-    fn operation_namespace(&self) -> NamespaceId {
+    fn namespace(&self) -> NamespaceId {
         let mut uuid_objects = self.get(&Reference::Id(
             ChronicleOperations::NamespaceUuid.as_iri().into(),
         ));
@@ -526,7 +537,7 @@ impl Operation for Node {
         NamespaceId::from_name(name, uuid)
     }
 
-    fn operation_agent(&self) -> AgentId {
+    fn agent(&self) -> AgentId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::AgentName.as_iri().into(),
         ));
@@ -534,7 +545,7 @@ impl Operation for Node {
         AgentId::from_name(name)
     }
 
-    fn operation_delegate(&self) -> AgentId {
+    fn delegate(&self) -> AgentId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::DelegateId.as_iri().into(),
         ));
@@ -542,7 +553,7 @@ impl Operation for Node {
         AgentId::from_name(name)
     }
 
-    fn operation_optional_activity(&self) -> Option<ActivityId> {
+    fn optional_activity(&self) -> Option<ActivityId> {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ActivityName.as_iri().into(),
         ));
@@ -553,14 +564,14 @@ impl Operation for Node {
         Some(ActivityId::from_name(object.as_str().unwrap()))
     }
 
-    fn operation_key(&self) -> String {
+    fn key(&self) -> String {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::PublicKey.as_iri().into(),
         ));
         String::from(objects.next().unwrap().as_str().unwrap())
     }
 
-    fn operation_start_time(&self) -> String {
+    fn start_time(&self) -> String {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::StartActivityTime.as_iri().into(),
         ));
@@ -568,7 +579,7 @@ impl Operation for Node {
         time.to_owned()
     }
 
-    fn operation_end_time(&self) -> String {
+    fn end_time(&self) -> String {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::EndActivityTime.as_iri().into(),
         ));
@@ -576,7 +587,7 @@ impl Operation for Node {
         time.to_owned()
     }
 
-    fn operation_entity(&self) -> EntityId {
+    fn entity(&self) -> EntityId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::EntityName.as_iri().into(),
         ));
@@ -584,7 +595,7 @@ impl Operation for Node {
         EntityId::from_name(name)
     }
 
-    fn operation_used_entity(&self) -> EntityId {
+    fn used_entity(&self) -> EntityId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::UsedEntityName.as_iri().into(),
         ));
@@ -592,7 +603,7 @@ impl Operation for Node {
         EntityId::from_name(name)
     }
 
-    fn operation_derivation(&self) -> Option<DerivationType> {
+    fn derivation(&self) -> Option<DerivationType> {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::DerivationType.as_iri().into(),
         ));
@@ -610,7 +621,7 @@ impl Operation for Node {
         Some(d)
     }
 
-    fn operation_domain(&self) -> Option<DomaintypeId> {
+    fn domain(&self) -> Option<DomaintypeId> {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::DomaintypeId.as_iri().into(),
         ));
@@ -621,7 +632,7 @@ impl Operation for Node {
         Some(DomaintypeId::from_name(d))
     }
 
-    fn operation_attributes(&self) -> BTreeMap<String, Attribute> {
+    fn attributes(&self) -> BTreeMap<String, Attribute> {
         self.get(&Reference::Id(
             ChronicleOperations::Attributes.as_iri().into(),
         ))
@@ -645,7 +656,7 @@ impl Operation for Node {
         .collect()
     }
 
-    fn operation_responsible(&self) -> AgentId {
+    fn responsible(&self) -> AgentId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ResponsibleId.as_iri().into(),
         ));
@@ -653,7 +664,7 @@ impl Operation for Node {
         AgentId::from_name(name)
     }
 
-    fn operation_optional_role(&self) -> Option<Role> {
+    fn optional_role(&self) -> Option<Role> {
         let mut name_objects = self.get(&Reference::Id(ChronicleOperations::Role.as_iri().into()));
         let object = match name_objects.next() {
             Some(object) => object,
@@ -662,7 +673,7 @@ impl Operation for Node {
         Some(Role::from(object.as_str().unwrap()))
     }
 
-    fn operation_activity(&self) -> ActivityId {
+    fn activity(&self) -> ActivityId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ActivityName.as_iri().into(),
         ));
@@ -670,7 +681,7 @@ impl Operation for Node {
         ActivityId::from_name(name)
     }
 
-    fn operation_identity(&self) -> Option<IdentityId> {
+    fn identity(&self) -> Option<IdentityId> {
         let mut id_objects = self.get(&Reference::Id(
             ChronicleOperations::Identity.as_iri().into(),
         ));
@@ -689,7 +700,7 @@ impl Operation for Node {
         )
     }
 
-    fn operation_locator(&self) -> Option<String> {
+    fn locator(&self) -> Option<String> {
         let mut objects = self.get(&Reference::Id(ChronicleOperations::Locator.as_iri().into()));
 
         let locator = match objects.next() {
@@ -700,7 +711,7 @@ impl Operation for Node {
         Some(locator.as_str().unwrap().to_owned())
     }
 
-    fn operation_signature(&self) -> Option<String> {
+    fn signature(&self) -> Option<String> {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::Signature.as_iri().into(),
         ));
@@ -712,7 +723,7 @@ impl Operation for Node {
         Some(signature.as_str().unwrap().to_owned())
     }
 
-    fn operation_signature_time(&self) -> Option<String> {
+    fn signature_time(&self) -> Option<String> {
         let mut objects = self.get(&Reference::Id(
             ChronicleOperations::SignatureTime.as_iri().into(),
         ));
@@ -722,6 +733,14 @@ impl Operation for Node {
         };
 
         Some(time.as_str().unwrap().to_owned())
+    }
+
+    fn informing_activity(&self) -> ActivityId {
+        let mut name_objects = self.get(&Reference::Id(
+            ChronicleOperations::InformingActivityName.as_iri().into(),
+        ));
+        let name = name_objects.next().unwrap().as_str().unwrap();
+        ActivityId::from_name(name)
     }
 }
 
@@ -741,7 +760,7 @@ impl ChronicleOperation {
             if o.has_type(&Reference::Id(
                 ChronicleOperations::CreateNamespace.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
+                let namespace = o.namespace();
                 let name = namespace.name_part().to_owned();
                 let uuid = namespace.uuid_part().to_owned();
                 Ok(ChronicleOperation::CreateNamespace(CreateNamespace {
@@ -752,8 +771,8 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::AgentExists.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let agent = o.operation_agent();
+                let namespace = o.namespace();
+                let agent = o.agent();
                 let name = agent.name_part();
                 Ok(ChronicleOperation::AgentExists(AgentExists {
                     namespace,
@@ -762,10 +781,10 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::AgentActsOnBehalfOf.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let delegate_id = o.operation_delegate();
-                let responsible_id = o.operation_responsible();
-                let activity_id = o.operation_optional_activity();
+                let namespace = o.namespace();
+                let delegate_id = o.delegate();
+                let responsible_id = o.responsible();
+                let activity_id = o.optional_activity();
 
                 Ok(ChronicleOperation::AgentActsOnBehalfOf(
                     ActsOnBehalfOf::new(
@@ -773,15 +792,15 @@ impl ChronicleOperation {
                         &responsible_id,
                         &delegate_id,
                         activity_id.as_ref(),
-                        o.operation_optional_role(),
+                        o.optional_role(),
                     ),
                 ))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::RegisterKey.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_agent();
-                let publickey = o.operation_key();
+                let namespace = o.namespace();
+                let id = o.agent();
+                let publickey = o.key();
                 Ok(ChronicleOperation::RegisterKey(RegisterKey {
                     namespace,
                     id,
@@ -790,8 +809,8 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::ActivityExists.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let activity_id = o.operation_optional_activity().unwrap();
+                let namespace = o.namespace();
+                let activity_id = o.optional_activity().unwrap();
                 let name = activity_id.name_part().to_owned();
                 Ok(ChronicleOperation::ActivityExists(ActivityExists {
                     namespace,
@@ -800,9 +819,9 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::StartActivity.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_optional_activity().unwrap();
-                let time: DateTime<Utc> = o.operation_start_time().parse().unwrap();
+                let namespace = o.namespace();
+                let id = o.optional_activity().unwrap();
+                let time: DateTime<Utc> = o.start_time().parse().unwrap();
                 Ok(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
                     id,
@@ -811,9 +830,9 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::EndActivity.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_optional_activity().unwrap();
-                let time: DateTime<Utc> = o.operation_end_time().parse().unwrap();
+                let namespace = o.namespace();
+                let id = o.optional_activity().unwrap();
+                let time: DateTime<Utc> = o.end_time().parse().unwrap();
                 Ok(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
                     id,
@@ -822,9 +841,9 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::ActivityUses.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_entity();
-                let activity = o.operation_optional_activity().unwrap();
+                let namespace = o.namespace();
+                let id = o.entity();
+                let activity = o.optional_activity().unwrap();
                 Ok(ChronicleOperation::ActivityUses(ActivityUses {
                     namespace,
                     id,
@@ -833,8 +852,8 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::EntityExists.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let entity = o.operation_entity();
+                let namespace = o.namespace();
+                let entity = o.entity();
                 let id = entity.name_part().into();
                 Ok(ChronicleOperation::EntityExists(EntityExists {
                     namespace,
@@ -843,38 +862,49 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::WasGeneratedBy.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_entity();
-                let activity = o.operation_optional_activity().unwrap();
+                let namespace = o.namespace();
+                let id = o.entity();
+                let activity = o.optional_activity().unwrap();
                 Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id,
                     activity,
                 }))
             } else if o.has_type(&Reference::Id(
+                ChronicleOperations::WasInformedBy.as_iri().into(),
+            )) {
+                let namespace = o.namespace();
+                let activity = o.activity();
+                let informing_activity = o.informing_activity();
+                Ok(ChronicleOperation::WasInformedBy(WasInformedBy {
+                    namespace,
+                    activity,
+                    informing_activity,
+                }))
+            } else if o.has_type(&Reference::Id(
                 ChronicleOperations::EntityHasEvidence.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_entity();
-                let agent = o.operation_agent();
-                let signature_time = o.operation_signature_time().map(|t| t.parse().unwrap());
+                let namespace = o.namespace();
+                let id = o.entity();
+                let agent = o.agent();
+                let signature_time = o.signature_time().map(|t| t.parse().unwrap());
                 Ok(ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                     namespace,
-                    identityid: o.operation_identity(),
+                    identityid: o.identity(),
                     id,
-                    locator: o.operation_locator(),
+                    locator: o.locator(),
                     agent,
-                    signature: o.operation_signature(),
+                    signature: o.signature(),
                     signature_time,
                 }))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::EntityDerive.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let id = o.operation_entity();
-                let used_id = o.operation_used_entity();
-                let activity_id = o.operation_optional_activity();
-                let typ = o.operation_derivation();
+                let namespace = o.namespace();
+                let id = o.entity();
+                let used_id = o.used_entity();
+                let activity_id = o.optional_activity();
+                let typ = o.derivation();
                 Ok(ChronicleOperation::EntityDerive(EntityDerive {
                     namespace,
                     id,
@@ -885,10 +915,10 @@ impl ChronicleOperation {
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::SetAttributes.as_iri().into(),
             )) {
-                let namespace = o.operation_namespace();
-                let domain = o.operation_domain();
+                let namespace = o.namespace();
+                let domain = o.domain();
 
-                let attrs = o.operation_attributes();
+                let attrs = o.attributes();
 
                 let attributes = Attributes {
                     typ: domain,
@@ -898,7 +928,7 @@ impl ChronicleOperation {
                     if o.has_key(&Term::Ref(Reference::Id(
                         ChronicleOperations::EntityName.as_iri().into(),
                     ))) {
-                        let id = o.operation_entity();
+                        let id = o.entity();
                         SetAttributes::Entity {
                             namespace,
                             id,
@@ -907,14 +937,14 @@ impl ChronicleOperation {
                     } else if o.has_key(&Term::Ref(Reference::Id(
                         ChronicleOperations::AgentName.as_iri().into(),
                     ))) {
-                        let id = o.operation_agent();
+                        let id = o.agent();
                         SetAttributes::Agent {
                             namespace,
                             id,
                             attributes,
                         }
                     } else {
-                        let id = o.operation_optional_activity().unwrap();
+                        let id = o.optional_activity().unwrap();
                         SetAttributes::Activity {
                             namespace,
                             id,
@@ -929,10 +959,10 @@ impl ChronicleOperation {
             )) {
                 Ok(ChronicleOperation::WasAssociatedWith(
                     WasAssociatedWith::new(
-                        &o.operation_namespace(),
-                        &o.operation_activity(),
-                        &o.operation_agent(),
-                        o.operation_optional_role(),
+                        &o.namespace(),
+                        &o.activity(),
+                        &o.agent(),
+                        o.optional_role(),
                     ),
                 ))
             } else {
