@@ -7,7 +7,7 @@ link ChronicleBuilder to Domain--><g id="link_ChronicleBuilder_Domain"><path d="
 link ChronicleBuilder to Chronicle--><g id="link_ChronicleBuilder_Chronicle"><path d="M198.7458,81.6198 C254.1563,62.6885 328.7771,40.401 396.875,30.6781 C495.0063,16.6667 606.025,51.0292 676.9469,79.5563 " fill="none" id="ChronicleBuilder-to-Chronicle" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="681.9833,81.599,674.8611,74.2148,677.1567,79.6418,671.7297,81.9374,681.9833,81.599" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="37.5" x="406.25" y="39.1559">builds</text></g><!--MD5=[8d363e2abcaac4399309842304fe6e65]
 link ChronicleBuilder to ChronicleStandalone--><g id="link_ChronicleBuilder_ChronicleStandalone"><path d="M211.5958,112.9698 C238.5427,112.9698 268.4979,112.9698 297.8844,112.9698 " fill="none" id="ChronicleBuilder-to-ChronicleStandalone" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="303.3646,112.9698,293.9896,108.8031,298.1563,112.9698,293.9896,117.1365,303.3646,112.9698" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="37.5" x="238.8021" y="98.5309">builds</text></g><!--MD5=[730dcc4bf26369af5b0ff3b814e255a0]
 link Chronicle to Domain--><g id="link_Chronicle_Domain"><path d="M689.9229,144.3667 C636.5792,171.3188 559.2979,210.3659 507.6906,236.4413 " fill="none" id="Chronicle-to-Domain" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="502.7781,238.9233,513.0248,238.4155,507.427,236.575,509.2675,230.9772,502.7781,238.9233" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="72.9167" x="637.5" y="196.4476">implements</text></g><!--MD5=[5a6ae7a17e410cce1ad1a6af1b32b412]
-link ChronicleStandalone to Domain--><g id="link_ChronicleStandalone_Domain"><path d="M453.125,144.3667 C453.125,170.2604 453.125,207.319 453.125,233.312 " fill="none" id="ChronicleStandalone-to-Domain" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="453.125,238.6827,457.2917,229.3077,453.125,233.4744,448.9583,229.3077,453.125,238.6827" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="72.9167" x="462.5" y="196.4476">implements</text></g><!--MD5=[578857a92f8d047a107c619de14fff37]
+link ChronicleStandalone to Domain--><g id="link_ChronicleStandalone_Domain"><path d="M453.125,144.3667 C453.125,170.2604 453.125,207.319 453.125,233.312 " fill="none" id="ChronicleStandalone-to-Domain" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="453.125,238.6827,457.2917,229.3077,453.125,233.4744,448.9583,229.3077,453.125,238.6827" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="72.9167" x="462.5" y="196.4476">implements</text></g><!--MD5=[2f330356a1235d8bb56a820f623cc77f]
 @startuml
 !theme bluegray
 
@@ -512,7 +512,7 @@ Chronicle - -> Domain: implements
 ChronicleStandalone - -> Domain: implements
 @enduml
 
-PlantUML version 1.2022.7beta11(Unknown compile time)
+PlantUML version 1.2022.8beta2(Unknown compile time)
 (GPL source distribution)
 Java Runtime: Java(TM) SE Runtime Environment
 JVM: Java HotSpot(TM) 64-Bit Server VM
