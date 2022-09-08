@@ -8,11 +8,11 @@ Run chronicle as a graphql server.
 
 #### Arguments
 
-##### ``--interface <interface>``
+##### `--interface <interface>`
 
 The graphql server socket address - defaults to 127.0.0.1:9982.
 
-#### ``--open``
+#### `--open`
 
 Serve the graphql playground IDE on the graphql server interface and open a web
 browser to it.

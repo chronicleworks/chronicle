@@ -12,7 +12,7 @@ in the same directory as the dockerfile, the following will build a domain
 specific chronicle. You should only need to source control the Dockerfile and
 domain.config - chronicle's build image will do the rest.
 
-``` docker
+```docker
 FROM blockchaintp/builder:{VERSION_NUMBER} as domain
 
 COPY domain.yaml chronicle-domain/
@@ -25,7 +25,7 @@ cargo build --release --frozen --bin chronicle
 For rapid development and testing purposes a standalone version of Chronicle
 can be built and distributed as a docker image or binary.
 
-``` docker
+```docker
 FROM blockchaintp/builder:{VERSION_NUMBER} as domain
 
 COPY domain.yaml chronicle-domain/

@@ -13,7 +13,7 @@ The untyped creation mutations `agent`, `activity` and `entity` can be used to
 create provenance terms. Mutations that produce provenance relations work in the
 same way as typed Chronicle.
 
-``` graphql
+```graphql
 mutation {
     agent(name: "agent",
           attributes: {type:"artist"}) {
@@ -30,7 +30,7 @@ the omission of type filters. Returned prov terms will be of the 'unknown' types
 `ProvAgent`, `ProvActivity` or `ProvEntity`. If domain types have been set, then
 they will appear on the corresponding type field.
 
-``` graphql
+```graphql
 query {
     activityTimeline(forEntity: ["http://blockchaintp.com/chronicle/ns#entity:example"],
                     from: "1968-01-01T00:00:00Z",

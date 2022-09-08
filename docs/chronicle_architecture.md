@@ -1,4 +1,3 @@
-
 # Chronicle Architecture
 
 Chronicle is an API toolkit that can be customized to your provenance domain and

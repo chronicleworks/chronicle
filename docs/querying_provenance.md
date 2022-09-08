@@ -2,7 +2,7 @@
 
 Currently Chronicle has 4 root queries.
 
-``` graphql
+```graphql
 type Query {
     activityTimeline(activityTypes: [ActivityType!]!, forEntity: [EntityID!]!, from: DateTime, to: DateTime, namespace: ID, after: String, before: String, first: Int, last: Int): ActivityConnection!
     agentsByType(agentType: AgentType!, namespace: String, after: String, before: String, first: Int, last: Int): AgentConnection!
@@ -28,7 +28,7 @@ A list of ActivityTypes to filter the returned timeline by, leaving this empty
 will return all activity types. The `PROV_ACTIVITY` activity type can be used to
 return activities that are not currently specified in the Chronicle domain.
 
-``` graphql
+```graphql
 enum ActivityType {
   PROV_ACTIVITY
   PUBLISHED
@@ -85,7 +85,7 @@ An integer controlling page size for reverse pagination. Defaults to 20
 All Chronicle Entity subtypes follow a similar pattern, we will use the Guidance
 entity from our example domain as a sample.
 
-``` graphql
+```graphql
 type Guidance {
   id: EntityID!
   namespace: Namespace!
@@ -159,7 +159,7 @@ determined by the [domain model](./domain_modelling.md)
 
 ### Activity subtypes
 
-``` graphql
+```graphql
 type Published {
   id: ActivityID!
   namespace: Namespace!

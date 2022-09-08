@@ -1,5 +1,7 @@
 # Recording Provenance using Chronicle
 
+<!-- markdownlint-disable -->
+
 ## Immutability
 
 Chronicle provenance is immutable. Once recorded you cannot contradict it - only
@@ -14,7 +16,7 @@ simple inferences to keep your provenance data consistent.
 
 For example:
 
-``` graphql title="The agent 'homer' participated in the activity 'writing-the-iliad' as a writer"
+```graphql title="The agent 'homer' participated in the activity 'writing-the-iliad' as a writer"
 mutation {
     wasAssociatedWith(
         activity: "chronicle:activity:writing-the-iliad",
@@ -24,7 +26,7 @@ mutation {
 }
 ```
 
-``` graphql title="There was an activity 'writing-the-iliad' that took place in Ionia"
+```graphql title="There was an activity 'writing-the-iliad' that took place in Ionia"
 mutation {
     writing(
         name: "writing-the-iliad",
@@ -35,7 +37,7 @@ mutation {
 }
 ```
 
-``` graphql title="An agent 'homer' exists and was a person"
+```graphql title="An agent 'homer' exists and was a person"
 mutation {
     person(
         name: "homer",
@@ -63,7 +65,7 @@ or change the state of Chronicle meaningfully.
 Here we attempt to change the end date of an activity after it has been
 recorded - one of these mutations will fail
 
-``` graphql
+```graphql
     mutation {
         endActivity(id:"chronicle:activity:birthday",
             time: "2022-07-29T12:41:52.433Z"
@@ -80,7 +82,7 @@ recorded - one of these mutations will fail
 Here we attempt to change the value of an attribute - one of these operations
 will fail.
 
-``` graphql
+```graphql
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
             name: "Tennyson"
@@ -100,7 +102,7 @@ Where a provenance term has been recorded with attributes, and the domain has
 been extended to include new attributes it is valid to append new attributes, as
 long as the values of the already recorded ones are unchanged.
 
-``` graphql
+```graphql
 
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
@@ -144,7 +146,7 @@ subject to change.
 
 All Chronicle mutations return a `Submission` type defined by:
 
-``` graphql
+```graphql
 type Submission {
   context: String!
   correlationId: String!
@@ -165,7 +167,7 @@ Chronicle provides a [graphql
 subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/) to
 notify clients when a chronicle operation has completed.
 
-``` graphql
+```graphql
 
 type Submission {
   context: String!
@@ -208,7 +210,7 @@ The definition mutations `question`, `guidance`, `publishedGuidance`, and
 each subtype and their attributes. The generated graphql mutations and their
 associated types will look like this:
 
-``` graphql
+```graphql
 
 scalar EntityID
 scalar DomaintypeID
@@ -317,7 +319,7 @@ mutation {
 Executing the following example mutation `question` will define an `Entity` of
 subtype `Question`, along with its attributes.
 
-``` graphql title="Define a Question entity with graphql"
+```graphql title="Define a Question entity with graphql"
 mutation {
     question(name: "anaphylaxis-referral", attributes: {
         cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
@@ -326,9 +328,9 @@ mutation {
 }
 ```
 
-And the equivalent operation using the command line interface is
+And the equivalent operation using the command line interface is:
 
-``` bash title="Define a document entity with the CLI"
+```bash title="Define a document entity with the CLI"
 chronicle question define anaphylaxis-referral --cms-id-attribute "How best to assess and refer patients who have required emergency treatment for Anaphylaxis" --cms-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
 
 ```
@@ -353,12 +355,12 @@ The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
 [evolving your domain](domain_modelling.md#evolution).
 
- The definition mutations `questionAsked` `researched`, `revised` and
- `published` will also have been created to allow you to define an instance of
- each subtype and their attributes. The generated graphql mutations and their
- associated types will look like this:
+The definition mutations `questionAsked` `researched`, `revised` and
+`published` will also have been created to allow you to define an instance of
+each subtype and their attributes. The generated graphql mutations and their
+associated types will look like this:
 
-``` graphql
+```graphql
 union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revised
 
 type ProvEntity {
@@ -446,7 +448,7 @@ mutation {
 The following example mutation `revised` will define an `Activity` of subtype
 `Revised`
 
-``` graphql title="Define a revised activity with graphql"
+```graphql title="Define a revised activity with graphql"
 mutation {
     revised(name: "september-2018-review", attributes: {
         versionAttribute: 14,
@@ -456,7 +458,7 @@ mutation {
 
 And the equivalent operation using the command line interface is:
 
-``` bash title="Define a document entity with the CLI"
+```bash title="Define a document entity with the CLI"
 chronicle revised define september-2018-review --version-attr 14
 ```
 
@@ -477,7 +479,7 @@ The definition mutations `person` and `organization` will also have been
 created. See [domain modelling](./domain_modelling.md/#graphql_generation) for
 details on the generated graphql SDL.
 
-``` graphql title="Define an organization agent with graphql"
+```graphql title="Define an organization agent with graphql"
 mutation {
     organization(name: "health-trust", attributes: {})
 }
@@ -485,7 +487,7 @@ mutation {
 
 And the equivalent operation using the command line interface is:
 
-``` bash title="Define an organization entity with the CLI"
+```bash title="Define an organization entity with the CLI"
 chronicle organization define health-trust
 ```
 
@@ -502,7 +504,7 @@ Activity.
 
 To apply using graphql:
 
-``` graphql
+```graphql
 mutation {
   used(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-evidence-12114")
 }
@@ -510,7 +512,7 @@ mutation {
 
 And the equivalent operation using the command line interface is:
 
-``` bash
+```bash
 chronicle revised use "chronicle:entity:anaphylaxis-evidence-12114" "chronicle:activity:september-2018-review"
 ```
 
@@ -527,7 +529,7 @@ Activity.
 
 To apply using graphql:
 
-``` graphql
+```graphql
 mutation {
   wasGeneratedBy(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-guidance-9-2018")
 }
@@ -535,7 +537,7 @@ mutation {
 
 And the equivalent operation using the command line interface is:
 
-``` bash
+```bash
 chronicle revised generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
 ```
 
@@ -560,16 +562,14 @@ activity with the agent - there is no current way to record a role with this
 however, so prefer [wasAssociatedWith](#association) if you need role based
 modelling.
 
-``` graphql
+```graphql
 mutation {
   startActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
 }
 ```
 
-And the equivalent command line operation. See [command line
-context](#command-line-context) for differences from graphql behavior.
 
-``` bash
+```bash
 chronicle revision start "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
@@ -595,16 +595,15 @@ activity with the agent - there is no current way to record a role with this
 however, so prefer [wasAssociatedWith](#association) if you need role based
 modelling.
 
-``` graphql
+```graphql
 mutation {
   endActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
 }
 ```
 
-And the equivalent command line operation. See [command line
-context](#command-line-context) for differences from graphql behavior.
+And the equivalent command line operation:
 
-``` bash
+```bash
 chronicle revision end "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
@@ -630,11 +629,10 @@ enum RoleType {
 }
 
 ```
-
 To record the asking of a question, we relate an Organization to a
 `QuestionAsked` activity, using the `Role` `STAKEHOLDER`.
 
-``` graphql
+```graphql
 mutation {
   wasAssociatedWith(
     responsible: "chronicle:agent:ncsa",
@@ -678,7 +676,7 @@ responsible `Person` to another delegate `Person` Agent, using the `Role`
 `EDITOR` and specify a particular `Revision` activity. The activity is not a
 required parameter - generic delegation between agents can be recorded.
 
-``` graphql
+```graphql
 mutation {
   actedOnBehalfOf(
     responsible: "chronicle:agent:john-roberts",
@@ -712,7 +710,7 @@ Primary sources can be recorded bin chronicle using the `hadPrimarySource`
 mutation, which takes two entities - the generatedEntity having a primary source
 of the useEntity.
 
-``` graphql
+```graphql
 mutation {
   hadPrimarySource {
     usedEntity: "chronicle:entity:anaphylaxis-assessment-question",
@@ -733,7 +731,7 @@ See [provenance concepts](./provenance_concepts.md#revision)
 Revision can be recorded bin chronicle using the `wasRevisionOf` mutation, which
 takes two entities - the generatedEntity being a revision of the usedEntity.
 
-``` graphql
+```graphql
 mutation {
   revision {
     usedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
@@ -754,7 +752,7 @@ Quotation can be recorded bin chronicle using the `wasQuotedFrom` mutation,
 which takes two entities - the generatedEntity having quoted from the
 usedEntity.
 
-``` graphql
+```graphql
 mutation {
   revision {
     usedEntity: "chronicle:entity:evidence-2321231",
