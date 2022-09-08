@@ -97,17 +97,17 @@ skinparam useBetaStyle false
   }
   nwdiagDiagram {
 	network {
-		
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
-    
+
 		LineColor #009fdb
 		LineThickness 1.0
 		FontColor #007faf
 	}
 	server {
-		
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -127,7 +127,7 @@ skinparam useBetaStyle false
   }
   ganttDiagram {
 	task {
-		
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -222,7 +222,7 @@ skinparam activity {
 
 
 skinparam participant {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -232,7 +232,7 @@ skinparam participant {
 
 
 skinparam actor {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -284,7 +284,7 @@ skinparam partition {
 
 
 skinparam collections {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -293,7 +293,7 @@ skinparam collections {
 
 
 skinparam control {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -303,7 +303,7 @@ skinparam control {
 
 
 skinparam entity {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -313,7 +313,7 @@ skinparam entity {
 
 
 skinparam boundary {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -345,7 +345,7 @@ skinparam artifact {
 
 
 skinparam component {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -382,7 +382,7 @@ skinparam cloud {
 
 
 skinparam database {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -392,7 +392,7 @@ skinparam database {
 
 
 skinparam class {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -406,7 +406,7 @@ skinparam class {
 
 
 skinparam object {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -419,7 +419,7 @@ skinparam object {
 
 
 skinparam usecase {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -463,7 +463,7 @@ skinparam frame {
 
 
 skinparam state {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -477,7 +477,7 @@ skinparam state {
 
 
 skinparam queue {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -501,7 +501,7 @@ skinparam file {
 
 
 skinparam stack {
-	
+
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb

@@ -14,7 +14,8 @@ The graphql server socket address - defaults to 127.0.0.1:9982.
 
 #### ``--open``
 
-Serve the graphql playground IDE on the graphql server interface and open a web browser to it.
+Serve the graphql playground IDE on the graphql server interface and open a web
+browser to it.
 
 ### export-schema
 
@@ -26,4 +27,5 @@ Installs shell completions for  bash, zsh or fish
 
 ## Other sub commands
 
-Chronicle will also generate sub commands for recording provenance, derived from your [domain configuration](./domain_modelling.md).
+Chronicle will also generate sub commands for recording provenance, derived from
+your [domain configuration](./domain_modelling.md).
