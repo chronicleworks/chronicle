@@ -1,0 +1,43 @@
+@startuml
+
+!include ../include/default.iuml
+
+left to right direction
+hide empty members
+
+
+
+rectangle ChronicleDomains as "Chronicle" {
+rectangle "Chronicle domain one" as DomainOnePackage {
+  component "Chronicle" as ChronicleDomainOne
+  database "Index database" as IndexOne
+}
+
+rectangle "Chronicle domain two"  as DomainTwoPackage {
+  component "Chronicle" as ChronicleDomainTwo
+  database "Index database" as IndexTwo
+}
+}
+
+rectangle "Consuming service" as ConsumingService {
+    component "Chronicle client" as ChronicleClient
+    component "Customer service" as CustomerService
+}
+
+rectangle "Sawtooth" as SawtoothPackage  {
+    component "Sawtooth validator"  as Sawtooth
+    rectangle ChronicleTpEmbed as "Chronicle" {
+        component "Chronicle Transaction Processor" as ChronicleTP
+    }
+}
+
+CustomerService <-> ChronicleClient
+ChronicleClient <--> ChronicleDomainOne: GraphQL
+ChronicleClient <--> ChronicleDomainTwo: GraphQL
+ChronicleDomainOne <-> IndexOne : Indexes PROV
+ChronicleDomainTwo <-> IndexTwo: Indexes PROV
+ChronicleDomainTwo --> Sawtooth: Submits transaction
+ChronicleDomainOne --> Sawtooth: Submits transaction
+ChronicleTP <-> Sawtooth: Confirms transaction
+
+@enduml

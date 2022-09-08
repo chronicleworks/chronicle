@@ -1,0 +1,505 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="458.3333px" preserveAspectRatio="none" style="width:829px;height:458px;background:#00000000;" version="1.1" viewBox="0 0 829 458" width="829.1667px" zoomAndPan="magnify"><defs><linearGradient id="g1hjt53f7nh2rp0" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#33B2E2"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs><g><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="62.5" x2="62.5" y1="105.1758" y2="355.013"/><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="195.8333" x2="195.8333" y1="105.1758" y2="355.013"/><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="387.5" x2="387.5" y1="105.1758" y2="355.013"/><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="595.8333" x2="595.8333" y1="105.1758" y2="355.013"/><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="772.9167" x2="772.9167" y1="105.1758" y2="355.013"/><text fill="#009FDB" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="71.875" x="23.9583" y="93.8944">Researcher</text><ellipse cx="63.0208" cy="19.7917" fill="url(#g1hjt53f7nh2rp0)" rx="8.3333" ry="8.3333" style="stroke:#33B2E2;stroke-width:1.0416666666666667;"/><path d="M63.0208,28.125 L63.0208,56.25 M49.4792,36.4583 L76.5625,36.4583 M63.0208,56.25 L49.4792,71.875 M63.0208,56.25 L76.5625,71.875 " fill="none" style="stroke:#33B2E2;stroke-width:1.0416666666666667;"/><text fill="#009FDB" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="71.875" x="23.9583" y="373.9075">Researcher</text><ellipse cx="63.0208" cy="394.5638" fill="url(#g1hjt53f7nh2rp0)" rx="8.3333" ry="8.3333" style="stroke:#33B2E2;stroke-width:1.0416666666666667;"/><path d="M63.0208,402.8971 L63.0208,431.0221 M49.4792,411.2305 L76.5625,411.2305 M63.0208,431.0221 L49.4792,446.6471 M63.0208,431.0221 L76.5625,446.6471 " fill="none" style="stroke:#33B2E2;stroke-width:1.0416666666666667;"/><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="87.5" x="152.0833" y="58.3333"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="56.25" x="167.7083" y="85.5611">Question</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="87.5" x="152.0833" y="353.9714"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="56.25" x="167.7083" y="381.1991">Question</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="150" x="312.5" y="58.3333"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="118.75" x="328.125" y="85.5611">Search Parameters</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="150" x="312.5" y="353.9714"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="118.75" x="328.125" y="381.1991">Search Parameters</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="120.8333" x="535.4167" y="58.3333"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="89.5833" x="551.0417" y="85.5611">Search Engine</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="120.8333" x="535.4167" y="353.9714"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="89.5833" x="551.0417" y="381.1991">Search Engine</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="88.5417" x="729.1667" y="58.3333"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="57.2917" x="744.7917" y="85.5611">Evidence</text><rect fill="url(#g1hjt53f7nh2rp0)" height="45.8008" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="88.5417" x="729.1667" y="353.9714"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="57.2917" x="744.7917" y="381.1991">Evidence</text><polygon fill="#009FDB" points="183.3333,148.8932,193.75,153.0599,183.3333,157.2266,187.5,153.0599" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="63.0208" x2="189.5833" y1="153.0599" y2="153.0599"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="76.0417" x="78.6458" y="139.6952">Informed by</text><polygon fill="#009FDB" points="375,194.694,385.4167,198.8607,375,203.0273,379.1667,198.8607" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="63.0208" x2="381.25" y1="198.8607" y2="198.8607"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="52.0833" x="78.6458" y="185.496">Decides</text><polygon fill="#009FDB" points="583.3333,240.4948,593.75,244.6615,583.3333,248.8281,587.5,244.6615" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="387.5" x2="589.5833" y1="244.6615" y2="244.6615"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="71.875" x="403.125" y="231.2968">Supplied to</text><polygon fill="#009FDB" points="74.4792,286.2956,64.0625,290.4622,74.4792,294.6289,70.3125,290.4622" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="68.2292" x2="594.7917" y1="290.4622" y2="290.4622"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="44.7917" x="89.0625" y="277.0976">Results</text><polygon fill="#009FDB" points="760.9375,332.0964,771.3542,336.263,760.9375,340.4297,765.1042,336.263" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="63.0208" x2="767.1875" y1="336.263" y2="336.263"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="71.875" x="78.6458" y="322.8984">References</text><!--MD5=[7827d0561d8b9dbbf343c81e35b5caff]
+@startuml
+!theme bluegray
+
+
+actor "Researcher"
+Researcher -> Question : Informed by
+Researcher -> "Search Parameters" : Decides
+"Search Parameters" -> "Search Engine" : Supplied to
+Researcher <- "Search Engine" : Results
+Researcher -> Evidence : References
+@enduml
+
+@startuml
+
+
+
+skinparam backgroundColor transparent
+skinparam useBetaStyle false
+
+
+
+
+
+
+
+
+<style>
+  root {
+    BackgroundColor transparent
+    FontColor #fff
+    HyperLinkColor $ORANGE
+    LineColor #007faf
+    LineThickness 1
+    Margin 10
+    Padding 6
+    Shadowing 0.0
+  }
+  node {
+   Padding 15
+   roundcorner 20
+   BackgroundColor #009fdb-#007faf
+  }
+  caption {
+    LineThickness 0
+  }
+  footer {
+    LineThickness 0
+  }
+  groupHeader {
+    BackgroundColor #f2f2f2
+    FontColor #0568ae
+    FontStyle bold
+  }
+  header {
+    LineThickness 0
+  }
+  referenceHeader {
+    BackgroundColor transparent
+    FontColor #5a5a5a
+    FontStyle bold
+  }
+  separator {
+    BackgroundColor #5a5a5a
+    FontColor transparent
+    FontStyle bold
+  }
+  title {
+	FontSize 20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor  #f5f5f5-#f2f2f2
+	FontColor #009fdb
+	BorderColor #f2f2f2
+  }
+  nwdiagDiagram {
+	network {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		LineThickness 1.0
+		FontColor #007faf
+	}
+	server {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	}
+	arrow {
+		FontColor #007faf
+		LineColor #007faf
+	}
+	group {
+		BackGroundColor #d2d2d2
+		LineColor $LIGHT_DARK
+		LineThickness 2.0
+		Margin 5
+		Padding 5
+	}
+  }
+  ganttDiagram {
+	task {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		Margin 10
+		Padding 6
+	}
+	note {
+		FontColor #fff
+		LineColor #04538b
+		BackGroundColor #0568ae
+	}
+	separator {
+		LineColor #f2f2f2
+		BackGroundColor #f2f2f2-#c2c2c2
+		FontColor #5a5a5a
+	}
+	milestone {
+		FontColor #0568ae
+		FontSize 16
+		FontStyle italic
+		BackGroundColor #f2f2f2
+		LineColor #c2c2c2
+	}
+	timeline {
+		BackgroundColor #f2f2f2
+		FontColor #5a5a5a
+	}
+	closed {
+		BackgroundColor #bb5d00
+		FontColor #fff
+	}
+  }
+</style>
+skinparam defaultFontName        "Verdana"
+skinparam defaultFontSize        12
+skinparam dpi                    100
+skinparam shadowing              false
+skinparam roundcorner            20
+skinparam ParticipantPadding     30
+skinparam BoxPadding             40
+skinparam Padding                8
+skinparam ArrowColor             #959595
+skinparam stereotype {
+    CBackgroundColor #f5f5f5
+    CBorderColor #c2c2c2
+    ABackgroundColor #c4ca33
+    ABorderColor #919700
+    IBackgroundColor #d95555
+    IBorderColor #a62222
+    EBackgroundColor #ee9033
+    EBorderColor #bb5d00
+    NBackgroundColor #3786be
+    NBorderColor #04538b
+}
+skinparam title {
+	FontColor	                 #009fdb
+	BorderColor	                 #c2c2c2
+	FontSize	    	         20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor              #f5f5f5-#f2f2f2
+}
+
+
+skinparam legend {
+	BackgroundColor #f2f2f2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+skinparam swimlane {
+	BorderColor #0568ae
+	BorderThickness 2
+	TitleBackgroundColor  #f5f5f5-#f2f2f2
+	TitleFontColor #009fdb
+}
+
+
+skinparam activity {
+	FontColor #fff
+	BorderColor #009fdb
+	BackgroundColor #33b2e2-#009fdb
+	BarColor #b5bd00
+	StartColor #0568ae
+	EndColor #0568ae
+	DiamondBackgroundColor #f5f5f5-#c2c2c2
+  	DiamondBorderColor #c2c2c2
+	DiamondFontColor #5a5a5a
+}
+
+
+skinparam participant {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	ParticipantBorderThickness 2
+}
+
+
+skinparam actor {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam arrow {
+	Thickness 3
+	Color #009fdb
+	FontColor #5a5a5a
+}
+
+
+skinparam sequence {
+	BorderColor #009fdb
+	TitleFontColor #009fdb
+	BackgroundColor transparent
+	StartColor #009fdb
+	EndColor #009fdb
+	BoxBackgroundColor #d2d2d2
+	BoxBorderColor #959595
+	BoxFontColor #5a5a5a
+	DelayFontColor #5a5a5a
+	LifeLineBorderColor #c2c2c2
+	LifeLineBorderThickness 2
+	LifeLineBackgroundColor #f5f5f5
+	GroupBorderColor #959595
+	GroupFontColor #5a5a5a
+	GroupHeaderFontColor #0568ae
+	DividerBackgroundColor #fff-#d2d2d2
+    DividerBorderColor #959595
+    DividerBorderThickness 2
+    DividerFontColor #5a5a5a
+	ReferenceBackgroundColor transparent
+	ReferenceBorderColor #959595
+	ReferenceFontColor #5a5a5a
+	ReferenceHeaderFontColor #0568ae
+	StereotypeFontColor #fff
+}
+
+
+skinparam partition {
+	BorderColor #009fdb
+	FontColor #009fdb
+	BackgroundColor transparent
+}
+
+
+skinparam collections {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam control {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam entity {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam boundary {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam agent {
+	BackgroundColor #orange
+	BorderColor #999999
+	FontColor #333333
+}
+
+
+skinparam note {
+	BorderThickness 1
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam artifact {
+	BackgroundColor #fff-#d2d2d2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+
+skinparam component {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam interface {
+	BackgroundColor  #d95555
+	BorderColor  #cf2a2a
+	FontColor #5a5a5a
+}
+
+
+skinparam storage {
+	BackgroundColor #ee9033-#ea7400
+  	BorderColor #ea7400
+	FontColor #fff
+}
+
+
+skinparam node {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #c2c2c2
+	FontColor #009fdb
+}
+
+
+skinparam cloud {
+	BackgroundColor #F2FCFE-#eeeeee
+	BorderColor #F2FCFE
+	FontColor #009fdb
+}
+
+
+skinparam database {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+}
+
+
+skinparam class {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	HeaderBackgroundColor #33b2e2-#009fdb
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam object {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam usecase {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam rectangle {
+		FontColor #5a5a5a
+	BorderColor #c2c2c2
+	BackgroundColor #fff-#fefefe
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam package {
+	FontColor #009fdb
+	BorderColor #33b2e2
+	BackgroundColor transparent
+	BorderThickness 2
+}
+
+
+skinparam folder {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #ea7400
+	FontColor #ea7400
+	BorderThickness 2
+}
+
+
+skinparam frame {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #0568ae
+	FontColor #0568ae
+	BorderThickness 2
+}
+
+
+skinparam state {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+	StartColor #0568ae
+	EndColor #0568ae
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam queue {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam card {
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam file {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #0568ae
+	FontColor #5a5a5a
+
+}
+
+
+skinparam stack {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+actor "Researcher"
+Researcher -> Question : Informed by
+Researcher -> "Search Parameters" : Decides
+"Search Parameters" -> "Search Engine" : Supplied to
+Researcher <- "Search Engine" : Results
+Researcher -> Evidence : References
+@enduml
+
+PlantUML version 1.2022.8beta2(Unknown compile time)
+(GPL source distribution)
+Java Runtime: Java(TM) SE Runtime Environment
+JVM: Java HotSpot(TM) 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

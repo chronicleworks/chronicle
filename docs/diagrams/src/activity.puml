@@ -1,0 +1,6 @@
+@startuml
+
+!include ../include/default.iuml
+!include ../include/activity.iuml
+
+@enduml

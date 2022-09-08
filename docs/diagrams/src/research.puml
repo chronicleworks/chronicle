@@ -1,0 +1,12 @@
+@startuml
+
+!include ../include/default.iuml
+
+actor "Researcher"
+Researcher -> Question : Informed by
+Researcher -> "Search Parameters" : Decides
+"Search Parameters" -> "Search Engine" : Supplied to
+Researcher <- "Search Engine" : Results
+Researcher -> Evidence : References
+
+@enduml

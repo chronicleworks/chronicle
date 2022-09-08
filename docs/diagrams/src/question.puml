@@ -1,0 +1,11 @@
+@startuml
+
+!include ../include/default.iuml
+
+actor "Stakeholder"
+actor "Author"
+
+Stakeholder -> Question : Asks
+Author -> Question : Authors
+
+@enduml

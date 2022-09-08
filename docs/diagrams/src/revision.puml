@@ -1,0 +1,15 @@
+@startuml
+
+!include ../include/default.iuml
+
+actor "Editor"
+actor "Author"
+
+Guidance -> Question : Has context
+Author -> Guidance : Creates version
+Author -> Evidence : Reviews
+Author -> Guidance : Authors
+Guidance -> Evidence : References
+Editor -> Author: Helps refine
+
+@enduml

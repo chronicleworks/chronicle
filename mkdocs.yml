@@ -1,6 +1,12 @@
----
 site_name: "Chronicle"
-theme: readthedocs
+theme:
+  name: "readthedocs"
+  language: "en"
+  palette:
+    primary: "light blue"
+    accent: "light blue"
+copyright: Copyright &copy; 2022 Blockchain Technology Partners
+strict: false
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -12,24 +18,28 @@ markdown_extensions:
 plugins:
   - search
   - build_plantuml:
-      theme_enabled: true
-      theme_folder: "include/themes"
-      theme_light: "light.puml"
-      theme_dark: "dark.puml"
-      # or "local" for local rendering
+      theme_enabled: false
       render: "server"
-      # ignored when render: server
-      bin_path: "/usr/local/bin/plantuml"
-      # offical plantuml server
+      bin_path: "/opt/homebrew/bin/plantuml"
       server: "http://www.plantuml.com/plantuml"
-      # for self-signed and invalid certs
       disable_ssl_certificate_validation: true
-      # or "png"
       output_format: "svg"
-      # should reside under docs_dir
       diagram_root: "docs/diagrams"
       output_folder: "out"
       input_folder: "src"
-      # comma separated list of extensions to parse,
-      # by default every file is parsed
       input_extensions: ""
+nav:
+  - "Home": index.md
+  - "Chronicle architecture": ./chronicle_architecture.md
+  - "Installing chronicle":
+      "Building chronicle for your domain": ./building.md
+      "Installing chronicle with sextant": ./sextant.md
+  - "Development with Chronicle":
+      - "Provenance concepts": ./provenance_concepts.md
+      - "Modeling your provenance domain": ./domain_modelling.md
+      - "Recording provenance": ./recording_provenance.md
+      - "Querying provenance": ./querying_provenance.md
+      - "Untyped chronicle": ./untyped_chronicle.md
+  - "Operating chronicle":
+      - "CLI": ./cli.md
+      - "Configuration options": ./config.md

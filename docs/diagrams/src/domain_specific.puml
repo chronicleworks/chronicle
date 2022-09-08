@@ -1,0 +1,16 @@
+@startuml
+
+!include ../include/default.iuml
+
+component ChronicleBuilder as "Chronicle build image"
+file Domain as "domain.yaml"
+component Chronicle as "Domain specific Chronicle"
+component ChronicleStandalone as "Domain specific stand-alone Chronicle"
+
+ChronicleBuilder -> Domain : references
+ChronicleBuilder -> Chronicle: builds
+ChronicleBuilder -> ChronicleStandalone: builds
+Chronicle --> Domain: implements
+ChronicleStandalone --> Domain: implements
+
+@enduml

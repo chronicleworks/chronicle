@@ -1,0 +1,16 @@
+
+@startuml
+
+!include ../include/default.iuml
+!include ../include/agent.iuml
+!include ../include/activity.iuml
+
+abstract actedOnBehalfOf {
+    + role
+}
+
+Agent -> actedOnBehalfOf
+actedOnBehalfOf -> Agent
+actedOnBehalfOf ..> Activity
+
+@enduml
