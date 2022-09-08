@@ -30,9 +30,7 @@ To model and record this process you will need the Chronicle domain model defini
 
 This process represented as provenance will look like:
 
-
 ![file](diagrams/out/question_as_prov.svg)
-
 
 ### Research
 The `Question` is used to inform one or more searches to a search engine by a researcher, the parameters to the search engine are recorded, and the results are used to create references to `Evidence`.
@@ -53,9 +51,7 @@ To model and record this process you will need the Chronicle domain model defini
 
 This process represented as provenance will look like:
 
-
 ![file](diagrams/out/research_as_prov.svg)
-
 
 ### Revision
 
@@ -101,9 +97,7 @@ A version of Guidance can be approved for Publication by one or more Editors or 
 * [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the Published process happened at a point in time
 * [hadEvidence](./recording_provenance.md/#had-evidence) - attach a signature of the published PDF document to the PublishedGuidance activity
 
-
 This process represented as provenance will look like:
-
 
 ![file](diagrams/out/publication_as_prov.svg)
 
@@ -213,7 +207,6 @@ An individual person
 
 A named organization consisting of one or more persons, the details of the organizational model are not required to be recorded in provenance.
 
-
 ### Roles
 
 When participating in activities, when either directly responsible or via delegation, Agents can have a Role. Agents form the who, whereas Roles are the 'what'. Agents may have multiple roles in the same Activity. From our example domain we can identify the following roles:
@@ -313,7 +306,6 @@ Attributes are used to assign additional data to the prov terms - `Agent`, `Acti
 
 Attribute names should be meaningful to your domain - choose things like 'Title' or 'Description', they can be re-used between any of prov terms - Entity, Activity and Agent.
 
-
 ``` yaml
 attributes:
   Content:
@@ -393,7 +385,6 @@ activities:
 
 Corresponding to actors in the example domain we specify the following roles:
 
-
 ``` yaml
 roles:
   - Stakeholder
@@ -403,7 +394,6 @@ roles:
 ```
 
 Supplying this as a YAML file to the chronicle build image as documented in [building chronicle](./building.md) will produce a well-typed API for your domain. The next step is then [recording provenance](./recording_provenance.md).
-
 
 ## Evolution
 

@@ -1,4 +1,4 @@
-# Querying Provenance
+# Querying Provenance
 
 Currently Chronicle has 4 root queries.
 
@@ -14,7 +14,6 @@ type Query {
 The majority of the work for provenance retrieval will be with the [activity timeline](#activity-timeline) query.
 
 Familiarizing yourself with GraphQL is necessary to make good use of Chronicle. Chronicle makes extensive use of [relay cursors](https://relay.dev/graphql/connections.htm) and [union types](https://www.apollographql.com/docs/apollo-server/schema/unions-interfaces/).
-
 
 ## Activity timeline
 
@@ -34,6 +33,7 @@ enum ActivityType {
 }
 
 ```
+
 #### forEntity
 
 A list of EntityIDs to filter activities by - leaving this empty will return all activity types.
@@ -45,7 +45,6 @@ The time in RFC3889 format to return activities from. Not specifying this will r
 #### to
 
 The time in RFC3889 format to return activities until. Nor specifying this will return all activity types after the time specified in[from](#from).
-
 
 #### after
 
@@ -63,13 +62,11 @@ An integer controlling page size for forward pagination. Defaults to 20
 
 An integer controlling page size for reverse pagination. Defaults to 20
 
-
 ## agentsByType
 
 ## agentById
 
 ## entityById
-
 
 ## Returned objects
 
@@ -103,7 +100,7 @@ The EntityID of the entity. This is derived from name, but clients should not at
 
 The Namespace of the entity, only of interest for Chronicle domains that span multiple namespaces.
 
-### name
+### name
 
 The name of the entity, determined when defined
 
@@ -135,9 +132,7 @@ A list of the Entities that this entity is derived from. See [derivation](./prov
 
 Attribute values for the attributes associated with the entity subtype, as determined by the [domain model](./domain_modelling.md)
 
-
 ### Activity subtypes
-
 
 ``` graphql
 type Published {
