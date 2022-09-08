@@ -1,0 +1,11 @@
+@startuml
+
+!include ../include/default.iuml
+
+actor "Stakeholder"
+actor "Editor"
+
+Editor -> Guidance: Approves
+Stakeholder -> Editor: Advises
+
+@enduml

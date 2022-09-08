@@ -1,0 +1,45 @@
+site_name: "Chronicle"
+theme:
+  name: "readthedocs"
+  language: "en"
+  palette:
+    primary: "light blue"
+    accent: "light blue"
+copyright: Copyright &copy; 2022 Blockchain Technology Partners
+strict: false
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      auto_append:
+        - docs/includes/glosary.md
+  - pymdownx.superfences
+plugins:
+  - search
+  - build_plantuml:
+      theme_enabled: false
+      render: "server"
+      bin_path: "/opt/homebrew/bin/plantuml"
+      server: "http://www.plantuml.com/plantuml"
+      disable_ssl_certificate_validation: true
+      output_format: "svg"
+      diagram_root: "docs/diagrams"
+      output_folder: "out"
+      input_folder: "src"
+      input_extensions: ""
+nav:
+  - "Home": index.md
+  - "Chronicle architecture": ./chronicle_architecture.md
+  - "Installing chronicle":
+      "Building chronicle for your domain": ./building.md
+      "Installing chronicle with sextant": ./sextant.md
+  - "Development with Chronicle":
+      - "Provenance concepts": ./provenance_concepts.md
+      - "Modeling your provenance domain": ./domain_modelling.md
+      - "Recording provenance": ./recording_provenance.md
+      - "Querying provenance": ./querying_provenance.md
+      - "Untyped chronicle": ./untyped_chronicle.md
+  - "Operating chronicle":
+      - "CLI": ./cli.md
+      - "Configuration options": ./config.md

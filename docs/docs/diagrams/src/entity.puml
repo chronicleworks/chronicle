@@ -1,0 +1,7 @@
+@startuml
+
+!include ../include/default.iuml
+
+!include ../include/entity.iuml
+
+@enduml

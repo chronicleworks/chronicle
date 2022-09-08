@@ -1,0 +1,6 @@
+abstract Activity {
+    + id
+    + name
+    + startedAtTime
+    + endedAtTime
+}

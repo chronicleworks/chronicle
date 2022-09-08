@@ -1,0 +1,11 @@
+@startuml
+
+
+!include ../include/default.iuml
+
+!include ../include/entity.iuml
+
+Entity -> Entity : wasDerivedFrom
+
+
+@enduml

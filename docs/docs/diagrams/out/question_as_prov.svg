@@ -1,0 +1,568 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="445.8333px" preserveAspectRatio="none" style="width:761px;height:445px;background:#00000000;" version="1.1" viewBox="0 0 761 445" width="761.4583px" zoomAndPan="magnify"><defs><linearGradient id="g10yd9xms7kqf80" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#33B2E2"/><stop offset="100%" stop-color="#009FDB"/></linearGradient><linearGradient id="g10yd9xms7kqf81" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#3786BE"/><stop offset="100%" stop-color="#0568AE"/></linearGradient></defs><g><!--MD5=[9d44916250b776386006c440668bcfbb]
+class Agent--><g id="elem_Agent"><rect codeLine="4" fill="url(#g10yd9xms7kqf80)" height="117.098" id="Agent" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="82.2917" x="91.1458" y="286.8635"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="82.2917" x="91.1458" y="286.8635"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="82.2917" x="91.1458" y="316.8684"/><rect codeLine="4" fill="none" height="117.098" id="Agent" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="82.2917" x="91.1458" y="286.8635"/><ellipse cx="105.7292" cy="307.0743" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M107.2754,308.2299 L107.5684,308.9461 L107.2754,308.9461 C106.9661,308.9461 106.8685,308.9623 106.7546,309.0437 C106.5755,309.1414 106.4616,309.3692 106.4616,309.5808 C106.4616,309.7761 106.5592,309.9552 106.722,310.0691 C106.8359,310.1668 106.9824,310.1993 107.2754,310.1993 L109.0169,310.1993 C109.2773,310.1993 109.4401,310.1668 109.5378,310.1179 C109.7331,310.004 109.847,309.7924 109.847,309.5808 C109.847,309.3692 109.7493,309.1902 109.5866,309.0763 C109.4564,308.9786 109.3424,308.9461 109.0007,308.9461 L106.5104,302.9076 L103.8086,302.9076 C103.4668,302.9076 103.3854,302.9239 103.2715,303.0053 C103.0762,303.1192 102.9785,303.3308 102.9785,303.5424 C102.9785,303.7377 103.0762,303.9168 103.2389,304.047 C103.3529,304.1446 103.4831,304.1609 103.8086,304.1609 L104.5898,304.1609 L102.653,308.9461 C102.3438,308.9461 102.2298,308.9623 102.1159,309.0437 C101.9368,309.1414 101.8229,309.3692 101.8229,309.5808 C101.8229,309.9877 102.0996,310.1993 102.653,310.1993 L104.3132,310.1993 C104.5736,310.1993 104.7363,310.1668 104.834,310.1179 C105.013,310.004 105.127,309.7924 105.127,309.5808 C105.127,309.3692 105.0293,309.1902 104.8665,309.06 C104.7526,308.9786 104.6387,308.9461 104.3132,308.9461 L104.0202,308.9461 L104.3132,308.2299 L107.2754,308.2299 Z M106.7708,306.9767 L104.8014,306.9767 L105.7943,304.5678 L106.7708,306.9767 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" font-style="italic" lengthAdjust="spacing" textLength="34.375" x="127.6042" y="311.0411">Agent</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="92.1875" x2="172.3958" y1="327.2851" y2="327.2851"/><ellipse cx="102.6042" cy="348.0167" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="10.4167" x="119.2708" y="350.421">id</text><ellipse cx="102.6042" cy="378.0216" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="34.375" x="119.2708" y="380.4259">name</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="92.1875" x2="172.3958" y1="395.6282" y2="395.6282"/></g><!--MD5=[c881b25adf3665c6568c9693d41a70f3]
+class Activity--><g id="elem_Activity"><rect codeLine="9" fill="url(#g10yd9xms7kqf80)" height="177.1077" id="Activity" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="127.0833" x="616.6667" y="256.6552"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="127.0833" x="616.6667" y="256.6552"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="127.0833" x="616.6667" y="286.6601"/><rect codeLine="9" fill="none" height="177.1077" id="Activity" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="127.0833" x="616.6667" y="256.6552"/><ellipse cx="647.1875" cy="276.866" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M648.7337,278.0216 L649.0267,278.7377 L648.7337,278.7377 C648.4245,278.7377 648.3268,278.754 648.2129,278.8354 C648.0339,278.933 647.9199,279.1609 647.9199,279.3725 C647.9199,279.5678 648.0176,279.7468 648.1803,279.8608 C648.2943,279.9584 648.4408,279.991 648.7337,279.991 L650.4753,279.991 C650.7357,279.991 650.8984,279.9584 650.9961,279.9096 C651.1914,279.7957 651.3053,279.5841 651.3053,279.3725 C651.3053,279.1609 651.2077,278.9819 651.0449,278.8679 C650.9147,278.7703 650.8008,278.7377 650.459,278.7377 L647.9688,272.6993 L645.2669,272.6993 C644.9251,272.6993 644.8438,272.7156 644.7298,272.797 C644.5345,272.9109 644.4368,273.1225 644.4368,273.3341 C644.4368,273.5294 644.5345,273.7084 644.6973,273.8386 C644.8112,273.9363 644.9414,273.9526 645.2669,273.9526 L646.0482,273.9526 L644.1113,278.7377 C643.8021,278.7377 643.6882,278.754 643.5742,278.8354 C643.3952,278.933 643.2813,279.1609 643.2813,279.3725 C643.2813,279.7794 643.5579,279.991 644.1113,279.991 L645.7715,279.991 C646.0319,279.991 646.1947,279.9584 646.2923,279.9096 C646.4714,279.7957 646.5853,279.5841 646.5853,279.3725 C646.5853,279.1609 646.4876,278.9819 646.3249,278.8517 C646.2109,278.7703 646.097,278.7377 645.7715,278.7377 L645.4785,278.7377 L645.7715,278.0216 L648.7337,278.0216 Z M648.2292,276.7683 L646.2598,276.7683 L647.2526,274.3595 L648.2292,276.7683 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" font-style="italic" lengthAdjust="spacing" textLength="43.75" x="672.6042" y="280.8328">Activity</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="617.7083" x2="742.7083" y1="297.0768" y2="297.0768"/><ellipse cx="628.125" cy="317.8084" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="10.4167" x="644.7917" y="320.2126">id</text><ellipse cx="628.125" cy="347.8132" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="34.375" x="644.7917" y="350.2175">name</text><ellipse cx="628.125" cy="377.8181" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="84.375" x="644.7917" y="380.2224">startedAtTime</text><ellipse cx="628.125" cy="407.823" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="81.25" x="644.7917" y="410.2273">endedAtTime</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="617.7083" x2="742.7083" y1="425.4296" y2="425.4296"/></g><!--MD5=[be996cdb8e6bf2fc7cb89c555f2cd144]
+class Entity--><g id="elem_Entity"><rect codeLine="16" fill="url(#g10yd9xms7kqf80)" height="117.098" id="Entity" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="81.25" x="358.3333" y="286.8635"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="81.25" x="358.3333" y="286.8635"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="81.25" x="358.3333" y="316.8684"/><rect codeLine="16" fill="none" height="117.098" id="Entity" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="81.25" x="358.3333" y="286.8635"/><ellipse cx="372.9167" cy="307.0743" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M374.4629,308.2299 L374.7559,308.9461 L374.4629,308.9461 C374.1536,308.9461 374.056,308.9623 373.9421,309.0437 C373.763,309.1414 373.6491,309.3692 373.6491,309.5808 C373.6491,309.7761 373.7467,309.9552 373.9095,310.0691 C374.0234,310.1668 374.1699,310.1993 374.4629,310.1993 L376.2044,310.1993 C376.4648,310.1993 376.6276,310.1668 376.7253,310.1179 C376.9206,310.004 377.0345,309.7924 377.0345,309.5808 C377.0345,309.3692 376.9368,309.1902 376.7741,309.0763 C376.6439,308.9786 376.5299,308.9461 376.1882,308.9461 L373.6979,302.9076 L370.9961,302.9076 C370.6543,302.9076 370.5729,302.9239 370.459,303.0053 C370.2637,303.1192 370.166,303.3308 370.166,303.5424 C370.166,303.7377 370.2637,303.9168 370.4264,304.047 C370.5404,304.1446 370.6706,304.1609 370.9961,304.1609 L371.7773,304.1609 L369.8405,308.9461 C369.5313,308.9461 369.4173,308.9623 369.3034,309.0437 C369.1243,309.1414 369.0104,309.3692 369.0104,309.5808 C369.0104,309.9877 369.2871,310.1993 369.8405,310.1993 L371.5007,310.1993 C371.7611,310.1993 371.9238,310.1668 372.0215,310.1179 C372.2005,310.004 372.3145,309.7924 372.3145,309.5808 C372.3145,309.3692 372.2168,309.1902 372.054,309.06 C371.9401,308.9786 371.8262,308.9461 371.5007,308.9461 L371.2077,308.9461 L371.5007,308.2299 L374.4629,308.2299 Z M373.9583,306.9767 L371.9889,306.9767 L372.9818,304.5678 L373.9583,306.9767 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" font-style="italic" lengthAdjust="spacing" textLength="33.3333" x="394.7917" y="311.0411">Entity</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="359.375" x2="438.5417" y1="327.2851" y2="327.2851"/><ellipse cx="369.7917" cy="348.0167" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="10.4167" x="386.4583" y="350.421">id</text><ellipse cx="369.7917" cy="378.0216" fill="none" rx="3.125" ry="3.125" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="34.375" x="386.4583" y="380.4259">name</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="359.375" x2="438.5417" y1="395.6282" y2="395.6282"/></g><!--MD5=[fc7123defb831ecdd44b2d9bcef6cceb]
+class Question--><g id="elem_Question"><rect fill="url(#g10yd9xms7kqf80)" height="57.0882" id="Question" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="101.0417" x="348.4375" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="101.0417" x="348.4375" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="101.0417" x="348.4375" y="165.8268"/><rect fill="none" height="57.0882" id="Question" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="101.0417" x="348.4375" y="135.8219"/><ellipse cx="363.0208" cy="156.0326" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M364.9577,152.6472 C364.2741,152.3217 363.8346,152.2241 363.1836,152.2241 C361.263,152.2241 359.7819,153.7377 359.7819,155.7397 L359.7819,156.5698 C359.7819,158.4741 361.3444,159.8575 363.4603,159.8575 C364.3555,159.8575 365.2181,159.6297 365.7552,159.2228 C366.1947,158.9298 366.4225,158.6043 366.4225,158.3113 C366.4225,157.9858 366.1296,157.6928 365.804,157.6928 C365.6413,157.6928 365.4948,157.7579 365.3483,157.8881 C365.0065,158.2462 365.0065,158.2462 364.8763,158.3113 C364.5671,158.5066 364.0625,158.6043 363.4928,158.6043 C361.9954,158.6043 361.0352,157.7905 361.0352,156.5372 L361.0352,155.7397 C361.0352,154.4213 361.9629,153.461 363.2324,153.461 C363.6556,153.461 364.1113,153.575 364.4531,153.7703 C364.8112,153.9656 364.9414,154.1284 365.0065,154.4213 C365.0553,154.7306 365.0716,154.8119 365.1693,154.9096 C365.2669,155.0235 365.446,155.0886 365.6087,155.0886 C365.8203,155.0886 365.9993,154.991 366.1296,154.8282 C366.2109,154.7143 366.2435,154.5841 366.2435,154.2586 L366.2435,153.2169 C366.2435,152.9076 366.2272,152.81 366.1458,152.6961 C366.0319,152.5007 365.8366,152.3868 365.6087,152.3868 C365.3971,152.3868 365.2507,152.4682 365.0879,152.6961 L364.9577,152.6472 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="53.125" x="384.8958" y="159.9994">Question</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="349.4792" x2="448.4375" y1="176.2434" y2="176.2434"/><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="349.4792" x2="448.4375" y1="184.5768" y2="184.5768"/></g><!--MD5=[09ce52be0ee7de43c61b6e2d59bf108b]
+class Person--><g id="elem_Person"><rect fill="url(#g10yd9xms7kqf80)" height="57.0882" id="Person" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="87.5" x="17.7083" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="87.5" x="17.7083" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="87.5" x="17.7083" y="165.8268"/><rect fill="none" height="57.0882" id="Person" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="87.5" x="17.7083" y="135.8219"/><ellipse cx="32.2917" cy="156.0326" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M34.2285,152.6472 C33.5449,152.3217 33.1055,152.2241 32.4544,152.2241 C30.5339,152.2241 29.0527,153.7377 29.0527,155.7397 L29.0527,156.5698 C29.0527,158.4741 30.6152,159.8575 32.7311,159.8575 C33.6263,159.8575 34.4889,159.6297 35.026,159.2228 C35.4655,158.9298 35.6934,158.6043 35.6934,158.3113 C35.6934,157.9858 35.4004,157.6928 35.0749,157.6928 C34.9121,157.6928 34.7656,157.7579 34.6191,157.8881 C34.2773,158.2462 34.2773,158.2462 34.1471,158.3113 C33.8379,158.5066 33.3333,158.6043 32.7637,158.6043 C31.2663,158.6043 30.306,157.7905 30.306,156.5372 L30.306,155.7397 C30.306,154.4213 31.2337,153.461 32.5033,153.461 C32.9264,153.461 33.3822,153.575 33.724,153.7703 C34.082,153.9656 34.2122,154.1284 34.2773,154.4213 C34.3262,154.7306 34.3424,154.8119 34.4401,154.9096 C34.5378,155.0235 34.7168,155.0886 34.8796,155.0886 C35.0911,155.0886 35.2702,154.991 35.4004,154.8282 C35.4818,154.7143 35.5143,154.5841 35.5143,154.2586 L35.5143,153.2169 C35.5143,152.9076 35.498,152.81 35.4167,152.6961 C35.3027,152.5007 35.1074,152.3868 34.8796,152.3868 C34.668,152.3868 34.5215,152.4682 34.3587,152.6961 L34.2285,152.6472 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="39.5833" x="54.1667" y="159.9994">Person</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="18.75" x2="104.1667" y1="176.2434" y2="176.2434"/><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="18.75" x2="104.1667" y1="184.5768" y2="184.5768"/></g><!--MD5=[86c7c362de55a38b660185a1328fe18d]
+class Organization--><g id="elem_Organization"><rect fill="url(#g10yd9xms7kqf80)" height="57.0882" id="Organization" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="122.9167" x="141.6667" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="122.9167" x="141.6667" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="122.9167" x="141.6667" y="165.8268"/><rect fill="none" height="57.0882" id="Organization" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="122.9167" x="141.6667" y="135.8219"/><ellipse cx="156.25" cy="156.0326" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M158.1868,152.6472 C157.5033,152.3217 157.0638,152.2241 156.4128,152.2241 C154.4922,152.2241 153.0111,153.7377 153.0111,155.7397 L153.0111,156.5698 C153.0111,158.4741 154.5736,159.8575 156.6895,159.8575 C157.5846,159.8575 158.4473,159.6297 158.9844,159.2228 C159.4238,158.9298 159.6517,158.6043 159.6517,158.3113 C159.6517,157.9858 159.3587,157.6928 159.0332,157.6928 C158.8704,157.6928 158.724,157.7579 158.5775,157.8881 C158.2357,158.2462 158.2357,158.2462 158.1055,158.3113 C157.7962,158.5066 157.2917,158.6043 156.722,158.6043 C155.2246,158.6043 154.2643,157.7905 154.2643,156.5372 L154.2643,155.7397 C154.2643,154.4213 155.1921,153.461 156.4616,153.461 C156.8848,153.461 157.3405,153.575 157.6823,153.7703 C158.0404,153.9656 158.1706,154.1284 158.2357,154.4213 C158.2845,154.7306 158.3008,154.8119 158.3984,154.9096 C158.4961,155.0235 158.6751,155.0886 158.8379,155.0886 C159.0495,155.0886 159.2285,154.991 159.3587,154.8282 C159.4401,154.7143 159.4727,154.5841 159.4727,154.2586 L159.4727,153.2169 C159.4727,152.9076 159.4564,152.81 159.375,152.6961 C159.2611,152.5007 159.0658,152.3868 158.8379,152.3868 C158.6263,152.3868 158.4798,152.4682 158.3171,152.6961 L158.1868,152.6472 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="75" x="178.125" y="159.9994">Organization</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="142.7083" x2="263.5417" y1="176.2434" y2="176.2434"/><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="142.7083" x2="263.5417" y1="184.5768" y2="184.5768"/></g><!--MD5=[298d88f07b5e63dbf4e3eb3f98d9ab40]
+class QuestionAsked--><g id="elem_QuestionAsked"><rect fill="url(#g10yd9xms7kqf80)" height="57.0882" id="QuestionAsked" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="137.5" x="611.4583" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="40.4215" rx="10.4167" ry="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="137.5" x="611.4583" y="135.8219"/><rect fill="url(#g10yd9xms7kqf80)" height="10.4167" style="stroke:url(#g10yd9xms7kqf80);stroke-width:1.0416666666666667;" width="137.5" x="611.4583" y="165.8268"/><rect fill="none" height="57.0882" id="QuestionAsked" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="137.5" x="611.4583" y="135.8219"/><ellipse cx="626.0417" cy="156.0326" fill="none" rx="10.4167" ry="10.4167" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M627.9785,152.6472 C627.2949,152.3217 626.8555,152.2241 626.2044,152.2241 C624.2839,152.2241 622.8027,153.7377 622.8027,155.7397 L622.8027,156.5698 C622.8027,158.4741 624.3652,159.8575 626.4811,159.8575 C627.3763,159.8575 628.2389,159.6297 628.776,159.2228 C629.2155,158.9298 629.4434,158.6043 629.4434,158.3113 C629.4434,157.9858 629.1504,157.6928 628.8249,157.6928 C628.6621,157.6928 628.5156,157.7579 628.3691,157.8881 C628.0273,158.2462 628.0273,158.2462 627.8971,158.3113 C627.5879,158.5066 627.0833,158.6043 626.5137,158.6043 C625.0163,158.6043 624.056,157.7905 624.056,156.5372 L624.056,155.7397 C624.056,154.4213 624.9837,153.461 626.2533,153.461 C626.6764,153.461 627.1322,153.575 627.474,153.7703 C627.832,153.9656 627.9622,154.1284 628.0273,154.4213 C628.0762,154.7306 628.0924,154.8119 628.1901,154.9096 C628.2878,155.0235 628.4668,155.0886 628.6296,155.0886 C628.8411,155.0886 629.0202,154.991 629.1504,154.8282 C629.2318,154.7143 629.2643,154.5841 629.2643,154.2586 L629.2643,153.2169 C629.2643,152.9076 629.248,152.81 629.1667,152.6961 C629.0527,152.5007 628.8574,152.3868 628.6296,152.3868 C628.418,152.3868 628.2715,152.4682 628.1087,152.6961 L627.9785,152.6472 Z " fill="#FFFFFF"/><text fill="#D2D2D2" font-family="&quot;Verdana&quot;" font-size="11.4583" lengthAdjust="spacing" textLength="89.5833" x="647.9167" y="159.9994">QuestionAsked</text><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="612.5" x2="747.9167" y1="176.2434" y2="176.2434"/><line style="stroke:#33B2E2;stroke-width:1.0416666666666667;" x1="612.5" x2="747.9167" y1="184.5768" y2="184.5768"/></g><!--MD5=[690c7b66534f348dab3eeb4aca2de1e3]
+reverse link Question to Entity--><g id="link_Question_Entity"><path codeLine="22" d="M398.9583,214.4094 C398.9583,236.7063 398.9583,263.2625 398.9583,286.524 " fill="none" id="Question-backto-Entity" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="none" points="391.6667,214.2563,398.9583,193.4229,406.25,214.2563,391.6667,214.2563" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[a2a9146c54d208d05afda3efae3ad87d]
+reverse link Person to Agent--><g id="link_Person_Agent"><path codeLine="23" d="M80.2942,213.0146 C89.2466,235.5927 100.0245,262.775 109.4408,286.524 " fill="none" id="Person-backto-Agent" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="none" points="73.4267,215.4771,72.526,193.4229,86.9832,210.1021,73.4267,215.4771" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[fec841f5cb7a28cb8be0b347f6856344]
+reverse link Organization to Agent--><g id="link_Organization_Agent"><path codeLine="24" d="M184.2896,213.0146 C175.3365,235.5927 164.5583,262.775 155.1427,286.524 " fill="none" id="Organization-backto-Agent" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="none" points="177.6,210.1021,192.0573,193.4229,191.1563,215.4771,177.6,210.1021" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[6553a38b171f9ae9c4f9562e8c713402]
+reverse link QuestionAsked to Activity--><g id="link_QuestionAsked_Activity"><path codeLine="25" d="M680.2083,214.4167 C680.2083,227.4979 680.2083,242.0458 680.2083,256.5333 " fill="none" id="QuestionAsked-backto-Activity" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="none" points="672.9167,214.2563,680.2083,193.4229,687.5,214.2563,672.9167,214.2563" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[f20fccb2a3bb0dcd75aeec3ed22847ad]
+link Person to QuestionAsked--><g id="link_Person_QuestionAsked"><path codeLine="27" d="M105.4632,143.0938 C111.2818,140.5229 117.2074,138.0302 122.9167,135.8219 C260.8531,82.4708 294.4125,59.1073 440.625,36.8635 C478.1563,31.1542 578.8646,17.401 611.4583,36.8635 C645.1583,56.9865 663.3135,99.9583 672.3573,130.4656 " fill="none" id="Person-to-QuestionAsked" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="673.8365,135.6292,675.2593,125.4691,672.4017,130.6224,667.2484,127.7647,673.8365,135.6292" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="121.875" x="465.1042" y="41.1747">wasAssociatedWith</text><path d="M445.8333,69.1227 L445.8333,88.9143 A10.4167,10.4167 0 0 0 456.25,99.331 L595.8333,99.331 A10.4167,10.4167 0 0 0 606.25,88.9143 L606.25,69.1227 L595.8333,58.706 L456.25,58.706 A10.4167,10.4167 0 0 0 445.8333,69.1227 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M595.8333,58.706 L595.8333,63.9143 A5.2083,5.2083 0 0 0 601.0417,69.1227 L606.25,69.1227 L595.8333,58.706 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="121.875" x="460.4167" y="83.8504">(role=Stakeholder)</text></g><!--MD5=[f20fccb2a3bb0dcd75aeec3ed22847ad]
+link Person to QuestionAsked--><g id="link_Person_QuestionAsked"><path codeLine="31" d="M105.4632,143.0938 C111.2818,140.5229 117.2074,138.0302 122.9167,135.8219 C260.8531,82.4708 294.4125,59.1073 440.625,36.8635 C478.1563,31.1542 578.8646,17.401 611.4583,36.8635 C645.1583,56.9865 663.3135,99.9583 672.3573,130.4656 " fill="none" id="Person-to-QuestionAsked-1" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="673.8365,135.6292,675.2593,125.4691,672.4017,130.6224,667.2484,127.7647,673.8365,135.6292" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="121.875" x="465.1042" y="41.1747">wasAssociatedWith</text><path d="M463.5417,69.1227 L463.5417,88.9143 A10.4167,10.4167 0 0 0 473.9583,99.331 L578.125,99.331 A10.4167,10.4167 0 0 0 588.5417,88.9143 L588.5417,69.1227 L578.125,58.706 L473.9583,58.706 A10.4167,10.4167 0 0 0 463.5417,69.1227 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M578.125,58.706 L578.125,63.9143 A5.2083,5.2083 0 0 0 583.3333,69.1227 L588.5417,69.1227 L578.125,58.706 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="86.4583" x="478.125" y="83.8504">(role=Author)</text></g><!--MD5=[52e2a136900eb3d0baeb4a9a27e1534c]
+link Organization to QuestionAsked--><g id="link_Organization_QuestionAsked"><path codeLine="29" d="M207.8792,135.7417 C214.6292,105.2188 230.2292,58.4479 264.5833,36.8635 C296.7281,16.6667 398.5438,27.8302 435.4167,36.8635 C510.499,55.2583 588.1458,101.1302 635.3198,132.5521 " fill="none" id="Organization-to-QuestionAsked" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="639.7885,135.5458,634.3186,126.8665,635.4614,132.6472,629.6807,133.79,639.7885,135.5458" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="121.875" x="289.0625" y="41.1747">wasAssociatedWith</text><path d="M269.7917,69.1227 L269.7917,88.9143 A10.4167,10.4167 0 0 0 280.2083,99.331 L419.7917,99.331 A10.4167,10.4167 0 0 0 430.2083,88.9143 L430.2083,69.1227 L419.7917,58.706 L280.2083,58.706 A10.4167,10.4167 0 0 0 269.7917,69.1227 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M419.7917,58.706 L419.7917,63.9143 A5.2083,5.2083 0 0 0 425,69.1227 L430.2083,69.1227 L419.7917,58.706 " fill="url(#g10yd9xms7kqf81)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="121.875" x="284.375" y="83.8504">(role=Stakeholder)</text></g><!--MD5=[77d091f14117d6a5eb7346b621670c9c]
+link Question to QuestionAsked--><g id="link_Question_QuestionAsked"><path codeLine="33" d="M449.5646,164.4677 C493.1302,164.4677 556.5792,164.4677 605.9073,164.4677 " fill="none" id="Question-to-QuestionAsked" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="611.2417,164.4677,601.8667,160.301,606.0333,164.4677,601.8667,168.6344,611.2417,164.4677" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="107.2917" x="476.8229" y="150.0288">wasGeneratedBy</text></g><!--MD5=[5b7e6bda48522679ee66f5a6d42a125b]
+@startuml
+!theme bluegray
+
+
+abstract Agent {
++ id
++ name
+}
+
+abstract Activity {
++ id
++ name
++ startedAtTime
++ endedAtTime
+}
+
+abstract Entity {
++ id
++ name
+}
+
+
+Question <|- - Entity
+Person <|- - Agent
+Organization <|- - Agent
+QuestionAsked <|- - Activity
+
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Organization -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Author)
+Question -> QuestionAsked : wasGeneratedBy
+@enduml
+
+@startuml
+
+
+
+skinparam backgroundColor transparent
+skinparam useBetaStyle false
+
+
+
+
+
+
+
+
+<style>
+  root {
+    BackgroundColor transparent
+    FontColor #fff
+    HyperLinkColor $ORANGE
+    LineColor #007faf
+    LineThickness 1
+    Margin 10
+    Padding 6
+    Shadowing 0.0
+  }
+  node {
+   Padding 15
+   roundcorner 20
+   BackgroundColor #009fdb-#007faf
+  }
+  caption {
+    LineThickness 0
+  }
+  footer {
+    LineThickness 0
+  }
+  groupHeader {
+    BackgroundColor #f2f2f2
+    FontColor #0568ae
+    FontStyle bold
+  }
+  header {
+    LineThickness 0
+  }
+  referenceHeader {
+    BackgroundColor transparent
+    FontColor #5a5a5a
+    FontStyle bold
+  }
+  separator {
+    BackgroundColor #5a5a5a
+    FontColor transparent
+    FontStyle bold
+  }
+  title {
+	FontSize 20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor  #f5f5f5-#f2f2f2
+	FontColor #009fdb
+	BorderColor #f2f2f2
+  }
+  nwdiagDiagram {
+	network {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		LineThickness 1.0
+		FontColor #007faf
+	}
+	server {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	}
+	arrow {
+		FontColor #007faf
+		LineColor #007faf
+	}
+	group {
+		BackGroundColor #d2d2d2
+		LineColor $LIGHT_DARK
+		LineThickness 2.0
+		Margin 5
+		Padding 5
+	}
+  }
+  ganttDiagram {
+	task {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		Margin 10
+		Padding 6
+	}
+	note {
+		FontColor #fff
+		LineColor #04538b
+		BackGroundColor #0568ae
+	}
+	separator {
+		LineColor #f2f2f2
+		BackGroundColor #f2f2f2-#c2c2c2
+		FontColor #5a5a5a
+	}
+	milestone {
+		FontColor #0568ae
+		FontSize 16
+		FontStyle italic
+		BackGroundColor #f2f2f2
+		LineColor #c2c2c2
+	}
+	timeline {
+		BackgroundColor #f2f2f2
+		FontColor #5a5a5a
+	}
+	closed {
+		BackgroundColor #bb5d00
+		FontColor #fff
+	}
+  }
+</style>
+skinparam defaultFontName        "Verdana"
+skinparam defaultFontSize        12
+skinparam dpi                    100
+skinparam shadowing              false
+skinparam roundcorner            20
+skinparam ParticipantPadding     30
+skinparam BoxPadding             40
+skinparam Padding                8
+skinparam ArrowColor             #959595
+skinparam stereotype {
+    CBackgroundColor #f5f5f5
+    CBorderColor #c2c2c2
+    ABackgroundColor #c4ca33
+    ABorderColor #919700
+    IBackgroundColor #d95555
+    IBorderColor #a62222
+    EBackgroundColor #ee9033
+    EBorderColor #bb5d00
+    NBackgroundColor #3786be
+    NBorderColor #04538b
+}
+skinparam title {
+	FontColor	                 #009fdb
+	BorderColor	                 #c2c2c2
+	FontSize	    	         20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor              #f5f5f5-#f2f2f2
+}
+
+
+skinparam legend {
+	BackgroundColor #f2f2f2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+skinparam swimlane {
+	BorderColor #0568ae
+	BorderThickness 2
+	TitleBackgroundColor  #f5f5f5-#f2f2f2
+	TitleFontColor #009fdb
+}
+
+
+skinparam activity {
+	FontColor #fff
+	BorderColor #009fdb
+	BackgroundColor #33b2e2-#009fdb
+	BarColor #b5bd00
+	StartColor #0568ae
+	EndColor #0568ae
+	DiamondBackgroundColor #f5f5f5-#c2c2c2
+  	DiamondBorderColor #c2c2c2
+	DiamondFontColor #5a5a5a
+}
+
+
+skinparam participant {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	ParticipantBorderThickness 2
+}
+
+
+skinparam actor {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam arrow {
+	Thickness 3
+	Color #009fdb
+	FontColor #5a5a5a
+}
+
+
+skinparam sequence {
+	BorderColor #009fdb
+	TitleFontColor #009fdb
+	BackgroundColor transparent
+	StartColor #009fdb
+	EndColor #009fdb
+	BoxBackgroundColor #d2d2d2
+	BoxBorderColor #959595
+	BoxFontColor #5a5a5a
+	DelayFontColor #5a5a5a
+	LifeLineBorderColor #c2c2c2
+	LifeLineBorderThickness 2
+	LifeLineBackgroundColor #f5f5f5
+	GroupBorderColor #959595
+	GroupFontColor #5a5a5a
+	GroupHeaderFontColor #0568ae
+	DividerBackgroundColor #fff-#d2d2d2
+    DividerBorderColor #959595
+    DividerBorderThickness 2
+    DividerFontColor #5a5a5a
+	ReferenceBackgroundColor transparent
+	ReferenceBorderColor #959595
+	ReferenceFontColor #5a5a5a
+	ReferenceHeaderFontColor #0568ae
+	StereotypeFontColor #fff
+}
+
+
+skinparam partition {
+	BorderColor #009fdb
+	FontColor #009fdb
+	BackgroundColor transparent
+}
+
+
+skinparam collections {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam control {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam entity {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam boundary {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam agent {
+	BackgroundColor #orange
+	BorderColor #999999
+	FontColor #333333
+}
+
+
+skinparam note {
+	BorderThickness 1
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam artifact {
+	BackgroundColor #fff-#d2d2d2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+
+skinparam component {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam interface {
+	BackgroundColor  #d95555
+	BorderColor  #cf2a2a
+	FontColor #5a5a5a
+}
+
+
+skinparam storage {
+	BackgroundColor #ee9033-#ea7400
+  	BorderColor #ea7400
+	FontColor #fff
+}
+
+
+skinparam node {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #c2c2c2
+	FontColor #009fdb
+}
+
+
+skinparam cloud {
+	BackgroundColor #F2FCFE-#eeeeee
+	BorderColor #F2FCFE
+	FontColor #009fdb
+}
+
+
+skinparam database {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+}
+
+
+skinparam class {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	HeaderBackgroundColor #33b2e2-#009fdb
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam object {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam usecase {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam rectangle {
+		FontColor #5a5a5a
+	BorderColor #c2c2c2
+	BackgroundColor #fff-#fefefe
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam package {
+	FontColor #009fdb
+	BorderColor #33b2e2
+	BackgroundColor transparent
+	BorderThickness 2
+}
+
+
+skinparam folder {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #ea7400
+	FontColor #ea7400
+	BorderThickness 2
+}
+
+
+skinparam frame {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #0568ae
+	FontColor #0568ae
+	BorderThickness 2
+}
+
+
+skinparam state {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+	StartColor #0568ae
+	EndColor #0568ae
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam queue {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam card {
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam file {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #0568ae
+	FontColor #5a5a5a
+
+}
+
+
+skinparam stack {
+
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+abstract Agent {
++ id
++ name
+}
+
+abstract Activity {
++ id
++ name
++ startedAtTime
++ endedAtTime
+}
+
+abstract Entity {
++ id
++ name
+}
+
+
+Question <|- - Entity
+Person <|- - Agent
+Organization <|- - Agent
+QuestionAsked <|- - Activity
+
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Organization -> QuestionAsked : wasAssociatedWith
+note on link: (role=Stakeholder)
+Person -> QuestionAsked : wasAssociatedWith
+note on link: (role=Author)
+Question -> QuestionAsked : wasGeneratedBy
+@enduml
+
+PlantUML version 1.2022.8beta2(Unknown compile time)
+(GPL source distribution)
+Java Runtime: Java(TM) SE Runtime Environment
+JVM: Java HotSpot(TM) 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>
