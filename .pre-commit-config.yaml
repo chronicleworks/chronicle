@@ -62,9 +62,6 @@ repos:
     rev: v0.11.0
     hooks:
       - id: markdownlint
-        #It throws MD013 on short lines,
-        # and cannot be disabled with file directives
-        exclude: "docs/.*"
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v8.21.0
     hooks:
