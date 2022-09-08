@@ -21,12 +21,15 @@ repos:
       - id: detect-private-key
         exclude: "api/src/lib.rs"
       - id: end-of-file-fixer
+        exclude: "docs/diagrams/out/.*"
       - id: mixed-line-ending
+        exclude: "docs/docs/diagrams/out/.*"
       - id: no-commit-to-branch
         args:
           - --pattern
           - '^(?!((fix|feature|refactor)\/[a-zA-Z0-9\-]+)$).*'
       - id: trailing-whitespace
+        exclude: "docs/docs/diagrams/out/.*"
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v2.29.3
     hooks:
@@ -36,18 +39,6 @@ repos:
     rev: v0.1.17
     hooks:
       - id: helmlint
-  - repo: https://github.com/gherynos/pre-commit-java
-    rev: v0.2.0
-    hooks:
-      - id: checkstyle
-        args:
-          - -c
-          - google_checks.xml
-        exclude: ".*/src/test/.*"
-      - id: cpd
-        exclude: ".*/src/test/.*"
-      - id: pmd
-        exclude: ".*/src/test/.*"
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 3.0.0
     hooks:
@@ -71,6 +62,9 @@ repos:
     rev: v0.11.0
     hooks:
       - id: markdownlint
+        #It throws MD013 on short lines,
+        # and cannot be disabled with file directives
+        exclude: "docs/.*"
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v8.21.0
     hooks:
@@ -79,7 +73,7 @@ repos:
     rev: v1.3.0
     hooks:
       - id: forbid-tabs
-        exclude: "^(.*/?Makefile|.*.mk|.*.go)$"
+        exclude: "^(.*/?Makefile|.*.mk|.*.go|docs/docs/diagrams/out/.*)$"
   - repo: https://github.com/doublify/pre-commit-go
     rev: 208a4aaa7f86b44e961eaaea526743b920e187a0
     hooks:
