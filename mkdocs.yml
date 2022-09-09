@@ -1,10 +1,8 @@
 site_name: "chronicle"
 theme:
-  name: "readthedocs"
-  language: "en"
+  name: material
   palette:
-    primary: "light blue"
-    accent: "light blue"
+    scheme: default
 copyright: Copyright &copy; 2022 Blockchain Technology Partners
 strict: false
 markdown_extensions:
