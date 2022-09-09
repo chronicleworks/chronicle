@@ -4,7 +4,7 @@ Chronicle records provenance information of any physical or digital asset on a
 distributed ledger to ensure that it is tamper-proof; and is available with
 Hyperledger Sawtooth as its default backing ledger, with support for other
 industry-leading distributed ledgers in the pipeline and a useful [in-memory
-mode](./building.md/#in-memory-version) for rapid development of provenance
+mode](building#in-memory-version) for rapid development of provenance
 applications.
 
 Chronicle is built on the W3C's PROV Ontology specification, which provides a
@@ -18,7 +18,7 @@ single endpoint. Alternatively, there is a command-line interface (CLI) for
 integration with enterprise legacy systems.
 
 Chronicle is a domain-agnostic offering, however, it is [easily
-configurable](./domain_modelling.md) to enable users to capture provenance
+configurable](domain_modelling) to enable users to capture provenance
 information for a range of applications or use cases such as the traceability of
 artwork, critical infrastructure, food items, medical devices, precious metals,
 or real estate, just to mention a few.
