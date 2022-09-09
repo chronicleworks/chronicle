@@ -21,8 +21,8 @@ plugins:
       theme_enabled: false
       render: "server"
       bin_path: "/opt/homebrew/bin/plantuml"
-      server: "http://www.plantuml.com/plantuml"
-      disable_ssl_certificate_validation: true
+      server: "https://www.plantuml.com/plantuml"
+      disable_ssl_certificate_validation: false
       output_format: "svg"
       diagram_root: "docs/diagrams"
       output_folder: "out"
