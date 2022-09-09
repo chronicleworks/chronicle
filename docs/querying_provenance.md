@@ -46,13 +46,13 @@ activity types.
 
 #### from
 
-The time in RFC3889 format to return activities from. Not specifying this will
-return all activity types before the time specified in[to](#to).
+The time in RFC3339 format to return activities from. Not specifying this will
+return all activity types before the time specified in [to](#to).
 
 #### to
 
-The time in RFC3889 format to return activities until. Nor specifying this will
-return all activity types after the time specified in[from](#from).
+The time in RFC3339 format to return activities until. Nor specifying this will
+return all activity types after the time specified in [from](#from).
 
 #### after
 
@@ -115,12 +115,12 @@ multiple namespaces.
 
 ### name
 
-The name of the entity, determined when defined
+The name of the entity, determined when defined.
 
 ### type
 
-A DomainTypeID derived from the Entity subtype, the built in graphql field
-`__TypeName` should be used for union queries
+A DomainTypeID derived from the Entity subtype. The built-in GraphQL field
+`__TypeName` should be used for union queries.
 
 ### evidence
 
@@ -155,7 +155,7 @@ recursive enumeration to retrieve a deep hierarchy.
 ### Attributes
 
 Attribute values for the attributes associated with the entity subtype, as
-determined by the [domain model](./domain_modelling.md)
+determined by the [domain model](./domain_modelling.md).
 
 ### Activity subtypes
 
@@ -185,9 +185,9 @@ multiple namespaces.
 
 ### name
 
-The name of the entity, determined when defined
+The name of the entity, determined when defined.
 
 ### type
 
-A DomainTypeID derived from the Entity subtype, the built in graphql field
+A DomainTypeID derived from the Entity subtype. the built-in GraphQL field
 `__TypeName` should be used for union queries

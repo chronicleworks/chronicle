@@ -2,7 +2,7 @@
 
 Chronicle uses the [W3C Provenance Ontology](https://www.w3.org/TR/prov-o/) as
 the basis for provenance modelling. We present here a summary of the concepts
-used and their corresponding mutations and graphql query structure.
+used and their corresponding mutations and GraphQL query structure.
 
 ## Agent
 
@@ -11,7 +11,7 @@ used and their corresponding mutations and graphql query structure.
 > An agent is something that bears some form of responsibility for an activity
 > taking place, for the existence of an entity, or for another agent's activity.
 
-Agents in chronicle can be subtyped and contain attributes, specified [by the
+Agents in Chronicle can be subtyped and contain attributes, specified [by the
 domain model agents section](./domain_modelling.md#agent). Agents can be
 recorded using [the typed agent mutations](./recording_provenance.md#agent) or
 can be left
