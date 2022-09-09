@@ -12,8 +12,8 @@ the basis for provenance modelling.
 
 This is a toy model of some aspects of evidence-based medicine, from an initial
 `Question` - the area and scope that the organization wishes to research and
-make guidance on - to revisions of a published `Guidance` document. The system is
-currently handled by a content management system that has identities for
+make guidance on - to revisions of a published `Guidance` document. The system
+is currently handled by a content management system that has identities for
 documents and users, and we will use Chronicle to add provenance capabilities.
 
 ### Question creation
@@ -88,9 +88,9 @@ This process represented as provenance will look like:
 
 ### Revision
 
-Guidance, like authorship, is triggered by research - in this case for changes or
-additions to the evidence base. Evidence is used to inform a new revision of the
-Guidance document.
+Guidance, like authorship, is triggered by research - in this case for changes
+or additions to the evidence base. Evidence is used to inform a new revision of
+the Guidance document.
 
 ![file](diagrams/out/revision.svg)
 

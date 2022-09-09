@@ -9,8 +9,8 @@ maintains and distributes a docker build image to be used in CI/CD.
 
 Assuming a valid [Chronicle domain configuration](./domain_modelling.md) located
 in the same directory as the dockerfile, the following will build a
-domain-specific Chronicle. You should only need to source control the Dockerfile and
-domain.config - Chronicle's build image will do the rest.
+domain-specific Chronicle. You should only need to source control the Dockerfile
+and domain.config - Chronicle's build image will do the rest.
 
 ```docker
 FROM blockchaintp/builder:{VERSION_NUMBER} as domain

@@ -99,8 +99,8 @@ will fail.
 ### Extending attributes is not a contradiction
 
 Where a provenance term has been recorded with attributes, and the domain has
-been extended to include new attributes, it is valid to append new attributes, as
-long as the values of the already recorded ones are unchanged.
+been extended to include new attributes, it is valid to append new attributes,
+as long as the values of the already recorded ones are unchanged.
 
 ```graphql
 
