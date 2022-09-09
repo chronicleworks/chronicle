@@ -7,10 +7,10 @@
 Chronicle provenance is immutable. Once recorded you cannot contradict it - only
 record additional provenance.
 
-## Open world model
+## Open-world model
 
 Chronicle does not use relational constraints in the way you may expect a
-relational database to, or allow free form data in the manner of a document
+relational database to, or allow free-form data in the manner of a document
 store. It is useful to think of Chronicle as recording facts, and it will make
 simple inferences to keep your provenance data consistent.
 
@@ -55,7 +55,7 @@ not yet been recorded by their `person` and `writing` mutation.
 ## Contradiction
 
 Chronicle will not allow you to record provenance that contradicts previously
-recorded provenance. For example - you cannot change the start / end dates of
+recorded provenance. For example, you cannot change the start / end dates of
 activities once set, or alter the value of an attribute. You can however record
 identical provenance any number of times, as this does not cause contradiction,
 or change the state of Chronicle meaningfully.
@@ -63,7 +63,7 @@ or change the state of Chronicle meaningfully.
 ### Contradiction of attribute time
 
 Here we attempt to change the end date of an activity after it has been
-recorded - one of these mutations will fail
+recorded - one of these mutations will fail.
 
 ```graphql
     mutation {
@@ -99,7 +99,7 @@ will fail.
 ### Extending attributes is not a contradiction
 
 Where a provenance term has been recorded with attributes, and the domain has
-been extended to include new attributes it is valid to append new attributes, as
+been extended to include new attributes, it is valid to append new attributes, as
 long as the values of the already recorded ones are unchanged.
 
 ```graphql
@@ -122,7 +122,7 @@ long as the values of the already recorded ones are unchanged.
 
 ### Example domain
 
-For this section we will use a our simplified [domain model for recording the
+For this section we will use our simplified [domain model for recording the
 provenance of medical guidance](./domain_modelling.md). We have a number of
 people who may be any combination of authors, editors or researchers
 collaborating to produce documents from evidence produced by a search process.
@@ -130,7 +130,7 @@ An external CMS is being used that has identifiers for documents and users.
 
 ### The `name` parameter
 
-The definition mutations for prov terms -  Entity, Activity and Agent are all
+The definition mutations for prov terms -  Entity, Activity and Agent - are all
 supplied with a `name` parameter. This should be something meaningful to the
 domain you are recording provenance for - a unique identifier from an external
 system or a natural key. This will form part of the identity of the term.
@@ -142,7 +142,7 @@ should be treated as opaque. Under no circumstances should you attempt to
 synthesize an identity from Chronicle in client code as the scheme may be
 subject to change.
 
-### Graphql mutation result - `Submission`
+### GraphQL mutation result - `Submission`
 
 All Chronicle mutations return a `Submission` type defined by:
 
@@ -154,18 +154,18 @@ type Submission {
 ```
 
 The `context` property here will be the identity of the Chronicle term you have
-changed in the mutation. i.e calling `agent(..)` will return the identity of the
+changed in the mutation, i.e calling `agent(..)` will return the identity of the
 agent, calling `startActivity(..)` the identity of the started activity.
 
 The `correlationId` property corresponds to the transaction id when running
-chronicle with a backend ledger, or a randomly generated uuid when used in [in
-memory](./chronicle_architecture.md/#development) mode.
+Chronicle with a backend ledger, or a randomly generated uuid when used in
+[in-memory](./chronicle_architecture.md/#development) mode.
 
 ### Commit notification subscriptions
 
-Chronicle provides a [graphql
+Chronicle provides a [GraphQL
 subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/) to
-notify clients when a chronicle operation has completed.
+notify clients when a Chronicle operation has completed.
 
 ```graphql
 
@@ -200,14 +200,14 @@ correlation id from a commit notification.
 See [provenance concepts](./provenance_concepts.md#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for
-us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence` as a graphql
+us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
 evolved, see [evolving your domain](domain_modelling.md#evolution).
 
 The definition mutations `question`, `guidance`, `publishedGuidance`, and
 `evidence` will also have been created to allow you to define an instance of
-each subtype and their attributes. The generated graphql mutations and their
+each subtype and their attributes. The generated GraphQL mutations and their
 associated types will look like this:
 
 ```graphql
@@ -335,7 +335,7 @@ chronicle question define anaphylaxis-referral --cms-id-attribute "How best to a
 
 ```
 
-Either operation will return the ID of the newly defined question
+Either operation will return the ID of the newly defined question.
 
 ### Define an Activity
 
@@ -350,14 +350,14 @@ Either operation will return the ID of the newly defined question
 See [provenance concepts](./provenance_concepts.md#activity)
 
 Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
-`Researched`, `Revised` and `Published` as a graphql union called `Activity`.
+`Researched`, `Revised` and `Published`, as a GraphQL union called `Activity`.
 The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
 [evolving your domain](domain_modelling.md#evolution).
 
-The definition mutations `questionAsked` `researched`, `revised` and
+The definition mutations `questionAsked`, `researched`, `revised` and
 `published` will also have been created to allow you to define an instance of
-each subtype and their attributes. The generated graphql mutations and their
+each subtype and their attributes. The generated GraphQL mutations and their
 associated types will look like this:
 
 ```graphql
@@ -446,7 +446,7 @@ mutation {
 ```
 
 The following example mutation `revised` will define an `Activity` of subtype
-`Revised`
+`Revised`:
 
 ```graphql title="Define a revised activity with graphql"
 mutation {
@@ -470,14 +470,14 @@ chronicle revised define september-2018-review --version-attr 14
 See [provenance concepts](./provenance_concepts.md#agent)
 
 Chronicle will have generated two `Agent` subtypes for us, `Person` and
-`Organization` as a graphql union called `Agent`. The union also contains an
+`Organization` as a GraphQL union called `Agent`. The union also contains an
 untyped activity `ProvAgent`. The untyped agent can be potentially returned
 where the domain definition has evolved, see [evolving your
 domain](domain_modelling.md#evolution).
 
 The definition mutations `person` and `organization` will also have been
 created. See [domain modelling](./domain_modelling.md/#graphql_generation) for
-details on the generated graphql SDL.
+details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
@@ -502,7 +502,7 @@ See [provenance concepts](./provenance_concepts.md#used)
 Usage operations in Chronicle can applied to all subtypes of Entity and
 Activity.
 
-To apply using graphql:
+To apply using GraphQL:
 
 ```graphql
 mutation {
@@ -527,7 +527,7 @@ See [provenance concepts](./provenance_concepts.md#generation)
 Generation operations in Chronicle can be applied to all subtypes of Entity and
 Activity.
 
-To apply using graphql:
+To apply using GraphQL:
 
 ```graphql
 mutation {
@@ -559,7 +559,7 @@ time. Time stamps should be in
 
 Started at time operations also take an optional `AgentId`, to associate the
 activity with the agent - there is no current way to record a role with this
-however, so prefer [wasAssociatedWith](#association) if you need role based
+however, so prefer [wasAssociatedWith](#association) if you need role-based
 modelling.
 
 ```graphql
@@ -592,7 +592,7 @@ format.
 
 Ended at time operations also take an optional `AgentId`, to associate the
 activity with the agent - there is no current way to record a role with this
-however, so prefer [wasAssociatedWith](#association) if you need role based
+however, so prefer [wasAssociatedWith](#association) if you need role-based
 modelling.
 
 ```graphql
@@ -673,7 +673,7 @@ enum RoleType {
 
 To record the responsibility of an `Editor` supervising an `Author`, we relate a
 responsible `Person` to another delegate `Person` Agent, using the `Role`
-`EDITOR` and specify a particular `Revision` activity. The activity is not a
+`EDITOR`, and specify a particular `Revision` activity. The activity is not a
 required parameter - generic delegation between agents can be recorded.
 
 ```graphql
@@ -706,7 +706,7 @@ mutation {
 
 See [provenance concepts](./provenance_concepts.md#primary-source)
 
-Primary sources can be recorded bin chronicle using the `hadPrimarySource`
+Primary sources can be recorded in Chronicle using the `hadPrimarySource`
 mutation, which takes two entities - the generatedEntity having a primary source
 of the useEntity.
 
@@ -728,7 +728,7 @@ mutation {
 
 See [provenance concepts](./provenance_concepts.md#revision)
 
-Revision can be recorded bin chronicle using the `wasRevisionOf` mutation, which
+Revision can be recorded in Chronicle using the `wasRevisionOf` mutation, which
 takes two entities - the generatedEntity being a revision of the usedEntity.
 
 ```graphql
@@ -761,12 +761,12 @@ mutation {
 }
 ```
 
-### Chronicle specific cryptographic operations
+### Chronicle-specific cryptographic operations
 
 #### Has identity
 
 #### Had evidence
 
-Evidence is a Chronicle specific provenance feature that simplifies the
-association of a cryptographic signature with an Entity. You will need a graphql
+Evidence is a Chronicle-specific provenance feature that simplifies the
+association of a cryptographic signature with an Entity. You will need a GraphQL
 client with multipart support for the attachment to sign.

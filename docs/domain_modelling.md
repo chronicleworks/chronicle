@@ -10,9 +10,9 @@ the basis for provenance modelling.
 
 ## Reference domain - Medical evidence
 
-This is a toy model of some aspects of evidence based medicine, from an initial
+This is a toy model of some aspects of evidence-based medicine, from an initial
 `Question` - the area and scope that the organization wishes to research and
-make guidance on to revisions of a published `Guidance` document. The system is
+make guidance on - to revisions of a published `Guidance` document. The system is
 currently handled by a content management system that has identities for
 documents and users, and we will use Chronicle to add provenance capabilities.
 
@@ -43,7 +43,7 @@ definition explained here, along with the following operations:
   subtype Person to act as Authors
 - [wasGeneratedBy](./recording_provenance.md/#generation) - specify that the
   QuestionAsked Activity produced the Question
-- [wasAssociatedWith](./recording_provenance.md/#association) - specify that the
+- [wasAssociatedWith](./recording_provenance.md/#association) - specify the
   Person who authored and the Organizations that asked
 - [endedAtTime](./recording_provenance.md/#ended-at-time) - specify the question
   was asked at a point in time
@@ -88,9 +88,9 @@ This process represented as provenance will look like:
 
 ### Revision
 
-Guidance, like authorship is triggered by research - in this case for changes or
+Guidance, like authorship, is triggered by research - in this case for changes or
 additions to the evidence base. Evidence is used to inform a new revision of the
-Guidance document
+Guidance document.
 
 ![file](diagrams/out/revision.svg)
 
@@ -177,11 +177,11 @@ Plaintext content of an external resource.
 
 #### CmsId
 
-An opaque identifier from the Cms being used to author and publish documents.
+An opaque identifier from the CMS being used to author and publish documents.
 
 #### Title
 
-A plain text title.
+A plaintext title.
 
 #### SearchParameter
 
@@ -193,7 +193,7 @@ A [BibTex](http://www.bibtex.org/) reference to evidence.
 
 #### Version
 
-A simple incrementing integer representing a version number
+A simple incrementing integer representing a version number.
 
 ### Entities
 
@@ -258,7 +258,7 @@ Has no attributes.
 When determining activities, a useful approach from [process
 mapping](https://www.bpmleader.com/2012/07/23/introductory-guide-to-process-mapping-modelling/)
 is to look for verbs in your analysis. Provenance modelling is similar, except
-we are modelling things that have taken place or are in-progress. It is useful
+we are modelling things that have taken place or are in progress. It is useful
 to use past tense for this reason. We can identify:
 
 #### QuestionAsked
@@ -327,7 +327,7 @@ Stakeholders and supervises Authors creating Guidances of Guidance.
 
 ## Domain model format
 
-We will now translate this conceptual design into Chronicle's domain modelling
+We will now translate this conceptual design into Chronicle's domain-modelling
 syntax. Chronicle domain models are specified in YAML, a complete model for the
 conceptual design can be written like this:
 
@@ -408,7 +408,7 @@ of:
 - Bool
 
 Attribute names should be meaningful to your domain - choose things like 'Title'
-or 'Description', they can be re-used between any of prov terms - Entity,
+or 'Description', they can be reused between any of prov terms - Entity,
 Activity and Agent.
 
 ```yaml
@@ -431,7 +431,7 @@ attributes:
 
 Using Chronicle's domain model definitions an Agent can be subtyped and
 associated with attributes like other provenance terms. In the following example
-we define the two Agent subtypes, Person has an id from the Cms, Organization a
+we define the two Agent subtypes, Person has an id from the CMS, Organization a
 text title.
 
 ```yaml
@@ -448,7 +448,7 @@ agents:
 
 Using Chronicle's domain model definitions an Entity can be subtyped and
 associated with attributes like other provenance terms. In the following example
-we define the four Entity subtypes, Question has an id from the Cms and its
+we define the four Entity subtypes, Question has an id from the CMS and its
 content,  Evidence the search parameters and reference. Guidance a title and
 version and PublishedGuidance needs no attributes.
 
@@ -475,8 +475,8 @@ entities:
 
 Using Chronicle's domain model definitions an Activity can be subtyped and
 associated with attributes like other provenance terms. In the following example
-we define the four Activity subtypes, Question has an id from the Cms and its
-content,  Evidence the search parameters and reference, Guidance a title and
+we define the four Activity subtypes, Question has an id from the CMS and its
+content, Evidence the search parameters and reference, Guidance a title and
 version and PublishedGuidance needs no attributes.
 
 ```yaml
@@ -507,13 +507,13 @@ roles:
   - Editor
 ```
 
-Supplying this as a YAML file to the chronicle build image as documented in
+Supplying this as a YAML file to the Chronicle build image as documented in
 [building chronicle](./building.md) will produce a well-typed API for your
 domain. The next step is then [recording provenance](./recording_provenance.md).
 
 ## Evolution
 
-Re definition of a Chronicle domain with existing data is possible, with some
+Redefinition of a Chronicle domain with existing data is possible, with some
 caveats:
 
 ### Type removal
@@ -521,7 +521,7 @@ caveats:
 You can remove a prov term (Entity, Agent or Activity), but as Chronicle data is
 immutable it will still exist on the back end. Terms can still be returned via
 queries, but will be as their Untyped variant - ProvEntity, ProvAgent and
-ProvActivity and their attributes will no longer be available via graphql.
+ProvActivity and their attributes will no longer be available via GraphQL.
 
 ### Attribute removal
 
@@ -530,7 +530,7 @@ have already recorded.
 
 ### Attribute addition
 
-You can add new attributes, and add their values to both existing and new data
+You can add new attributes, and add their values to both existing and new data.
 
 This conforms to most reasonable models of interface and protocol evolution,
 where you should design for extension rather than modification.
