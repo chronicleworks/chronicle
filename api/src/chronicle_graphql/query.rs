@@ -34,7 +34,7 @@ pub async fn activity_timeline<'a>(
     last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
     use crate::persistence::schema::{
-        activity, agent, association, delegation, entity, namespace::dsl as nsdsl, useage,
+        activity, agent, association, delegation, entity, namespace::dsl as nsdsl, usage,
     };
 
     let store = ctx.data_unchecked::<Store>();
@@ -56,7 +56,7 @@ pub async fn activity_timeline<'a>(
     let to = to.or_else(|| Some(Utc::now()));
 
     let mut sql_query = activity::table
-        .left_join(useage::table.on(useage::activity_id.eq(activity::id)))
+        .left_join(usage::table.on(usage::activity_id.eq(activity::id)))
         .left_join(generation::table.on(generation::activity_id.eq(activity::id)))
         .left_join(association::table.on(association::activity_id.eq(activity::id)))
         .left_join(
@@ -66,7 +66,7 @@ pub async fn activity_timeline<'a>(
         )
         .left_join(
             entity::table.on(entity::id
-                .eq(useage::entity_id)
+                .eq(usage::entity_id)
                 .or(entity::id.eq(generation::generated_entity_id))),
         )
         .left_join(

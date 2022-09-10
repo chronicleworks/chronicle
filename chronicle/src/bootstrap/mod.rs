@@ -802,7 +802,7 @@ pub mod test {
         derivation: {}
         delegation: {}
         generation: {}
-        useage: {}
+        usage: {}
         "###);
     }
 

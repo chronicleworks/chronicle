@@ -116,7 +116,7 @@ create table association (
     unique(agent_id, activity_id, role)
 );
 
-create table useage (
+create table usage (
     activity_id integer not null,
     entity_id integer not null,
     foreign key(entity_id) references entity(id),

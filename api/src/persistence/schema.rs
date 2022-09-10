@@ -191,7 +191,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    useage (activity_id, entity_id) {
+    usage (activity_id, entity_id) {
         activity_id -> Integer,
         entity_id -> Integer,
     }
@@ -218,8 +218,8 @@ diesel::joinable!(hadattachment -> entity (entity_id));
 diesel::joinable!(hadidentity -> agent (agent_id));
 diesel::joinable!(hadidentity -> identity (identity_id));
 diesel::joinable!(identity -> namespace (namespace_id));
-diesel::joinable!(useage -> activity (activity_id));
-diesel::joinable!(useage -> entity (entity_id));
+diesel::joinable!(usage -> activity (activity_id));
+diesel::joinable!(usage -> entity (entity_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     activity,
@@ -238,5 +238,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     identity,
     ledgersync,
     namespace,
-    useage,
+    usage,
 );

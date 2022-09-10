@@ -40,13 +40,13 @@ pub async fn was_associated_with<'a>(
 }
 
 pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-    use crate::persistence::schema::useage::{self, dsl};
+    use crate::persistence::schema::usage::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();
 
     let mut connection = store.pool.get()?;
 
-    let res = useage::table
+    let res = usage::table
         .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::entity::table)
         .order(crate::persistence::schema::entity::name)

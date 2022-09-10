@@ -305,7 +305,7 @@ impl ToJson for ProvModel {
                     .ok();
             }
 
-            if let Some(usage) = self.useage.get(&(namespace.to_owned(), id.to_owned())) {
+            if let Some(usage) = self.usage.get(&(namespace.to_owned(), id.to_owned())) {
                 let mut ids = json::Array::new();
 
                 for usage in usage.iter() {
