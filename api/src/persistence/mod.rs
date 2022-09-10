@@ -568,6 +568,17 @@ impl Store {
             }
         }
 
+        for ((namespaceid, activity_id), was_informed_by) in model.was_informed_by.iter() {
+            for (_, informing_activity_id) in was_informed_by.iter() {
+                self.apply_was_informed_by(
+                    connection,
+                    namespaceid,
+                    activity_id,
+                    informing_activity_id,
+                )?;
+            }
+        }
+
         for ((namespaceid, _), generation) in model.generation.iter() {
             for generation in generation.iter() {
                 self.apply_was_generated_by(connection, namespaceid, generation)?;
@@ -642,6 +653,37 @@ impl Store {
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
+            ))
+            .execute(connection)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(connection))]
+    fn apply_was_informed_by(
+        &self,
+        connection: &mut SqliteConnection,
+        namespace: &common::prov::NamespaceId,
+        activity_id: &common::prov::ActivityId,
+        informing_activity_id: &common::prov::ActivityId,
+    ) -> Result<(), StoreError> {
+        let storedactivity = self.activity_by_activity_name_and_namespace(
+            connection,
+            activity_id.name_part(),
+            namespace,
+        )?;
+
+        let storedinformingactivity = self.activity_by_activity_name_and_namespace(
+            connection,
+            activity_id.name_part(),
+            namespace,
+        )?;
+
+        use schema::wasinformedby::dsl as link;
+        diesel::insert_or_ignore_into(schema::wasinformedby::table)
+            .values((
+                &link::activity_id.eq(storedactivity.id),
+                &link::informing_activity_id.eq(storedinformingactivity.id),
             ))
             .execute(connection)?;
 
@@ -1130,6 +1172,21 @@ impl Store {
             {
                 let used = used;
                 model.used(namespaceid.clone(), &id, &EntityId::from_name(&used));
+            }
+
+            for wasinformedby in schema::wasinformedby::table
+                .filter(schema::wasinformedby::activity_id.eq(activity.id))
+                .order(schema::wasinformedby::activity_id.asc())
+                .inner_join(schema::activity::table)
+                .select(schema::activity::name)
+                .load::<String>(connection)?
+            {
+                let wasinformedby = wasinformedby;
+                model.was_informed_by(
+                    namespaceid.clone(),
+                    &id,
+                    &ActivityId::from_name(wasinformedby),
+                );
             }
         }
 
