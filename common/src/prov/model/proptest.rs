@@ -599,12 +599,12 @@ proptest! {
                     prop_assert_eq!(&informed_activity.name, activity.name_part());
                     prop_assert_eq!(&informed_activity.namespaceid, namespace);
 
-                    let has_communication = prov.was_informed_by.get(
+                    let was_informed_by = prov.was_informed_by.get(
                         &(namespace.clone(), activity.clone()))
                         .unwrap()
                         .contains(&(namespace.to_owned(), informing_activity.to_owned()));
 
-                    prop_assert!(has_communication);
+                    prop_assert!(was_informed_by);
                 },
 
                 ChronicleOperation::EntityHasEvidence(

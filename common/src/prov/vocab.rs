@@ -79,8 +79,6 @@ pub enum ChronicleOperations {
     DomaintypeId,
     #[iri("chronicleop:WasInformedBy")]
     WasInformedBy,
-    #[iri("chronicleop:informedActivityName")]
-    InformedActivityName,
     #[iri("chronicleop:informingActivityName")]
     InformingActivityName,
 }
@@ -172,6 +170,8 @@ pub enum Chronicle {
     SignedBy,
     #[iri("chronicle:value")]
     Value,
+    #[iri("chronicle:wasInformedBy")]
+    WasInformedBy,
 }
 
 /// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible
