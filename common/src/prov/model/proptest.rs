@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
         Delegation, DelegationId, Derivation, DomaintypeId, EntityId, Generation, IdentityId, Name,
-        NamePart, NamespaceId, ProvModel, Role, Useage, UuidPart,
+        NamePart, NamespaceId, ProvModel, Role, Usage, UuidPart,
     },
 };
 
@@ -523,15 +523,15 @@ proptest! {
                     prop_assert_eq!(&activity.name, activity_id.name_part());
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
-                    let has_useage = prov.useage.get(&(namespace.to_owned(), activity_id.to_owned()))
+                    let has_usage = prov.usage.get(&(namespace.to_owned(), activity_id.to_owned()))
                         .unwrap()
-                        .contains(&Useage {
+                        .contains(&Usage {
                             activity_id: activity_id.clone(),
                             entity_id: id.clone(),
                             time: None
                         });
 
-                    prop_assert!(has_useage);
+                    prop_assert!(has_usage);
                 },
                 ChronicleOperation::EntityExists(
                     EntityExists { namespace, name}) => {
