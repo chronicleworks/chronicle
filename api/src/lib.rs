@@ -33,6 +33,7 @@ use common::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
+            WasInformedBy,
         },
         ActivityId, AgentId, ChronicleTransactionId, EntityId, IdentityId, Name, NamePart,
         NamespaceId, ProvModel,
@@ -463,6 +464,91 @@ where
         .await?
     }
 
+    /// Creates and submits a (ChronicleTransaction::ActivityWasInformedBy)
+    ///
+    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
+    #[instrument]
+    async fn activity_was_informed_by(
+        &self,
+        id: ActivityId,
+        informing_activity_id: ActivityId,
+        namespace: Option<Name>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) =
+                    api.ensure_namespace(connection, &namespace.unwrap())?;
+                let (id, to_apply) = {
+                    let activity = api.store.get_activity_by_name_or_last_started(
+                        connection,
+                        Some(id.name_part().clone()),
+                        namespace.clone(),
+                    );
+
+                    let informing_activity = api.store.activity_by_activity_name_and_namespace(
+                        connection,
+                        informing_activity_id.name_part(),
+                        &namespace,
+                    );
+
+                    let name: Name = {
+                        if let Ok(existing) = activity {
+                            debug!(?existing, "Use existing activity");
+                            existing.name.into()
+                        } else {
+                            debug!(?id, "Need new activity");
+                            api.store.disambiguate_activity_name(
+                                connection,
+                                id.name_part(),
+                                &namespace,
+                            )?
+                        }
+                    };
+
+                    let id = ActivityId::from_name(&name);
+
+                    let name: Name = {
+                        if let Ok(existing) = informing_activity {
+                            debug!(?existing, "Use existing activity as informing activity");
+                            existing.name.into()
+                        } else {
+                            debug!(?id, "Need new activity as informing activity");
+                            api.store.disambiguate_activity_name(
+                                connection,
+                                id.name_part(),
+                                &namespace,
+                            )?
+                        }
+                    };
+
+                    let informing_activity = ActivityId::from_name(&name);
+
+                    let create = ChronicleOperation::WasInformedBy(WasInformedBy {
+                        namespace,
+                        activity: id.clone(),
+                        informing_activity,
+                    });
+
+                    to_apply.push(create);
+
+                    (id, to_apply)
+                };
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
     /// Submits operations [`CreateEntity`], and [`SetAttributes::Entity`]
     ///
     /// We use our local store to see if the agent already exists, disambiguating the URI if so
@@ -679,6 +765,14 @@ where
                 namespace,
                 activity,
             }) => self.activity_use(id, namespace, activity).await,
+            ApiCommand::Activity(ActivityCommand::WasInformedBy {
+                id,
+                informing_activity,
+                namespace,
+            }) => {
+                self.activity_was_informed_by(id, informing_activity, namespace.into())
+                    .await
+            }
             ApiCommand::Activity(ActivityCommand::Associate {
                 id,
                 namespace,
