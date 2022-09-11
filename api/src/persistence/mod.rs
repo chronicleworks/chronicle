@@ -1176,6 +1176,7 @@ impl Store {
 
             for wasinformedby in schema::wasinformedby::table
                 .filter(schema::wasinformedby::activity_id.eq(activity.id))
+                .or_filter(schema::wasinformedby::namespace_id.eq(activity.namespace_id))
                 .order(schema::wasinformedby::activity_id.asc())
                 .inner_join(schema::activity::table)
                 .select(schema::activity::name)
