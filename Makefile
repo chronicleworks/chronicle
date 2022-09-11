@@ -15,11 +15,11 @@ analyze: analyze_fossa
 
 publish: gh-create-draft-release
 	container_id=$$(docker create chronicle-tp:${ISOLATION_ID}); \
-	  docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/
-		docker rm $$container_id
+	  docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/;  \
+		docker rm $$container_id;
 	container_id=$$(docker create chronicle:${ISOLATION_ID}); \
-	  docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/
-		docker rm $$container_id
+	  docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/; \
+		docker rm $$container_id;
 	if [ "$(RELEASABLE)" = "yes" ]; then \
 	  $(GH_RELEASE) upload $(VERSION) target/* ; \
 	fi
