@@ -201,7 +201,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    wasinformedby (activity_id, informing_activity_id) {
+    wasinformedby (namespace_id, activity_id, informing_activity_id) {
         namespace_id -> Integer,
         activity_id -> Integer,
         informing_activity_id -> Integer,
