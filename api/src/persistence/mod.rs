@@ -675,7 +675,7 @@ impl Store {
 
         let storedinformingactivity = self.activity_by_activity_name_and_namespace(
             connection,
-            activity_id.name_part(),
+            informing_activity_id.name_part(),
             namespace,
         )?;
 
