@@ -16,6 +16,6 @@ RUN apt-get update && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 
-FROM chef AS builder
+FROM chef AS chronicle-builder
 COPY . .
 RUN cargo build --release
