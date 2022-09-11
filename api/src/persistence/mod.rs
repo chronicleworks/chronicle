@@ -663,9 +663,9 @@ impl Store {
     fn apply_was_informed_by(
         &self,
         connection: &mut SqliteConnection,
-        namespace: &common::prov::NamespaceId,
-        activity_id: &common::prov::ActivityId,
-        informing_activity_id: &common::prov::ActivityId,
+        namespace: &NamespaceId,
+        activity_id: &ActivityId,
+        informing_activity_id: &ActivityId,
     ) -> Result<(), StoreError> {
         let storedactivity = self.activity_by_activity_name_and_namespace(
             connection,
