@@ -202,7 +202,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
         &rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
     let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "activity").qualified();
     let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
-    let activity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
+    let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
