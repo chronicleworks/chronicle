@@ -369,6 +369,93 @@ mod test {
     }
 
     #[tokio::test]
+    async fn was_informed_by() {
+        let schema = test_schema().await;
+
+        let activity1 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation {
+                      gardening(name:"gardening", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+
+        insta::assert_toml_snapshot!(activity1, @r###"
+        [data.gardening]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:gardening'
+        "###);
+
+        let activity2 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation {
+                      swimAbout(name:"swimming", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+
+        insta::assert_toml_snapshot!(activity2, @r###"
+        [data.swimAbout]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:swimming'
+        "###);
+
+        let was_informed_by = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:gardening",
+                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:swimming",)
+                {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(was_informed_by, @r###"
+        [data.wasInformedBy]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:gardening'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let response = schema
+            .execute(Request::new(
+                r#"
+            query test {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:gardening") {
+                    ... on Gardening {
+                        id
+                        name
+                        wasInformedBy {
+                            ... on ProvActivity {
+                                id
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(response, @r###"
+        [data.activityById]
+        id = 'http://blockchaintp.com/chronicle/ns#entity:gardening'
+        name = 'gardening'
+        wasInformedBy = []
+        "###);
+    }
+
+    #[tokio::test]
     async fn quotation() {
         let schema = test_schema().await;
 
