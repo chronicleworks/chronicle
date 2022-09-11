@@ -692,7 +692,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
                     "name": "gardening2",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -728,7 +728,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
                     "name": "gardening4",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -764,7 +764,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
                     "name": "gardening6",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -800,7 +800,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
                     "name": "gardening8",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -913,7 +913,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening8",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
                     "name": "gardening8",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -949,7 +949,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening6",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
                     "name": "gardening6",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -985,7 +985,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening4",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
                     "name": "gardening4",
                     "stringAttribute": "string",
                     "intAttribute": 1,
@@ -1021,7 +1021,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#entity:gardening2",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
                     "name": "gardening2",
                     "stringAttribute": "string",
                     "intAttribute": 1,
