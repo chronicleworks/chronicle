@@ -125,8 +125,10 @@ create table usage (
 );
 
 create table wasinformedby (
+    namespace_id integer not null,
     activity_id integer not null,
     informing_activity_id integer not null,
+    foreign key (namespace_id) references namespace(id),
     foreign key(activity_id) references activity(id),
     primary key(activity_id,informing_activity_id)
 );
