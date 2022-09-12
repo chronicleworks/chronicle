@@ -452,7 +452,8 @@ mod test {
         [data.activityById]
         id = 'http://blockchaintp.com/chronicle/ns#activity:gardening'
         name = 'gardening'
-        wasInformedBy = []
+
+        [[data.activityById.wasInformedBy]]
         "###);
     }
 
