@@ -13,8 +13,8 @@ services:
     build:
       context: ../
       dockerfile: docker/chronicle.dockerfile
-  builder:
-    image: builder:${ISOLATION_ID:-local}
+  chronicle-builder:
+    image: chronicle-builder:${ISOLATION_ID:-local}
     build:
       context: ../
       dockerfile: docker/chronicle-builder.dockerfile
