@@ -479,8 +479,7 @@ where
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace)?;
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
                     let activity = api.store.get_activity_by_name_or_last_started(
                         connection,
