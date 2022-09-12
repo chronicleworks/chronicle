@@ -150,13 +150,13 @@ impl ActivityCommand {
 
     pub fn was_informed_by(
         id: ActivityId,
-        informing_activity: ActivityId,
         namespace: impl AsRef<str>,
+        informing_activity: ActivityId,
     ) -> Self {
         Self::WasInformedBy {
             id,
-            informing_activity,
             namespace: namespace.as_ref().into(),
+            informing_activity,
         }
     }
 
