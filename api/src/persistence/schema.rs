@@ -201,8 +201,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    wasinformedby (namespace_id, activity_id, informing_activity_id) {
-        namespace_id -> Integer,
+    wasinformedby (activity_id, informing_activity_id) {
         activity_id -> Integer,
         informing_activity_id -> Integer,
     }
@@ -231,8 +230,6 @@ diesel::joinable!(hadidentity -> identity (identity_id));
 diesel::joinable!(identity -> namespace (namespace_id));
 diesel::joinable!(usage -> activity (activity_id));
 diesel::joinable!(usage -> entity (entity_id));
-diesel::joinable!(wasinformedby -> activity (activity_id));
-diesel::joinable!(wasinformedby -> namespace (namespace_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     activity,
