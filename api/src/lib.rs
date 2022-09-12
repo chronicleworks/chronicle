@@ -471,8 +471,8 @@ where
     async fn activity_was_informed_by(
         &self,
         id: ActivityId,
+        namespace: Name,
         informing_activity_id: ActivityId,
-        namespace: Option<Name>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -480,7 +480,7 @@ where
 
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) =
-                    api.ensure_namespace(connection, &namespace.unwrap())?;
+                    api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
                     let activity = api.store.get_activity_by_name_or_last_started(
                         connection,
@@ -767,10 +767,10 @@ where
             }) => self.activity_use(id, namespace, activity).await,
             ApiCommand::Activity(ActivityCommand::WasInformedBy {
                 id,
-                informing_activity,
                 namespace,
+                informing_activity,
             }) => {
-                self.activity_was_informed_by(id, informing_activity, namespace.into())
+                self.activity_was_informed_by(id, namespace, informing_activity)
                     .await
             }
             ApiCommand::Activity(ActivityCommand::Associate {
