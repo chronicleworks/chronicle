@@ -449,7 +449,7 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:gardening'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:gardening'
         name = 'gardening'
         wasInformedBy = []
         "###);
