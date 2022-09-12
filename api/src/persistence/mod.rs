@@ -568,11 +568,11 @@ impl Store {
             }
         }
 
-        for ((namespaceid, activity_id), was_informed_by) in model.was_informed_by.iter() {
+        for ((namespace, activity_id), was_informed_by) in model.was_informed_by.iter() {
             for (_, informing_activity_id) in was_informed_by.iter() {
                 self.apply_was_informed_by(
                     connection,
-                    namespaceid,
+                    namespace,
                     activity_id,
                     informing_activity_id,
                 )?;
@@ -1175,7 +1175,7 @@ impl Store {
             }
 
             for wasinformedby in schema::wasinformedby::table
-                .filter(schema::wasinformedby::activity_id.eq(activity.id))
+                .filter(schema::wasinformedby::informing_activity_id.eq(activity.id))
                 .or_filter(schema::wasinformedby::namespace_id.eq(activity.namespace_id))
                 .order(schema::wasinformedby::activity_id.asc())
                 .inner_join(schema::activity::table)
