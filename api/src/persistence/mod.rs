@@ -570,7 +570,12 @@ impl Store {
 
         for ((namespaceid, activity_id), was_informed_by) in model.was_informed_by.iter() {
             for (_, informing_activity_id) in was_informed_by.iter() {
-                self.apply_was_informed_by(connection, namespaceid, activity_id, informing_activity_id)?;
+                self.apply_was_informed_by(
+                    connection,
+                    namespaceid,
+                    activity_id,
+                    informing_activity_id,
+                )?;
             }
         }
 
@@ -1170,8 +1175,11 @@ impl Store {
             }
 
             for wasinformedby in schema::wasinformedby::table
-                .filter(schema::wasinformedby::informing_activity_id.eq(activity.id))
-                .inner_join(schema::activity::table.on(schema::wasinformedby::informing_activity_id.eq(schema::activity::id)))
+                .filter(schema::wasinformedby::activity_id.eq(activity.id))
+                .inner_join(
+                    schema::activity::table
+                        .on(schema::wasinformedby::informing_activity_id.eq(schema::activity::id)),
+                )
                 .select(schema::activity::name)
                 .load::<String>(connection)?
             {

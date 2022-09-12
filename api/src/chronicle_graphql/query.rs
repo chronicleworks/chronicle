@@ -57,7 +57,7 @@ pub async fn activity_timeline<'a>(
     let to = to.or_else(|| Some(Utc::now()));
 
     let mut sql_query = activity::table
-        .left_join(wasinformedby::table.on(wasinformedby::informing_activity_id.eq(activity::id)))
+        .left_join(wasinformedby::table.on(wasinformedby::activity_id.eq(activity::id)))
         .left_join(usage::table.on(usage::activity_id.eq(activity::id)))
         .left_join(generation::table.on(generation::activity_id.eq(activity::id)))
         .left_join(association::table.on(association::activity_id.eq(activity::id)))

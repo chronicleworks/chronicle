@@ -67,7 +67,7 @@ pub async fn was_informed_by<'a>(
     let mut connection = store.pool.get()?;
 
     let res = wasinformedby::table
-        .filter(dsl::informing_activity_id.eq(id))
+        .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::activity::table.on(wasinformedby::informing_activity_id.eq(crate::persistence::schema::activity::id)))
         .order(crate::persistence::schema::activity::name)
         .select(Activity::as_select())

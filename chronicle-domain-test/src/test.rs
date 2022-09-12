@@ -439,6 +439,7 @@ mod test {
                         wasInformedBy {
                             ... on ProvActivity {
                                 id
+                                name
                             }
                         }
                     }
