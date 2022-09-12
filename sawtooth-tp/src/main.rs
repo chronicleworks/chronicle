@@ -41,7 +41,7 @@ async fn main() {
             Arg::new("console-logging")
                 .long("console-logging")
                 .value_name("console-logging")
-                .takes_value(false)
+                .takes_value(true)
                 .help("Log to console using RUST_LOG environment"),
         )
         .get_matches();
