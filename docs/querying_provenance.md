@@ -103,59 +103,59 @@ type Guidance {
 
 ```
 
-#### id
+#### Entity: id
 
 The EntityID of the entity. This is derived from name, but clients should not
 attempt to synthesize it themselves.
 
-#### namespace
+#### Entity: namespace
 
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-### name
+#### Entity: name
 
 The name of the entity, determined when defined.
 
-### type
+#### Entity: type
 
 A DomainTypeID derived from the Entity subtype. The built-in GraphQL field
 `__TypeName` should be used for union queries.
 
-### evidence
+#### Entity: evidence
 
 See [chronicle evidence](#chronicle-evidence)
 
-### wasGeneratedBy
+#### Entity: wasGeneratedBy
 
 A list of the Activities that generated this entity. See
-[generation](./provenance_concepts.md#generation).
+[generation](provenance_concepts#generation).
 
-### wasRevisionOf
+#### Entity: wasRevisionOf
 
 A list of the Entities that this entity is a revision of. See
-[revision](./provenance_concepts.md#revision). This currently only returns the
+[revision](provenance_concepts#revision). This currently only returns the
 immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
-### wasQuotedFrom
+#### Entity: wasQuotedFrom
 
 A list of the Entities that this entity was quoted from. See
-[quotation](./provenance_concepts.md#quotation). This currently only returns the
+[quotation](provenance_concepts#quotation). This currently only returns the
 immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
-### wasDerivedFrom
+#### Entity: wasDerivedFrom
 
 A list of the Entities that this entity is derived from. See
-[derivation](./provenance_concepts.md#derivation). This currently only returns
+[derivation](provenance_concepts#derivation). This currently only returns
 the immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
 ### Attributes
 
 Attribute values for the attributes associated with the entity subtype, as
-determined by the [domain model](./domain_modelling.md).
+determined by the [domain model](domain_modelling).
 
 ### Activity subtypes
 
@@ -173,21 +173,21 @@ type Published {
 }
 ```
 
-#### id
+#### Activity: id
 
 The EntityID of the entity. This is derived from name, but clients should not
 attempt to synthesize it themselves.
 
-#### namespace
+#### Activity: namespace
 
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-### name
+#### Activity: name
 
 The name of the entity, determined when defined.
 
-### type
+#### Activity: type
 
 A DomainTypeID derived from the Entity subtype. the built-in GraphQL field
 `__TypeName` should be used for union queries

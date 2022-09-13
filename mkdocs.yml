@@ -1,10 +1,8 @@
 site_name: "chronicle"
 theme:
-  name: "readthedocs"
-  language: "en"
+  name: material
   palette:
-    primary: "light blue"
-    accent: "light blue"
+    scheme: default
 copyright: Copyright &copy; 2022 Blockchain Technology Partners
 strict: false
 markdown_extensions:
@@ -30,16 +28,16 @@ plugins:
       input_extensions: ""
 nav:
   - "Overview": index.md
-  - "Chronicle architecture": ./chronicle_architecture.md
-  - "Installing Chronicle":
-      - "Building Chronicle for your domain": ./building.md
-      - "Installing Chronicle with Sextant": ./sextant.md
-  - "Development with Chronicle":
+  - "Architecture": ./chronicle_architecture.md
+  - "Installing":
+      - "Building for your domain": ./building.md
+      - "Installing with Sextant": ./sextant.md
+  - "Development":
       - "Provenance concepts": ./provenance_concepts.md
-      - "Modeling your provenance domain": ./domain_modelling.md
+      - "Modeling a provenance domain": ./domain_modelling.md
       - "Recording provenance": ./recording_provenance.md
       - "Querying provenance": ./querying_provenance.md
       - "Untyped Chronicle": ./untyped_chronicle.md
-  - "Operating Chronicle":
+  - "Operating":
       - "CLI": ./cli.md
       - "Configuration options": ./config.md

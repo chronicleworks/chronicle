@@ -12,10 +12,10 @@ used and their corresponding mutations and GraphQL query structure.
 > taking place, for the existence of an entity, or for another agent's activity.
 
 Agents in Chronicle can be subtyped and contain attributes, specified [by the
-domain model agents section](./domain_modelling.md#agent). Agents can be
-recorded using [the typed agent mutations](./recording_provenance.md#agent) or
+domain model agents section](domain_modelling#agent). Agents can be
+recorded using [the typed agent mutations](recording_provenance#agent) or
 can be left
-[untyped](./untyped_chronicle.md#creating-an-agent-in-untyped-chronicle).
+[untyped](untyped_chronicle#creating-an-agent-in-untyped-chronicle).
 
 ## Activity
 
@@ -30,10 +30,10 @@ can be left
 > or printing a book.
 
 Activities in Chronicle can be subtyped and contain attributes, specified [by
-the domain model section](./domain_modelling.md#activity). Agents can be
+the domain model section](domain_modelling#activity). Agents can be
 recorded using [the typed activity
-mutations](./recording_provenance.md#activity) or can be left
-[untyped](./untyped_chronicle.md#creating-an-activity-in-untyped-chronicle).
+mutations](recording_provenance#activity) or can be left
+[untyped](untyped_chronicle#creating-an-activity-in-untyped-chronicle).
 
 ## Entity
 
@@ -47,9 +47,9 @@ mutations](./recording_provenance.md#activity) or can be left
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
 Entities in Chronicle can be subtyped and contain attributes, specified [by the
-domain model section](./domain_modelling.md#entity). Agents can be recorded
-using [the typed activity mutations](./recording_provenance.md#entity) or can be
-left [untyped](./untyped_chronicle.md#creating-an-entity-in-untyped-chronicle).
+domain model section](domain_modelling#entity). Agents can be recorded
+using [the typed activity mutations](recording_provenance#entity) or can be
+left [untyped](untyped_chronicle#creating-an-entity-in-untyped-chronicle).
 
 ## Association
 

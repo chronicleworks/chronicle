@@ -1,7 +1,5 @@
 # Recording Provenance using Chronicle
 
-<!-- markdownlint-disable -->
-
 ## Immutability
 
 Chronicle provenance is immutable. Once recorded you cannot contradict it - only
@@ -16,7 +14,7 @@ simple inferences to keep your provenance data consistent.
 
 For example:
 
-```graphql title="The agent 'homer' participated in the activity 'writing-the-iliad' as a writer"
+```graphql title="'homer' in the activity 'writing-the-iliad' as a writer"
 mutation {
     wasAssociatedWith(
         activity: "chronicle:activity:writing-the-iliad",
@@ -26,7 +24,7 @@ mutation {
 }
 ```
 
-```graphql title="There was an activity 'writing-the-iliad' that took place in Ionia"
+```graphql title="An activity 'writing-the-iliad' that took place in Ionia"
 mutation {
     writing(
         name: "writing-the-iliad",
@@ -123,7 +121,7 @@ as long as the values of the already recorded ones are unchanged.
 ### Example domain
 
 For this section we will use our simplified [domain model for recording the
-provenance of medical guidance](./domain_modelling.md). We have a number of
+provenance of medical guidance](domain_modelling). We have a number of
 people who may be any combination of authors, editors or researchers
 collaborating to produce documents from evidence produced by a search process.
 An external CMS is being used that has identifiers for documents and users.
@@ -159,7 +157,7 @@ agent, calling `startActivity(..)` the identity of the started activity.
 
 The `correlationId` property corresponds to the transaction id when running
 Chronicle with a backend ledger, or a randomly generated uuid when used in
-[in-memory](./chronicle_architecture.md/#development) mode.
+[in-memory](chronicle_architecture#development) mode.
 
 ### Commit notification subscriptions
 
@@ -197,13 +195,13 @@ correlation id from a commit notification.
 > concepts and ideas. An entity is a physical, digital, conceptual, or other
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
-See [provenance concepts](./provenance_concepts.md#entity)
+See [provenance concepts](provenance_concepts#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for
 us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
-evolved, see [evolving your domain](domain_modelling.md#evolution).
+evolved, see [evolving your domain](domain_modelling#evolution).
 
 The definition mutations `question`, `guidance`, `publishedGuidance`, and
 `evidence` will also have been created to allow you to define an instance of
@@ -319,19 +317,20 @@ mutation {
 Executing the following example mutation `question` will define an `Entity` of
 subtype `Question`, along with its attributes.
 
-```graphql title="Define a Question entity with graphql"
+```graphql
 mutation {
     question(name: "anaphylaxis-referral", attributes: {
         cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
-        contentAttribute: "How best to assess and refer patients who have required emergency treatment for Anaphylaxis",
+        contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
     })
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
-```bash title="Define a document entity with the CLI"
-chronicle question define anaphylaxis-referral --cms-id-attribute "How best to assess and refer patients who have required emergency treatment for Anaphylaxis" --cms-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
+```bash
+chronicle question define anaphylaxis-referral --cms-id-attribute \
+  "How to assess and refer patients needing emergency treatment for Anaphylaxis" --cms-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
 
 ```
 
@@ -347,13 +346,13 @@ Either operation will return the ID of the newly defined question.
 > entities; physical activities can include driving a car between two locations
 > or printing a book.
 
-See [provenance concepts](./provenance_concepts.md#activity)
+See [provenance concepts](provenance_concepts#activity)
 
 Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
 `Researched`, `Revised` and `Published`, as a GraphQL union called `Activity`.
 The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
-[evolving your domain](domain_modelling.md#evolution).
+[evolving your domain](domain_modelling#evolution).
 
 The definition mutations `questionAsked`, `researched`, `revised` and
 `published` will also have been created to allow you to define an instance of
@@ -467,16 +466,16 @@ chronicle revised define september-2018-review --version-attr 14
 > An agent is something that bears some form of responsibility for an activity
 > taking place, for the existence of an entity, or for another agent's activity.
 
-See [provenance concepts](./provenance_concepts.md#agent)
+See [provenance concepts](provenance_concepts#agent)
 
 Chronicle will have generated two `Agent` subtypes for us, `Person` and
 `Organization` as a GraphQL union called `Agent`. The union also contains an
 untyped activity `ProvAgent`. The untyped agent can be potentially returned
 where the domain definition has evolved, see [evolving your
-domain](domain_modelling.md#evolution).
+domain](domain_modelling#evolution).
 
 The definition mutations `person` and `organization` will also have been
-created. See [domain modelling](./domain_modelling.md/#graphql_generation) for
+created. See [domain modelling](domain_modelling#graphql_generation) for
 details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
@@ -497,7 +496,7 @@ chronicle organization define health-trust
 > the activity had not begun to utilize this entity and could not have been
 > affected by the entity.
 
-See [provenance concepts](./provenance_concepts.md#used)
+See [provenance concepts](provenance_concepts#used)
 
 Usage operations in Chronicle can applied to all subtypes of Entity and
 Activity.
@@ -522,7 +521,7 @@ chronicle revised use "chronicle:entity:anaphylaxis-evidence-12114" "chronicle:a
 > This entity did not exist before generation and becomes available for usage
 > after this generation.
 
-See [provenance concepts](./provenance_concepts.md#generation)
+See [provenance concepts](provenance_concepts#generation)
 
 Generation operations in Chronicle can be applied to all subtypes of Entity and
 Activity.
@@ -549,7 +548,7 @@ chronicle revised generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chron
 > start. A start may refer to a trigger entity that set off the activity, or to
 > an activity, known as starter, that generated the trigger.
 
-See [provenance concepts](./provenance_concepts.md#started-at-time)
+See [provenance concepts](provenance_concepts#started-at-time)
 
 Chronicle allows you to specify the start time of an activity when you need to
 model a time range. If you want an instantaneous activity, simply call [ended at
@@ -568,7 +567,6 @@ mutation {
 }
 ```
 
-
 ```bash
 chronicle revision start "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
@@ -582,7 +580,7 @@ chronicle revision start "chronicle:activity:september-2018-review" --time "2002
 > refer to a trigger entity that terminated the activity, or to an activity,
 > known as ender that generated the trigger.
 
-See [provenance concepts](./provenance_concepts.md#ended-at-time)
+See [provenance concepts](provenance_concepts#ended-at-time)
 
 Chronicle allows you to specify the end time of an activity when you need to
 model a time range. If you want an instantaneous activity, simply call this
@@ -613,13 +611,13 @@ chronicle revision end "chronicle:activity:september-2018-review" --time "2002-1
 > An activity association is an assignment of responsibility to an agent for an
 > activity, indicating that the agent had a role in the activity.
 
-See [provenance concepts](./provenance_concepts.md#association)
+See [provenance concepts](provenance_concepts#association)
 
 Association and [delegation](#delegation) accept an optional `Role`. These will
 have been generated from the domain model, and using the example domain results
 in:
 
-```
+```graphql
 enum RoleType {
   UNSPECIFIED
   STAKEHOLDER
@@ -627,8 +625,8 @@ enum RoleType {
   RESEARCHER
   EDITOR
 }
-
 ```
+
 To record the asking of a question, we relate an Organization to a
 `QuestionAsked` activity, using the `Role` `STAKEHOLDER`.
 
@@ -654,13 +652,13 @@ mutation {
 > in some way for the activity that took place but we do not say explicitly who
 > bears responsibility and to what degree.
 
-See [provenance concepts](./provenance_concepts.md#delegation)
+See [provenance concepts](provenance_concepts#delegation)
 
 Delegation and [association](#association) accept an optional `Role`. These will
 have been generated from the domain model, and using the example domain results
 in:
 
-```
+```graphql
 enum RoleType {
   UNSPECIFIED
   STAKEHOLDER
@@ -704,7 +702,7 @@ mutation {
 > to interpretation, and should be done according to conventions accepted within
 > the application's domain.
 
-See [provenance concepts](./provenance_concepts.md#primary-source)
+See [provenance concepts](provenance_concepts#primary-source)
 
 Primary sources can be recorded in Chronicle using the `hadPrimarySource`
 mutation, which takes two entities - the generatedEntity having a primary source
@@ -726,7 +724,7 @@ mutation {
 > substantial content from the original. Revision is a particular case of
 > derivation.
 
-See [provenance concepts](./provenance_concepts.md#revision)
+See [provenance concepts](provenance_concepts#revision)
 
 Revision can be recorded in Chronicle using the `wasRevisionOf` mutation, which
 takes two entities - the generatedEntity being a revision of the usedEntity.
@@ -746,7 +744,7 @@ mutation {
 > image, by someone who may or may not be its original author. Quotation is a
 > particular case of derivation.
 
-See [provenance concepts](./provenance_concepts.md#quotation)
+See [provenance concepts](provenance_concepts#quotation)
 
 Quotation can be recorded bin chronicle using the `wasQuotedFrom` mutation,
 which takes two entities - the generatedEntity having quoted from the
