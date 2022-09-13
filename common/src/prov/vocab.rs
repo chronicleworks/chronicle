@@ -77,6 +77,10 @@ pub enum ChronicleOperations {
     Attribute,
     #[iri("chronicleop:domaintypeId")]
     DomaintypeId,
+    #[iri("chronicleop:WasInformedBy")]
+    WasInformedBy,
+    #[iri("chronicleop:informingActivityName")]
+    InformingActivityName,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
@@ -124,6 +128,8 @@ pub enum Prov {
     HadRole,
     #[iri("prov:hadActivity")]
     HadActivity,
+    #[iri("prov:wasInformedBy")]
+    WasInformedBy,
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
@@ -164,6 +170,8 @@ pub enum Chronicle {
     SignedBy,
     #[iri("chronicle:value")]
     Value,
+    #[iri("chronicle:wasInformedBy")]
+    WasInformedBy,
 }
 
 /// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible

@@ -327,6 +327,22 @@ impl ToJson for ProvModel {
                 .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
                 .ok();
 
+            if let Some(activities) = self
+                .was_informed_by
+                .get(&(namespace.to_owned(), id.to_owned()))
+            {
+                let mut values = json::Array::new();
+
+                for (_, activity) in activities {
+                    values.push(object! {
+                        "@id": JsonValue::String(activity.to_string()),
+                    });
+                }
+                activitydoc
+                    .insert(Iri::from(Prov::WasInformedBy).as_str(), values)
+                    .ok();
+            }
+
             Self::write_attributes(&mut activitydoc, activity.attributes.values());
 
             doc.push(activitydoc);
@@ -726,6 +742,35 @@ impl ToJson for ChronicleOperation {
                 o.has_value(
                     OperationValue::string(activity.name_part()),
                     ChronicleOperations::ActivityName,
+                );
+
+                o
+            }
+            ChronicleOperation::WasInformedBy(WasInformedBy {
+                namespace,
+                activity,
+                informing_activity,
+            }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::WasInformedBy);
+
+                o.has_value(
+                    OperationValue::string(namespace.name_part()),
+                    ChronicleOperations::NamespaceName,
+                );
+
+                o.has_value(
+                    OperationValue::string(namespace.uuid_part()),
+                    ChronicleOperations::NamespaceUuid,
+                );
+
+                o.has_value(
+                    OperationValue::string(activity.name_part()),
+                    ChronicleOperations::ActivityName,
+                );
+
+                o.has_value(
+                    OperationValue::string(informing_activity.name_part()),
+                    ChronicleOperations::InformingActivityName,
                 );
 
                 o

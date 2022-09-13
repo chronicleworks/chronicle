@@ -226,6 +226,13 @@ pub struct EntityHasEvidence {
     pub signature_time: Option<DateTime<Utc>>,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct WasInformedBy {
+    pub namespace: NamespaceId,
+    pub activity: ActivityId,
+    pub informing_activity: ActivityId,
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum SetAttributes {
     Entity {
@@ -261,4 +268,5 @@ pub enum ChronicleOperation {
     EntityHasEvidence(EntityHasEvidence),
     SetAttributes(SetAttributes),
     WasAssociatedWith(WasAssociatedWith),
+    WasInformedBy(WasInformedBy),
 }

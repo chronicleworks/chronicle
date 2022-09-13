@@ -803,6 +803,7 @@ pub mod test {
         delegation: {}
         generation: {}
         usage: {}
+        was_informed_by: {}
         "###);
     }
 

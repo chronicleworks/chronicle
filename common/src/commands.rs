@@ -81,6 +81,11 @@ pub enum ActivityCommand {
         namespace: Name,
         activity: Option<ActivityId>,
     },
+    WasInformedBy {
+        id: ActivityId,
+        namespace: Name,
+        informing_activity: ActivityId,
+    },
     Generate {
         id: EntityId,
         namespace: Name,
@@ -152,6 +157,18 @@ impl ActivityCommand {
             id,
             namespace: namespace.as_ref().into(),
             activity,
+        }
+    }
+
+    pub fn was_informed_by(
+        id: ActivityId,
+        namespace: impl AsRef<str>,
+        informing_activity: ActivityId,
+    ) -> Self {
+        Self::WasInformedBy {
+            id,
+            namespace: namespace.as_ref().into(),
+            informing_activity,
         }
     }
 }
