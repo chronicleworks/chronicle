@@ -437,7 +437,7 @@ mod test {
                         id
                         name
                         wasInformedBy {
-                            ... on ProvActivity {
+                            ... on SwimAbout {
                                 id
                                 name
                             }
@@ -454,6 +454,8 @@ mod test {
         name = 'gardening'
 
         [[data.activityById.wasInformedBy]]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:swimming'
+        name = 'swimming'
         "###);
     }
 
