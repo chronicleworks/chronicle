@@ -451,6 +451,175 @@ mod test {
     }
 
     #[tokio::test]
+    async fn was_informed_by() {
+        let schema = test_schema().await;
+
+        // create an activity
+        let activity1 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation one {
+                      gardening(name:"composting", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(activity1, @r###"
+        [data.gardening]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create another activity
+        let activity2 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation two {
+                      gardening(name:"lawnmowing", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(activity2, @r###"
+        [data.gardening]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // establish WasInformedBy relationship
+        let was_informed_by = schema
+            .execute(Request::new(
+                r#"
+            mutation exec {
+                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
+                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:lawnmowing",)
+                {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(was_informed_by, @r###"
+        [data.wasInformedBy]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query WasInformedBy relationship
+        let response = schema
+            .execute(Request::new(
+                r#"
+            query test {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
+                    ... on Gardening {
+                        id
+                        name
+                        wasInformedBy {
+                            ... on Gardening {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(response, @r###"
+        [data.activityById]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        name = 'composting'
+
+        [[data.activityById.wasInformedBy]]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
+        name = 'lawnmowing'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create a third activity
+        let activity3 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation three {
+                      gardening(name:"mowermaintenance", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(activity3, @r###"
+        [data.gardening]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // establish another WasInformedBy relationship
+        let was_informed_by2 = schema
+            .execute(Request::new(
+                r#"
+            mutation execagain {
+                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
+                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:mowermaintenance",)
+                {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(was_informed_by2, @r###"
+        [data.wasInformedBy]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query WasInformedBy relationship
+        let response = schema
+            .execute(Request::new(
+                r#"
+            query testagain {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
+                    ... on Gardening {
+                        id
+                        name
+                        wasInformedBy {
+                            ... on Gardening {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(response, @r###"
+        [data.activityById]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        name = 'composting'
+
+        [[data.activityById.wasInformedBy]]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
+        name = 'lawnmowing'
+
+        [[data.activityById.wasInformedBy]]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
+        name = 'mowermaintenance'
+        "###);
+    }
+
+    #[tokio::test]
     async fn query_activity_timeline() {
         let schema = test_schema().await;
 
