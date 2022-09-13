@@ -267,6 +267,15 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                 .collect())
         }
 
+        async fn was_informed_by<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(activity_union_type_name())>> {
+            Ok(#activity_impl::was_informed_by(self.0.id, ctx)
+                .await
+                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                .into_iter()
+                .map(map_activity_to_domain_type)
+                .collect())
+        }
+
         #(for attribute in &activity.attributes =>
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
@@ -1071,6 +1080,16 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::used(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+        }
+
+        pub async fn was_informed_by<'a>(
+            &self,
+            ctx: &#graphql_context<'a>,
+            activity: #activity_id,
+            informing_activity: #activity_id,
+            namespace: Option<String>,
+        ) -> async_graphql::#graphql_result<#submission> {
+            #impls::was_informed_by(ctx, activity, informing_activity, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         pub async fn was_generated_by<'a>(
