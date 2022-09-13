@@ -289,6 +289,22 @@ prop_compose! {
 }
 
 prop_compose! {
+    fn was_informed_by() (
+        // we probably should disallow reflexivity for `wasInformedBy`
+        activity1 in name(),
+        activity2 in name(),
+        namespace in namespace(),
+    ) -> WasInformedBy {
+
+        WasInformedBy{
+            namespace,
+            activity: ActivityId::from_name(&activity1),
+            informing_activity: ActivityId::from_name(&activity2),
+        }
+    }
+}
+
+prop_compose! {
     fn entity_attributes() (
         name in name(),
         namespace in namespace(),
@@ -332,22 +348,22 @@ prop_compose! {
 
 fn transaction() -> impl Strategy<Value = ChronicleOperation> {
     prop_oneof![
-        1 => create_namespace().prop_map(ChronicleOperation::CreateNamespace),
-        2 => create_agent().prop_map(ChronicleOperation::AgentExists),
-        2 => register_key().prop_map(ChronicleOperation::RegisterKey),
-        4 => create_activity().prop_map(ChronicleOperation::ActivityExists),
-        4 => start_activity().prop_map(ChronicleOperation::StartActivity),
-        4 => end_activity().prop_map(ChronicleOperation::EndActivity),
-        4 => used().prop_map(ChronicleOperation::ActivityUses),
-        2 => create_entity().prop_map(ChronicleOperation::EntityExists),
-        4 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
-        2 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
-        2 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
-        2 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
-        2 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
-        2 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
-        2 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
-        2 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => create_agent().prop_map(ChronicleOperation::AgentExists),
+        1 => register_key().prop_map(ChronicleOperation::RegisterKey),
+        1 => create_activity().prop_map(ChronicleOperation::ActivityExists),
+        1 => start_activity().prop_map(ChronicleOperation::StartActivity),
+        1 => end_activity().prop_map(ChronicleOperation::EndActivity),
+        1 => used().prop_map(ChronicleOperation::ActivityUses),
+        1 => create_entity().prop_map(ChronicleOperation::EntityExists),
+        1 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
+        1 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
+        1 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
+        1 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
+        1 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
+        1 => was_informed_by().prop_map(ChronicleOperation::WasInformedBy),
+        1 => entity_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => activity_attributes().prop_map(ChronicleOperation::SetAttributes),
+        1 => agent_attributes().prop_map(ChronicleOperation::SetAttributes),
     ]
 }
 
@@ -565,6 +581,20 @@ proptest! {
 
                     prop_assert!(has_generation);
                 }
+                ChronicleOperation::WasInformedBy(WasInformedBy{namespace, activity, informing_activity}) => {
+                    let informed_activity = &prov.activities.get(&(namespace.to_owned(), activity.to_owned()));
+                    prop_assert!(informed_activity.is_some());
+                    let informed_activity = informed_activity.unwrap();
+                    prop_assert_eq!(&informed_activity.name, activity.name_part());
+                    prop_assert_eq!(&informed_activity.namespaceid, namespace);
+
+                    let was_informed_by = prov.was_informed_by.get(
+                        &(namespace.clone(), activity.clone()))
+                        .unwrap()
+                        .contains(&(namespace.to_owned(), informing_activity.to_owned()));
+
+                    prop_assert!(was_informed_by);
+                },
                 ChronicleOperation::EntityHasEvidence(
                     EntityHasEvidence{
                     namespace,

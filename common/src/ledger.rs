@@ -12,6 +12,7 @@ use crate::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence,
             RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
+            WasInformedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
@@ -515,6 +516,17 @@ impl ChronicleOperation {
                 LedgerAddress::in_namespace(namespace, activity.clone()),
                 LedgerAddress::in_namespace(namespace, id.clone()),
             ],
+            ChronicleOperation::WasInformedBy(WasInformedBy {
+                namespace,
+                activity,
+                informing_activity,
+            }) => {
+                vec![
+                    LedgerAddress::namespace(namespace),
+                    LedgerAddress::in_namespace(namespace, activity.clone()),
+                    LedgerAddress::in_namespace(namespace, informing_activity.clone()),
+                ]
+            }
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,

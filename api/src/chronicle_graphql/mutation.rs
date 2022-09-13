@@ -310,6 +310,27 @@ pub async fn used<'a>(
     transaction_context(res, ctx).await
 }
 
+pub async fn was_informed_by<'a>(
+    ctx: &Context<'a>,
+    activity: ActivityId,
+    informing_activity: ActivityId,
+    namespace: Option<String>,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
+
+    let res = api
+        .dispatch(ApiCommand::Activity(ActivityCommand::WasInformedBy {
+            id: activity,
+            namespace,
+            informing_activity,
+        }))
+        .await?;
+
+    transaction_context(res, ctx).await
+}
+
 pub async fn was_generated_by<'a>(
     ctx: &Context<'a>,
     activity: ActivityId,

@@ -3,7 +3,7 @@ use async_graphql::Context;
 use common::prov::Role;
 use diesel::prelude::*;
 
-use super::{Entity, Namespace};
+use super::{Activity, Entity, Namespace};
 
 pub async fn namespace<'a>(
     namespaceid: i32,
@@ -52,6 +52,29 @@ pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<E
         .order(crate::persistence::schema::entity::name)
         .select(Entity::as_select())
         .load::<Entity>(&mut connection)?;
+
+    Ok(res)
+}
+
+pub async fn was_informed_by<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<Activity>> {
+    use crate::persistence::schema::wasinformedby::{self, dsl};
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+
+    let res =
+        wasinformedby::table
+            .filter(dsl::activity_id.eq(id))
+            .inner_join(crate::persistence::schema::activity::table.on(
+                wasinformedby::informing_activity_id.eq(crate::persistence::schema::activity::id),
+            ))
+            .order(crate::persistence::schema::activity::name)
+            .select(Activity::as_select())
+            .load::<Activity>(&mut connection)?;
 
     Ok(res)
 }

@@ -1,9 +1,7 @@
 // @generated automatically by Diesel CLI.
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     activity (id) {
         id -> Integer,
         name -> Text,
@@ -13,22 +11,18 @@ diesel::table! {
         ended -> Nullable<Timestamp>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     activity_attribute (activity_id, typename) {
         activity_id -> Integer,
         typename -> Text,
         value -> Text,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     agent (id) {
         id -> Integer,
         name -> Text,
@@ -38,33 +32,27 @@ diesel::table! {
         identity_id -> Nullable<Integer>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     agent_attribute (agent_id, typename) {
         agent_id -> Integer,
         typename -> Text,
         value -> Text,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     association (agent_id, activity_id, role) {
         agent_id -> Integer,
         activity_id -> Integer,
         role -> Nullable<Text>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     attachment (id) {
         id -> Integer,
         namespace_id -> Integer,
@@ -74,11 +62,9 @@ diesel::table! {
         locator -> Nullable<Text>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     delegation (delegate_id, responsible_id, activity_id, role) {
         delegate_id -> Integer,
         responsible_id -> Integer,
@@ -86,11 +72,9 @@ diesel::table! {
         role -> Nullable<Text>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     derivation (activity_id, generated_entity_id, used_entity_id, typ) {
         activity_id -> Nullable<Integer>,
         generated_entity_id -> Integer,
@@ -98,11 +82,9 @@ diesel::table! {
         typ -> Nullable<Integer>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     entity (id) {
         id -> Integer,
         name -> Text,
@@ -111,79 +93,73 @@ diesel::table! {
         attachment_id -> Nullable<Integer>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     entity_attribute (entity_id, typename) {
         entity_id -> Integer,
         typename -> Text,
         value -> Text,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     generation (activity_id, generated_entity_id) {
         activity_id -> Integer,
         generated_entity_id -> Integer,
         typ -> Nullable<Text>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     hadattachment (entity_id, attachment_id) {
         entity_id -> Integer,
         attachment_id -> Integer,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     hadidentity (agent_id, identity_id) {
         agent_id -> Integer,
         identity_id -> Integer,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     identity (id) {
         id -> Integer,
         namespace_id -> Integer,
         public_key -> Text,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     ledgersync (correlation_id) {
         correlation_id -> Text,
         offset -> Nullable<Text>,
         sync_time -> Nullable<Timestamp>,
     }
 }
-
 diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
-
     namespace (id) {
         id -> Integer,
         name -> Text,
         uuid -> Text,
+    }
+}
+diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+    usage (activity_id, entity_id) {
+        activity_id -> Integer,
+        entity_id -> Integer,
     }
 }
 
@@ -191,9 +167,9 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
-    usage (activity_id, entity_id) {
+    wasinformedby (activity_id, informing_activity_id) {
         activity_id -> Integer,
-        entity_id -> Integer,
+        informing_activity_id -> Integer,
     }
 }
 
@@ -220,7 +196,6 @@ diesel::joinable!(hadidentity -> identity (identity_id));
 diesel::joinable!(identity -> namespace (namespace_id));
 diesel::joinable!(usage -> activity (activity_id));
 diesel::joinable!(usage -> entity (entity_id));
-
 diesel::allow_tables_to_appear_in_same_query!(
     activity,
     activity_attribute,
@@ -239,4 +214,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     ledgersync,
     namespace,
     usage,
+    wasinformedby,
 );

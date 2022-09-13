@@ -21,7 +21,7 @@ use super::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
         EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-        WasGeneratedBy,
+        WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
     IdentityId, Name, NamePart, NamespaceId, PublicKeyPart, Role, UuidPart,
@@ -379,6 +379,7 @@ pub struct ProvModel {
     pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
     pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
+    pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
 }
 
 impl ProvModel {
@@ -465,6 +466,13 @@ impl ProvModel {
 
         for (id, mut rhs) in other.usage {
             self.usage
+                .entry(id.clone())
+                .and_modify(|xs| xs.extend(rhs.drain()))
+                .or_insert(rhs);
+        }
+
+        for (id, mut rhs) in other.was_informed_by {
+            self.was_informed_by
                 .entry(id.clone())
                 .and_modify(|xs| xs.extend(rhs.drain()))
                 .or_insert(rhs);
@@ -576,6 +584,18 @@ impl ProvModel {
                 entity_id: entity_id.clone(),
                 time: None,
             });
+    }
+
+    pub fn was_informed_by(
+        &mut self,
+        namespace: NamespaceId,
+        activity: &ActivityId,
+        informing_activity: &ActivityId,
+    ) {
+        self.was_informed_by
+            .entry((namespace.clone(), activity.clone()))
+            .or_insert_with(HashSet::new)
+            .insert((namespace, informing_activity.clone()));
     }
 
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
@@ -861,6 +881,27 @@ impl ProvModel {
                 }
 
                 self.was_generated_by(namespace, &id, &activity)
+            }
+            ChronicleOperation::WasInformedBy(WasInformedBy {
+                namespace,
+                activity,
+                informing_activity,
+            }) => {
+                self.namespace_context(&namespace);
+                if !self
+                    .activities
+                    .contains_key(&(namespace.clone(), activity.clone()))
+                {
+                    self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
+                }
+                self.was_informed_by
+                    .entry((namespace.clone(), activity.clone()))
+                    .or_insert_with(|| {
+                        let mut values = HashSet::new();
+                        values.insert((namespace.clone(), informing_activity.clone()));
+                        values
+                    });
+                self.was_informed_by(namespace, &activity, &informing_activity);
             }
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
