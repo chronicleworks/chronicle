@@ -9,9 +9,9 @@ use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
-use common::commands::ApiResponse;
+use common::{commands::ApiResponse, signing::DirectoryStoredKeys};
 
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 use user_error::UFE;
 
 use common::signing::SignerError;
@@ -269,6 +269,12 @@ pub async fn bootstrap<Query, Mutation>(
             ConsoleLogging::Off
         },
     );
+
+    if matches.subcommand_matches("verify-keystore").is_some() {
+        let config = handle_config_and_init(&domain.into()).unwrap();
+        info!(keystore=?DirectoryStoredKeys::new(&config.secrets.path).unwrap());
+        std::process::exit(0);
+    }
 
     config_and_exec(gql, domain.into())
         .await

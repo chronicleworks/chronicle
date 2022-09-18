@@ -854,7 +854,8 @@ impl SubCommand for CliModel {
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
                     ),
-            );
+            )
+            .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));
 
         for agent in self.agents.iter() {
             app = app.subcommand(agent.as_cmd());
