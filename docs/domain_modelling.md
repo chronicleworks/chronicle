@@ -33,19 +33,19 @@ The `Question` is then used to inform the `Research` for the production of
 To model and record this process you will need the Chronicle domain model
 definition explained here, along with the following operations:
 
-- [question](recording_provenance#define-an-entity) - define an Entity of
+- [question](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Question
-- [questionAsked](recording_provenance#define-an-activity) - define an
+- [questionAsked](./recording_provenance.md#define-an-activity) - define an
   Activity of subtype QuestionAsked
-- [person or organization](recording_provenance#define-an-agent) - define
+- [person or organization](./recording_provenance.md#define-an-agent) - define
   an Agent of subtype Person or Organization to act as  Stakeholders
-- [person](recording_provenance#define-an-agent)  - define an Agent of
+- [person](./recording_provenance.md#define-an-agent)  - define an Agent of
   subtype Person to act as Authors
-- [wasGeneratedBy](recording_provenance#generation) - specify that the
+- [wasGeneratedBy](./recording_provenance.md#generation) - specify that the
   QuestionAsked Activity produced the Question
-- [wasAssociatedWith](recording_provenance#association) - specify the
+- [wasAssociatedWith](./recording_provenance.md#association) - specify the
   Person who authored and the Organizations that asked
-- [endedAtTime](recording_provenance#ended-at-time) - specify the question
+- [endedAtTime](./recording_provenance.md#ended-at-time) - specify the question
   was asked at a point in time
 
 This process represented as provenance will look like:
@@ -63,23 +63,23 @@ are used to create references to `Evidence`.
 To model and record this process you will need the Chronicle domain model
 definition explained here, along with the following operations:
 
-- [question](recording_provenance#define-an-entity) - define an Entity of
+- [question](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Question
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
+- [evidence](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Evidence
-- [researched](recording_provenance#define-an-activity)  - define an
+- [researched](./recording_provenance.md#define-an-activity)  - define an
   Activity of subtype Researched
-- [person](recording_provenance#define-an-agent)  - define an Agent of
+- [person](./recording_provenance.md#define-an-agent)  - define an Agent of
   subtype Person
-- [used](recording_provenance#usage) - specify that the Research Activity
+- [used](./recording_provenance.md#usage) - specify that the Research Activity
   used the Question
-- [wasGeneratedBy](recording_provenance#generation) - specify that the
+- [wasGeneratedBy](./recording_provenance.md#generation) - specify that the
   Research Activity produced the Evidence
-- [wasAssociatedWith](recording_provenance#association) - specify that the
+- [wasAssociatedWith](./recording_provenance.md#association) - specify that the
   research was done by a Person acting as a researcher
-- [startedAtTime](recording_provenance#started-at-time) - specify the
+- [startedAtTime](./recording_provenance.md#started-at-time) - specify the
   research began at a point in time
-- [endedAtTime](recording_provenance#ended-at-time) - specify the research
+- [endedAtTime](./recording_provenance.md#ended-at-time) - specify the research
   ended at a point in time
 
 This process represented as provenance will look like:
@@ -97,30 +97,30 @@ the Guidance document.
 To model and record this process you will need the Chronicle domain model
 definition explained here, along with the following operations:
 
-- [question](recording_provenance#define-an-entity) - define an Entity of
+- [question](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Question
-- [guidance](recording_provenance#define-an-entity) - define an Entity of
+- [guidance](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Guidance
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
+- [evidence](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Evidence
-- [revised](recording_provenance#define-an-activity)  - define an Activity
+- [revised](./recording_provenance.md#define-an-activity)  - define an Activity
   of subtype Revised
-- [used](recording_provenance#usage) - specify that the Guidance Activity
+- [used](./recording_provenance.md#usage) - specify that the Guidance Activity
   used the Question
-- [used](recording_provenance#usage) - specify that the Guidance Activity
+- [used](./recording_provenance.md#usage) - specify that the Guidance Activity
   used the Evidence
-- [wasGeneratedBy](recording_provenance#generation) - specify that the
+- [wasGeneratedBy](./recording_provenance.md#generation) - specify that the
   Guidance Activity produced the Guidance
-- [wasAssociatedWith](recording_provenance#association) - specify that the
+- [wasAssociatedWith](./recording_provenance.md#association) - specify that the
   research was done by a Person acting as a researcher
-- [wasRevisionOf](recording_provenance#revision) - specify that the
+- [wasRevisionOf](./recording_provenance.md#revision) - specify that the
   Guidance is possibly a Revision of previous Guidance
-- [hadPrimarySource](recording_provenance#primary-source) - specify that
+- [hadPrimarySource](./recording_provenance.md#primary-source) - specify that
   the Guidance possibly has a primary source of the Question (for the first
   version)
-- [startedAtTime](recording_provenance#started-at-time) - specify the
+- [startedAtTime](./recording_provenance.md#started-at-time) - specify the
   Guidance process began at a point in time
-- [endedAtTime](recording_provenance#ended-at-time) - specify the Guidance
+- [endedAtTime](./recording_provenance.md#ended-at-time) - specify the Guidance
   process ended at a point in time
 
 This process represented as provenance will look like:
@@ -134,27 +134,27 @@ Stakeholders. Publication produces a digital artifact that can be signed.
 
 ![file](diagrams/out/publication.svg)
 
-- [guidance](recording_provenance#define-an-entity) - define an Entity of
+- [guidance](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Guidance
-- [publishedGuidance](recording_provenance#define-an-entity) - define an
+- [publishedGuidance](./recording_provenance.md#define-an-entity) - define an
   Entity of subtype PublishedGuidance
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
+- [evidence](./recording_provenance.md#define-an-entity) - define an Entity of
   subtype Evidence
-- [published](recording_provenance#define-an-activity)  - define an
+- [published](./recording_provenance.md#define-an-activity)  - define an
   Activity of subtype Published
-- [used](recording_provenance#usage) - specify that the Published Activity
+- [used](./recording_provenance.md#usage) - specify that the Published Activity
   used the Guidance
-- [wasGeneratedBy](recording_provenance#generation) - specify that the
+- [wasGeneratedBy](./recording_provenance.md#generation) - specify that the
   Published Activity produced the PublishedGuidance
-- [wasAssociatedWith](recording_provenance#association) - specify that the
+- [wasAssociatedWith](./recording_provenance.md#association) - specify that the
   Publication was done by a Person acting as an Editor
-- [actedOnBehalfOf](recording_provenance#delegation) - specify that the
+- [actedOnBehalfOf](./recording_provenance.md#delegation) - specify that the
   Publication was done by on behalf of on or more Stakeholders
-- [hadPrimarySource](recording_provenance#primarySource) - specify that
+- [hadPrimarySource](./recording_provenance.md#primarySource) - specify that
   the PublishedGuidance has a primary source of the Guidance
-- [endedAtTime](recording_provenance#ended-at-time) - specify the
+- [endedAtTime](./recording_provenance.md#ended-at-time) - specify the
   Published process happened at a point in time
-- [hadEvidence](recording_provenance#had-evidence) - attach a signature of
+- [hadEvidence](./recording_provenance.md#had-evidence) - attach a signature of
   the published PDF document to the PublishedGuidance activity
 
 This process represented as provenance will look like:
@@ -508,8 +508,8 @@ roles:
 ```
 
 Supplying this as a YAML file to the Chronicle build image as documented in
-[building chronicle](building) will produce a well-typed API for your
-domain. The next step is then [recording provenance](recording_provenance).
+[building chronicle(./building.md) will produce a well-typed API for your
+domain. The next step is then [recording provenance](./recording_provenance).
 
 ## Evolution
 
