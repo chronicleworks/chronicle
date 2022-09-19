@@ -6,7 +6,7 @@ use k256::{
 };
 use rand::prelude::StdRng;
 use rand_core::SeedableRng;
-use tracing::error;
+use tracing::{debug, error, info};
 
 use std::{
     path::{Path, PathBuf},
@@ -20,8 +20,8 @@ custom_error! {pub SignerError
     Io{source: std::io::Error}                              = "Invalid key store directory",
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
-    InvalidPublicKey{source: pkcs8::Error}            = "Invalid public key",
-    InvalidPrivateKey{source:  spki::Error}    = "Invalid public key",
+    InvalidPublicKey{source: pkcs8::Error}                  = "Invalid public key",
+    InvalidPrivateKey{source:  spki::Error}                 = "Invalid public key",
     NoPublicKeyFound{}                                      = "No public key found",
     NoPrivateKeyFound{}                                     = "No private key found",
 }
@@ -36,6 +36,7 @@ impl DirectoryStoredKeys {
     where
         P: AsRef<Path>,
     {
+        debug!(init_keystore_at = ?base.as_ref());
         Ok(Self {
             base: base.as_ref().to_path_buf(),
         })
@@ -134,17 +135,20 @@ impl DirectoryStoredKeys {
     }
 
     pub fn generate_agent(&self, agent: &AgentId) -> Result<(), SignerError> {
+        info!(generate_agent_key_at = ?self.agent_path(agent));
         let path = self.agent_path(agent);
         std::fs::create_dir_all(&path)?;
         Self::new_signing_key(&path)
     }
 
     pub fn generate_chronicle(&self) -> Result<(), SignerError> {
+        info!(generate_chronicle_key_at = ?self.base);
         std::fs::create_dir_all(&self.base)?;
         Self::new_signing_key(&self.base)
     }
 
     fn new_signing_key(secretpath: &Path) -> Result<(), SignerError> {
+        debug!(generate_secret_at = ?secretpath);
         let secret = SecretKey::random(StdRng::from_entropy());
 
         let privpem = secret.to_pkcs8_pem(LineEnding::CRLF)?;
@@ -162,12 +166,14 @@ impl DirectoryStoredKeys {
     }
 
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {
+        debug!(load_signing_key_at = ?path);
         Ok(SigningKey::from_pkcs8_pem(&*std::fs::read_to_string(
             Path::join(path, Path::new("key.priv.pem")),
         )?)?)
     }
 
     fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
+        debug!(load_verifying_key_at = ?path);
         Ok(VerifyingKey::from_public_key_pem(
             &*std::fs::read_to_string(Path::join(path, Path::new("key.pub.pem")))?,
         )?)
