@@ -30,7 +30,7 @@ network access for dependencies and can be used in secure environments.
 For friction-free development and testing, without the need for a backend ledger,
 domain-specific versions of Chronicle can be built in the same CI / CD process
 as your production version. Chronicle will use an embedded database and can be
-started with an [embedded GraphQL IDE](./cli.md#serve-graphql).
+started with an [embedded GraphQL IDE](./cli#serve-graphql).
 
 ![file](diagrams/out/stand-alone-deployment.svg)
 
@@ -43,3 +43,9 @@ but your application code must execute in the same container as Chronicle. This
 kind of deployment can operate side by side with GraphQL.
 
 ![file](diagrams/out/deployment-cli.svg)
+
+
+## Chronicle Transaction Processor
+
+Chronicle on sawtooth requires its own transaction processor, this functions
+independently of any domain specific models and can operate on any chronicle domain.

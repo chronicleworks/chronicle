@@ -1,7 +1,7 @@
 # Building Chronicle
 
 BTP maintain and distribute a docker image for the
-[Chronicle transaction processor](./chronicle_architecture.md#transaction-processor).
+[Chronicle transaction processor](./chronicle_architecture#transaction-processor).
 End users of Chronicle need to build their own versions to support
 their custom domains. BTP maintains and distributes a docker build
 image to be used in CI/CD.

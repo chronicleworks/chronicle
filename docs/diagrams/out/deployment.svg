@@ -1,26 +1,26 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="687.5px" preserveAspectRatio="none" style="width:1310px;height:687px;background:#00000000;" version="1.1" viewBox="0 0 1310 687" width="1310.4167px" zoomAndPan="magnify"><defs><linearGradient id="g1hh6vuvkvauc10" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#33B2E2"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs><g><!--MD5=[e0993032b34ac5376ce40dddaa919c7d]
-cluster ChronicleDomains--><g id="cluster_ChronicleDomains"><rect fill="none" height="658.3333" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="345.8333" x="409.375" y="17.7083"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="114.5833" x="525" y="47.463">Chronicle</text></g><!--MD5=[e3f7dbbdd04830bd1fc4bad55623b8b5]
-cluster DomainOnePackage--><g id="cluster_DomainOnePackage"><rect fill="none" height="269.7917" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="295.8333" x="434.375" y="86.4583"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="262.5" x="451.0417" y="116.213">Chronicle domain one</text></g><!--MD5=[c0ef62cdfbff367c20e632796555adda]
-cluster DomainTwoPackage--><g id="cluster_DomainTwoPackage"><rect fill="none" height="269.7917" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="295.8333" x="434.375" y="381.25"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="262.5" x="451.0417" y="411.0046">Chronicle domain two</text></g><!--MD5=[e9c1eba3b743f85634b66766c7c14b7b]
-cluster ConsumingService--><g id="cluster_ConsumingService"><rect fill="none" height="238.5417" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="260.4167" x="17.7083" y="409.375"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="227.0833" x="34.375" y="439.1296">Consuming service</text></g><!--MD5=[167682717be71cd996c033fcc984aacc]
-cluster SawtoothPackage--><g id="cluster_SawtoothPackage"><rect fill="none" height="339.5833" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="343.75" x="955.2083" y="219.7917"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="116.6667" x="1068.75" y="249.5463">Sawtooth</text></g><!--MD5=[7163e25ac89fa24c825f8ec4851435e1]
-cluster ChronicleTpEmbed--><g id="cluster_ChronicleTpEmbed"><rect fill="none" height="139.5833" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="293.75" x="980.2083" y="288.5417"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="20.8333" font-weight="bold" lengthAdjust="spacing" textLength="114.5833" x="1069.7917" y="318.2963">Chronicle</text></g><!--MD5=[839c6de57fec5fb42b28f494701f62cc]
-entity ChronicleDomainOne--><g id="elem_ChronicleDomainOne"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="116.6667" x="523.4375" y="277.0833"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="619.2708" y="282.2917"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="617.1875" y="284.375"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="617.1875" y="288.5417"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="58.3333" x="547.3958" y="317.8528">Chronicle</text></g><!--MD5=[014e97f95548c7eba7be8ce18452f4fd]
-entity IndexOne--><g id="elem_IndexOne"><path d="M514.5833,157.8125 C514.5833,147.3958 581.7708,147.3958 581.7708,147.3958 C581.7708,147.3958 648.9583,147.3958 648.9583,157.8125 L648.9583,198.4049 C648.9583,208.8216 581.7708,208.8216 581.7708,208.8216 C581.7708,208.8216 514.5833,208.8216 514.5833,198.4049 L514.5833,157.8125 " fill="url(#g1hh6vuvkvauc10)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M514.5833,157.8125 C514.5833,168.2292 581.7708,168.2292 581.7708,168.2292 C581.7708,168.2292 648.9583,168.2292 648.9583,157.8125 " fill="none" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="96.875" x="533.3333" y="192.3319">Index database</text></g><!--MD5=[fad4db242888463e6a342338e57ed272]
-entity ChronicleDomainTwo--><g id="elem_ChronicleDomainTwo"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="116.6667" x="523.4375" y="571.875"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="619.2708" y="577.0833"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="617.1875" y="579.1667"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="617.1875" y="583.3333"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="58.3333" x="547.3958" y="612.6444">Chronicle</text></g><!--MD5=[3130b54604dba97fc2f420950c81ab31]
-entity IndexTwo--><g id="elem_IndexTwo"><path d="M514.5833,452.6042 C514.5833,442.1875 581.7708,442.1875 581.7708,442.1875 C581.7708,442.1875 648.9583,442.1875 648.9583,452.6042 L648.9583,493.1966 C648.9583,503.6133 581.7708,503.6133 581.7708,503.6133 C581.7708,503.6133 514.5833,503.6133 514.5833,493.1966 L514.5833,452.6042 " fill="url(#g1hh6vuvkvauc10)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M514.5833,452.6042 C514.5833,463.0208 581.7708,463.0208 581.7708,463.0208 C581.7708,463.0208 648.9583,463.0208 648.9583,452.6042 " fill="none" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="96.875" x="533.3333" y="487.1236">Index database</text></g><!--MD5=[d2b8c9f33b0bedf500350e1be8f5ba31]
-entity ChronicleClient--><g id="elem_ChronicleClient"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="154.1667" x="70.3125" y="469.7917"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="203.6458" y="475"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="201.5625" y="477.0833"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="201.5625" y="481.25"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="95.8333" x="94.2708" y="510.5611">Chronicle client</text></g><!--MD5=[76d0c25527896f67cb6aa4ccab7e7ab8]
-entity CustomerService--><g id="elem_CustomerService"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="169.7917" x="62.5" y="568.75"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="211.4583" y="573.9583"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="209.375" y="576.0417"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="209.375" y="580.2083"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="111.4583" x="86.4583" y="609.5194">Customer service</text></g><!--MD5=[5249ea2b03fa3b7487e8fe2d32b737aa]
-entity Sawtooth--><g id="elem_Sawtooth"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="175" x="1039.5833" y="480.2083"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="1193.75" y="485.4167"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1191.6667" y="487.5"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1191.6667" y="491.6667"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="116.6667" x="1063.5417" y="520.9778">Sawtooth validator</text></g><!--MD5=[d18ea71899ad7122b263837d385b774a]
-entity ChronicleTP--><g id="elem_ChronicleTP"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="260.4167" x="996.875" y="348.9583"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="1236.4583" y="354.1667"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1234.375" y="356.25"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1234.375" y="360.4167"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="202.0833" x="1020.8333" y="389.7278">Chronicle Transaction Processor</text></g><!--MD5=[88479afbda706a36b392076b51ca02d4]
-link CustomerService to ChronicleClient--><g id="link_CustomerService_ChronicleClient"><path d="M147.3958,563.3156 C147.3958,554.8052 147.3958,546.2958 147.3958,537.7854 " fill="none" id="CustomerService-ChronicleClient" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="147.3958,532.4875,143.2292,541.8625,147.3958,537.6958,151.5625,541.8625,147.3958,532.4875" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="147.3958,568.6885,151.5625,559.3135,147.3958,563.4802,143.2292,559.3135,147.3958,568.6885" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[f0a082c36e866bb7878fc82461704e66]
-link ChronicleClient to ChronicleDomainOne--><g id="link_ChronicleClient_ChronicleDomainOne"><path d="M223.8875,467.4073 C307.3146,430.2167 440.1927,370.9823 518.0927,336.2552 " fill="none" id="ChronicleClient-ChronicleDomainOne" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="523.1438,334.0042,512.8845,334.0179,518.3871,336.1258,516.2792,341.6284,523.1438,334.0042" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="218.8552,469.651,229.1144,469.6388,223.6121,467.5301,225.7209,462.0278,218.8552,469.651" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="304.1667" y="393.8944">GraphQL</text></g><!--MD5=[a540f09c6aca307d48171454951d2cae]
-link ChronicleClient to ChronicleDomainTwo--><g id="link_ChronicleClient_ChronicleDomainTwo"><path d="M229.6063,524.4906 C250.7615,530.35 273.575,536.4469 294.7917,541.6667 C371.249,560.4771 459.9969,579.05 518.0917,590.7704 " fill="none" id="ChronicleClient-ChronicleDomainTwo" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="523.2667,591.8128,514.9005,585.8749,518.1611,590.7831,513.2529,594.0438,523.2667,591.8128" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="224.5521,523.0875,232.4693,529.612,229.5703,524.4819,234.7004,521.5829,224.5521,523.0875" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="304.1667" y="530.3528">GraphQL</text></g><!--MD5=[2c4620392e970f7baed5eb337aa07c73]
-link ChronicleDomainOne to IndexOne--><g id="link_ChronicleDomainOne_IndexOne"><path d="M581.7708,271.3677 C581.7708,253.4802 581.7708,232.0823 581.7708,214.3 " fill="none" id="ChronicleDomainOne-IndexOne" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="581.7708,208.9052,577.6042,218.2802,581.7708,214.1135,585.9375,218.2802,581.7708,208.9052" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="581.7708,276.8135,585.9375,267.4385,581.7708,271.6052,577.6042,267.4385,581.7708,276.8135" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="86.4583" x="519.2708" y="247.8007">Indexes PROV</text></g><!--MD5=[12f63d82c3ecd25fa22cbc93616f5881]
-link ChronicleDomainTwo to IndexTwo--><g id="link_ChronicleDomainTwo_IndexTwo"><path d="M581.7708,566.1594 C581.7708,548.2719 581.7708,526.874 581.7708,509.0917 " fill="none" id="ChronicleDomainTwo-IndexTwo" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="581.7708,503.6969,577.6042,513.0719,581.7708,508.9052,585.9375,513.0719,581.7708,503.6969" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="581.7708,571.6052,585.9375,562.2302,581.7708,566.3969,577.6042,562.2302,581.7708,571.6052" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="86.4583" x="519.2708" y="542.5924">Indexes PROV</text></g><!--MD5=[4593394b0b58b3547dbd7c39114a2628]
-link ChronicleDomainTwo to Sawtooth--><g id="link_ChronicleDomainTwo_Sawtooth"><path d="M640.4333,593.4019 C734.376,577.55 921.3302,546.0021 1033.8802,527.0104 " fill="none" id="ChronicleDomainTwo-to-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1039.1833,526.1156,1029.2452,523.5688,1034.0478,526.9832,1030.6334,531.7857,1039.1833,526.1156" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="122.9167" x="806.25" y="531.3944">Submits transaction</text></g><!--MD5=[7236365b005082d0b58afc73fe591e23]
-link ChronicleDomainOne to Sawtooth--><g id="link_ChronicleDomainOne_Sawtooth"><path d="M640.4333,329.8792 C735.2771,365.3427 924.9229,436.2552 1037.0958,478.2 " fill="none" id="ChronicleDomainOne-to-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1042.0469,480.051,1034.7248,472.865,1037.1684,478.227,1031.8064,480.6706,1042.0469,480.051" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="122.9167" x="806.25" y="378.2694">Submits transaction</text></g><!--MD5=[02dedfdd3b4ed8ce91f5d412eeac9a58]
-link ChronicleTP to Sawtooth--><g id="link_ChronicleTP_Sawtooth"><path d="M1127.0833,417.2865 C1127.0833,435.2135 1127.0833,456.6708 1127.0833,474.5719 " fill="none" id="ChronicleTP-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1127.0833,480.0208,1131.25,470.6458,1127.0833,474.8125,1122.9167,470.6458,1127.0833,480.0208" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1127.0833,411.8448,1122.9167,421.2198,1127.0833,417.0531,1131.25,421.2198,1127.0833,411.8448" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="128.125" x="1043.75" y="450.6653">Confirms transaction</text></g><!--MD5=[e12aef91c9ff9aaadde9a2e83aac86b8]
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="656.25px" preserveAspectRatio="none" style="width:1129px;height:656px;background:#00000000;" version="1.1" viewBox="0 0 1129 656" width="1129.1667px" zoomAndPan="magnify"><defs><linearGradient id="g1hh6vuvkvauc10" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#33B2E2"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs><g><!--MD5=[e0993032b34ac5376ce40dddaa919c7d]
+cluster ChronicleDomains--><g id="cluster_ChronicleDomains"><rect fill="none" height="627.0833" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="244.7917" x="340.625" y="17.7083"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="70.8333" x="427.6042" y="39.7278">Chronicle</text></g><!--MD5=[e3f7dbbdd04830bd1fc4bad55623b8b5]
+cluster DomainOnePackage--><g id="cluster_DomainOnePackage"><rect fill="none" height="259.375" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="194.7917" x="365.625" y="76.0417"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="161.4583" x="382.2917" y="98.0611">Chronicle domain one</text></g><!--MD5=[c0ef62cdfbff367c20e632796555adda]
+cluster DomainTwoPackage--><g id="cluster_DomainTwoPackage"><rect fill="none" height="259.375" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="194.7917" x="365.625" y="360.4167"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="161.4583" x="382.2917" y="382.4361">Chronicle domain two</text></g><!--MD5=[e9c1eba3b743f85634b66766c7c14b7b]
+cluster ConsumingService--><g id="cluster_ConsumingService"><rect fill="none" height="228.125" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="203.125" x="17.7083" y="391.6667"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="140.625" x="48.9583" y="413.6861">Consuming service</text></g><!--MD5=[167682717be71cd996c033fcc984aacc]
+cluster SawtoothPackage--><g id="cluster_SawtoothPackage"><rect fill="none" height="318.75" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="343.75" x="773.9583" y="212.5"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="72.9167" x="909.375" y="234.5194">Sawtooth</text></g><!--MD5=[7163e25ac89fa24c825f8ec4851435e1]
+cluster ChronicleTpEmbed--><g id="cluster_ChronicleTpEmbed"><rect fill="none" height="129.1667" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:2.0833333333333335;" width="293.75" x="798.9583" y="270.8333"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" font-weight="bold" lengthAdjust="spacing" textLength="70.8333" x="910.4167" y="292.8528">Chronicle</text></g><!--MD5=[839c6de57fec5fb42b28f494701f62cc]
+entity ChronicleDomainOne--><g id="elem_ChronicleDomainOne"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="116.6667" x="404.6875" y="256.25"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="500.5208" y="261.4583"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="498.4375" y="263.5417"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="498.4375" y="267.7083"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="58.3333" x="428.6458" y="297.0194">Chronicle</text></g><!--MD5=[014e97f95548c7eba7be8ce18452f4fd]
+entity IndexOne--><g id="elem_IndexOne"><path d="M395.8333,136.9792 C395.8333,126.5625 463.0208,126.5625 463.0208,126.5625 C463.0208,126.5625 530.2083,126.5625 530.2083,136.9792 L530.2083,177.5716 C530.2083,187.9883 463.0208,187.9883 463.0208,187.9883 C463.0208,187.9883 395.8333,187.9883 395.8333,177.5716 L395.8333,136.9792 " fill="url(#g1hh6vuvkvauc10)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M395.8333,136.9792 C395.8333,147.3958 463.0208,147.3958 463.0208,147.3958 C463.0208,147.3958 530.2083,147.3958 530.2083,136.9792 " fill="none" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="96.875" x="414.5833" y="171.4986">Index database</text></g><!--MD5=[fad4db242888463e6a342338e57ed272]
+entity ChronicleDomainTwo--><g id="elem_ChronicleDomainTwo"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="116.6667" x="404.6875" y="540.625"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="500.5208" y="545.8333"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="498.4375" y="547.9167"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="498.4375" y="552.0833"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="58.3333" x="428.6458" y="581.3944">Chronicle</text></g><!--MD5=[3130b54604dba97fc2f420950c81ab31]
+entity IndexTwo--><g id="elem_IndexTwo"><path d="M395.8333,421.3542 C395.8333,410.9375 463.0208,410.9375 463.0208,410.9375 C463.0208,410.9375 530.2083,410.9375 530.2083,421.3542 L530.2083,461.9466 C530.2083,472.3633 463.0208,472.3633 463.0208,472.3633 C463.0208,472.3633 395.8333,472.3633 395.8333,461.9466 L395.8333,421.3542 " fill="url(#g1hh6vuvkvauc10)" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><path d="M395.8333,421.3542 C395.8333,431.7708 463.0208,431.7708 463.0208,431.7708 C463.0208,431.7708 530.2083,431.7708 530.2083,421.3542 " fill="none" style="stroke:#007FAF;stroke-width:1.0416666666666667;"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="96.875" x="414.5833" y="455.8736">Index database</text></g><!--MD5=[d2b8c9f33b0bedf500350e1be8f5ba31]
+entity ChronicleClient--><g id="elem_ChronicleClient"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="154.1667" x="42.1875" y="441.6667"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="175.5208" y="446.875"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="173.4375" y="448.9583"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="173.4375" y="453.125"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="95.8333" x="66.1458" y="482.4361">Chronicle client</text></g><!--MD5=[76d0c25527896f67cb6aa4ccab7e7ab8]
+entity CustomerService--><g id="elem_CustomerService"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="169.7917" x="34.375" y="540.625"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="183.3333" y="545.8333"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="181.25" y="547.9167"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="181.25" y="552.0833"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="111.4583" x="58.3333" y="581.3944">Customer service</text></g><!--MD5=[5249ea2b03fa3b7487e8fe2d32b737aa]
+entity Sawtooth--><g id="elem_Sawtooth"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="175" x="858.3333" y="452.0833"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="1012.5" y="457.2917"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1010.4167" y="459.375"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1010.4167" y="463.5417"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="116.6667" x="882.2917" y="492.8528">Sawtooth validator</text></g><!--MD5=[d18ea71899ad7122b263837d385b774a]
+entity ChronicleTP--><g id="elem_ChronicleTP"><rect fill="url(#g1hh6vuvkvauc10)" height="62.4674" rx="4.1667" ry="4.1667" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="260.4167" x="815.625" y="320.8333"/><rect fill="url(#g1hh6vuvkvauc10)" height="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="15.625" x="1055.2083" y="326.0417"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1053.125" y="328.125"/><rect fill="url(#g1hh6vuvkvauc10)" height="2.0833" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="4.1667" x="1053.125" y="332.2917"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="202.0833" x="839.5833" y="361.6028">Chronicle Transaction Processor</text></g><!--MD5=[88479afbda706a36b392076b51ca02d4]
+link CustomerService to ChronicleClient--><g id="link_CustomerService_ChronicleClient"><path d="M119.2708,535.1906 C119.2708,526.6802 119.2708,518.1708 119.2708,509.6604 " fill="none" id="CustomerService-ChronicleClient" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="119.2708,504.3625,115.1042,513.7375,119.2708,509.5708,123.4375,513.7375,119.2708,504.3625" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="119.2708,540.5635,123.4375,531.1885,119.2708,535.3552,115.1042,531.1885,119.2708,540.5635" style="stroke:#009FDB;stroke-width:3.125;"/></g><!--MD5=[f0a082c36e866bb7878fc82461704e66]
+link ChronicleClient to ChronicleDomainOne--><g id="link_ChronicleClient_ChronicleDomainOne"><path d="M183.15,438.8156 C244.8479,405.3333 338.4042,354.5625 399.8552,321.2135 " fill="none" id="ChronicleClient-ChronicleDomainOne" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="404.5917,318.6427,394.3644,319.4514,400.0138,321.1266,398.3386,326.776,404.5917,318.6427" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="178.2719,441.4635,188.4992,440.6548,182.8498,438.9796,184.5249,433.3302,178.2719,441.4635" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="246.875" y="363.6861">GraphQL</text></g><!--MD5=[a540f09c6aca307d48171454951d2cae]
+link ChronicleClient to ChronicleDomainTwo--><g id="link_ChronicleClient_ChronicleDomainTwo"><path d="M201.7198,502.0698 C213.6698,506.0771 225.8688,510.0208 237.5,513.5417 C291.6792,529.9438 354.0479,545.9229 399.274,556.9969 " fill="none" id="ChronicleClient-ChronicleDomainTwo" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="404.425,558.2553,396.3058,551.984,399.3653,557.02,394.3293,560.0795,404.425,558.2553" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="196.6167,500.349,204.1692,507.2924,201.552,502.0129,206.8315,499.3958,196.6167,500.349" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="246.875" y="502.2278">GraphQL</text></g><!--MD5=[2c4620392e970f7baed5eb337aa07c73]
+link ChronicleDomainOne to IndexOne--><g id="link_ChronicleDomainOne_IndexOne"><path d="M463.0208,250.5344 C463.0208,232.6469 463.0208,211.249 463.0208,193.4667 " fill="none" id="ChronicleDomainOne-IndexOne" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="463.0208,188.0719,458.8542,197.4469,463.0208,193.2802,467.1875,197.4469,463.0208,188.0719" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="463.0208,255.9802,467.1875,246.6052,463.0208,250.7719,458.8542,246.6052,463.0208,255.9802" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="86.4583" x="400.5208" y="226.9674">Indexes PROV</text></g><!--MD5=[12f63d82c3ecd25fa22cbc93616f5881]
+link ChronicleDomainTwo to IndexTwo--><g id="link_ChronicleDomainTwo_IndexTwo"><path d="M463.0208,534.9094 C463.0208,517.0219 463.0208,495.624 463.0208,477.8417 " fill="none" id="ChronicleDomainTwo-IndexTwo" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="463.0208,472.4469,458.8542,481.8219,463.0208,477.6552,467.1875,481.8219,463.0208,472.4469" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="463.0208,540.3552,467.1875,530.9802,463.0208,535.1469,458.8542,530.9802,463.0208,540.3552" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="86.4583" x="400.5208" y="511.3424">Indexes PROV</text></g><!--MD5=[4593394b0b58b3547dbd7c39114a2628]
+link ChronicleDomainTwo to Sawtooth--><g id="link_ChronicleDomainTwo_Sawtooth"><path d="M521.5719,561.2827 C603.5938,546.176 755.0375,518.2823 852.7646,500.2833 " fill="none" id="ChronicleDomainTwo-to-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="857.9583,499.326,847.9837,496.9266,852.8362,500.2695,849.4932,505.122,857.9583,499.326" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="122.9167" x="625" y="507.4361">Submits transaction</text></g><!--MD5=[7236365b005082d0b58afc73fe591e23]
+link ChronicleDomainOne to Sawtooth--><g id="link_ChronicleDomainOne_Sawtooth"><path d="M521.5719,310.9271 C606.4938,345.5219 765.8333,410.4313 862.924,449.9833 " fill="none" id="ChronicleDomainOne-to-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="867.7875,451.9646,860.6767,444.5695,862.9639,450,857.5333,452.2872,867.7875,451.9646" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="122.9167" x="625" y="339.7278">Submits transaction</text></g><!--MD5=[02dedfdd3b4ed8ce91f5d412eeac9a58]
+link ChronicleTP to Sawtooth--><g id="link_ChronicleTP_Sawtooth"><path d="M945.8333,389.1615 C945.8333,407.0885 945.8333,428.5458 945.8333,446.4469 " fill="none" id="ChronicleTP-Sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="945.8333,451.8958,950,442.5208,945.8333,446.6875,941.6667,442.5208,945.8333,451.8958" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="945.8333,383.7198,941.6667,393.0948,945.8333,388.9281,950,393.0948,945.8333,383.7198" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="128.125" x="862.5" y="422.5403">Confirms transaction</text></g><!--MD5=[661029abd87bb2d2168d5668d75e3d2f]
 @startuml
 !theme bluegray
 
@@ -128,17 +128,17 @@ skinparam useBetaStyle false
   }
   nwdiagDiagram {
 	network {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
-
+    
 		LineColor #009fdb
 		LineThickness 1.0
 		FontColor #007faf
 	}
 	server {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -158,7 +158,7 @@ skinparam useBetaStyle false
   }
   ganttDiagram {
 	task {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -253,7 +253,7 @@ skinparam activity {
 
 
 skinparam participant {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -263,7 +263,7 @@ skinparam participant {
 
 
 skinparam actor {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -315,7 +315,7 @@ skinparam partition {
 
 
 skinparam collections {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -324,7 +324,7 @@ skinparam collections {
 
 
 skinparam control {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -334,7 +334,7 @@ skinparam control {
 
 
 skinparam entity {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -344,7 +344,7 @@ skinparam entity {
 
 
 skinparam boundary {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -376,7 +376,7 @@ skinparam artifact {
 
 
 skinparam component {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -413,7 +413,7 @@ skinparam cloud {
 
 
 skinparam database {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -423,7 +423,7 @@ skinparam database {
 
 
 skinparam class {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -437,7 +437,7 @@ skinparam class {
 
 
 skinparam object {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -450,7 +450,7 @@ skinparam object {
 
 
 skinparam usecase {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -494,7 +494,7 @@ skinparam frame {
 
 
 skinparam state {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -508,7 +508,7 @@ skinparam state {
 
 
 skinparam queue {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -532,7 +532,7 @@ skinparam file {
 
 
 skinparam stack {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -579,7 +579,7 @@ ChronicleDomainOne - -> Sawtooth: Submits transaction
 ChronicleTP <-> Sawtooth: Confirms transaction
 @enduml
 
-PlantUML version 1.2022.8beta2(Unknown compile time)
+PlantUML version 1.2022.8beta8(Unknown compile time)
 (GPL source distribution)
 Java Runtime: Java(TM) SE Runtime Environment
 JVM: Java HotSpot(TM) 64-Bit Server VM

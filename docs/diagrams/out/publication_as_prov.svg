@@ -18,7 +18,7 @@ link Person to Person--><g id="link_Person_Person"><path codeLine="30" d="M105.5
 link PublishedGuidance to Revision--><g id="link_PublishedGuidance_Revision"><path codeLine="34" d="M421.7719,152.5958 C433.6438,124.2927 456.1365,82.7198 491.1458,64.1896 C543.1115,36.6844 566.4,49.9177 623.4375,64.1896 C684.2323,79.401 744.9188,119.8688 782.8708,148.9917 " fill="none" id="PublishedGuidance-to-Revision" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="787.3854,152.4844,782.5191,143.4527,783.2656,149.2978,777.4206,150.0444,787.3854,152.4844" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="113.5417" x="500.5208" y="65.3757">hadPrimarySource</text></g><!--MD5=[b88acac280cf9933169186a61bb1ac47]
 link Publication to Guidance--><g id="link_Publication_Guidance"><path codeLine="35" d="M1041.9792,181.3771 C1067.2396,181.3771 1097.125,181.3771 1122.6354,181.3771 " fill="none" id="Publication-to-Guidance" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1128.0104,181.3771,1118.6354,177.2104,1122.8021,181.3771,1118.6354,185.5438,1128.0104,181.3771" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="31.25" x="1069.2708" y="166.9382">used</text></g><!--MD5=[f7a55d1c18581ddcd3001da6e2fcb81e]
 link PublishedGuidance to Publication--><g id="link_PublishedGuidance_Publication"><path codeLine="36" d="M450.1969,152.7219 C491.826,123.8615 561.1427,81.2385 628.6458,64.1896 C682.9583,50.4719 700.1969,51.1969 754.6875,64.1896 C823.5927,80.6188 895.2135,121.0177 940.2656,149.7792 " fill="none" id="PublishedGuidance-to-Publication" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="944.8125,152.7,939.1771,144.1271,940.4305,149.8848,934.6728,151.1383,944.8125,152.7" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="107.2917" x="638.0208" y="65.3757">wasGeneratedBy</text></g><!--MD5=[cdc806fa83a76d81cfe87a2554076b8a]
-link PublishedGuidance to Document--><g id="link_PublishedGuidance_Document"><path codeLine="37" d="M491.674,181.3771 C533.1271,181.3771 582.8719,181.3771 621.0031,181.3771 " fill="none" id="PublishedGuidance-to-Document" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="626.5417,181.3771,617.1667,177.2104,621.3333,181.3771,617.1667,185.5438,626.5417,181.3771" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="80.2083" x="519.0104" y="166.9382">hadEvidence</text></g><!--MD5=[4e939067607206df58c93366a3cd8d34]
+link PublishedGuidance to Document--><g id="link_PublishedGuidance_Document"><path codeLine="37" d="M491.674,181.3771 C533.1271,181.3771 582.8719,181.3771 621.0031,181.3771 " fill="none" id="PublishedGuidance-to-Document" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="626.5417,181.3771,617.1667,177.2104,621.3333,181.3771,617.1667,185.5438,626.5417,181.3771" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="80.2083" x="519.0104" y="166.9382">hadEvidence</text></g><!--MD5=[40dba0bfff7e880aeff738c881c6a931]
 @startuml
 !theme bluegray
 
@@ -123,17 +123,17 @@ skinparam useBetaStyle false
   }
   nwdiagDiagram {
 	network {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
-
+    
 		LineColor #009fdb
 		LineThickness 1.0
 		FontColor #007faf
 	}
 	server {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -153,7 +153,7 @@ skinparam useBetaStyle false
   }
   ganttDiagram {
 	task {
-
+		
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -248,7 +248,7 @@ skinparam activity {
 
 
 skinparam participant {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -258,7 +258,7 @@ skinparam participant {
 
 
 skinparam actor {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -310,7 +310,7 @@ skinparam partition {
 
 
 skinparam collections {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -319,7 +319,7 @@ skinparam collections {
 
 
 skinparam control {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -329,7 +329,7 @@ skinparam control {
 
 
 skinparam entity {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -339,7 +339,7 @@ skinparam entity {
 
 
 skinparam boundary {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -371,7 +371,7 @@ skinparam artifact {
 
 
 skinparam component {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -408,7 +408,7 @@ skinparam cloud {
 
 
 skinparam database {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -418,7 +418,7 @@ skinparam database {
 
 
 skinparam class {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -432,7 +432,7 @@ skinparam class {
 
 
 skinparam object {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -445,7 +445,7 @@ skinparam object {
 
 
 skinparam usecase {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -489,7 +489,7 @@ skinparam frame {
 
 
 skinparam state {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -503,7 +503,7 @@ skinparam state {
 
 
 skinparam queue {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -527,7 +527,7 @@ skinparam file {
 
 
 skinparam stack {
-
+	
 	FontColor #fff
 	BorderColor #33b2e2
 	BackgroundColor #33b2e2-#009fdb
@@ -571,7 +571,7 @@ PublishedGuidance -> Publication: wasGeneratedBy
 PublishedGuidance -> Document: hadEvidence
 @enduml
 
-PlantUML version 1.2022.8beta2(Unknown compile time)
+PlantUML version 1.2022.8beta8(Unknown compile time)
 (GPL source distribution)
 Java Runtime: Java(TM) SE Runtime Environment
 JVM: Java HotSpot(TM) 64-Bit Server VM
