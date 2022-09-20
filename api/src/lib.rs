@@ -11,9 +11,11 @@ use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
 use common::{
     k256::ecdsa::{signature::Signer, Signature},
+    ledger::SubmissionStage,
     prov::{
         operations::{WasAssociatedWith, WasInformedBy},
-        Role,
+        to_json_ld::ToJson,
+        Contradiction, ProcessorError, Role,
     },
 };
 use persistence::{Store, StoreError, MIGRATIONS};
@@ -35,8 +37,7 @@ use common::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, Generated, RegisterKey, SetAttributes, StartActivity,
-            WasGeneratedBy,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
         },
         ActivityId, AgentId, ChronicleTransactionId, EntityId, ExternalId, ExternalIdPart,
         IdentityId, NamespaceId, ProvModel,
@@ -50,25 +51,28 @@ pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
 
-custom_error! {pub ApiError
-    Store{source: persistence::StoreError}                      = "Storage",
-    Transaction{source: diesel::result::Error}                  = "Transaction failed",
-    Iri{source: iref::Error}                                    = "Invalid IRI",
-    JsonLD{message: String}                                     = "Json LD processing",
-    Ledger{source: SubmissionError}                             = "Ledger error",
-    Signing{source: SignerError}                                = "Signing",
+custom_error! {
+  pub ApiError
+    Store{source: persistence::StoreError}                      = "Storage {source:?}",
+    Transaction{source: diesel::result::Error}                  = "Transaction failed {source}",
+    Iri{source: iref::Error}                                    = "Invalid IRI {source}",
+    JsonLD{message: String}                                     = "Json LD processing {message}",
+    Ledger{source: SubmissionError}                             = "Ledger error {source}",
+    Signing{source: SignerError}                                = "Signing {source}",
     NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
     CannotFindAttachment{}                                      = "Cannot locate attachment file",
     ApiShutdownRx                                               = "Api shut down before reply",
     ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
     LedgerShutdownTx{source: SendError<LedgerSendWithReply>}    = "Ledger shut down before send",
-    AddressParse{source: AddrParseError}                        = "Invalid socket address",
-    ConnectionPool{source: r2d2::Error}                         = "Connection pool",
+    AddressParse{source: AddrParseError}                        = "Invalid socket address {source}",
+    ConnectionPool{source: r2d2::Error}                         = "Connection pool {source}",
     FileUpload{source: std::io::Error}                          = "File upload",
     Join{source: JoinError}                                     = "Blocking thread pool",
-    Subscription{source: SubscriptionError}                     = "State update subscription",
+    Subscription{source: SubscriptionError}                     = "State update subscription {source}",
     NotCurrentActivity{}                                        = "No appropriate activity to end",
     EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
+    Contradiction{source: Contradiction}                        = "Contradiction {source}",
+    ProcessorError{source: ProcessorError}                      = "Processor {source}",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -110,7 +114,7 @@ impl BlockingLedgerWriter {
                         let result = ledger_writer.submit(submission.as_slice()).await;
 
                         reply
-                            .send(result)
+                            .send(result.map_err(SubmissionError::from))
                             .await
                             .map_err(|e| {
                                 error!(?e);
@@ -161,6 +165,7 @@ where
     U: UuidGen + Send + Sync + Clone,
 {
     tx: Sender<ApiSendWithReply>,
+    submit_tx: tokio::sync::broadcast::Sender<SubmissionStage>,
     #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
     ledger_writer: BlockingLedgerWriter,
@@ -174,7 +179,7 @@ where
 /// A clonable api handle
 pub struct ApiDispatch {
     tx: Sender<ApiSendWithReply>,
-    pub notify_commit: tokio::sync::broadcast::Sender<(ProvModel, ChronicleTransactionId)>,
+    pub notify_commit: tokio::sync::broadcast::Sender<SubmissionStage>,
 }
 
 impl ApiDispatch {
@@ -211,11 +216,11 @@ where
         R: LedgerReader + Send + Clone + Sync + 'static,
         W: LedgerWriter + Send + 'static,
     {
-        let (tx, mut rx) = mpsc::channel::<ApiSendWithReply>(10);
+        let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
         let (commit_notify_tx, _) = tokio::sync::broadcast::channel(20);
         let dispatch = ApiDispatch {
-            tx: tx.clone(),
+            tx: commit_tx.clone(),
             notify_commit: commit_notify_tx.clone(),
         };
 
@@ -239,7 +244,8 @@ where
             let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
 
             let mut api = Api::<U> {
-                tx: tx.clone(),
+                tx: commit_tx.clone(),
+                submit_tx: commit_notify_tx.clone(),
                 keystore,
                 ledger_writer: BlockingLedgerWriter::new(ledger_writer),
                 store: store.clone(),
@@ -264,22 +270,35 @@ where
                     select! {
                             state = state_updates.next().fuse() =>{
 
-                                if state.is_none() {
+                                match state {
+                                  None => {
                                     warn!("Ledger reader disconnected");
                                     break;
-                                }
+                                  }
+                                  // Ledger contradicted or error, so nothing to
+                                  // apply, but forward notification
+                                  Some(commit@ Err(_)) => {
+                                    commit_notify_tx.send(SubmissionStage::committed(commit)).ok();
+                                  },
+                                  Some(ref stage@ Ok(ref commit)) => {
+                                        let offset = commit.offset.clone();
+                                        let tx_id = commit.tx_id.clone();
+                                        let delta = commit.delta.clone();
 
-                                if let Some((offset, prov, correlation_id)) = state {
-                                        api.sync(&prov, offset.clone(),correlation_id.clone())
-                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, correlation_id = %correlation_id))
+                                        debug!(committed = ?tx_id);
+                                        debug!(delta = %delta.to_json().compact().await.unwrap().pretty());
+
+                                        api.sync( delta, offset.clone(),tx_id.clone())
+                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, tx_id = %tx_id))
                                             .await
                                             .map_err(|e| {
                                                 error!(?e, "Api sync to confirmed commit");
-                                            }).map(|_| commit_notify_tx.send((*prov,correlation_id))).ok();
+                                            }).map(|_| commit_notify_tx.send(SubmissionStage::committed(stage.clone())).ok())
+                                            .ok();
+                                  },
                                 }
-
                             },
-                            cmd = rx.recv().fuse() => {
+                            cmd = commit_rx.recv().fuse() => {
                                 if let Some((command, reply)) = cmd {
 
                                 let result = api
@@ -302,6 +321,31 @@ where
         });
 
         Ok(dispatch)
+    }
+
+    /// Notify after a successful submission, for now this makes little
+    /// difference, but with the future introduction of a submission queue,
+    /// submission notifications will be decoupled from api invocation.
+    /// This is a measure to keep the api interface stable once this is introduced
+    fn submit_blocking(
+        &mut self,
+        tx: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, ApiError> {
+        let res = self.ledger_writer.submit_blocking(tx);
+
+        match res {
+            Ok(tx_id) => {
+                self.submit_tx.send(SubmissionStage::submitted(&tx_id)).ok();
+                Ok(tx_id)
+            }
+            Err(ApiError::Ledger { ref source }) => {
+                self.submit_tx
+                    .send(SubmissionStage::submitted_error(source))
+                    .ok();
+                Err(source.clone().into())
+            }
+            e => e,
+        }
     }
 
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
@@ -345,7 +389,7 @@ where
         &self,
         id: EntityId,
         namespace: ExternalId,
-        activity: Option<ActivityId>,
+        activity_id: ActivityId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -353,63 +397,32 @@ where
 
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let activity = api.store.get_activity_by_external_id_or_last_started(
-                    connection,
-                    activity.map(|x| x.external_id_part().clone()),
-                    namespace.clone(),
-                )?;
-
-                let entity = api.store.entity_by_entity_external_id_and_namespace(
-                    connection,
-                    id.external_id_part(),
-                    &namespace,
-                );
-
-                let external_id: ExternalId = {
-                    if let Ok(existing) = entity {
-                        debug!(?existing, "Use existing entity");
-                        existing.external_id.into()
-                    } else {
-                        debug!(?id, "Need new entity");
-                        api.store.disambiguate_entity_external_id(
-                            connection,
-                            id.external_id_part().clone(),
-                            namespace.clone(),
-                        )?
-                    }
-                };
-
-                let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id: id.clone(),
-                    activity: ActivityId::from_external_id(&activity.external_id),
+                    activity: activity_id,
                 });
 
                 to_apply.push(create);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
     }
 
     /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
-    ///
-    /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
+    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
     #[instrument]
     async fn activity_use(
         &self,
         id: EntityId,
         namespace: ExternalId,
-        activity: Option<ActivityId>,
+        activity_id: ActivityId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -418,38 +431,10 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api.store.get_activity_by_external_id_or_last_started(
-                        connection,
-                        activity.map(|x| x.external_id_part().clone()),
-                        namespace.clone(),
-                    )?;
-
-                    let entity = api.store.entity_by_entity_external_id_and_namespace(
-                        connection,
-                        id.external_id_part(),
-                        &namespace,
-                    );
-
-                    let external_id: ExternalId = {
-                        if let Ok(existing) = entity {
-                            debug!(?existing, "Use existing entity");
-                            existing.external_id.into()
-                        } else {
-                            debug!(?id, "Need new entity");
-                            api.store.disambiguate_entity_external_id(
-                                connection,
-                                id.external_id_part().clone(),
-                                namespace.clone(),
-                            )?
-                        }
-                    };
-
-                    let id = EntityId::from_external_id(&external_id);
-
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
                         namespace,
                         id: id.clone(),
-                        activity: ActivityId::from_external_id(&activity.external_id),
+                        activity: activity_id,
                     });
 
                     to_apply.push(create);
@@ -457,13 +442,10 @@ where
                     (id, to_apply)
                 };
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -486,55 +468,10 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api.store.get_activity_by_external_id_or_last_started(
-                        connection,
-                        Some(id.external_id_part().clone()),
-                        namespace.clone(),
-                    );
-
-                    let informing_activity =
-                        api.store.activity_by_activity_external_id_and_namespace(
-                            connection,
-                            informing_activity_id.external_id_part(),
-                            &namespace,
-                        );
-
-                    let external_id: ExternalId = {
-                        if let Ok(existing) = activity {
-                            debug!(?existing, "Use existing activity");
-                            existing.external_id.into()
-                        } else {
-                            debug!(?id, "Need new activity");
-                            api.store.disambiguate_activity_external_id(
-                                connection,
-                                id.external_id_part(),
-                                &namespace,
-                            )?
-                        }
-                    };
-
-                    let id = ActivityId::from_external_id(&external_id);
-
-                    let external_id: ExternalId = {
-                        if let Ok(existing) = informing_activity {
-                            debug!(?existing, "Use existing activity as informing activity");
-                            existing.external_id.into()
-                        } else {
-                            debug!(?id, "Need new activity as informing activity");
-                            api.store.disambiguate_activity_external_id(
-                                connection,
-                                id.external_id_part(),
-                                &namespace,
-                            )?
-                        }
-                    };
-
-                    let informing_activity = ActivityId::from_external_id(&external_id);
-
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
                         namespace,
                         activity: id.clone(),
-                        informing_activity,
+                        informing_activity: informing_activity_id,
                     });
 
                     to_apply.push(create);
@@ -542,13 +479,10 @@ where
                     (id, to_apply)
                 };
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -571,12 +505,6 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let external_id: ExternalId = api.store.disambiguate_entity_external_id(
-                    connection,
-                    external_id,
-                    namespace.clone(),
-                )?;
-
                 let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::EntityExists(EntityExists {
@@ -594,13 +522,10 @@ where
 
                 to_apply.push(set_type);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -623,12 +548,6 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let external_id: ExternalId = api.store.disambiguate_activity_external_id(
-                    connection,
-                    &external_id,
-                    &namespace,
-                )?;
-
                 let create = ChronicleOperation::ActivityExists(ActivityExists {
                     namespace: namespace.clone(),
                     external_id: external_id.clone(),
@@ -644,13 +563,11 @@ where
                 });
 
                 to_apply.push(set_type);
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -673,12 +590,6 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let external_id: ExternalId = api.store.disambiguate_agent_external_id(
-                    connection,
-                    &external_id,
-                    &namespace,
-                )?;
-
                 let create = ChronicleOperation::AgentExists(AgentExists {
                     external_id: external_id.to_owned(),
                     namespace: namespace.clone(),
@@ -695,13 +606,10 @@ where
 
                 to_apply.push(set_type);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -716,13 +624,10 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    namespace,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(namespace, model, tx_id))
             })
         })
         .await?
@@ -745,7 +650,7 @@ where
                 registration,
             }) => self.register_key(id, namespace, registration).await,
             ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }) => {
-                self.use_in_context(id, namespace).await
+                self.use_agent_in_cli_context(id, namespace).await
             }
             ApiCommand::Agent(AgentCommand::Delegate {
                 id,
@@ -762,6 +667,12 @@ where
                 self.create_activity(external_id, namespace, attributes)
                     .await
             }
+            ApiCommand::Activity(ActivityCommand::Instant {
+                id,
+                namespace,
+                time,
+                agent,
+            }) => self.instant(id, namespace, time, agent).await,
             ApiCommand::Activity(ActivityCommand::Start {
                 id,
                 namespace,
@@ -823,11 +734,6 @@ where
                 self.entity_derive(id, namespace, activity, used_entity, derivation)
                     .await
             }
-            ApiCommand::Entity(EntityCommand::Generated {
-                id,
-                namespace,
-                entity,
-            }) => self.entity_generated(id, namespace, entity).await,
             ApiCommand::Query(query) => self.query(query).await,
         }
     }
@@ -859,12 +765,9 @@ where
 
                 to_apply.push(tx);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
-                Ok(ApiResponse::submission(
-                    responsible_id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(responsible_id, model, tx_id))
             })
         })
         .await?
@@ -894,13 +797,9 @@ where
                 ));
 
                 to_apply.push(tx);
-
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
-                Ok(ApiResponse::submission(
-                    responsible_id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(responsible_id, model, tx_id))
             })
         })
         .await?
@@ -933,73 +832,9 @@ where
 
                 to_apply.push(tx);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
-            })
-        })
-        .await?
-    }
-
-    #[instrument]
-    async fn entity_generated(
-        &self,
-        id: ActivityId,
-        namespace: ExternalId,
-        entity: Option<EntityId>,
-    ) -> Result<ApiResponse, ApiError> {
-        let mut api = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut connection = api.store.connection()?;
-
-            connection.immediate_transaction(|connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let entity = api.store.get_entity_by_external_id(
-                    connection,
-                    entity.map(|x| x.external_id_part().clone()),
-                    namespace.clone(),
-                )?;
-
-                let activity = api.store.activity_by_activity_external_id_and_namespace(
-                    connection,
-                    id.external_id_part(),
-                    &namespace,
-                );
-
-                let external_id: ExternalId = {
-                    if let Ok(existing) = activity {
-                        debug!(?existing, "Use existing activity");
-                        existing.external_id.into()
-                    } else {
-                        debug!(?id, "Need new activity");
-                        api.store.disambiguate_entity_external_id(
-                            connection,
-                            id.external_id_part().to_owned(),
-                            namespace.clone(),
-                        )?
-                    }
-                };
-
-                let id = ActivityId::from_external_id(&external_id);
-
-                let create = ChronicleOperation::Generated(Generated {
-                    namespace,
-                    id: id.clone(),
-                    entity: EntityId::from_external_id(&entity.external_id),
-                });
-
-                to_apply.push(create);
-
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
-
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -1057,7 +892,7 @@ where
 
                 let signer = api.keystore.agent_signing(&agent_id)?;
 
-                let signature: Signature = signer.try_sign(&*buf)?;
+                let signature: Signature = signer.try_sign(&buf)?;
 
                 let tx = ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                     namespace,
@@ -1074,13 +909,10 @@ where
 
                 to_apply.push(tx);
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
@@ -1101,27 +933,25 @@ where
         .await?
     }
 
-    #[instrument]
+    #[instrument(level = "debug", skip(self), ret(Debug))]
     async fn sync(
         &self,
-        prov: &ProvModel,
+        prov: Box<ProvModel>,
         offset: Offset,
-        correlation_id: ChronicleTransactionId,
+        tx_id: ChronicleTransactionId,
     ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
-        let prov = prov.clone();
 
         tokio::task::spawn_blocking(move || {
-            //TODO: This should be a single tx
             api.store.apply_prov(&prov)?;
-            api.store.set_last_offset(offset, correlation_id)?;
+            api.store.set_last_offset(offset, tx_id)?;
 
             Ok(ApiResponse::Unit)
         })
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::RegisterKey), implicitly verifying the input keys and saving to the local key store as required
+    /// Creates and submits a (ChronicleTransaction::RegisterKey) implicitly verifying the input keys and saving to the local key store as required
     #[instrument]
     async fn register_key(
         &self,
@@ -1156,22 +986,71 @@ where
                 to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
                     id: id.clone(),
                     namespace,
-                    publickey: hex::encode(api.keystore.agent_verifying(&id.clone())?.to_bytes()),
+                    publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
                 }));
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by external_id, or via [use_agent] context
+    /// Creates and submits a (ChronicleTransaction::StartActivity) determining the appropriate agent by external_id, or via [use_agent] context
+    #[instrument]
+    async fn instant(
+        &self,
+        id: ActivityId,
+        namespace: ExternalId,
+        time: Option<DateTime<Utc>>,
+        agent: Option<AgentId>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+                let agent_id = {
+                    if let Some(agent) = agent {
+                        Some(agent)
+                    } else {
+                        api.store
+                            .get_current_agent(connection)
+                            .ok()
+                            .map(|x| AgentId::from_external_id(x.external_id))
+                    }
+                };
+
+                to_apply.push(ChronicleOperation::StartActivity(StartActivity {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                    time: time.unwrap_or_else(Utc::now),
+                }));
+
+                to_apply.push(ChronicleOperation::EndActivity(EndActivity {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                    time: time.unwrap_or_else(Utc::now),
+                }));
+
+                if let Some(agent_id) = agent_id {
+                    to_apply.push(ChronicleOperation::WasAssociatedWith(
+                        WasAssociatedWith::new(&namespace, &id, &agent_id, None),
+                    ));
+                }
+
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
+
+                Ok(ApiResponse::submission(id, model, tx_id))
+            })
+        })
+        .await?
+    }
+
+    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
     #[instrument]
     async fn start_activity(
         &self,
@@ -1185,75 +1064,44 @@ where
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let agent = {
+
+                let agent_id = {
                     if let Some(agent) = agent {
+                        Some(agent)
+                    } else {
                         api.store
-                            .agent_by_agent_external_id_and_namespace(
-                                connection,
-                                agent.external_id_part(),
-                                &namespace,
-                            )
+                            .get_current_agent(connection)
                             .ok()
-                    } else {
-                        api.store.get_current_agent(connection).ok()
+                            .map(|x| AgentId::from_external_id(x.external_id))
                     }
                 };
 
-                let activity = api.store.activity_by_activity_external_id_and_namespace(
-                    connection,
-                    id.external_id_part(),
-                    &namespace,
-                );
-
-                let external_id: ExternalId = {
-                    if let Ok(existing) = activity {
-                        debug!(?existing, "Use existing activity");
-                        existing.external_id.into()
-                    } else {
-                        debug!(?id, "Need new activity");
-                        api.store.disambiguate_activity_external_id(
-                            connection,
-                            id.external_id_part(),
-                            &namespace,
-                        )?
-                    }
-                };
-
-                let id = ActivityId::from_external_id(&external_id);
                 to_apply.push(ChronicleOperation::StartActivity(StartActivity {
                     namespace: namespace.clone(),
                     id: id.clone(),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                if let Some(agent) = agent {
+                if let Some(agent_id) = agent_id {
                     to_apply.push(ChronicleOperation::WasAssociatedWith(
-                        WasAssociatedWith::new(
-                            &namespace,
-                            &id,
-                            &AgentId::from_external_id(&agent.external_id),
-                            None,
-                        ),
+                        WasAssociatedWith::new(&namespace, &id, &agent_id, None),
                     ));
                 }
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by external_id, or via [use_agent] context
+    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name or via [use_agent] context
     #[instrument]
     async fn end_activity(
         &self,
-        id: Option<ActivityId>,
+        id: ActivityId,
         namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
@@ -1263,64 +1111,41 @@ where
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let activity = api
-                    .store
-                    .get_activity_by_external_id_or_last_started(
-                        connection,
-                        id.map(|id| id.external_id_part().clone()),
-                        namespace.clone(),
-                    )
-                    .map_err(|_| ApiError::NotCurrentActivity {})?;
 
-                let agent = {
+                let agent_id = {
                     if let Some(agent) = agent {
-                        api.store
-                            .agent_by_agent_external_id_and_namespace(
-                                connection,
-                                agent.external_id_part(),
-                                &namespace,
-                            )
-                            .ok()
+                        Some(agent)
                     } else {
                         api.store
                             .get_current_agent(connection)
-                            .map_err(|_| ApiError::NoCurrentAgent {})
                             .ok()
+                            .map(|x| AgentId::from_external_id(x.external_id))
                     }
                 };
 
-                let id = ActivityId::from_external_id(&activity.external_id);
                 to_apply.push(ChronicleOperation::EndActivity(EndActivity {
                     namespace: namespace.clone(),
                     id: id.clone(),
                     time: time.unwrap_or_else(Utc::now),
                 }));
 
-                if let Some(agent) = agent {
+                if let Some(agent_id) = agent_id {
                     to_apply.push(ChronicleOperation::WasAssociatedWith(
-                        WasAssociatedWith::new(
-                            &namespace,
-                            &id,
-                            &AgentId::from_external_id(&agent.external_id),
-                            None,
-                        ),
+                        WasAssociatedWith::new(&namespace, &id, &agent_id, None),
                     ));
                 }
 
-                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                let model = ProvModel::from_tx(&to_apply)?;
+                let tx_id = api.submit_blocking(&to_apply)?;
 
-                Ok(ApiResponse::submission(
-                    id,
-                    ProvModel::from_tx(&to_apply),
-                    correlation_id,
-                ))
+                Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
         .await?
     }
 
     #[instrument]
-    async fn use_in_context(
+    async fn use_agent_in_cli_context(
         &self,
         id: AgentId,
         namespace: ExternalId,
@@ -1367,18 +1192,27 @@ mod test {
     };
 
     #[derive(Clone)]
-    struct TestDispatch(ApiDispatch, ProvModel);
+    struct TestDispatch(ApiDispatch);
 
     impl TestDispatch {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
-        ) -> Result<Option<(ProvModel, ChronicleTransactionId)>, ApiError> {
+        ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { prov, .. } = self.0.dispatch(command).await? {
-                self.1.merge(*prov);
-
-                Ok(Some(self.0.notify_commit.subscribe().recv().await.unwrap()))
+            if let ApiResponse::Submission { .. } = self.0.dispatch(command).await? {
+                // Recv until we get a commit notification
+                loop {
+                    let commit = self.0.notify_commit.subscribe().recv().await.unwrap();
+                    match commit {
+                        common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
+                        common::ledger::SubmissionStage::Committed(Ok(commit)) => {
+                            return Ok(Some((commit.delta, commit.tx_id)))
+                        }
+                        common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{:?}", e),
+                        common::ledger::SubmissionStage::Committed(Err(e)) => panic!("{:?}", e),
+                    }
+                }
             } else {
                 Ok(None)
             }
@@ -1428,50 +1262,39 @@ mod test {
         .await
         .unwrap();
 
-        TestDispatch(dispatch, ProvModel::default())
-    }
-
-    macro_rules! assert_json_ld {
-        ($x:expr) => {
-            let mut v: serde_json::Value =
-                serde_json::from_str(&*$x.1.to_json().compact().await.unwrap().to_string())
-                    .unwrap();
-
-            // Sort @graph by //@id, as objects are unordered
-            if let Some(v) = v.pointer_mut("/@graph") {
-                v.as_array_mut().unwrap().sort_by(|l, r| {
-                    l.as_object()
-                        .unwrap()
-                        .get("@id")
-                        .unwrap()
-                        .as_str()
-                        .unwrap()
-                        .cmp(r.as_object().unwrap().get("@id").unwrap().as_str().unwrap())
-                });
-            }
-
-            insta::assert_snapshot!(serde_json::to_string_pretty(&v).unwrap());
-        };
+        TestDispatch(dispatch)
     }
 
     #[tokio::test]
     async fn create_namespace() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            external_id: "testns".into(),
-        }))
-        .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        insta::assert_json_snapshot!(api
+            .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
+                external_id: "testns".into(),
+            }))
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .to_json()
+            .compact_stable_order()
+            .await
+            .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+          "@type": "chronicle:Namespace",
+          "externalId": "testns"
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn create_agent() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+        insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes {
@@ -1486,11 +1309,38 @@ mod test {
                 .into_iter()
                 .collect(),
             },
-        }))
-        .await
-        .unwrap();
-
-        assert_json_ld!(api);
+            }))
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .to_json()
+            .compact_stable_order()
+            .await
+            .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -1511,18 +1361,20 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-            registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
-                buffer: pk.as_bytes().into(),
-            }),
-        }))
-        .await
-        .unwrap();
+        let delta = api
+            .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+                registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
+                    buffer: pk.as_bytes().into(),
+                }),
+            }))
+            .await
+            .unwrap()
+            .unwrap();
 
-        insta::assert_yaml_snapshot!(api.1, {
-            ".*.publickey" => "[public]"
+        insta::assert_yaml_snapshot!(delta.0, {
+            ".*.public_key" => "[public]"
         }, @r###"
         ---
         namespaces:
@@ -1584,7 +1436,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn create_activity() {
         let mut api = test_api().await;
 
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+        insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes {
@@ -1601,15 +1453,43 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn start_activity() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
             namespace: "testns".into(),
@@ -1627,7 +1507,36 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             id: AgentId::from_external_id("testagent"),
@@ -1636,6 +1545,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -1643,15 +1553,375 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             agent: None,
         }))
         .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn contradict_attributes() {
+        let mut api = test_api().await;
+
+        insta::assert_json_snapshot!(
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            external_id: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from_external_id("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        let res = api
+            .dispatch(ApiCommand::Agent(AgentCommand::Create {
+                external_id: "testagent".into(),
+                namespace: "testns".into(),
+                attributes: Attributes {
+                    typ: Some(DomaintypeId::from_external_id("test")),
+                    attributes: [(
+                        "test".to_owned(),
+                        Attribute {
+                            typ: "test".to_owned(),
+                            value: serde_json::Value::String("test2".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            }))
+            .await;
+
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
+    }
+
+    #[tokio::test]
+    async fn contradict_start_time() {
+        let mut api = test_api().await;
+
+        insta::assert_json_snapshot!(
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            external_id: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from_external_id("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
+            id: AgentId::from_external_id("testagent"),
+            namespace: "testns".into(),
+        }))
+        .await
         .unwrap();
 
-        assert_json_ld!(api);
+        insta::assert_json_snapshot!(
+        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
+            id: ActivityId::from_external_id("testactivity"),
+            namespace: "testns".into(),
+            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            agent: None,
+        }))
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        // Should contradict
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
+                id: ActivityId::from_external_id("testactivity"),
+                namespace: "testns".into(),
+                time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
+                agent: None,
+            }))
+            .await;
+
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
+    }
+
+    #[tokio::test]
+    async fn contradict_end_time() {
+        let mut api = test_api().await;
+
+        insta::assert_json_snapshot!(
+        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+            external_id: "testagent".into(),
+            namespace: "testns".into(),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from_external_id("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }))
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
+            id: AgentId::from_external_id("testagent"),
+            namespace: "testns".into(),
+        }))
+        .await
+        .unwrap();
+
+        insta::assert_json_snapshot!(
+        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
+            id: ActivityId::from_external_id("testactivity"),
+            namespace: "testns".into(),
+            time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
+            agent: None,
+        }))
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "endTime": "2018-07-08T09:10:11+00:00",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        // Should contradict
+        let res = api
+            .dispatch(ApiCommand::Activity(ActivityCommand::End {
+                id: ActivityId::from_external_id("testactivity"),
+                namespace: "testns".into(),
+                time: Some(Utc.ymd(2022, 7, 8).and_hms(9, 10, 11)),
+                agent: None,
+            }))
+            .await;
+
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
     async fn end_activity() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
             namespace: "testns".into(),
@@ -1669,7 +1939,36 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             id: AgentId::from_external_id("testagent"),
@@ -1678,6 +1977,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -1685,25 +1985,91 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             agent: None,
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {},
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
-        // Should end the last opened activity
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: None,
+
+            id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": "prov:Activity",
+              "endTime": "2014-07-08T09:10:11+00:00",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "startTime": "2014-07-08T09:10:11+00:00",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn activity_use() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
             namespace: "testns".into(),
@@ -1721,7 +2087,36 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
             id: AgentId::from_external_id("testagent"),
@@ -1730,6 +2125,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap();
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
             namespace: "testns".into(),
@@ -1747,32 +2143,149 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
-            activity: Some(ActivityId::from_external_id("testactivity")),
+            activity: ActivityId::from_external_id("testactivity"),
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "used": [
+                "chronicle:entity:testentity"
+              ],
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:entity:testentity",
+              "@type": "prov:Entity",
+              "externalId": "testentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: None,
+            id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: Some(AgentId::from_external_id("testagent")),
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "endTime": "2014-07-08T09:10:11+00:00",
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:qualifiedAssociation": {
+                "@id": "chronicle:association:testagent:testactivity:role="
+              },
+              "used": [
+                "chronicle:entity:testentity"
+              ],
+              "value": {
+                "test": "test"
+              },
+              "wasAssociatedWith": [
+                "chronicle:agent:testagent"
+              ]
+            },
+            {
+              "@id": "chronicle:association:testagent:testactivity:role=",
+              "@type": "prov:Association",
+              "agent": "chronicle:agent:testagent",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:testactivity"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn activity_generate() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
             namespace: "testns".into(),
@@ -1790,23 +2303,79 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             },
         }))
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
-            activity: Some(ActivityId::from_external_id("testactivity")),
+            activity: ActivityId::from_external_id("testactivity"),
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testentity",
+              "@type": "prov:Entity",
+              "externalId": "testentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasGeneratedBy": [
+                "chronicle:activity:testactivity"
+              ]
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn derive_entity_abstract() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1815,15 +2384,48 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             derivation: None,
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "externalId": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasDerivedFrom": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "externalId": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn derive_entity_primary_source() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1832,15 +2434,48 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             used_entity: EntityId::from_external_id("testusedentity"),
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "externalId": "testgeneratedentity",
+              "hadPrimarySource": [
+                "chronicle:entity:testusedentity"
+              ],
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "externalId": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn derive_entity_revision() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1849,15 +2484,48 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             derivation: Some(DerivationType::Revision),
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "externalId": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasRevisionOf": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "externalId": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn derive_entity_quotation() {
         let mut api = test_api().await;
 
+        insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1866,36 +2534,40 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             derivation: Some(DerivationType::Quotation),
         }))
         .await
-        .unwrap();
-
-        assert_json_ld!(api);
-    }
-
-    #[tokio::test]
-    async fn many_activities() {
-        let mut api = test_api().await;
-
-        for i in 0..100 {
-            api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                external_id: format!("testactivity{}", i).into(),
-                namespace: "testns".into(),
-                attributes: Attributes {
-                    typ: Some(DomaintypeId::from_external_id("test")),
-                    attributes: [(
-                        "test".to_owned(),
-                        Attribute {
-                            typ: "test".to_owned(),
-                            value: serde_json::Value::String("test".to_owned()),
-                        },
-                    )]
-                    .into_iter()
-                    .collect(),
-                },
-            }))
-            .await
-            .unwrap();
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:entity:testgeneratedentity",
+              "@type": "prov:Entity",
+              "externalId": "testgeneratedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {},
+              "wasQuotedFrom": [
+                "chronicle:entity:testusedentity"
+              ]
+            },
+            {
+              "@id": "chronicle:entity:testusedentity",
+              "@type": "prov:Entity",
+              "externalId": "testusedentity",
+              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
         }
-
-        assert_json_ld!(api);
+        "###);
     }
 }

@@ -82,7 +82,7 @@ where
     T: TypeName,
 {
     fn as_cli_name(&self) -> String {
-        to_kebab_case(&*self.as_type_name())
+        to_kebab_case(&self.as_type_name())
     }
 }
 
@@ -91,7 +91,7 @@ where
     T: TypeName,
 {
     fn as_property(&self) -> String {
-        to_snake_case(&*self.as_type_name())
+        to_snake_case(&self.as_type_name())
     }
 }
 
@@ -561,11 +561,11 @@ impl ChronicleDomainDef {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
 
-        let file: String = std::fs::read_to_string(&path)?;
+        let file: String = std::fs::read_to_string(path)?;
 
         match path.extension() {
-            Some(ext) if ext == "json" => Self::from_json(&*file),
-            _ => Self::from_yaml(&*file),
+            Some(ext) if ext == "json" => Self::from_json(&file),
+            _ => Self::from_yaml(&file),
         }
     }
 
@@ -780,7 +780,7 @@ pub mod test {
     fn json_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_json_file()?;
 
-        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
+        let mut domain = ChronicleDomainDef::from_file(file.path()).unwrap();
 
         domain.entities.sort();
 
@@ -820,7 +820,7 @@ pub mod test {
     fn yaml_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
 
-        let mut domain = ChronicleDomainDef::from_file(&file.path()).unwrap();
+        let mut domain = ChronicleDomainDef::from_file(file.path()).unwrap();
 
         domain.entities.sort();
 
@@ -889,7 +889,7 @@ pub mod test {
     #[test]
     fn test_chronicle_domain_def_from_str() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file()?;
-        let s: String = std::fs::read_to_string(&file.path())?;
+        let s: String = std::fs::read_to_string(file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
 
         insta::assert_yaml_snapshot!(domain, @r###"
@@ -955,7 +955,7 @@ pub mod test {
     #[test]
     fn test_from_domain_for_file_input() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file_single_entity()?;
-        let s: String = std::fs::read_to_string(&file.path())?;
+        let s: String = std::fs::read_to_string(file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
         let input = DomainFileInput::from(&domain);
 
@@ -1002,7 +1002,7 @@ pub mod test {
     #[test]
     fn test_to_json_string() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file_single_entity()?;
-        let s: String = std::fs::read_to_string(&file.path())?;
+        let s: String = std::fs::read_to_string(file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
 
         insta::assert_yaml_snapshot!(domain, @r###"
@@ -1036,7 +1036,7 @@ pub mod test {
     #[test]
     fn test_to_yaml_string() -> Result<(), Box<dyn std::error::Error>> {
         let file = create_test_yaml_file_single_entity()?;
-        let s: String = std::fs::read_to_string(&file.path())?;
+        let s: String = std::fs::read_to_string(file.path())?;
         let domain = ChronicleDomainDef::from_str(&s)?;
 
         insta::assert_yaml_snapshot!(domain, @r###"

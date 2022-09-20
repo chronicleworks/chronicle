@@ -10,6 +10,7 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV OPENSSL_STATIC=true
+ENV PROTOCOL_BUF_VERSION=v3.15.1
 
 RUN apt-get update && \
   apt-get install -y \
@@ -38,16 +39,16 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 FROM builder AS test
 COPY . .
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
-    TARGET=x86_64-unknown-linux-gnu; \
+  TARGET=x86_64-unknown-linux-gnu; \
   elif [ "$TARGETARCH" = "arm64" ]; then \
-    TARGET=aarch64-unknown-linux-gnu; \
+  TARGET=aarch64-unknown-linux-gnu; \
   else \
-    echo "Unsupported architecture: $TARGETARCH"; \
-    exit 1; \
+  echo "Unsupported architecture: $TARGETARCH"; \
+  exit 1; \
   fi \
   && cargo clean \
   && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
-    --bin chronicle_sawtooth_tp \
+  --bin chronicle_sawtooth_tp \
   && mv -f "target/${TARGET}" "target/${TARGETARCH}"
 
 FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle

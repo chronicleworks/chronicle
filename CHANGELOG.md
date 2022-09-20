@@ -293,4 +293,3 @@
 * feat: Abstract API, LD serialisation for derivation [view commit](https://github.com/catenasys/chronicle/commit/6f7a3473bc9fd0aa8da8aab6cb88534606ae7cda)
 * feat: Rework model + persistence to something closer to PROV-DM [view commit](https://github.com/catenasys/chronicle/commit/d018617f0301f27be2854c9a407a8515f1d12be3)
 * feat: Move schema towards PROV-DM, predicting further relations [view commit](https://github.com/catenasys/chronicle/commit/c8949232481475b6843d1d21d3fc68568cdae51d)
-

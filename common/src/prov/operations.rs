@@ -68,7 +68,7 @@ impl DerivationType {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct CreateNamespace {
     pub id: NamespaceId,
     pub external_id: ExternalId,
@@ -85,7 +85,7 @@ impl CreateNamespace {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct AgentExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
@@ -100,7 +100,7 @@ impl AgentExists {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActsOnBehalfOf {
     pub id: DelegationId,
     pub role: Option<Role>,
@@ -134,54 +134,54 @@ impl ActsOnBehalfOf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct RegisterKey {
     pub namespace: NamespaceId,
     pub id: AgentId,
     pub publickey: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct StartActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
     pub time: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EndActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
     pub time: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityUses {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasGeneratedBy {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityDerive {
     pub namespace: NamespaceId,
     pub id: EntityId,
@@ -190,7 +190,7 @@ pub struct EntityDerive {
     pub typ: Option<DerivationType>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasAssociatedWith {
     pub id: AssociationId,
     pub role: Option<Role>,
@@ -216,7 +216,7 @@ impl WasAssociatedWith {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityHasEvidence {
     pub namespace: NamespaceId,
     pub id: EntityId,
@@ -235,13 +235,6 @@ pub struct WasInformedBy {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct Generated {
-    pub namespace: NamespaceId,
-    pub id: ActivityId,
-    pub entity: EntityId,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum SetAttributes {
     Entity {
         namespace: NamespaceId,
@@ -260,7 +253,7 @@ pub enum SetAttributes {
     },
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ChronicleOperation {
     CreateNamespace(CreateNamespace),
     AgentExists(AgentExists),
@@ -277,5 +270,4 @@ pub enum ChronicleOperation {
     SetAttributes(SetAttributes),
     WasAssociatedWith(WasAssociatedWith),
     WasInformedBy(WasInformedBy),
-    Generated(Generated),
 }

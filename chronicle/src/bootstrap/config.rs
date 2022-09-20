@@ -113,12 +113,12 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
             println!("Creating config dir {} if needed", path.to_string_lossy());
             std::fs::create_dir_all(path.parent().unwrap())?;
             println!("Creating db dir {} if needed", &dbpath.to_string_lossy());
-            std::fs::create_dir_all(&dbpath)?;
+            std::fs::create_dir_all(dbpath)?;
             println!(
                 "Creating secret dir {} if needed",
                 &secretpath.to_string_lossy()
             );
-            std::fs::create_dir_all(&secretpath)?;
+            std::fs::create_dir_all(secretpath)?;
 
             let config = format!(
                 r#"
@@ -141,7 +141,7 @@ address = "{}"
             std::fs::write(path, config)?;
 
             if generatesecret == Answer::YES {
-                DirectoryStoredKeys::new(&secretpath)?.generate_chronicle()?;
+                DirectoryStoredKeys::new(secretpath)?.generate_chronicle()?;
             } else {
                 println!(
                     "Please install your keys in .pem format in the configured secret location"

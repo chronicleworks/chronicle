@@ -1,6 +1,6 @@
 mod graphlql_scalars;
 pub use graphlql_scalars::*;
-use tracing::debug;
+use tracing::trace;
 
 use std::{fmt::Display, str::FromStr};
 
@@ -19,10 +19,10 @@ use super::vocab::Chronicle;
 
 custom_error::custom_error! {pub ParseIriError
     NotAnIri {source: iref::Error } = "Invalid IRI",
-    UnparsableIri {iri: IriRefBuf} = "Unparseable chronicle IRI",
-    UnparsableUuid {source: uuid::Error } = "Unparseable UUID",
+    UnparsableIri {iri: IriRefBuf} = "Unparsable chronicle IRI",
+    UnparsableUuid {source: uuid::Error } = "Unparsable UUID",
     IncorrectIriKind = "Unexpected Iri type",
-    MissingComponent{component: String} = "Expected {} ",
+    MissingComponent{component: String} = "Expected {component}",
 }
 
 #[derive(
@@ -172,13 +172,11 @@ pub trait AsCompact {
     fn compact(&self) -> String;
 }
 
-impl AsCompact for ChronicleIri {
-    fn compact(&self) -> String {
-        self.to_string().replace(Chronicle::PREFIX, "chronicle:")
-    }
+pub trait TryFromCompact {
+    fn de_compact(&self) -> Result<String, ParseIriError>;
 }
 
-impl AsCompact for NamespaceId {
+impl<T: Display> AsCompact for T {
     fn compact(&self) -> String {
         self.to_string().replace(Chronicle::PREFIX, "chronicle:")
     }
@@ -271,7 +269,7 @@ impl FromStr for ChronicleIri {
     type Err = ParseIriError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        debug!("Parsing IRI: {}", s);
+        trace!(parsing_iri = %s);
         //Compacted form, expand
         let iri = {
             if s.starts_with("chronicle:") {
@@ -281,7 +279,7 @@ impl FromStr for ChronicleIri {
             }
         };
 
-        let iri = IriRefBuf::from_str(&*iri)?;
+        let iri = IriRefBuf::from_str(&iri)?;
 
         match fragment_components(iri.as_iri()?)
             .iter()

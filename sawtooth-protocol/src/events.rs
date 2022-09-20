@@ -10,8 +10,12 @@ use std::{
 use backoff::ExponentialBackoff;
 
 use common::{
-    ledger::{LedgerReader, Offset, SubscriptionError},
-    prov::{ChronicleTransactionId, ChronicleTransactionIdError, ProcessorError, ProvModel},
+    ledger::{Commit, CommitResult, LedgerReader, Offset, SubscriptionError},
+    protocol::{deserialize_event, ProtocolError},
+    prov::{
+        ChronicleTransactionId, ChronicleTransactionIdError, Contradiction, ProcessorError,
+        ProvModel,
+    },
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -35,24 +39,25 @@ use tracing::{debug, error, info, instrument, warn};
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
-    Runtime{source: JoinError}                      = "Failed to return from blocking operation",
-    ZmqRx{source: ReceiveError}                     = "No response from validator",
-    ZmqRxx{source: RecvTimeoutError}                = "No response from validator",
-    ZmqTx{source: SendError}                        = "No response from validator",
-    ProtobufEncode{source: EncodeError}             = "Protobuf encoding",
-    ProtobufDecode{source: DecodeError}             = "Protobuf decoding",
-    SubscribeError{msg: String}                     = "Subscription failed",
-    RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator",
+    Runtime{source: JoinError}                      = "Failed to return from blocking operation {source}",
+    ZmqRx{source: ReceiveError}                     = "No response from validator {source}",
+    ZmqRxx{source: RecvTimeoutError}                = "No response from validator {source}",
+    ZmqTx{source: SendError}                        = "No response from validator {source}",
+    ProtobufEncode{source: EncodeError}             = "Protobuf encoding {source}",
+    ProtobufDecode{source: DecodeError}             = "Protobuf decoding {source}",
+    SubscribeError{msg: String}                     = "Subscription failed {msg}",
+    RetryReceive{source: backoff::Error<sawtooth_sdk::messaging::stream::ReceiveError>} = "No response from validator {source}",
     MissingBlockNum{}                               = "Missing block_num in block commit",
     MissingTransactionId{}                          = "Missing transaction_id in prov-update",
     InvalidTransactionId{source: common::k256::ecdsa::Error}
-                                                    = "Invalid transaction id (not a signature)",
+                                                    = "Invalid transaction id {source}",
     MissingData{}                                   = "Missing block_num in block commit",
     UnparsableBlockNum {}                           = "Unparsable block_num in block commit",
-    UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data",
-    Processor { source: ProcessorError }            = "Json LD processing",
-    Hex{ source: FromHexError }                     = "Hex decode",
-    Signature {source: ChronicleTransactionIdError }          = "Signature parse"
+    UnparsableEvent {source: serde_cbor::Error}     = "Unparsable event data {source}",
+    Processor { source: ProcessorError }            = "Json LD processing {source}",
+    Hex{ source: FromHexError }                     = "Hex decode {source}",
+    Signature {source: ChronicleTransactionIdError }= "Signature parse {source}",
+    Protocol {source: ProtocolError}                = "Event protocol {source}"
 }
 
 impl From<StateError> for SubscriptionError {
@@ -118,12 +123,13 @@ impl StateDelta {
         Ok(response)
     }
 
+    /// Subscribe to state delta events and then set up the event stream
     #[instrument]
     async fn get_state_from(
         &self,
         offset: &Offset,
     ) -> Result<
-        impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, ChronicleTransactionId)>>,
+        impl futures::Stream<Item = Vec<Result<Commit, (ChronicleTransactionId, Contradiction)>>>,
         StateError,
     > {
         let request = self.builder.make_subscription_request(offset);
@@ -138,7 +144,7 @@ impl StateDelta {
                 let fut = self.tx.send(
                     Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                     &uuid::Uuid::new_v4().to_string(),
-                    &*buf,
+                    &buf,
                 )?;
                 match StateDelta::recv_from_messagefuture(fut).await {
                     Ok((_, response)) => {
@@ -166,11 +172,13 @@ impl StateDelta {
     fn event_stream(
         rx: Arc<Mutex<MessageReceiver>>,
         block: Offset,
-    ) -> impl futures::Stream<Item = Vec<(Offset, Box<ProvModel>, ChronicleTransactionId)>> {
+    ) -> impl futures::Stream<Item = Vec<Result<Commit, (ChronicleTransactionId, Contradiction)>>>
+    {
         #[derive(Debug)]
         enum ParsedEvent {
             Block(String),
             State(Box<ProvModel>, ChronicleTransactionId),
+            Contradiction(Contradiction, ChronicleTransactionId),
         }
 
         stream::unfold((rx, block), |(rx, block)| async move {
@@ -204,16 +212,27 @@ impl StateDelta {
                                                     ChronicleTransactionId::from(&*attr.value)
                                                 });
 
-                                            transaction_id.and_then(|transaction_id| {
-                                                serde_cbor::from_slice::<ProvModel>(&*event.data)
-                                                    .map_err(StateError::from)
-                                                    .map(|prov| {
-                                                        Some(ParsedEvent::State(
-                                                            Box::new(prov),
+                                            let event = deserialize_event(&event.data)
+                                                .await
+                                                .map_err(StateError::from);
+
+                                            transaction_id
+                                                .map_err(StateError::from)
+                                                .and_then(|transaction_id| {
+                                                    event.map(|event| (transaction_id, event))
+                                                })
+                                                .map(|(transaction_id, (_span, res))| match res {
+                                                    Err(contradiction) => {
+                                                        Some(ParsedEvent::Contradiction(
+                                                            contradiction,
                                                             transaction_id,
                                                         ))
-                                                    })
-                                            })
+                                                    }
+                                                    Ok(delta) => Some(ParsedEvent::State(
+                                                        Box::new(delta),
+                                                        transaction_id,
+                                                    )),
+                                                })
                                         }
                                         _ => Ok(None),
                                     });
@@ -233,11 +252,18 @@ impl StateDelta {
                                                 next_prov,
                                                 transaction_id,
                                             ))) => {
-                                                prov.push((
+                                                prov.push(Ok(Commit::new(
+                                                    transaction_id,
                                                     block.clone(),
                                                     next_prov,
-                                                    transaction_id,
-                                                ));
+                                                )));
+                                                (prov, block)
+                                            }
+                                            Ok(Some(ParsedEvent::Contradiction(
+                                                contradiction,
+                                                transaction_id,
+                                            ))) => {
+                                                prov.push(Err((transaction_id, contradiction)));
                                                 (prov, block)
                                             }
                                             Err(e) => {
@@ -278,10 +304,7 @@ impl LedgerReader for StateDelta {
     async fn state_updates(
         self,
         offset: Offset,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
-        common::ledger::SubscriptionError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = CommitResult> + Send>>, SubscriptionError> {
         let self_clone = self.clone();
 
         let subscribe = backoff::future::retry(ExponentialBackoff::default(), || {

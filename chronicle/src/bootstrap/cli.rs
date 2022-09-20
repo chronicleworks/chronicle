@@ -26,21 +26,21 @@ use crate::{
 };
 
 custom_error::custom_error! {pub CliError
-    MissingArgument{arg: String}                    = "Missing argument {}",
-    InvalidArgument{arg: String, expected: String, got: String } = "Invalid argument {} expected {} got {}",
-    ArgumentParsing{source: clap::Error}            = "Bad argument",
-    InvalidIri{source: iref::Error}                 = "Invalid IRI",
-    InvalidChronicleIri{source: ParseIriError}      = "Invalid chronicle IRI",
-    InvalidJson{source: serde_json::Error}          = "Invalid JSON",
-    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp",
-    InvalidCoercion{arg: String}                    = "Invalid coercion {}",
-    ApiError{source: ApiError}                      = "Api failure",
-    Keys{source: SignerError}                       = "Key storage",
-    FileSystem{source: std::io::Error}              = "Cannot locate configuration file",
-    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file",
+    MissingArgument{arg: String}                    = "Missing argument {arg}",
+    InvalidArgument{arg: String, expected: String, got: String } = "Invalid argument {arg} expected {expected} got {got}",
+    ArgumentParsing{source: clap::Error}            = "Bad argument {source}",
+    InvalidIri{source: iref::Error}                 = "Invalid IRI {source}",
+    InvalidChronicleIri{source: ParseIriError}      = "Invalid chronicle IRI {source}",
+    InvalidJson{source: serde_json::Error}          = "Invalid JSON {source}",
+    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp {source}",
+    InvalidCoercion{arg: String}                    = "Invalid coercion {arg}",
+    ApiError{source: ApiError}                      = "Api failure {source}",
+    Keys{source: SignerError}                       = "Key storage {source}",
+    FileSystem{source: std::io::Error}              = "Cannot locate configuration file {source}",
+    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file {source}",
     InvalidPath                                     = "Invalid path", //TODO - the path, you know how annoying this is
-    Ld{source: CompactionError}                     = "Invalid Json LD",
-    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream",
+    Ld{source: CompactionError}                     = "Invalid Json LD {source}",
+    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream {source}",
 }
 
 /// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
@@ -74,7 +74,7 @@ impl AttributeCliModel {
 
     pub fn as_arg(&self) -> Arg {
         Arg::new(&*self.attribute_name)
-            .long(&*self.attribute_name)
+            .long(&self.attribute_name)
             .help(&*self.attribute_help)
             .takes_value(true)
             .required(true)
@@ -176,7 +176,7 @@ fn attribute_value_from_param(
         }
     };
 
-    let mut value = serde_json::from_str(&*value)?;
+    let mut value = serde_json::from_str(&value)?;
     match typ {
         PrimitiveType::Bool => {
             if let Some(coerced) = valico::json_dsl::boolean()
@@ -231,7 +231,7 @@ fn attributes_from(
             .map(|attr| {
                 let value = attribute_value_from_param(
                     &attr.attribute_name,
-                    &*args.get_one::<String>(&attr.attribute_name).unwrap(),
+                    args.get_one::<String>(&attr.attribute_name).unwrap(),
                     attr.attribute.primitive_type,
                 )?;
                 Ok::<_, CliError>((
@@ -405,7 +405,6 @@ impl SubCommand for ActivityCliModel {
         let mut define =
                     Command::new("define")
                         .about(&*self.define_about)
-
                         .arg(Arg::new("external_id")
                             .help("An externally meaningful identifier for the activity , e.g. a URI or relational id")
                             .takes_value(true))
@@ -432,7 +431,7 @@ impl SubCommand for ActivityCliModel {
         cmd.subcommand(define)
            .subcommand(
                     Command::new("start")
-                        .about("Record this activity as started, optionally specifying the time and agent. If no agent is specified the agent context set via use will be used")
+                        .about("Record this activity as started at the specified time, if no time is specified the current time is used")
                         .arg(Arg::new("id")
                             .help("A valid chronicle activity IRI")
                             .takes_value(true)
@@ -462,7 +461,37 @@ impl SubCommand for ActivityCliModel {
                 )
                 .subcommand(
                     Command::new("end")
-                        .about("Record this activity as ended at the current time")
+                        .about("Record this activity as ended at the specified time, if no time is specified the current time is used")
+                        .arg(Arg::new("id")
+                            .help("A valid chronicle activity IRI")
+                            .takes_value(true)
+                            .required(true)
+                        )
+                        .arg(Arg::new("agent_id")
+                            .long("agent")
+                            .help("A valid chronicle agent IRI")
+                            .takes_value(true)
+                            .required(false)
+                        )
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .default_value("default")
+                                .required(false)
+                                .takes_value(true),
+                        )
+                        .arg(
+                            Arg::new("time")
+                                .long("time")
+                                .help("A valid RFC3339 timestamp")
+                                .required(false)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    Command::new("instant")
+                        .about("Record this activity as taking place at the specified time, if no time is specified the current time is used")
                         .arg(Arg::new("id")
                             .help("A valid chronicle activity IRI")
                             .takes_value(true)
@@ -559,7 +588,19 @@ impl SubCommand for ActivityCliModel {
 
         if let Some(matches) = matches.subcommand_matches("end") {
             return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
-                id: id_from_option(matches, "id")?,
+                id: id_from(matches, "id")?,
+                namespace: namespace_from(matches)?,
+                time: matches
+                    .get_one::<String>("time")
+                    .map(|t| t.parse())
+                    .transpose()?,
+                agent: id_from_option(matches, "agent_id")?,
+            })));
+        };
+
+        if let Some(matches) = matches.subcommand_matches("instant") {
+            return Ok(Some(ApiCommand::Activity(ActivityCommand::Instant {
+                id: id_from(matches, "id")?,
                 namespace: namespace_from(matches)?,
                 time: matches
                     .get_one::<String>("time")
@@ -573,7 +614,7 @@ impl SubCommand for ActivityCliModel {
             return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
                 id: id_from(matches, "entity_id")?,
                 namespace: namespace_from(matches)?,
-                activity: id_from_option(matches, "activity_id")?,
+                activity: id_from(matches, "activity_id")?,
             })));
         };
 
@@ -581,7 +622,7 @@ impl SubCommand for ActivityCliModel {
             return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
                 id: id_from(matches, "entity_id")?,
                 namespace: namespace_from(matches)?,
-                activity: id_from_option(matches, "activity_id")?,
+                activity: id_from(matches, "activity_id")?,
             })));
         };
 
@@ -654,7 +695,7 @@ impl SubCommand for EntityCliModel {
                             .long("subtype")
                             .required(false)
                             .takes_value(true)
-                            .value_parser(PossibleValuesParser::new(&[
+                            .value_parser(PossibleValuesParser::new([
                                 "revision",
                                 "quotation",
                                 "primary-source",
@@ -820,7 +861,7 @@ impl SubCommand for CliModel {
             )
             .arg(Arg::new("console-logging").long("console-logging")
                 .takes_value(true)
-                .possible_values(&["pretty","json"])
+                .possible_values(["pretty","json"])
                 .default_value("pretty")
                 .help(
                     "Instrument using RUST_LOG environment, writing in either human readable format or structured json to stdio",
@@ -830,7 +871,7 @@ impl SubCommand for CliModel {
                     .about("Generate shell completions and exit")
                     .arg(
                         Arg::new("shell")
-                            .value_parser(PossibleValuesParser::new(&["bash", "zsh", "fish"]))
+                            .value_parser(PossibleValuesParser::new(["bash", "zsh", "fish"]))
                             .default_value("bash")
                             .help("Shell to generate completions for"),
                     ),

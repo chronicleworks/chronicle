@@ -64,6 +64,12 @@ pub enum ActivityCommand {
         namespace: ExternalId,
         attributes: Attributes,
     },
+    Instant {
+        id: ActivityId,
+        namespace: ExternalId,
+        time: Option<DateTime<Utc>>,
+        agent: Option<AgentId>,
+    },
     Start {
         id: ActivityId,
         namespace: ExternalId,
@@ -71,7 +77,7 @@ pub enum ActivityCommand {
         agent: Option<AgentId>,
     },
     End {
-        id: Option<ActivityId>,
+        id: ActivityId,
         namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
@@ -79,17 +85,17 @@ pub enum ActivityCommand {
     Use {
         id: EntityId,
         namespace: ExternalId,
-        activity: Option<ActivityId>,
+        activity: ActivityId,
+    },
+    Generate {
+        id: EntityId,
+        namespace: ExternalId,
+        activity: ActivityId,
     },
     WasInformedBy {
         id: ActivityId,
         namespace: ExternalId,
         informing_activity: ActivityId,
-    },
-    Generate {
-        id: EntityId,
-        namespace: ExternalId,
-        activity: Option<ActivityId>,
     },
     Associate {
         id: ActivityId,
@@ -127,7 +133,7 @@ impl ActivityCommand {
     }
 
     pub fn end(
-        id: Option<ActivityId>,
+        id: ActivityId,
         namespace: impl AsRef<str>,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
@@ -140,20 +146,22 @@ impl ActivityCommand {
         }
     }
 
-    pub fn r#use(id: EntityId, namespace: impl AsRef<str>, activity: Option<ActivityId>) -> Self {
-        Self::Use {
+    pub fn instant(
+        id: ActivityId,
+        namespace: impl AsRef<str>,
+        time: Option<DateTime<Utc>>,
+        agent: Option<AgentId>,
+    ) -> Self {
+        Self::End {
             id,
             namespace: namespace.as_ref().into(),
-            activity,
+            time,
+            agent,
         }
     }
 
-    pub fn generate(
-        id: EntityId,
-        namespace: impl AsRef<str>,
-        activity: Option<ActivityId>,
-    ) -> Self {
-        Self::Generate {
+    pub fn r#use(id: EntityId, namespace: impl AsRef<str>, activity: ActivityId) -> Self {
+        Self::Use {
             id,
             namespace: namespace.as_ref().into(),
             activity,
@@ -169,6 +177,14 @@ impl ActivityCommand {
             id,
             namespace: namespace.as_ref().into(),
             informing_activity,
+        }
+    }
+
+    pub fn generate(id: EntityId, namespace: impl AsRef<str>, activity: ActivityId) -> Self {
+        Self::Generate {
+            id,
+            namespace: namespace.as_ref().into(),
+            activity,
         }
     }
 }
@@ -224,11 +240,6 @@ pub enum EntityCommand {
         activity: Option<ActivityId>,
         used_entity: EntityId,
     },
-    Generated {
-        id: ActivityId,
-        namespace: ExternalId,
-        entity: Option<EntityId>,
-    },
 }
 
 impl EntityCommand {
@@ -275,14 +286,6 @@ impl EntityCommand {
             used_entity,
         }
     }
-
-    pub fn generated(id: ActivityId, namespace: impl AsRef<str>, entity: Option<EntityId>) -> Self {
-        Self::Generated {
-            id,
-            namespace: namespace.as_ref().into(),
-            entity,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,7 +310,7 @@ pub enum ApiResponse {
     Submission {
         subject: ChronicleIri,
         prov: Box<ProvModel>,
-        correlation_id: ChronicleTransactionId,
+        tx_id: ChronicleTransactionId,
     },
     /// The api has successfully executed the query
     QueryReply { prov: Box<ProvModel> },
@@ -317,12 +320,12 @@ impl ApiResponse {
     pub fn submission(
         subject: impl Into<ChronicleIri>,
         prov: ProvModel,
-        correlation_id: ChronicleTransactionId,
+        tx_id: ChronicleTransactionId,
     ) -> Self {
         ApiResponse::Submission {
             subject: subject.into(),
             prov: Box::new(prov),
-            correlation_id,
+            tx_id,
         }
     }
 

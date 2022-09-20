@@ -147,7 +147,7 @@ All Chronicle mutations return a `Submission` type defined by:
 ```graphql
 type Submission {
   context: String!
-  correlationId: String!
+  txId: String!
 }
 ```
 
@@ -155,7 +155,7 @@ The `context` property here will be the identity of the Chronicle term you have
 changed in the mutation, i.e calling `agent(..)` will return the identity of the
 agent, calling `startActivity(..)` the identity of the started activity.
 
-The `correlationId` property corresponds to the transaction id when running
+The `txId` property corresponds to the transaction id when running
 Chronicle with a backend ledger, or a randomly generated uuid when used in
 [in-memory](chronicle_architecture#development) mode.
 
@@ -163,28 +163,100 @@ Chronicle with a backend ledger, or a randomly generated uuid when used in
 
 Chronicle provides a [GraphQL
 subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/) to
-notify clients when a Chronicle operation has completed.
+notify clients when a Chronicle operation has been sent to a backend ledger and
+when that operation has been applied to both the ledger and Chronicle.
 
 ```graphql
 
+enum Stage {
+ SUBMITTED
+ COMMITTED
+}
+
 type Submission {
-  context: String!
-  correlationId: String!
+  stage: Stage!
+  tx_id: String!
+  error: String
+  delta: Delta
 }
 
 subscription {
     commitNotifications {
-        correlationId
+        stage
+        tx_id
+        error
+        delta
     }
 }
 
 ```
 
-The `correlationId` on this subscription will match the correlationId from the
+The `txId` on this subscription will match the txId from the
 [Submission](#graphql-mutation-result---submission). Clients that wish to know
-the result of an operation should await both the
+the result of an operation should await the
 [Submission](#graphql-mutation-result---submission) and the corresponding
-correlation id from a commit notification.
+ `txId` from a commit notification.
+
+ Chronicle will notify commit completion in 2 stages, the first will be a submit
+ notification like:
+
+ ```graphql
+{
+  stage: "SUBMIT"
+  error: null
+  delta: null
+  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+}
+
+ ```
+
+ And the second, when the Chronicle transaction has been committed to the
+ ledger:
+
+ ```graphql
+{
+  stage: "COMMIT"
+  error: null
+  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+  delta:  {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:publication1",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:Published"
+              ],
+              "externalId": "publication1",
+              "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "value": {
+              }
+            },
+            {
+              "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+              "@type": "chronicle:Namespace",
+              "externalId": "default"
+            }
+          ]
+        }
+}
+
+```
+
+Once this message has been received, clients can assume that provenance has been
+correctly recorded in the backend ledger, and is also available to be queried
+on the Chronicle instance that sent the transaction. Chronicle is now
+consistent with the ledger.
+
+The delta field will be set to a JSON-LD object representing the provenance
+objects that have been affected by the transaction. Advanced integrations can
+use this as an update mechanism for reporting and other features that require
+asynchronous updates of Chronicle provenance.
+
+If error is set on either SUBMIT or COMMIT notifications, then the
+transaction can be assumed to have failed. If the failure is on submission then
+it is likely transient and resumable, but a failure on COMMIT should be
+assumed to be non-resumable, as it will be a [contradiction](#contradiction).
 
 ### Define an Entity
 
@@ -583,9 +655,8 @@ chronicle revision start "chronicle:activity:september-2018-review" --time "2002
 See [provenance concepts](provenance_concepts#ended-at-time)
 
 Chronicle allows you to specify the end time of an activity when you need to
-model a time range. If you want an instantaneous activity, simply call this
-operation. Eliding the time parameter will use the current system time. Time
-stamps should be in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html)
+model a time range. Eliding the time parameter will use the current system time.
+Time stamps should be in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html)
 format.
 
 Ended at time operations also take an optional `AgentId`, to associate the
@@ -603,6 +674,24 @@ And the equivalent command line operation:
 
 ```bash
 chronicle revision end "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+
+```
+
+### Instant
+
+Instant is a convenience operation that will set both start and end time in the
+same operation.
+
+```graphql
+mutation {
+  instantActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+}
+```
+
+And the equivalent command line operation:
+
+```bash
+chronicle revision instant "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
 
