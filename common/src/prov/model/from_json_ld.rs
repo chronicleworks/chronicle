@@ -1,12 +1,14 @@
-use std::collections::BTreeMap;
-
 use chrono::{DateTime, Utc};
-use futures::TryFutureExt;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use iref::{AsIri, Iri, IriBuf, IriRefBuf};
+use json::object;
 use json::JsonValue;
 use json_ld::{
-    syntax::Term, util::AsJson, Document, Indexed, JsonContext, NoLoader, Node, Reference,
+    syntax::Term, util::AsJson, Document, Indexed, JsonContext, Loader, Node, Reference,
+    RemoteDocument,
 };
+use std::collections::BTreeMap;
+use tracing::{instrument, trace};
 
 use crate::{
     attributes::{Attribute, Attributes},
@@ -26,6 +28,30 @@ use crate::{
 use super::{
     Activity, Agent, Attachment, Entity, ExpandedJson, Identity, ProcessorError, ProvModel,
 };
+
+pub struct ContextLoader;
+
+impl Loader for ContextLoader {
+    type Document = json::JsonValue;
+
+    // This is only used to load the context, so we can just return it directly
+    fn load<'a>(
+        &'a mut self,
+        url: Iri<'_>,
+    ) -> BoxFuture<'a, Result<RemoteDocument<Self::Document>, json_ld::Error>> {
+        let url = IriBuf::from(url);
+        trace!("Loading context from {}", url);
+        async move {
+            Ok(json_ld::RemoteDocument::new(
+                object! {
+                 "@context": crate::context::PROV.clone()
+                },
+                url.as_iri(),
+            ))
+        }
+        .boxed()
+    }
+}
 
 fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, ProcessorError> {
     let ids: Result<Vec<_>, _> = node
@@ -71,20 +97,30 @@ fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
 }
 
 impl ProvModel {
-    pub async fn apply_json_ld_bytes(self, buf: &[u8]) -> Result<Self, ProcessorError> {
+    pub async fn apply_json_ld_str(&mut self, buf: &str) -> Result<(), ProcessorError> {
+        self.apply_json_ld(json::parse(buf)?).await?;
+
+        Ok(())
+    }
+    pub async fn apply_json_ld_bytes(&mut self, buf: &[u8]) -> Result<(), ProcessorError> {
         self.apply_json_ld(json::parse(std::str::from_utf8(buf)?)?)
-            .await
+            .await?;
+
+        Ok(())
     }
 
     /// Take a Json-Ld input document, assuming it is in compact form, expand it and apply the state to the prov model
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
-    pub async fn apply_json_ld(mut self, mut json: JsonValue) -> Result<Self, ProcessorError> {
-        json.remove("@context");
-        json.insert("@context", crate::context::PROV.clone()).ok();
+    #[instrument(level = "trace", skip(self, json))]
+    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
+        json.insert("@context", "https://blockchaintp.com/chr/1.0/c.jsonld")
+            .ok();
+
+        trace!(to_apply_compact=%json.pretty(2));
 
         let output = json
-            .expand::<JsonContext, _>(&mut NoLoader)
+            .expand::<JsonContext, _>(&mut ContextLoader)
             .map_err(|e| ProcessorError::Expansion {
                 inner: e.to_string(),
             })
@@ -115,7 +151,7 @@ impl ProvModel {
             }
         }
 
-        Ok(self)
+        Ok(())
     }
 
     /// Extract the types and find the first that is not prov::, as we currently only alow zero or one domain types
@@ -134,7 +170,7 @@ impl ProvModel {
             attributes: node
                 .get(&Reference::Id(Chronicle::Value.as_iri().into()))
                 .map(|o| {
-                    let serde_object = serde_json::from_str(&*o.as_json()["@value"].to_string())?;
+                    let serde_object = serde_json::from_str(&o.as_json()["@value"].to_string())?;
 
                     if let serde_json::Value::Object(object) = serde_object {
                         Ok(object
@@ -636,7 +672,7 @@ impl Operation for Node {
             ChronicleOperations::Attributes.as_iri().into(),
         ))
         .map(|o| {
-            let serde_object = serde_json::from_str(&*o.as_json()["@value"].to_string()).unwrap();
+            let serde_object = serde_json::from_str(&o.as_json()["@value"].to_string()).unwrap();
 
             if let serde_json::Value::Object(object) = serde_object {
                 Ok(object
@@ -746,7 +782,7 @@ impl Operation for Node {
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
         let output = json
-            .expand::<JsonContext, _>(&mut NoLoader)
+            .expand::<JsonContext, _>(&mut ContextLoader)
             .map_err(|e| ProcessorError::Expansion {
                 inner: e.to_string(),
             })

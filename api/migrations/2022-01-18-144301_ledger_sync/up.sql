@@ -8,7 +8,7 @@ create table namespace (
 create unique index namespace_idx on namespace(external_id,uuid);
 
 create table ledgersync (
-    correlation_id text primary key not null,
+    tx_id text primary key not null,
     offset text,
     sync_time timestamp
 );
@@ -104,15 +104,6 @@ create table generation (
     foreign key(activity_id) references activity(id),
     foreign key(generated_entity_id) references entity(id),
     primary key(activity_id,generated_entity_id)
-);
-
-create table generated (
-    entity_id integer not null,
-    generated_activity_id integer not null,
-    typ text,
-    foreign key(entity_id) references activity(id),
-    foreign key(generated_activity_id) references entity(id),
-    primary key(entity_id,generated_activity_id)
 );
 
 create table association (

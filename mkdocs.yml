@@ -38,6 +38,7 @@ nav:
       - "Recording provenance": ./recording_provenance.md
       - "Querying provenance": ./querying_provenance.md
       - "Untyped Chronicle": ./untyped_chronicle.md
+  - "Upgrading": ./upgrading.md
   - "Operating":
       - "CLI": ./cli.md
       - "Configuration options": ./config.md

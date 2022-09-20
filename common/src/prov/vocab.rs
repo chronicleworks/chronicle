@@ -137,15 +137,10 @@ pub enum Prov {
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
-#[iri_prefix("rdfs" = "http://www.w3.org/2000/01/rdf-schema#")]
-pub enum Rdfs {
-    #[iri("rdfs:Label")]
-    Label,
-}
-
-#[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("chronicle" = "http://blockchaintp.com/chronicle/ns#")]
 pub enum Chronicle {
+    #[iri("chronicle:externalId")]
+    ExternalId,
     #[iri("chronicle:Identity")]
     Identity,
     #[iri("chronicle:hasIdentity")]

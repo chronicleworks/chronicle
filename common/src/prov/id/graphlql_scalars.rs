@@ -8,7 +8,7 @@ impl ScalarType for EvidenceId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = value {
             // Parse the integer value
-            Ok(EvidenceId::try_from(Iri::from_str(&*value)?)?)
+            Ok(EvidenceId::try_from(Iri::from_str(&value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))
@@ -25,7 +25,7 @@ impl ScalarType for IdentityId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
             // Parse the integer value
-            Ok(IdentityId::try_from(Iri::from_str(&*value)?)?)
+            Ok(IdentityId::try_from(Iri::from_str(value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))
@@ -42,7 +42,7 @@ impl ScalarType for DomaintypeId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
             // Parse the integer value
-            Ok(DomaintypeId::try_from(Iri::from_str(&*value)?)?)
+            Ok(DomaintypeId::try_from(Iri::from_str(value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))
@@ -59,7 +59,7 @@ impl ScalarType for EntityId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
             // Parse the integer value
-            Ok(EntityId::try_from(Iri::from_str(&*value)?)?)
+            Ok(EntityId::try_from(Iri::from_str(value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))
@@ -76,7 +76,7 @@ impl ScalarType for AgentId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
             // Parse the integer value
-            Ok(AgentId::try_from(Iri::from_str(&*value)?)?)
+            Ok(AgentId::try_from(Iri::from_str(value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))
@@ -93,7 +93,7 @@ impl ScalarType for ActivityId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
             // Parse the integer value
-            Ok(ActivityId::try_from(Iri::from_str(&*value)?)?)
+            Ok(ActivityId::try_from(Iri::from_str(value)?)?)
         } else {
             // If the type does not match
             Err(InputValueError::expected_type(value))

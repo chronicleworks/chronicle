@@ -1,10 +1,15 @@
 use async_graphql::{
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
-    Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject, Subscription,
+    scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject,
+    Subscription,
 };
 use async_graphql_poem::{GraphQL, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
+use common::{
+    ledger::{SubmissionError, SubmissionStage},
+    prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
+};
 use custom_error::custom_error;
 use derivative::*;
 use diesel::{
@@ -16,8 +21,10 @@ use futures::Stream;
 use poem::{
     get, handler, listener::TcpListener, post, web::Html, EndpointExt, IntoResponse, Route, Server,
 };
+use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
+use tracing::error;
 
 use crate::ApiDispatch;
 #[macro_use]
@@ -123,7 +130,7 @@ impl Namespace {
 #[derive(Default, Queryable)]
 pub struct Submission {
     context: String,
-    correlation_id: String,
+    tx_id: String,
 }
 
 #[Object]
@@ -132,8 +139,8 @@ impl Submission {
         &self.context
     }
 
-    async fn correlation_id(&self) -> &str {
-        &self.correlation_id
+    async fn tx_id(&self) -> &str {
+        &self.tx_id
     }
 }
 
@@ -198,19 +205,82 @@ impl Store {
     }
 }
 
-pub struct Subscription;
-
-#[derive(Queryable)]
-pub struct CommitNotification {
-    correlation_id: String,
+pub struct Commit {
+    pub tx_id: String,
 }
 
-#[Object]
+pub struct Rejection {
+    pub commit: Commit,
+    pub reason: String,
+}
+
+#[derive(Enum, PartialEq, Eq, Clone, Copy)]
+pub enum Stage {
+    Submit,
+    Commit,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Delta(async_graphql::Value);
+scalar!(Delta);
+
+#[derive(SimpleObject)]
+pub struct CommitNotification {
+    pub stage: Stage,
+    pub tx_id: String,
+    pub error: Option<String>,
+    pub delta: Option<Delta>,
+}
+
 impl CommitNotification {
-    pub async fn correlation_id(&self) -> &String {
-        &self.correlation_id
+    pub fn from_submission(tx_id: &ChronicleTransactionId) -> Self {
+        CommitNotification {
+            stage: Stage::Submit,
+            tx_id: tx_id.to_string(),
+            error: None,
+            delta: None,
+        }
+    }
+
+    pub fn from_submission_failed(e: &SubmissionError) -> Self {
+        CommitNotification {
+            stage: Stage::Submit,
+            tx_id: e.tx_id().to_string(),
+            error: Some(e.to_string()),
+            delta: None,
+        }
+    }
+
+    pub fn from_contradiction(tx_id: &ChronicleTransactionId, contradiction: &str) -> Self {
+        CommitNotification {
+            stage: Stage::Commit,
+            tx_id: tx_id.to_string(),
+            error: Some(contradiction.to_string()),
+            delta: None,
+        }
+    }
+
+    pub async fn from_committed(
+        tx_id: &ChronicleTransactionId,
+        delta: Box<ProvModel>,
+    ) -> Result<Self, async_graphql::Error> {
+        Ok(CommitNotification {
+            stage: Stage::Commit,
+            tx_id: tx_id.to_string(),
+            error: None,
+            delta: delta
+                .to_json()
+                .compact_stable_order()
+                .await
+                .ok()
+                .map(async_graphql::Value::from_json)
+                .transpose()?
+                .map(Delta),
+        })
     }
 }
+
+pub struct Subscription;
 
 #[Subscription]
 impl Subscription {
@@ -223,8 +293,22 @@ impl Subscription {
         async_stream::stream! {
             loop {
                 match rx.recv().await {
-                    Ok((_prov, correlation_id)) =>
-                    yield CommitNotification {correlation_id: correlation_id.to_string()},
+                    Ok(SubmissionStage::Submitted(Ok(submission))) =>
+                      yield CommitNotification::from_submission(&submission),
+                    Ok(SubmissionStage::Committed(Ok(commit))) => {
+                      let notify = CommitNotification::from_committed(&commit.tx_id, commit.delta).await;
+                      if let Ok(notify) = notify {
+                        yield notify;
+                      } else {
+                        error!("Failed to convert commit to notification: {:?}", notify.err());
+                      }
+                    }
+                    Ok(SubmissionStage::Committed(Err((commit,contradiction)))) =>
+                      yield CommitNotification::from_contradiction(&commit, &*contradiction.to_string()),
+                    Ok(SubmissionStage::Submitted(Err(e))) => {
+                      error!("Failed to submit: {:?}", e);
+                      yield CommitNotification::from_submission_failed(&e);
+                    }
                     Err(RecvError::Lagged(_)) => {
                     }
                     Err(_) => break

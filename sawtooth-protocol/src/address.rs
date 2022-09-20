@@ -18,7 +18,14 @@ lazy_static! {
 pub static VERSION: &str = "1.0";
 pub static FAMILY: &str = "chronicle";
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SawtoothAddress(String);
+
+impl SawtoothAddress {
+    pub fn new(address: String) -> Self {
+        SawtoothAddress(address)
+    }
+}
 
 /// Our sawtooth addresses use hash(chronicle)[..6] as the prefix,
 /// followed by a 256 bit hash of the resource Iri and namespace Iri.

@@ -148,12 +148,14 @@ mod test {
             ))
             .await;
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_toml_snapshot!(created, @r###"
         [data.actedOnBehalfOf]
         context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let derived = schema
             .execute(Request::new(
@@ -666,8 +668,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation generated {
-                generated(entity: "http://blockchaintp.com/chronicle/ns#activity:tide",
-                id: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                wasGeneratedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:damming",
+                id: "http://blockchaintp.com/chronicle/ns#activity:tide",)
                 {
                     context
                 }
@@ -676,8 +678,8 @@ mod test {
             ))
             .await;
         insta::assert_toml_snapshot!(generated, @r###"
-        [data.generated]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        [data.wasGeneratedBy]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -737,8 +739,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation again {
-                generated(entity: "http://blockchaintp.com/chronicle/ns#activity:storm",
-                id: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                wasGeneratedBy(id: "http://blockchaintp.com/chronicle/ns#entity:storm",
+                activity: "http://blockchaintp.com/chronicle/ns#activity:damming",)
                 {
                     context
                 }
@@ -747,8 +749,8 @@ mod test {
             ))
             .await;
         insta::assert_toml_snapshot!(generated2, @r###"
-        [data.generated]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        [data.wasGeneratedBy]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -781,6 +783,10 @@ mod test {
         [[data.activityById.generated]]
         id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
         externalId = 'tide'
+
+        [[data.activityById.generated]]
+        id = 'http://blockchaintp.com/chronicle/ns#entity:storm'
+        externalId = 'storm'
         "###);
     }
 
@@ -917,6 +923,21 @@ mod test {
             let res = schema
                 .execute(Request::new(format!(
                     r#"
+                  mutation {{
+                      startActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                          context
+                      }}
+                  }}
+                "#,
+                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
+                )))
+                .await;
+
+            assert_eq!(res.errors, vec![]);
+
+            let res = schema
+                .execute(Request::new(format!(
+                    r#"
             mutation {{
                 endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
@@ -950,7 +971,7 @@ mod test {
             assert_eq!(res.errors, vec![]);
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(3000)).await;
 
         let entire_timeline_in_order = schema
             .execute(Request::new(

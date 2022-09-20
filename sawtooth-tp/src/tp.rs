@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use common::{
     ledger::OperationState,
@@ -82,36 +82,39 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .recv()
             .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
-        let mut model = ProvModel::default();
+        //pre compute and pre-load dependencies
+        let deps = transactions
+            .iter()
+            .flat_map(|tx| tx.dependencies())
+            .collect::<HashSet<_>>();
 
-        let mut state = OperationState::new();
+        debug!(
+            input_chronicle_addresses=?deps,
+        );
+
+        let mut model = ProvModel::default();
+        let mut state = OperationState::<SawtoothAddress>::new();
+
+        // order of `get_state_entries` should be in order in which sent
+        let sawtooth_entries = context
+            .get_state_entries(
+                &deps
+                    .iter()
+                    .map(|x| SawtoothAddress::from(x).to_string())
+                    .collect::<Vec<_>>(),
+            )?
+            .into_iter()
+            .map(|(addr, data)| {
+                (
+                    SawtoothAddress::new(addr),
+                    Some(String::from_utf8(data).unwrap()),
+                )
+            });
+
+        state.update_state(sawtooth_entries);
 
         for tx in transactions {
             debug!(operation = ?tx);
-
-            let deps = tx.dependencies();
-
-            // order of `get_state_entries` should be in order in which sent
-            let sawtooth_entries = context
-                .get_state_entries(
-                    &deps
-                        .iter()
-                        .map(|x| SawtoothAddress::from(x).to_string())
-                        .collect::<Vec<_>>(),
-                )?
-                .into_iter()
-                .collect::<Vec<_>>()
-                .into_iter()
-                .collect::<BTreeMap<_, _>>();
-
-            let entries = sawtooth_entries
-                .into_iter()
-                .enumerate()
-                .map(|(i, (_k, v))| (deps[i].clone(), v))
-                .collect::<BTreeMap<_, _>>()
-                .into_iter();
-
-            state.append_input(entries);
 
             let input = state.input();
 
@@ -128,10 +131,10 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .recv()
                 .map_err(|e| ApplyError::InternalError(e.to_string()))??;
 
-            state.append_output(
+            state.update_state(
                 tx_output
                     .into_iter()
-                    .map(|output| output.into())
+                    .map(|output| (SawtoothAddress::from(&output.address), Some(output.data)))
                     .collect::<BTreeMap<_, _>>()
                     .into_iter(),
             );
@@ -144,7 +147,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
                 .dirty()
                 .map(|output| {
                     let address = output.address;
-                    (SawtoothAddress::from(&address).to_string(), output.data)
+                    (address.to_string(), output.data.as_bytes().to_vec())
                 })
                 .collect(),
         )?;
@@ -153,7 +156,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
         context.add_event(
             "chronicle/prov-update".to_string(),
             vec![("transaction_id".to_owned(), request.signature.clone())],
-            &*serde_cbor::to_vec(&model)
+            &serde_cbor::to_vec(&model)
                 .map_err(|e| ApplyError::InvalidTransaction(e.to_string()))?,
         )?;
 

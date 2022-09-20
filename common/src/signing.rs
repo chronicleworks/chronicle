@@ -167,7 +167,7 @@ impl DirectoryStoredKeys {
 
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {
         debug!(load_signing_key_at = ?path);
-        Ok(SigningKey::from_pkcs8_pem(&*std::fs::read_to_string(
+        Ok(SigningKey::from_pkcs8_pem(&std::fs::read_to_string(
             Path::join(path, Path::new("key.priv.pem")),
         )?)?)
     }
@@ -175,7 +175,7 @@ impl DirectoryStoredKeys {
     fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
         debug!(load_verifying_key_at = ?path);
         Ok(VerifyingKey::from_public_key_pem(
-            &*std::fs::read_to_string(Path::join(path, Path::new("key.pub.pem")))?,
+            &std::fs::read_to_string(Path::join(path, Path::new("key.pub.pem")))?,
         )?)
     }
 }

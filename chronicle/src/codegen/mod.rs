@@ -1050,6 +1050,17 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::generate_key(ctx, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        pub async fn instant_activity<'a>(
+            &self,
+            ctx: &#graphql_context<'a>,
+            id: #activity_id,
+            namespace: Option<String>,
+            agent: Option<#agent_id>,
+            time: Option<DateTime<Utc>>,
+        ) -> async_graphql::#graphql_result<#submission> {
+            #impls::instant_activity(ctx, id, namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+        }
+
         pub async fn start_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1112,16 +1123,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_generated_by(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
-        }
-
-        pub async fn generated<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            entity: #entity_id,
-            id: #activity_id,
-            namespace: Option<String>,
-        ) -> async_graphql::#graphql_result<#submission> {
-            #impls::generated(ctx, entity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         pub async fn has_attachment<'a>(

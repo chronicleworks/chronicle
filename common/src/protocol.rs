@@ -1,40 +1,141 @@
 use std::io::Cursor;
 
 use prost::Message;
+use tracing::span;
 
 use crate::prov::{
-    operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, ProcessorError,
+    operations::ChronicleOperation, to_json_ld::ToJson, CompactionError, Contradiction,
+    ExpandedJson, ProcessorError, ProvModel,
 };
+
+use thiserror::Error;
+
+use self::messages::event::OptionContradiction;
+
+#[derive(Error, Debug)]
+pub enum ProtocolError {
+    #[error("Protobuf deserialization error {source}")]
+    ProtobufDeserialize {
+        #[from]
+        source: prost::DecodeError,
+    },
+    #[error("Protobuf serialization error {source}")]
+    ProtobufSerialize {
+        #[from]
+        source: prost::EncodeError,
+    },
+    #[error("Serde de/serialization error {source}")]
+    JsonSerialize {
+        #[from]
+        source: serde_json::Error,
+    },
+    #[error("Problem applying delta {source}")]
+    ProcessorError {
+        #[from]
+        source: ProcessorError,
+    },
+    #[error("Could not compact json {source}")]
+    Compaction {
+        #[from]
+        source: CompactionError,
+    },
+}
+
+static PROTOCOL_VERSION: &str = "1";
 
 // Include the `submission` module, which is
 // generated from ./protos/submission.proto.
-pub mod submission {
+pub mod messages {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
+}
+
+pub async fn chronicle_committed(
+    span: span::Id,
+    delta: ProvModel,
+) -> Result<messages::Event, ProtocolError> {
+    Ok(messages::Event {
+        version: PROTOCOL_VERSION.to_owned(),
+        delta: serde_json::to_string(&delta.to_json().compact_stable_order().await?)?,
+        span_id: span.into_u64(),
+        ..Default::default()
+    })
+}
+
+pub fn chronicle_contradicted(
+    span: span::Id,
+    contradiction: &Contradiction,
+) -> Result<messages::Event, ProtocolError> {
+    Ok(messages::Event {
+        version: PROTOCOL_VERSION.to_owned(),
+        span_id: span.into_u64(),
+        option_contradiction: Some(OptionContradiction::Contradiction(serde_json::to_string(
+            &contradiction,
+        )?)),
+        ..Default::default()
+    })
+}
+
+pub async fn deserialize_event(
+    buf: &[u8],
+) -> Result<(span::Id, Result<ProvModel, Contradiction>), ProtocolError> {
+    let event = messages::Event::decode(buf)?;
+    let span_id = span::Id::from_u64(event.span_id);
+    let model = match (event.delta, event.option_contradiction) {
+        (_, Some(OptionContradiction::Contradiction(contradiction))) => {
+            Err(serde_json::from_str::<Contradiction>(&contradiction)?)
+        }
+        (delta, None) => {
+            let mut model = ProvModel::default();
+            model.apply_json_ld_str(&delta).await?;
+
+            Ok(model)
+        }
+    };
+    Ok((span_id, model))
+}
+
+impl messages::Event {
+    pub async fn get_contradiction(&self) -> Result<Option<Contradiction>, ProtocolError> {
+        Ok(self
+            .option_contradiction
+            .as_ref()
+            .map(|OptionContradiction::Contradiction(s)| serde_json::from_str(s))
+            .transpose()?)
+    }
+
+    pub async fn get_delta(&self) -> Result<ProvModel, ProtocolError> {
+        let mut model = ProvModel::default();
+        model.apply_json_ld_str(&self.delta).await?;
+
+        Ok(model)
+    }
 }
 
 /// Envelope a payload of `ChronicleOperations` in a `Submission` protocol buffer,
 /// along with placeholders for protocol version info and a tracing span id.
 pub async fn create_operation_submission_request(
     payload: &[ChronicleOperation],
-) -> submission::Submission {
-    let mut submission = submission::Submission::default();
-    let protocol_version = "1".to_string();
-    submission.version = protocol_version;
-    submission.span_id = "".to_string();
+) -> Result<messages::Submission, ProtocolError> {
+    let mut submission = messages::Submission {
+        version: PROTOCOL_VERSION.to_string(),
+        span_id: 0u64,
+        ..Default::default()
+    };
+
     let mut ops = Vec::with_capacity(payload.len());
     for op in payload {
         let op_json = op.to_json();
-        let compact_json_string = op_json.compact().await.unwrap().0.to_string();
+        let compact_json_string = op_json.compact().await?.0.to_string();
         // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
         // which calls here from `sawtooth-protocol::messages` being non-fallible
         ops.push(compact_json_string);
     }
     submission.body = ops;
-    submission
+    Ok(submission)
 }
 
 /// `Submission` protocol buffer serializer
-pub fn serialize_submission(submission: &submission::Submission) -> Vec<u8> {
+pub fn serialize_submission(submission: &messages::Submission) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.reserve(submission.encoded_len());
     submission.encode(&mut buf).unwrap();
@@ -42,8 +143,8 @@ pub fn serialize_submission(submission: &submission::Submission) -> Vec<u8> {
 }
 
 /// `Submission` protocol buffer deserializer
-pub fn deserialize_submission(buf: &[u8]) -> Result<submission::Submission, prost::DecodeError> {
-    submission::Submission::decode(&mut Cursor::new(buf))
+pub fn deserialize_submission(buf: &[u8]) -> Result<messages::Submission, prost::DecodeError> {
+    messages::Submission::decode(&mut Cursor::new(buf))
 }
 
 /// Convert a `Submission` payload from a vector of
@@ -141,7 +242,7 @@ mod test {
         ];
 
         // Serialize operations payload to protocol buffer
-        let submission = create_operation_submission_request(&tx).await;
+        let submission = create_operation_submission_request(&tx).await.unwrap();
         let serialized_sub = serialize_submission(&submission);
 
         // Test that serialisation to and from protocol buffer is symmetric

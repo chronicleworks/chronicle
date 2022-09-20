@@ -13,8 +13,8 @@ use common::{
     prov::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
-        EvidenceId, ExternalId, ExternalIdPart, GeneratedEntity, Generation, Identity, IdentityId,
-        Namespace, NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
+        EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
+        NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
     },
 };
 use custom_error::custom_error;
@@ -22,13 +22,12 @@ use derivative::*;
 
 use diesel::{
     connection::SimpleConnection,
-    dsl::max,
     prelude::*,
     r2d2::{ConnectionManager, Pool, PooledConnection},
     sqlite::SqliteConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, instrument, warn};
 use uuid::Uuid;
 
 use crate::QueryCommand;
@@ -38,13 +37,13 @@ pub(crate) mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 custom_error! {pub StoreError
-    Db{source: diesel::result::Error}                           = "Database operation failed",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
-    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {:?}",
-    DbPool{source: r2d2::Error}                                 = "Connection pool error",
-    Uuid{source: uuid::Error}                                   = "Invalid UUID",
-    Json{source: serde_json::Error}                             = "Unreadable Attribute",
-    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id",
+    Db{source: diesel::result::Error}                           = "Database operation failed {source}",
+    DbConnection{source: diesel::ConnectionError}               = "Database connection failed {source}",
+    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {migration}",
+    DbPool{source: r2d2::Error}                                 = "Connection pool error {source}",
+    Uuid{source: uuid::Error}                                   = "Invalid UUID {source}",
+    Json{source: serde_json::Error}                             = "Unreadable Attribute {source}",
+    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id {source}",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
 }
@@ -139,17 +138,17 @@ impl Store {
         &self,
         connection: &mut SqliteConnection,
         external_id: &ExternalId,
-        namespaceid: &NamespaceId,
+        namespace_id: &NamespaceId,
     ) -> Result<query::Entity, StoreError> {
-        let (_namespaceid, nsid) =
-            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+        let (_, ns_id) =
+            self.namespace_by_external_id(connection, namespace_id.external_id_part())?;
         use schema::entity::dsl;
 
         Ok(schema::entity::table
             .filter(
                 dsl::external_id
                     .eq(external_id)
-                    .and(dsl::namespace_id.eq(nsid)),
+                    .and(dsl::namespace_id.eq(ns_id)),
             )
             .first::<query::Entity>(connection)?)
     }
@@ -174,8 +173,8 @@ impl Store {
             .first::<query::Agent>(connection)?)
     }
 
-    /// Apply an activity to persistent storage, external_id + namespace are a key, so we update times + domaintype on conflict
-    #[instrument(name = "Apply activity", skip(self, connection, ns))]
+    /// Apply an activity to persistent storage, name + namespace are a key, so we update times + domaintype on conflict
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_activity(
         &self,
         connection: &mut SqliteConnection,
@@ -196,7 +195,7 @@ impl Store {
             self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
 
         let existing = self
-            .activity_by_activity_external_id_and_namespace(connection, &*external_id, namespaceid)
+            .activity_by_activity_external_id_and_namespace(connection, external_id, namespaceid)
             .ok();
 
         let resolved_domain_type = domaintypeid
@@ -235,7 +234,7 @@ impl Store {
 
         let query::Activity { id, .. } = self.activity_by_activity_external_id_and_namespace(
             connection,
-            &*external_id,
+            external_id,
             namespaceid,
         )?;
 
@@ -259,7 +258,7 @@ impl Store {
 
     /// Apply an agent to persistent storage, external_id + namespace are a key, so we update publickey + domaintype on conflict
     /// current is a special case, only relevant to local CLI context. A possibly improved design would be to store this in another table given its scope
-    #[instrument(name = "Apply agent", skip(self, connection, ns))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_agent(
         &self,
         connection: &mut SqliteConnection,
@@ -321,7 +320,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply attachment", skip(self, connection, ns))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_attachment(
         &self,
         connection: &mut SqliteConnection,
@@ -367,7 +366,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply entity", skip(self, connection, ns))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_entity(
         &self,
         connection: &mut SqliteConnection,
@@ -428,7 +427,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply has evidence", skip(self, connection))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_has_evidence(
         &self,
         connection: &mut SqliteConnection,
@@ -454,7 +453,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply had evidence", skip(self, connection))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_had_evidence(
         &self,
         connection: &mut SqliteConnection,
@@ -481,7 +480,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply has identity", skip(self, connection))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_has_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -507,7 +506,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply had identity", skip(self, connection))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_had_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -531,7 +530,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(name = "Apply identity", skip(self, connection, ns))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_identity(
         &self,
         connection: &mut SqliteConnection,
@@ -555,14 +554,11 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection, model))]
     fn apply_model(
         &self,
         connection: &mut SqliteConnection,
         model: &ProvModel,
     ) -> Result<(), StoreError> {
-        debug!(model=?model);
-
         for (_, ns) in model.namespaces.iter() {
             self.apply_namespace(connection, ns)?
         }
@@ -631,12 +627,6 @@ impl Store {
             }
         }
 
-        for ((namespaceid, _), generated) in model.generated.iter() {
-            for generated in generated.iter() {
-                self.apply_generated(connection, namespaceid, generated)?;
-            }
-        }
-
         for ((namespaceid, _), derivation) in model.derivation.iter() {
             for derivation in derivation.iter() {
                 self.apply_derivation(connection, namespaceid, derivation)?;
@@ -652,7 +642,7 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
+    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_namespace(
         &self,
         connection: &mut SqliteConnection,
@@ -673,15 +663,9 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(self, prov))]
     pub fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
-        debug!("Enter transaction");
-
-        self.connection()?.immediate_transaction(|connection| {
-            debug!("Entered transaction");
-            self.apply_model(connection, prov)
-        })?;
-        debug!("Completed transaction");
+        self.connection()?
+            .immediate_transaction(|connection| self.apply_model(connection, prov))?;
 
         Ok(())
     }
@@ -899,183 +883,10 @@ impl Store {
         Ok(())
     }
 
-    #[instrument(skip(connection))]
-    fn apply_generated(
-        &self,
-        connection: &mut SqliteConnection,
-        namespace: &common::prov::NamespaceId,
-        generated: &GeneratedEntity,
-    ) -> Result<(), StoreError> {
-        let storedentity = self.entity_by_entity_external_id_and_namespace(
-            connection,
-            generated.entity_id.external_id_part(),
-            namespace,
-        )?;
-
-        let storedactivity = self.activity_by_activity_external_id_and_namespace(
-            connection,
-            generated.generated_id.external_id_part(),
-            namespace,
-        )?;
-
-        use schema::generated::dsl as link;
-        diesel::insert_or_ignore_into(schema::generated::table)
-            .values((
-                &link::entity_id.eq(storedentity.id),
-                &link::generated_activity_id.eq(storedactivity.id),
-            ))
-            .execute(connection)?;
-
-        Ok(())
-    }
-
     pub fn connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
         Ok(self.pool.get()?)
-    }
-
-    /// Ensure the external_id is unique within the namespace, if not, then postfix the row id
-    pub(crate) fn disambiguate_activity_external_id(
-        &self,
-        connection: &mut SqliteConnection,
-        external_id: &ExternalId,
-        namespaceid: &NamespaceId,
-    ) -> Result<ExternalId, StoreError> {
-        use schema::{activity::dsl, namespace::dsl as nsdsl};
-
-        let collision = schema::activity::table
-            .inner_join(schema::namespace::table)
-            .filter(
-                dsl::external_id
-                    .eq(external_id)
-                    .and(nsdsl::external_id.eq(namespaceid.external_id_part())),
-            )
-            .count()
-            .first::<i64>(connection)?;
-
-        if collision == 0 {
-            return Ok(external_id.to_owned());
-        }
-
-        let ambiguous = schema::activity::table
-            .select(max(dsl::id))
-            .first::<Option<i32>>(connection)?;
-
-        Ok(format!("{}-{}", external_id, ambiguous.unwrap_or_default()).into())
-    }
-
-    /// Ensure the external_id is unique within the namespace, if not, then postfix the rowid
-    pub(crate) fn disambiguate_agent_external_id(
-        &self,
-        connection: &mut SqliteConnection,
-        external_id: &ExternalId,
-        namespaceid: &NamespaceId,
-    ) -> Result<ExternalId, StoreError> {
-        use schema::{agent::dsl, namespace::dsl as nsdsl};
-
-        let collision = schema::agent::table
-            .inner_join(schema::namespace::table)
-            .filter(
-                dsl::external_id
-                    .eq(external_id)
-                    .and(nsdsl::external_id.eq(namespaceid.external_id_part())),
-            )
-            .count()
-            .first::<i64>(connection)?;
-
-        if collision == 0 {
-            return Ok(external_id.to_owned());
-        }
-
-        let ambiguous = schema::agent::table
-            .select(max(dsl::id))
-            .first::<Option<i32>>(connection)?;
-
-        Ok(format!("{}-{}", external_id, ambiguous.unwrap_or_default()).into())
-    }
-
-    /// Ensure the external_id is unique within the namespace, if not, then postfix the rowid
-    #[instrument(skip(connection))]
-    pub(crate) fn disambiguate_entity_external_id(
-        &self,
-        connection: &mut SqliteConnection,
-        external_id: ExternalId,
-        namespaceid: NamespaceId,
-    ) -> Result<ExternalId, StoreError> {
-        use schema::{entity::dsl, namespace::dsl as nsdsl};
-
-        let collision = schema::entity::table
-            .inner_join(schema::namespace::table)
-            .filter(
-                dsl::external_id
-                    .eq(&external_id)
-                    .and(nsdsl::external_id.eq(namespaceid.external_id_part())),
-            )
-            .count()
-            .first::<i64>(connection)?;
-
-        if collision == 0 {
-            trace!(
-                ?external_id,
-                "Entity external_id is unique within namespace, so use directly"
-            );
-            return Ok(external_id.to_owned());
-        }
-
-        let ambiguous = schema::entity::table
-            .select(max(dsl::id))
-            .first::<Option<i32>>(connection)?;
-
-        trace!(?external_id, "Is not unique, postfix with last rowid");
-
-        Ok(format!("{}-{}", external_id, ambiguous.unwrap_or_default()).into())
-    }
-
-    /// Get the named entity
-    #[instrument(skip(connection))]
-    pub(crate) fn get_entity_by_external_id(
-        &self,
-        connection: &mut SqliteConnection,
-        external_id: Option<ExternalId>,
-        namespace: NamespaceId,
-    ) -> Result<query::Entity, StoreError> {
-        if let Some(external_id) = external_id {
-            trace!(%external_id, "Use existing");
-            Ok(self.entity_by_entity_external_id_and_namespace(
-                connection,
-                &external_id,
-                &namespace,
-            )?)
-        } else {
-            trace!("Use last started");
-            Ok(schema::entity::table.first::<query::Entity>(connection)?)
-        }
-    }
-
-    /// Get the named activity or the last started one, a useful context aware shortcut for the CLI
-    #[instrument(skip(connection))]
-    pub(crate) fn get_activity_by_external_id_or_last_started(
-        &self,
-        connection: &mut SqliteConnection,
-        external_id: Option<ExternalId>,
-        namespace: NamespaceId,
-    ) -> Result<query::Activity, StoreError> {
-        use schema::activity::dsl;
-
-        if let Some(external_id) = external_id {
-            trace!(%external_id, "Use existing");
-            Ok(self.activity_by_activity_external_id_and_namespace(
-                connection,
-                &external_id,
-                &namespace,
-            )?)
-        } else {
-            trace!("Use last started");
-            Ok(schema::activity::table
-                .order(dsl::started)
-                .first::<query::Activity>(connection)?)
-        }
     }
 
     #[instrument(skip(connection))]
@@ -1096,12 +907,10 @@ impl Store {
         self.connection()?.immediate_transaction(|connection| {
             schema::ledgersync::table
                 .order_by(dsl::sync_time)
-                .select((dsl::offset, dsl::correlation_id))
+                .select((dsl::offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)
-                .map(|(offset, correlation_id)| {
-                    offset.map(|offset| (Offset::from(&*offset), correlation_id))
-                })
+                .map(|(offset, tx_id)| offset.map(|offset| (Offset::from(&*offset), tx_id)))
         })
     }
 
@@ -1204,7 +1013,7 @@ impl Store {
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
-                            serde_json::from_str(&*attr.value).map(|value| {
+                            serde_json::from_str(&attr.value).map(|value| {
                                 (
                                     attr.typename.clone(),
                                     Attribute {
@@ -1244,7 +1053,7 @@ impl Store {
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
-                            serde_json::from_str(&*attr.value).map(|value| {
+                            serde_json::from_str(&attr.value).map(|value| {
                                 (
                                     attr.typename.clone(),
                                     Attribute {
@@ -1328,7 +1137,7 @@ impl Store {
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
-                            serde_json::from_str(&*attr.value).map(|value| {
+                            serde_json::from_str(&attr.value).map(|value| {
                                 (
                                     attr.typename.clone(),
                                     Attribute {
@@ -1351,7 +1160,7 @@ impl Store {
     pub fn set_last_offset(
         &self,
         offset: Offset,
-        correlation_id: ChronicleTransactionId,
+        tx_id: ChronicleTransactionId,
     ) -> Result<(), StoreError> {
         use schema::ledgersync::{self as dsl};
 
@@ -1360,10 +1169,10 @@ impl Store {
                 diesel::insert_into(dsl::table)
                     .values((
                         dsl::offset.eq(offset),
-                        dsl::correlation_id.eq(&*correlation_id.to_string()),
+                        dsl::tx_id.eq(&*tx_id.to_string()),
                         (dsl::sync_time.eq(Utc::now().naive_utc())),
                     ))
-                    .on_conflict(dsl::correlation_id)
+                    .on_conflict(dsl::tx_id)
                     .do_update()
                     .set(dsl::sync_time.eq(Utc::now().naive_utc()))
                     .execute(connection)
@@ -1381,7 +1190,7 @@ impl Store {
         external_id: &ExternalId,
         namespace: &ExternalId,
     ) -> Result<(), StoreError> {
-        let (_, nsid) = self.namespace_by_external_id(connection, &*namespace)?;
+        let (_, nsid) = self.namespace_by_external_id(connection, namespace)?;
         use schema::agent::dsl;
 
         diesel::update(schema::agent::table.filter(dsl::current.ne(0)))

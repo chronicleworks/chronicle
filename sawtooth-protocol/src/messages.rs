@@ -1,7 +1,7 @@
 use common::{
     k256::ecdsa::{signature::Signer, Signature, SigningKey},
     ledger::Offset,
-    protocol::{create_operation_submission_request, serialize_submission},
+    protocol::{create_operation_submission_request, serialize_submission, ProtocolError},
     prov::{operations::ChronicleOperation, ChronicleTransactionId},
 };
 use custom_error::custom_error;
@@ -81,7 +81,7 @@ impl MessageBuilder {
         header.signer_public_key = pubkey;
 
         let encoded_header = header.encode_to_vec();
-        let s: Signature = self.signer.sign(&*encoded_header);
+        let s: Signature = self.signer.sign(&encoded_header);
         s.normalize_s();
 
         batch.transactions = vec![tx];
@@ -98,12 +98,12 @@ impl MessageBuilder {
         output_addresses: Vec<String>,
         dependencies: Vec<String>,
         payload: &[ChronicleOperation],
-    ) -> (Transaction, ChronicleTransactionId) {
-        let submission = create_operation_submission_request(payload).await;
+    ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
+        let submission = create_operation_submission_request(payload).await?;
         let bytes = serialize_submission(&submission);
 
         let mut hasher = Sha512::new();
-        hasher.update(&*bytes);
+        hasher.update(&bytes);
 
         let pubkey = hex::encode(self.signer.verifying_key().to_bytes());
 
@@ -122,19 +122,19 @@ impl MessageBuilder {
         debug!(?header);
 
         let encoded_header = header.encode_to_vec();
-        let s: Signature = self.signer.sign(&*encoded_header);
+        let s: Signature = self.signer.sign(&encoded_header);
         s.normalize_s();
 
         let s = hex::encode(s.to_vec());
 
-        (
+        Ok((
             Transaction {
                 header: encoded_header,
                 header_signature: s.clone(),
                 payload: bytes,
             },
             ChronicleTransactionId::from(&*s),
-        )
+        ))
     }
 }
 
@@ -181,18 +181,19 @@ mod test {
                 dependencies,
                 batch.as_slice(),
             )
-            .await;
+            .await
+            .unwrap();
 
         let batch = builder.wrap_tx_as_sawtooth_batch(proto_tx);
 
         let batch_sdk_parsed: Batch =
-            protobuf::Message::parse_from_bytes(&*batch.encode_to_vec()).unwrap();
+            protobuf::Message::parse_from_bytes(&batch.encode_to_vec()).unwrap();
 
         for tx in batch_sdk_parsed.transactions {
             let header = TransactionHeader::parse_from_bytes(tx.header.as_slice()).unwrap();
 
             let mut hasher = Sha512::new();
-            hasher.update(&*tx.payload);
+            hasher.update(&tx.payload);
             let computed_hash = hasher.finish();
 
             assert_eq!(header.payload_sha512, hex::encode(computed_hash));

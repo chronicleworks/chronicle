@@ -1,43 +1,82 @@
+use derivative::Derivative;
 use futures::{stream, SinkExt, Stream, StreamExt};
 
 use json::JsonValue;
 use serde::ser::SerializeSeq;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 use uuid::Uuid;
 
-use crate::{
-    context::PROV,
-    prov::{
-        operations::{
-            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence, Generated,
-            RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
-            WasInformedBy,
-        },
-        to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, ExternalIdPart,
-        IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
+use crate::prov::{
+    operations::{
+        ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+        CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence, RegisterKey,
+        SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
     },
+    to_json_ld::ToJson,
+    ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
+    ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
 };
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap},
-    fmt::Display,
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt::{Display, Formatter},
     pin::Pin,
-    str::{from_utf8, FromStr},
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
-#[derive(Debug)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub enum SubmissionError {
     Implementation {
-        source: Box<dyn std::error::Error + Send + Sync + 'static>,
+        #[derivative(Debug = "ignore")]
+        source: Arc<Box<dyn std::error::Error + Send + Sync + 'static>>,
+        tx_id: ChronicleTransactionId,
     },
     Processor {
-        source: ProcessorError,
+        source: Arc<ProcessorError>,
+        tx_id: ChronicleTransactionId,
     },
+    Contradiction {
+        source: Contradiction,
+        tx_id: ChronicleTransactionId,
+    },
+}
+
+impl SubmissionError {
+    pub fn tx_id(&self) -> &ChronicleTransactionId {
+        match self {
+            SubmissionError::Implementation { tx_id, .. } => tx_id,
+            SubmissionError::Processor { tx_id, .. } => tx_id,
+            SubmissionError::Contradiction { tx_id, .. } => tx_id,
+        }
+    }
+
+    pub fn processor(tx_id: &ChronicleTransactionId, source: ProcessorError) -> SubmissionError {
+        SubmissionError::Processor {
+            source: Arc::new(source),
+            tx_id: tx_id.clone(),
+        }
+    }
+
+    pub fn contradiction(tx_id: &ChronicleTransactionId, source: Contradiction) -> SubmissionError {
+        SubmissionError::Contradiction {
+            source,
+            tx_id: tx_id.clone(),
+        }
+    }
+
+    pub fn implementation(
+        tx_id: &ChronicleTransactionId,
+        source: Arc<Box<dyn std::error::Error + Send + Sync + 'static>>,
+    ) -> SubmissionError {
+        SubmissionError::Implementation {
+            source,
+            tx_id: tx_id.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -63,17 +102,12 @@ impl std::error::Error for SubscriptionError {
     }
 }
 
-impl From<ProcessorError> for SubmissionError {
-    fn from(source: ProcessorError) -> Self {
-        SubmissionError::Processor { source }
-    }
-}
-
 impl Display for SubmissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Implementation { .. } => write!(f, "Ledger error"),
-            Self::Processor { source: _ } => write!(f, "Processor error"),
+            Self::Implementation { source, .. } => write!(f, "Ledger error {} ", source),
+            Self::Processor { source, .. } => write!(f, "Processor error {} ", source),
+            Self::Contradiction { source, .. } => write!(f, "Contradiction: {}", source),
         }
     }
 }
@@ -81,11 +115,33 @@ impl Display for SubmissionError {
 impl std::error::Error for SubmissionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Implementation { source } => Some(source.as_ref()),
-            Self::Processor { source } => Some(source),
+            Self::Implementation { source, .. } => Some(&**source.as_ref()),
+            Self::Processor { source, .. } => Some(source),
+            Self::Contradiction { source, .. } => Some(source),
         }
     }
 }
+
+pub type SubmitResult = Result<ChronicleTransactionId, SubmissionError>;
+
+#[derive(Debug, Clone)]
+pub struct Commit {
+    pub tx_id: ChronicleTransactionId,
+    pub offset: Offset,
+    pub delta: Box<ProvModel>,
+}
+
+impl Commit {
+    pub fn new(tx_id: ChronicleTransactionId, offset: Offset, delta: Box<ProvModel>) -> Self {
+        Commit {
+            tx_id,
+            offset,
+            delta,
+        }
+    }
+}
+
+pub type CommitResult = Result<Commit, (ChronicleTransactionId, Contradiction)>;
 
 #[async_trait::async_trait(?Send)]
 pub trait LedgerWriter {
@@ -93,6 +149,38 @@ pub trait LedgerWriter {
         &mut self,
         tx: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SubmissionError>;
+}
+
+#[derive(Debug, Clone)]
+pub enum SubmissionStage {
+    Submitted(SubmitResult),
+    Committed(CommitResult),
+}
+
+impl SubmissionStage {
+    pub fn submitted_error(r: &SubmissionError) -> Self {
+        SubmissionStage::Submitted(Err(r.clone()))
+    }
+    pub fn submitted(r: &ChronicleTransactionId) -> Self {
+        SubmissionStage::Submitted(Ok(r.clone()))
+    }
+
+    pub fn committed(commit: Result<Commit, (ChronicleTransactionId, Contradiction)>) -> Self {
+        SubmissionStage::Committed(commit)
+    }
+
+    pub fn tx_id(&self) -> &ChronicleTransactionId {
+        match self {
+            Self::Submitted(tx_id) => match tx_id {
+                Ok(tx_id) => tx_id,
+                Err(e) => e.tx_id(),
+            },
+            Self::Committed(commit) => match commit {
+                Ok(commit) => &commit.tx_id,
+                Err((tx_id, _)) => tx_id,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,17 +215,14 @@ pub trait LedgerReader {
     async fn state_updates(
         self,
         offset: Offset,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
-        SubscriptionError,
-    >;
+    ) -> Result<Pin<Box<dyn Stream<Item = CommitResult> + Send>>, SubscriptionError>;
 }
 
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug, Clone)]
 pub struct InMemLedger {
     kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
-    chan: UnboundedSender<(Offset, ProvModel, ChronicleTransactionId)>,
+    chan: UnboundedSender<CommitResult>,
     reader: Option<InMemLedgerReader>,
     head: u64,
 }
@@ -167,7 +252,16 @@ impl Default for InMemLedger {
     }
 }
 
-type SharedLedger = Option<UnboundedReceiver<(Offset, ProvModel, ChronicleTransactionId)>>;
+impl std::fmt::Display for InMemLedger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (k, v) in self.kv.borrow().iter() {
+            writeln!(f, "{}: {}", k, v.pretty(2))?;
+        }
+        Ok(())
+    }
+}
+
+type SharedLedger = Option<UnboundedReceiver<CommitResult>>;
 
 #[derive(Debug, Clone)]
 pub struct InMemLedgerReader {
@@ -179,15 +273,10 @@ impl LedgerReader for InMemLedgerReader {
     async fn state_updates(
         self,
         _offset: Offset,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = (Offset, Box<ProvModel>, ChronicleTransactionId)> + Send>>,
-        SubscriptionError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = CommitResult> + Send>>, SubscriptionError> {
         let chan = self.chan.lock().unwrap().take().unwrap();
         let stream = stream::unfold(chan, |mut chan| async move {
-            chan.next()
-                .await
-                .map(|(offset, prov, uuid)| ((offset, prov.into(), uuid), chan))
+            chan.next().await.map(|stage| (stage, chan))
         });
 
         Ok(stream.boxed())
@@ -219,6 +308,7 @@ impl serde::Serialize for InMemLedger {
 
 #[async_trait::async_trait(?Send)]
 impl LedgerWriter for InMemLedger {
+    #[instrument(skip(self), level="debug" ret(Debug))]
     async fn submit(
         &mut self,
         tx: &[ChronicleOperation],
@@ -227,63 +317,84 @@ impl LedgerWriter for InMemLedger {
 
         let mut model = ProvModel::default();
         let mut state = OperationState::new();
-        let mut state_deps: Vec<LedgerAddress> = vec![];
+
+        //pre compute and pre-load dependencies
+        let deps = tx
+            .iter()
+            .flat_map(|tx| tx.dependencies())
+            .collect::<HashSet<_>>();
+
+        state.update_state(deps.iter().map(|dep| {
+            (
+                dep.clone(),
+                self.kv.borrow().get(dep).map(|dep| dep.to_string()),
+            )
+        }));
+
+        debug!(
+            input_chronicle_addresses=?deps,
+        );
+
+        trace!(ledger_state_before = %self);
 
         for tx in tx {
-            let deps = tx.dependencies();
+            let res = tx.process(model, state.input()).await;
 
-            state.append_input(
-                self.kv
-                    .borrow()
-                    .iter()
-                    .map(|(k, v)| (k.to_owned(), v.to_string().as_bytes().to_vec())),
-            );
-
-            debug!(
-                input_chronicle_addresses=?deps,
-            );
-
-            let (tx_output, updated_model) = tx.process(model, state.input()).await.unwrap();
-
-            state.append_output(
-                tx_output
-                    .into_iter()
-                    .map(|output| output.into())
-                    .collect::<BTreeMap<_, _>>()
-                    .into_iter(),
-            );
-            model = updated_model;
-            state_deps.append(
-                &mut deps
-                    .iter()
-                    .filter(|d| !state_deps.contains(d))
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
+            match res {
+                Err(ProcessorError::Contradiction { source }) => {
+                    return Err(SubmissionError::contradiction(&id, source))
+                }
+                //This fake ledger is used for development purposes and testing, so we panic on serious error
+                Err(e) => panic!("{:?}", e),
+                Ok((tx_output, updated_model)) => {
+                    state.update_state(
+                        tx_output
+                            .into_iter()
+                            .map(|output| {
+                                debug!(output_state = %output.data);
+                                (output.address, Some(output.data))
+                            })
+                            .collect::<BTreeMap<_, _>>()
+                            .into_iter(),
+                    );
+                    model = updated_model;
+                }
+            }
         }
 
-        state
+        let mut delta = ProvModel::default();
+        for output in state
             .dirty()
-            .map(|output: StateOutput| {
-                if state_deps.contains(&output.address) {
+            .map(|output: StateOutput<LedgerAddress>| {
+                trace!(dirty = ?output);
+                if deps.contains(&output.address) {
                     Ok(output)
                 } else {
-                    Err(SubmissionError::Processor {
-                        source: ProcessorError::Address {},
-                    })
+                    Err(SubmissionError::processor(&id, ProcessorError::Address {}))
                 }
             })
             .collect::<Result<Vec<_>, SubmissionError>>()
             .into_iter()
-            .flat_map(|v: Vec<StateOutput>| v.into_iter())
-            .for_each(|output| {
-                let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-                debug!(output_address=?output.address);
-                self.kv.borrow_mut().insert(output.address, state);
-            });
+            .flat_map(|v: Vec<StateOutput<LedgerAddress>>| v.into_iter())
+        {
+            let state = json::parse(&output.data).unwrap();
+            delta
+                .apply_json_ld_str(&output.data)
+                .await
+                .map_err(|e| SubmissionError::processor(&id, e))?;
+            self.kv.borrow_mut().insert(output.address, state);
+        }
+
+        debug!(delta = %delta.to_json().compact().await.unwrap().pretty());
+
+        trace!(ledger_state_after = %self);
 
         self.chan
-            .send((Offset::from(&*self.head.to_string()), model, id.clone()))
+            .send(Ok(Commit::new(
+                id.clone(),
+                Offset::from(&*self.head.to_string()),
+                Box::new(delta),
+            )))
             .await
             .ok();
 
@@ -297,6 +408,16 @@ pub struct LedgerAddress {
     // Namespaces do not have a namespace
     namespace: Option<NamespaceId>,
     resource: ChronicleIri,
+}
+
+impl Display for LedgerAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(namespace) = &self.namespace {
+            write!(f, "{}:{}", namespace, self.resource)
+        } else {
+            write!(f, "{}", self.resource)
+        }
+    }
 }
 
 pub trait NameSpacePart {
@@ -348,82 +469,125 @@ impl LedgerAddress {
 
 #[derive(Debug)]
 pub struct StateInput {
-    data: Vec<u8>,
+    data: String,
 }
 
 impl StateInput {
-    pub fn new(data: Vec<u8>) -> Self {
+    pub fn new(data: String) -> Self {
         Self { data }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        self.data.as_bytes()
     }
 }
 
 #[derive(Debug)]
-pub struct StateOutput {
-    pub address: LedgerAddress,
-    pub data: Vec<u8>,
+pub struct StateOutput<T> {
+    pub address: T,
+    pub data: String,
 }
 
-impl StateOutput {
-    pub fn new(address: LedgerAddress, data: Vec<u8>) -> Self {
-        Self { address, data }
+impl<T> StateOutput<T> {
+    pub fn new(address: T, data: impl ToString) -> Self {
+        Self {
+            address,
+            data: data.to_string(),
+        }
+    }
+
+    pub fn address(&self) -> &T {
+        &self.address
+    }
+
+    pub fn data(&self) -> &[u8] {
+        self.data.as_bytes()
     }
 }
 
-impl From<StateOutput> for (LedgerAddress, Vec<u8>) {
-    fn from(output: StateOutput) -> (LedgerAddress, Vec<u8>) {
+impl<T> From<StateOutput<T>> for (T, String) {
+    fn from(output: StateOutput<T>) -> (T, String) {
         (output.address, output.data)
     }
 }
 
-/// Hold a cache of `LedgerWriter::submit` input and output address data
-pub struct OperationState {
-    input: BTreeMap<LedgerAddress, Vec<u8>>,
-    output: BTreeMap<LedgerAddress, Vec<u8>>,
+#[derive(Debug, Clone)]
+pub struct Version {
+    pub(crate) version: u32,
+    pub(crate) value: Option<String>,
 }
 
-impl Default for OperationState {
+impl Version {
+    pub fn write(&mut self, value: Option<String>) {
+        if value != self.value {
+            self.version += 1;
+            self.value = value;
+        }
+    }
+}
+
+/// Hold a cache of `LedgerWriter::submit` input and output address data
+pub struct OperationState<T>
+where
+    T: Ord,
+{
+    state: BTreeMap<T, Version>,
+}
+
+impl<T> Default for OperationState<T>
+where
+    T: Ord,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl OperationState {
+impl<T> OperationState<T>
+where
+    T: Ord,
+{
     pub fn new() -> Self {
         Self {
-            input: BTreeMap::new(),
-            output: BTreeMap::new(),
+            state: BTreeMap::new(),
         }
     }
 
     /// Load input values into `OperationState`
-    pub fn append_input(&mut self, input: impl Iterator<Item = (LedgerAddress, Vec<u8>)>) {
-        let input_values: Vec<(LedgerAddress, Vec<u8>)> = input.collect();
-        self.input.extend(input_values);
+    pub fn update_state(&mut self, input: impl Iterator<Item = (T, Option<String>)>) {
+        for (address, value) in input {
+            self.state
+                .entry(address)
+                .or_insert_with(|| Version {
+                    version: 0,
+                    value: value.clone(),
+                })
+                .write(value);
+        }
     }
 
     /// Return the byte vectors of input data held in `OperationState`
     /// as a vector of `StateInput`s
     pub fn input(&self) -> Vec<StateInput> {
-        self.input.values().cloned().map(StateInput::new).collect()
-    }
-
-    /// Load processed output address and data values into maps in `OperationState`
-    pub fn append_output(&mut self, outputs: impl Iterator<Item = (LedgerAddress, Vec<u8>)>) {
-        let mut output = outputs.collect::<BTreeMap<_, _>>();
-        self.output.append(&mut output);
+        self.state
+            .values()
+            .cloned()
+            .filter_map(|v| v.value.map(StateInput::new))
+            .collect()
     }
 
     /// Check if the data associated with an address has changed in processing
     /// while outputting a stream of dirty `StateOutput`s
-    pub fn dirty(self) -> impl Iterator<Item = StateOutput> {
-        self.output
+    pub fn dirty(self) -> impl Iterator<Item = StateOutput<T>> {
+        self.state
             .into_iter()
-            .filter(|(addr, data)| match (self.input.get(addr), &data) {
-                (Some(input), output) if input != *output => true,
-                (None, _) => true,
-                _ => false,
+            .filter_map(|(addr, data)| {
+                if data.version > 0 {
+                    data.value.map(|value| (StateOutput::new(addr, value)))
+                } else {
+                    None
+                }
             })
-            .map(|(k, v)| StateOutput::new(k, v))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -537,15 +701,6 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, informing_activity.clone()),
                 ]
             }
-            ChronicleOperation::Generated(Generated {
-                namespace,
-                id,
-                entity,
-            }) => vec![
-                LedgerAddress::namespace(namespace),
-                LedgerAddress::in_namespace(namespace, entity.clone()),
-                LedgerAddress::in_namespace(namespace, id.clone()),
-            ],
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,
@@ -563,6 +718,7 @@ impl ChronicleOperation {
                 id,
                 delegate_id,
                 activity_id,
+                responsible_id,
                 ..
             }) => vec![
                 Some(LedgerAddress::namespace(namespace)),
@@ -570,6 +726,10 @@ impl ChronicleOperation {
                     .as_ref()
                     .map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
                 Some(LedgerAddress::in_namespace(namespace, delegate_id.clone())),
+                Some(LedgerAddress::in_namespace(
+                    namespace,
+                    responsible_id.clone(),
+                )),
                 Some(LedgerAddress::in_namespace(namespace, id.clone())),
             ]
             .into_iter()
@@ -617,26 +777,27 @@ impl ChronicleOperation {
 
     /// Take input states and apply them to the prov model, then apply transaction,
     /// then transform to the compact representation and write each resource to the output state,
-    /// also return the aggregate model so we can emit it as an event
-    #[instrument(skip(self, model, input))]
+    #[instrument(level = "debug", skip(self, model, input))]
     pub async fn process(
         &self,
         mut model: ProvModel,
         input: Vec<StateInput>,
-    ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
+    ) -> Result<(Vec<StateOutput<LedgerAddress>>, ProvModel), ProcessorError> {
         for input in input {
-            let graph = json::parse(std::str::from_utf8(&input.data)?)?;
-            debug!(input_model=%graph);
+            let graph = json::parse(&input.data)?;
+            debug!(input_model=%graph.pretty(2));
             let resource = json::object! {
-                "@context":  PROV.clone(),
                 "@graph": [graph],
             };
-            model = model.apply_json_ld(resource).await?;
+            model.apply_json_ld(resource).await?;
         }
 
-        model.apply(self);
+        model.apply(self)?;
         let mut json_ld = model.to_json().compact_stable_order().await?;
-        debug!(result_model=%json_ld);
+
+        json_ld
+            .as_object_mut()
+            .map(|graph| graph.remove("@context"));
 
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
@@ -654,16 +815,11 @@ impl ChronicleOperation {
                                     .and_then(|id| id.as_str())
                                     .ok_or(ProcessorError::NotANode {})?,
                             )?,
-                            data: serde_json::to_string(resource).unwrap().into_bytes(),
+                            data: serde_json::to_string(resource).unwrap(),
                         })
                     })
                     .collect::<Result<Vec<_>, ProcessorError>>()?
             } else {
-                // Remove context and return resource
-                json_ld
-                    .as_object_mut()
-                    .map(|graph| graph.remove("@context"));
-
                 vec![StateOutput {
                     address: LedgerAddress::from_ld(
                         json_ld
@@ -674,7 +830,7 @@ impl ChronicleOperation {
                             .and_then(|id| id.as_str())
                             .ok_or(ProcessorError::NotANode {})?,
                     )?,
-                    data: serde_json::to_string(&json_ld).unwrap().into_bytes(),
+                    data: serde_json::to_string(&json_ld).unwrap(),
                 }]
             },
             model,
@@ -685,19 +841,19 @@ impl ChronicleOperation {
 /// Ensure ledgerwriter only writes dirty values back
 #[cfg(test)]
 pub mod test {
-    use std::{collections::BTreeMap, str::from_utf8};
 
     use crate::{
-        ledger::{InMemLedger, StateInput},
+        ledger::InMemLedger,
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, ProvModel,
-            Role,
+            to_json_ld::ToJson,
+            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
         },
     };
+    use futures::StreamExt;
     use uuid::Uuid;
 
-    use super::{LedgerAddress, OperationState, StateOutput};
+    use super::{LedgerReader, LedgerWriter, Offset};
     fn uuid() -> Uuid {
         let bytes = [
             0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
@@ -754,335 +910,135 @@ pub mod test {
         })
     }
 
-    async fn transact_helper(
-        tx: &ChronicleOperation,
-        state: &mut OperationState,
-        l: &InMemLedger,
-        model: &mut ProvModel,
-    ) {
-        state.append_input(
-            l.kv.borrow()
-                .iter()
-                .map(|(k, v)| (k.to_owned(), v.to_string().as_bytes().to_vec())),
-        );
-        let (tx_output, updated_model) = tx.process(model.clone(), state.input()).await.unwrap();
-        state.append_output(
-            tx_output
-                .into_iter()
-                .map(|o| o.into())
-                .collect::<BTreeMap<_, _>>()
-                .into_iter(),
-        );
-        *model = updated_model;
-    }
-
-    fn amend_ledger_helper(output: StateOutput, l: &mut InMemLedger) {
-        let state = json::parse(from_utf8(&output.data).unwrap()).unwrap();
-
-        l.kv.borrow_mut().insert(output.address, state);
-    }
-
-    /// Create namespace should create one novel output
     #[tokio::test]
-    async fn test_dirty_passes_novel_output() -> Result<(), String> {
-        let mut state = OperationState::new();
-        let mut model = ProvModel::default();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-        let mut l = InMemLedger::new();
+    async fn test_delta_incrementally() {
+        let mut ledger = InMemLedger::new();
+        let reader = ledger.reader();
+        let mut reader = reader.state_updates(Offset::Genesis).await.unwrap();
 
-        let op = create_namespace_helper(None);
-        tx.push(op);
+        ledger.submit(&[]).await.ok();
 
-        let dirty_values = 1;
+        let res = reader.next().await.unwrap().unwrap();
 
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
+        // No transaction, so no delta
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+
+        ledger
+            .submit(&[create_namespace_helper(Some(1))])
+            .await
+            .ok();
+
+        let res = reader.next().await.unwrap().unwrap();
+
+        // Namespace delta
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###"
+        "@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'
+        "@id" = 'chronicle:ns:testns1:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8'
+        "@type" = 'chronicle:Namespace'
+        externalId = 'testns1'
+        "###);
+
+        ledger
+            .submit(&[create_namespace_helper(Some(1))])
+            .await
+            .ok();
+
+        let res = reader.next().await.unwrap().unwrap();
+
+        // No delta
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+
+        ledger.submit(&[agent_exists_helper()]).await.ok();
+
+        let res = reader.next().await.unwrap().unwrap();
+
+        // Agent delta
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###"
+        "@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'
+
+        [["@graph"]]
+        "@id" = 'chronicle:agent:test%5Fagent'
+        "@type" = 'prov:Agent'
+        externalId = 'test_agent'
+        namespace = 'chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8'
+
+        ["@graph".value]
+
+        [["@graph"]]
+        "@id" = 'chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8'
+        "@type" = 'chronicle:Namespace'
+        externalId = 'testns'
+        "###);
+
+        ledger.submit(&[agent_exists_helper()]).await.ok();
+
+        let res = reader.next().await.unwrap().unwrap();
+
+        // No delta
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order()
+          .await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+
+        ledger
+            .submit(&[create_agent_acts_on_behalf_of()])
+            .await
+            .ok();
+
+        let res = reader.next().await.unwrap().unwrap();
+
+        // No delta
+        insta::assert_snapshot!(&*serde_json::to_string_pretty(&res.delta.to_json()
+            .compact_stable_order().await.unwrap()).unwrap(),
+             @r###"
+        {
+          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:test%5Factivity",
+              "@type": "prov:Activity",
+              "externalId": "test_activity",
+              "namespace": "chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:agent:test%5Fagent",
+              "@type": "prov:Agent",
+              "actedOnBehalfOf": [
+                "chronicle:agent:test%5Fdelegate"
+              ],
+              "externalId": "test_agent",
+              "namespace": "chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8",
+              "prov:qualifiedDelegation": {
+                "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity"
+              },
+              "value": {}
+            },
+            {
+              "@id": "chronicle:agent:test%5Fdelegate",
+              "@type": "prov:Agent",
+              "externalId": "test_delegate",
+              "namespace": "chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity",
+              "@type": "prov:Delegation",
+              "actedOnBehalfOf": [
+                "chronicle:agent:test%5Fdelegate"
+              ],
+              "agent": "chronicle:agent:test%5Fagent",
+              "namespace": "chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8",
+              "prov:hadActivity": {
+                "@id": "chronicle:activity:test%5Factivity"
+              },
+              "prov:hadRole": "test_role"
+            },
+            {
+              "@id": "chronicle:ns:testns:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
         }
-        let mut dirty_matches = 0;
-        for output in state.dirty() {
-            dirty_matches += 1;
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-        assert!(dirty_matches == dirty_values);
-        Ok(())
-    }
-
-    /// Repeating an operation should create no novel output
-    #[tokio::test]
-    async fn test_dirty_matches_non_novel_output() -> Result<(), String> {
-        let mut state = OperationState::new();
-        let mut model = ProvModel::default();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-        let mut l = InMemLedger::new();
-
-        // operation - create namespace
-        let op = create_namespace_helper(None);
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-
-        for output in state.dirty() {
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-
-        // reinitialize state
-        let mut state = OperationState::new();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // operation - re-create the same namespace
-        let dirty_values = 0;
-        let op = create_namespace_helper(None);
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-        let mut dirty_matches = 0;
-        for output in state.dirty() {
-            dirty_matches += 1;
-            amend_ledger_helper(output, &mut l);
-        }
-
-        l.head += 1;
-        assert!(dirty_matches == dirty_values);
-
-        // reinitialize state
-        let mut state = OperationState::new();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // operation - agent acts on behalf of
-        let op = create_agent_acts_on_behalf_of();
-        tx.push(op);
-        let dirty_values = 4;
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-        let mut dirty_matches = 0;
-        for output in state.dirty() {
-            dirty_matches += 1;
-            amend_ledger_helper(output, &mut l);
-        }
-        assert!(dirty_matches == dirty_values);
-        l.head += 1;
-
-        // reinitialize state
-        let mut state = OperationState::new();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // repeat operation - agent acts on behalf of
-        let dirty_values = 0;
-        let op = create_agent_acts_on_behalf_of();
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-        let mut dirty_matches = 0;
-        for output in state.dirty() {
-            dirty_matches += 1;
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-        assert!(dirty_matches == dirty_values);
-        Ok(())
-    }
-
-    /// Already existing 'dirty' values should not match
-    #[tokio::test]
-    async fn test_dirty_passes_dirty_output() -> Result<(), String> {
-        let mut state = OperationState::new();
-        let mut model = ProvModel::default();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-        let mut l = InMemLedger::new();
-
-        // operation - create namespace
-        let op = create_namespace_helper(None);
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-
-        for output in state.dirty() {
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-
-        // reinitialize state
-        let mut state = OperationState::new();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // operation - create agent
-        let op = agent_exists_helper();
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-
-        for output in state.dirty() {
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-
-        // reinitialize state
-        let mut state = OperationState::new();
-        let mut tx: Vec<ChronicleOperation> = vec![];
-
-        // operation - agent acts on behalf of
-        // involves a delegation and an activity, writing to
-        // a namespace and agent that already exist as inputs,
-        // which are amended by the transaction
-        let op = create_agent_acts_on_behalf_of();
-        let dirty_values = 4;
-
-        tx.push(op);
-
-        for tx in tx {
-            transact_helper(&tx, &mut state, &l, &mut model).await;
-        }
-
-        let mut dirty_matches = 0;
-
-        for output in state.dirty() {
-            dirty_matches += 1;
-            amend_ledger_helper(output, &mut l);
-        }
-        l.head += 1;
-        assert!(dirty_matches == dirty_values);
-        Ok(())
-    }
-
-    fn init_n_unique_ledgeraddresses(n: i32) -> BTreeMap<LedgerAddress, Vec<u8>> {
-        let addresses = {
-            (0..n)
-                .into_iter()
-                .map(|i| LedgerAddress::namespace(&create_namespace_id_helper(Some(i))))
-                .collect::<Vec<_>>()
-        };
-        let data: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![4], vec![5]];
-
-        addresses
-            .into_iter()
-            .zip(data.into_iter())
-            .collect::<BTreeMap<_, _>>()
-    }
-
-    #[test]
-    fn test_operationstate_append_output_passes_dirty_values_and_dirty_only_outputs_dirty_values() {
-        let mut state = OperationState::new();
-
-        assert!(state.input.is_empty());
-        assert!(state.output.is_empty());
-
-        let input = init_n_unique_ledgeraddresses(5);
-
-        state.append_input(input.clone().into_iter().take(3));
-
-        let state_data = state.input.clone();
-
-        assert!(state_data.len() == 3);
-
-        state.append_output(input.clone().into_iter());
-
-        assert!(state.output.len() == 5);
-
-        let dirty_output = state.dirty().collect::<Vec<_>>();
-        assert!(dirty_output.len() == 2);
-
-        let dirty_output = dirty_output
-            .into_iter()
-            .map(|output| output.into())
-            .collect::<BTreeMap<LedgerAddress, Vec<u8>>>();
-        let dirty_input = input
-            .into_iter()
-            .skip(3)
-            .collect::<BTreeMap<LedgerAddress, Vec<u8>>>();
-
-        dirty_output
-            .into_iter()
-            .zip(dirty_input.into_iter())
-            .for_each(|(left, right)| {
-                assert_eq!(left.0, right.0);
-                assert_eq!(left.1, right.1);
-            });
-    }
-
-    #[test]
-    fn test_operationstate_input() {
-        let mut state = OperationState::new();
-
-        let input = init_n_unique_ledgeraddresses(5);
-
-        state.append_input(input.clone().into_iter());
-
-        let state_data = state.input();
-        let input_as_stateinput = input.values().cloned().map(StateInput::new);
-
-        state_data
-            .into_iter()
-            .zip(input_as_stateinput.into_iter())
-            .for_each(|(left, right)| {
-                assert_eq!(left.data, right.data);
-            });
-    }
-
-    #[test]
-    fn test_append_output() {
-        let mut state = OperationState::new();
-
-        let input = init_n_unique_ledgeraddresses(5);
-
-        state.append_input(input.clone().into_iter());
-
-        assert!(state.input == input);
-    }
-
-    #[test]
-    fn test_operationstate_append_input_and_input() {
-        let mut state = OperationState::new();
-
-        let addresses = {
-            (0..5)
-                .into_iter()
-                .map(|i| LedgerAddress::namespace(&create_namespace_id_helper(Some(i))))
-                .collect::<Vec<_>>()
-        };
-        let data: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![4], vec![5]];
-
-        let input = addresses
-            .into_iter()
-            .zip(data.clone().into_iter())
-            .collect::<BTreeMap<_, _>>();
-
-        state.append_input(input.clone().into_iter());
-
-        // check if the input is as expected by comparing with cloned values
-        assert_eq!(state.input, input);
-        // check `OperationState::input` outputs data consistent with original input data
-        assert_eq!(
-            state
-                .input()
-                .into_iter()
-                .map(|input| input.data)
-                .collect::<Vec<Vec<u8>>>(),
-            data
-        );
-    }
-
-    #[test]
-    fn test_from_stateoutput_for_ledger_data_tuple() {
-        let id = create_namespace_id_helper(None);
-        let addr = LedgerAddress::namespace(&id);
-        let data: Vec<u8> = vec![1];
-        let output = StateOutput::new(addr.clone(), data.clone());
-        let (addr_from_output, data_from_output) = output.into();
-        assert_eq!(addr_from_output, addr);
-        assert_eq!(data_from_output, data);
+        "###);
     }
 }
