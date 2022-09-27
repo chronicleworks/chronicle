@@ -1,7 +1,39 @@
 # CHANGELOG
 
+## v0.2.1
+
+* fix: Create a root key if none exists [view commit](https://github.com/catenasys/chronicle/commit/15057420819e360eb1bdff6ebfc1bb4104e49d20)
+* feat: Keystore init subcommand for operational purposes [view commit](https://github.com/catenasys/chronicle/commit/3309df7b27e97706581b6babaec46aed5ddbe467)
+* docs: correct links and headings [view commit](https://github.com/catenasys/chronicle/commit/17da1d17b290b79fe05971818fd35669f07f4e2a)
+* docs: cut down on redundant headings, correct unicode char [view commit](https://github.com/catenasys/chronicle/commit/5788ae88beab027f15c43af25989140b28e581e3)
+* docs: update theme [view commit](https://github.com/catenasys/chronicle/commit/5275df348feb10ae367324e1989f94f3454efe27)
+* fix: json option for tp [view commit](https://github.com/catenasys/chronicle/commit/d8d3de8d04068bff58e4ca5997aebfb501848b0a)
+* test(chronicle-domain-test): test wasinformedby support [view commit](https://github.com/catenasys/chronicle/commit/aaba65949b8c06e7885f6db10225f678b971abaa)
+* feat(chronicle): add new fn on activity for wasinformedby in codegen [view commit](https://github.com/catenasys/chronicle/commit/499ff9bd75b89bd7ce24ab228b8b4c0e7865b0df)
+* feat(api): extend wasinformedby support in chronicle_graphql [view commit](https://github.com/catenasys/chronicle/commit/803713333b54672896a03d92043c5c758e730db6)
+* feat(api): extend wasinformedby support in persistence [view commit](https://github.com/catenasys/chronicle/commit/8a9ca78236d2c259ffaed6fc0ea580bd799b6539)
+* feat(common): add model and operations support for wasinformedby [view commit](https://github.com/catenasys/chronicle/commit/796fee4ebe42aca1f6a4dc1ff5433c99ecb83c64)
+* fix: Name collision avoidance [view commit](https://github.com/catenasys/chronicle/commit/681b17e131a804676f048cc2db5d02fb5fc8a6fc)
+* test(chronicle-domain-test): update test snapshot [view commit](https://github.com/catenasys/chronicle/commit/5e4658763ac062d6d5ade9c4e3ca6698ba10127c)
+* fix(chronicle): correct `activity_id` type in `codegen::gen_activity_definition` [view commit](https://github.com/catenasys/chronicle/commit/20edd9377e9f33f3f140f6dcea3599a643e6d74d)
+* fix: Rather stupid lack of escaping on publish [view commit](https://github.com/catenasys/chronicle/commit/cb2b9ac6a8504439ed76c3628c7959140177f412)
+* fix(chronicle): fix spelling of usage [view commit](https://github.com/catenasys/chronicle/commit/c045b1d7593299be17e7a8b5da9a23e68cdea12a)
+* docs(mkdocs): lowercase site_name [view commit](https://github.com/catenasys/chronicle/commit/338be888b965101cccdc53b4797dd42700364c37)
+* docs(docs): rewrap some paragraphs to placate linter [view commit](https://github.com/catenasys/chronicle/commit/eaa820b912d6a2c0c82fa6371f5bbeb05dfad1a5)
+* docs(docs): very minor changes to docs [view commit](https://github.com/catenasys/chronicle/commit/8023c4846d4e6c4f4ffa5511d3e0271e26122558)
+* fix(mkdocs): update plantuml config to use https for server url and check certificates [view commit](https://github.com/catenasys/chronicle/commit/45c643b04d53dfdf5b23172987777cf847be43e6)
+* docs(mkdocs): update nav with consistent naming and overview [view commit](https://github.com/catenasys/chronicle/commit/b1d03876d3aaf3aa65ad24d7a37eef0e0dab775f)
+* fix: Lints and exclusion. Broken links [view commit](https://github.com/catenasys/chronicle/commit/68d2b33aafaaff089f89c71935c750c56e101d18)
+* fix: Multiple markdown lint issues [view commit](https://github.com/catenasys/chronicle/commit/b89f388058e85b0f47de2dab8af7bfc3eead7c81)
+* fix: Move docs up a level [view commit](https://github.com/catenasys/chronicle/commit/3c826e9842a1c657ba36a9652cadd6f023ff9df0)
+* fix: Line dups, various lints [view commit](https://github.com/catenasys/chronicle/commit/20888a59538b31ccc4620279c7d53620fc77506b)
+* fix: Restore lints, remove renamed requirements.txt [view commit](https://github.com/catenasys/chronicle/commit/92453b9a915e8ab8253b25ccc8cb4264e548fec7)
+* fix: Lint excludes [view commit](https://github.com/catenasys/chronicle/commit/c6573487903719d811a08ec9225b7555be0ac8ca)
+* feat: Aggregate documentation commit [view commit](https://github.com/catenasys/chronicle/commit/6b43f949e7c1916cb284d50dc8d7744e96d026b6)
+
 ## v0.2.0
 
+* docs: update CHANGELOG [view commit](https://github.com/catenasys/chronicle/commit/a6b504a5b5c3569ef1dc688d7b43928d5eb53759)
 * feat(common): use compact json form in `create_operation_submission_request` [view commit](https://github.com/catenasys/chronicle/commit/6214f2110ef176334d94ac67c389ca6f53978438)
 * feat(sawtooth-protocol): make `async` `MessageBuilder::make_sawtooth_transaction` and `SawtoothSubmitter::submit` [view commit](https://github.com/catenasys/chronicle/commit/085aecddeae4841acd0a69f7687a943470883004)
 * fix(common): correct use of term mock, i.e. don't use it in this case [view commit](https://github.com/catenasys/chronicle/commit/7f582026b2bf5e28ec866e745464e08806d80edd)
@@ -261,3 +293,4 @@
 * feat: Abstract API, LD serialisation for derivation [view commit](https://github.com/catenasys/chronicle/commit/6f7a3473bc9fd0aa8da8aab6cb88534606ae7cda)
 * feat: Rework model + persistence to something closer to PROV-DM [view commit](https://github.com/catenasys/chronicle/commit/d018617f0301f27be2854c9a407a8515f1d12be3)
 * feat: Move schema towards PROV-DM, predicting further relations [view commit](https://github.com/catenasys/chronicle/commit/c8949232481475b6843d1d21d3fc68568cdae51d)
+
