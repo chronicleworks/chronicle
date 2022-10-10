@@ -1,4 +1,10 @@
 FROM rust:latest as chef
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG BUILD_ARGS
+
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,6 +15,10 @@ RUN apt-get update && \
   apt-get install -y \
   build-essential \
   cmake \
+  g++-x86-64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  gcc-x86-64-linux-gnu \
+  gcc-aarch64-linux-gnu \
   libzmq3-dev \
   libssl-dev \
   protobuf-compiler \
