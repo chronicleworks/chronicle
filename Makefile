@@ -43,10 +43,10 @@ define multi-arch-docker =
 
 .PHONY: ensure-context-$(1)
 $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
-	docker buildx create --name $(ISOLATION_ID) \
+	docker buildx create --name ctx-$(ISOLATION_ID) \
 		--driver docker-container \
 		--bootstrap || true
-	docker buildx use $(ISOLATION_ID)
+	docker buildx use ctx-$(ISOLATION_ID)
 
 $(1)-$(2)-build: $(1)-$(2)-ensure-context
 	docker buildx build -f ./docker/$(1).dockerfile -t $(1)-$(2):$(ISOLATION_ID) . \
