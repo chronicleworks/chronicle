@@ -1,4 +1,4 @@
-FROM rust:latest as chef
+FROM --platform=$TARGETPLATFORM rust:latest as chef
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
@@ -25,7 +25,16 @@ RUN apt-get update && \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN cargo install cargo-chef
 
-FROM chef AS chronicle-builder
+FROM chef as planner
 COPY . .
-RUN cargo build --release
+RUN cargo chef prepare  --recipe-path recipe.json
+
+FROM chef AS builder
+
+COPY --from=planner /app/recipe.json recipe.json
+RUN export CARGO_BUILD_JOBS=$(( $( cat /proc/cpuinfo |grep processor | wc -l) / 2 +1 )); \
+  cargo chef cook --release --recipe-path recipe.json
+
+COPY . .

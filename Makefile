@@ -5,7 +5,7 @@ export OPENSSL_STATIC=1
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-IMAGES := chronicle chronicle-tp
+IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
 
 CLEAN_DIRS := $(CLEAN_DIRS)
@@ -34,10 +34,15 @@ run:
 stop:
 	docker-compose -f docker/chronicle.yaml down || true
 
+$(MARKERS)/binfmt:
+	mkdir -p $(MARKERS)
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+	touch $@
+
 define multi-arch-docker =
 
 .PHONY: ensure-context-$(1)
-$(1)-$(2)-ensure-context:
+$(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 	docker buildx create --name $(ISOLATION_ID) \
 		--driver docker-container \
 		--bootstrap || true
@@ -48,12 +53,20 @@ $(1)-$(2)-build: $(1)-$(2)-ensure-context
 		--platform linux/$(2) \
 		--load
 
+$(1)-$(2)-build-native: $(1)-$(2)-ensure-context
+	if [ "$(2)" = "amd64" ]; then \
+		docker buildx build -f ./docker/$(1).dockerfile -t $(1):$(ISOLATION_ID) . \
+			--platform linux/$(2) \
+			--load ; \
+	fi
+
 $(1)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
-build: $(1)-$(2)-build
+$(1): $(1)-$(2)-build $(1)-$(2)-build-native
 
+build: $(1)
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
