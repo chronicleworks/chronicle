@@ -46,10 +46,8 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     exit 1; \
   fi \
   && cargo clean \
-  && if [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
-    cargo test --target "${TARGET}"; \
-  fi \
   && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
+    --bin chronicle_sawtooth_tp \
   && mv -f "target/${TARGET}" "target/${TARGETARCH}"
 
 FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle

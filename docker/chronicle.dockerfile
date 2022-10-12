@@ -50,6 +50,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     cargo test --target "${TARGET}"; \
   fi \
   && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
+    --bin chronicle \
   && mv -f "target/${TARGET}" "target/${TARGETARCH}"
 
 FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle
