@@ -1,4 +1,9 @@
-FROM rust:latest as builder
+FROM --platform=$BUILDPLATFORM rust:latest as builder
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG BUILD_ARGS
 
 WORKDIR /app
 
@@ -10,24 +15,45 @@ RUN apt-get update && \
   apt-get install -y \
   build-essential \
   cmake \
+  g++-x86-64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  gcc-x86-64-linux-gnu \
+  gcc-aarch64-linux-gnu \
   libzmq3-dev \
   libssl-dev \
   protobuf-compiler \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    TARGET=x86_64-unknown-linux-gnu; \
+  elif [ "$TARGETARCH" = "arm64" ]; then \
+    TARGET=aarch64-unknown-linux-gnu; \
+  else \
+    echo "Unsupported architecture: $TARGETARCH"; \
+    exit 1; \
+  fi \
+  && rustup target add "${TARGET}"
 
 FROM builder AS test
 COPY . .
-RUN cargo test --release
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    TARGET=x86_64-unknown-linux-gnu; \
+  elif [ "$TARGETARCH" = "arm64" ]; then \
+    TARGET=aarch64-unknown-linux-gnu; \
+  else \
+    echo "Unsupported architecture: $TARGETARCH"; \
+    exit 1; \
+  fi \
+  && cargo clean \
+  && if [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    cargo test --target "${TARGET}"; \
+  fi \
+  && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
+    --bin chronicle \
+  && mv -f "target/${TARGET}" "target/${TARGETARCH}"
 
-FROM builder AS base
-# Build tp
-COPY . .
-
-ARG BUILD_ARGS
-RUN cargo build --release ${BUILD_ARGS}
-
-FROM ubuntu:focal AS chronicle
+FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle
+ARG TARGETARCH
 WORKDIR /
-COPY --from=base /app/target/release/chronicle /usr/local/bin
+COPY --from=test /app/target/${TARGETARCH}/release/chronicle /usr/local/bin

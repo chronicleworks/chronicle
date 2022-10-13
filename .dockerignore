@@ -1,6 +1,6 @@
 .github
 build
-docker/cache
+docker
 markers
 target
 .dockerignore

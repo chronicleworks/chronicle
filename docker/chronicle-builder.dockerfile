@@ -1,4 +1,10 @@
-FROM rust:latest as chef
+FROM --platform=$TARGETPLATFORM rust:latest as chef
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG BUILD_ARGS
+
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -15,7 +21,6 @@ RUN apt-get update && \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
-
-FROM chef AS chronicle-builder
 COPY . .
-RUN cargo build --release
+
+RUN cargo fetch --locked
