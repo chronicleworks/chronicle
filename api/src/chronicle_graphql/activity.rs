@@ -79,6 +79,22 @@ pub async fn was_informed_by<'a>(
     Ok(res)
 }
 
+pub async fn generated<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
+    use crate::persistence::schema::generated::{self, dsl};
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+
+    let res = generated::table
+        .filter(dsl::generated_activity_id.eq(id))
+        .inner_join(crate::persistence::schema::entity::table)
+        .select(Entity::as_select())
+        .load::<Entity>(&mut connection)?;
+
+    Ok(res)
+}
+
 pub async fn load_attribute<'a>(
     id: i32,
     external_id: &str,

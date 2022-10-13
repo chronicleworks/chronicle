@@ -224,6 +224,11 @@ pub enum EntityCommand {
         activity: Option<ActivityId>,
         used_entity: EntityId,
     },
+    Generated {
+        id: ActivityId,
+        namespace: ExternalId,
+        entity: Option<EntityId>,
+    },
 }
 
 impl EntityCommand {
@@ -268,6 +273,14 @@ impl EntityCommand {
             derivation,
             activity,
             used_entity,
+        }
+    }
+
+    pub fn generated(id: ActivityId, namespace: impl AsRef<str>, entity: Option<EntityId>) -> Self {
+        Self::Generated {
+            id,
+            namespace: namespace.as_ref().into(),
+            entity,
         }
     }
 }

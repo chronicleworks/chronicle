@@ -106,6 +106,15 @@ create table generation (
     primary key(activity_id,generated_entity_id)
 );
 
+create table generated (
+    entity_id integer not null,
+    generated_activity_id integer not null,
+    typ text,
+    foreign key(entity_id) references activity(id),
+    foreign key(generated_activity_id) references entity(id),
+    primary key(entity_id,generated_activity_id)
+);
+
 create table association (
     agent_id integer not null,
     activity_id integer not null,

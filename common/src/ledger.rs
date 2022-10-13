@@ -10,7 +10,7 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence,
+            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence, Generated,
             RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy,
             WasInformedBy,
         },
@@ -537,6 +537,15 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, informing_activity.clone()),
                 ]
             }
+            ChronicleOperation::Generated(Generated {
+                namespace,
+                id,
+                entity,
+            }) => vec![
+                LedgerAddress::namespace(namespace),
+                LedgerAddress::in_namespace(namespace, entity.clone()),
+                LedgerAddress::in_namespace(namespace, id.clone()),
+            ],
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
                 id,

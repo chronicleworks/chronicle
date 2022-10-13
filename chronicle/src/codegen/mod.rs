@@ -276,6 +276,18 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                 .collect())
         }
 
+        async fn generated<'a>(
+            &self,
+            ctx: &#context<'a>,
+        ) -> #async_result<Vec<#(entity_union_type_name())>> {
+            Ok(#activity_impl::generated(self.0.id, ctx)
+                .await
+                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                .into_iter()
+                .map(map_entity_to_domain_type)
+                .collect())
+        }
+
         #(for attribute in &activity.attributes =>
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
@@ -1100,6 +1112,16 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_generated_by(ctx, activity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+        }
+
+        pub async fn generated<'a>(
+            &self,
+            ctx: &#graphql_context<'a>,
+            entity: #entity_id,
+            id: #activity_id,
+            namespace: Option<String>,
+        ) -> async_graphql::#graphql_result<#submission> {
+            #impls::generated(ctx, entity, id, namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         pub async fn has_attachment<'a>(

@@ -9,7 +9,7 @@ use crate::{
     prov::{
         operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
         Delegation, DelegationId, Derivation, DomaintypeId, EntityId, ExternalId, ExternalIdPart,
-        Generation, IdentityId, NamespaceId, ProvModel, Role, Usage, UuidPart,
+        GeneratedEntity, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage, UuidPart,
     },
 };
 
@@ -580,6 +580,30 @@ proptest! {
                             time: None });
 
                     prop_assert!(has_generation);
+                }
+                ChronicleOperation::Generated(Generated{namespace, id, entity}) => {
+                    let entity_id = entity;
+                    let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
+                    prop_assert!(activity.is_some());
+                    let activity = activity.unwrap();
+                    prop_assert_eq!(&activity.external_id, id.external_id_part());
+                    prop_assert_eq!(&activity.namespaceid, namespace);
+
+                    let entity = &prov.entities.get(&(namespace.to_owned(),entity.to_owned()));
+                    prop_assert!(entity.is_some());
+                    let entity = entity.unwrap();
+                    prop_assert_eq!(&entity.external_id, entity_id.external_id_part());
+                    prop_assert_eq!(&entity.namespaceid, namespace);
+
+                    let has_generated = prov.generated.get(
+                        &(namespace.clone(),id.clone()))
+                        .unwrap()
+                        .contains(& GeneratedEntity {
+                            entity_id: entity_id.clone(),
+                            generated_id: id.clone(),
+                            time: None });
+
+                    prop_assert!(has_generated);
                 }
                 ChronicleOperation::WasInformedBy(WasInformedBy{namespace, activity, informing_activity}) => {
                     let informed_activity = &prov.activities.get(&(namespace.to_owned(), activity.to_owned()));

@@ -817,6 +817,7 @@ pub mod test {
         generation: {}
         usage: {}
         was_informed_by: {}
+        generated: {}
         "###);
     }
 

@@ -127,6 +127,17 @@ diesel::table! {
     use diesel::sql_types::*;
     use common::prov::*;
 
+    generated (entity_id, generated_activity_id) {
+        entity_id -> Integer,
+        generated_activity_id -> Integer,
+        typ -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     generation (activity_id, generated_entity_id) {
         activity_id -> Integer,
         generated_entity_id -> Integer,
@@ -221,6 +232,8 @@ diesel::joinable!(derivation -> activity (activity_id));
 diesel::joinable!(entity -> attachment (attachment_id));
 diesel::joinable!(entity -> namespace (namespace_id));
 diesel::joinable!(entity_attribute -> entity (entity_id));
+diesel::joinable!(generated -> activity (entity_id));
+diesel::joinable!(generated -> entity (generated_activity_id));
 diesel::joinable!(generation -> activity (activity_id));
 diesel::joinable!(generation -> entity (generated_entity_id));
 diesel::joinable!(hadattachment -> attachment (attachment_id));
@@ -242,6 +255,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     derivation,
     entity,
     entity_attribute,
+    generated,
     generation,
     hadattachment,
     hadidentity,

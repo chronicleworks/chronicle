@@ -352,6 +352,27 @@ pub async fn was_generated_by<'a>(
     transaction_context(res, ctx).await
 }
 
+pub async fn generated<'a>(
+    ctx: &Context<'a>,
+    entity: EntityId,
+    activity: ActivityId,
+    namespace: Option<String>,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
+
+    let res = api
+        .dispatch(ApiCommand::Entity(EntityCommand::Generated {
+            id: activity,
+            namespace,
+            entity: Some(entity),
+        }))
+        .await?;
+
+    transaction_context(res, ctx).await
+}
+
 pub async fn has_attachment<'a>(
     ctx: &Context<'a>,
     entity: EntityId,

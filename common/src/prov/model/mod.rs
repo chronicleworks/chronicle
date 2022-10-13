@@ -20,7 +20,7 @@ use super::{
     operations::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
+        EntityHasEvidence, Generated, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
         WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
@@ -355,6 +355,13 @@ pub struct Generation {
     pub time: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct GeneratedEntity {
+    pub entity_id: EntityId,
+    pub generated_id: ActivityId,
+    pub time: Option<DateTime<Utc>>,
+}
+
 type NamespacedId<T> = (NamespaceId, T);
 type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
@@ -380,6 +387,7 @@ pub struct ProvModel {
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
     pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
     pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
+    pub generated: HashMap<NamespacedActivity, HashSet<GeneratedEntity>>,
 }
 
 impl ProvModel {
@@ -570,6 +578,22 @@ impl ProvModel {
             .or_insert_with(HashSet::new)
             .insert(Generation {
                 activity_id: activity_id.clone(),
+                generated_id: generated_id.clone(),
+                time: None,
+            });
+    }
+
+    pub fn generated(
+        &mut self,
+        namespace: NamespaceId,
+        generated_id: &ActivityId,
+        entity_id: &EntityId,
+    ) {
+        self.generated
+            .entry((namespace, generated_id.clone()))
+            .or_insert_with(HashSet::new)
+            .insert(GeneratedEntity {
+                entity_id: entity_id.clone(),
                 generated_id: generated_id.clone(),
                 time: None,
             });
@@ -1029,6 +1053,27 @@ impl ProvModel {
                     .or_insert_with(|| {
                         Agent::exists(namespace, id.clone()).has_attributes(attributes)
                     });
+            }
+            ChronicleOperation::Generated(Generated {
+                namespace,
+                id,
+                entity,
+            }) => {
+                self.namespace_context(&namespace);
+                if !self
+                    .entities
+                    .contains_key(&(namespace.clone(), entity.clone()))
+                {
+                    self.add_entity(Entity::exists(namespace.clone(), entity.clone()));
+                }
+                if !self
+                    .activities
+                    .contains_key(&(namespace.clone(), id.clone()))
+                {
+                    self.add_activity(Activity::exists(namespace.clone(), id.clone()));
+                }
+
+                self.generated(namespace, &id, &entity)
             }
         };
     }
