@@ -4,7 +4,7 @@ use async_graphql::{
 };
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, NamePart};
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 use diesel::{debug_query, prelude::*, sqlite::Sqlite};
 use tracing::{debug, instrument};
 
@@ -78,7 +78,7 @@ pub async fn activity_timeline<'a>(
                 .or(agent::id.eq(delegation::responsible_id))),
         )
         .inner_join(nsdsl::namespace.on(activity::namespace_id.eq(nsdsl::id)))
-        .filter(nsdsl::name.eq(&**ns))
+        .filter(nsdsl::external_id.eq(&**ns))
         .filter(activity::started.ge(from.map(|x| x.naive_utc())))
         .filter(activity::ended.le(to.map(|x| x.naive_utc())))
         .select(Activity::as_select())
@@ -86,10 +86,10 @@ pub async fn activity_timeline<'a>(
 
     if !for_entity.is_empty() {
         sql_query = sql_query.filter(
-            entity::name.eq_any(
+            entity::external_id.eq_any(
                 for_entity
                     .iter()
-                    .map(|x| x.name_part().clone())
+                    .map(|x| x.external_id_part().clone())
                     .collect::<Vec<_>>(),
             ),
         )
@@ -97,10 +97,10 @@ pub async fn activity_timeline<'a>(
 
     if !for_agent.is_empty() {
         sql_query = sql_query.filter(
-            agent::name.eq_any(
+            agent::external_id.eq_any(
                 for_agent
                     .iter()
-                    .map(|x| x.name_part().clone())
+                    .map(|x| x.external_id_part().clone())
                     .collect::<Vec<_>>(),
             ),
         )
@@ -111,7 +111,7 @@ pub async fn activity_timeline<'a>(
             activity::domaintype.eq_any(
                 activity_types
                     .iter()
-                    .map(|x| x.name_part().clone())
+                    .map(|x| x.external_id_part().clone())
                     .collect::<Vec<_>>(),
             ),
         );
@@ -169,12 +169,12 @@ pub async fn agents_by_type<'a>(
     let sql_query = agent::table
         .inner_join(nsdsl::namespace)
         .filter(
-            nsdsl::name
+            nsdsl::external_id
                 .eq(&**ns)
-                .and(agent::domaintype.eq(typ.as_ref().map(|x| x.name_part().to_owned()))),
+                .and(agent::domaintype.eq(typ.as_ref().map(|x| x.external_id_part().to_owned()))),
         )
         .select(Agent::as_select())
-        .order_by(agent::name.asc());
+        .order_by(agent::external_id.asc());
 
     query(
         after,
@@ -216,7 +216,11 @@ pub async fn agent_by_id<'a>(
 
     Ok(agent::table
         .inner_join(nsdsl::namespace)
-        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
+        .filter(
+            dsl::external_id
+                .eq(id.external_id_part())
+                .and(nsdsl::external_id.eq(&ns)),
+        )
         .select(Agent::as_select())
         .first::<Agent>(&mut connection)
         .optional()?)
@@ -239,7 +243,11 @@ pub async fn activity_by_id<'a>(
 
     Ok(activity::table
         .inner_join(nsdsl::namespace)
-        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
+        .filter(
+            dsl::external_id
+                .eq(id.external_id_part())
+                .and(nsdsl::external_id.eq(&ns)),
+        )
         .select(Activity::as_select())
         .first::<Activity>(&mut connection)
         .optional()?)
@@ -261,7 +269,11 @@ pub async fn entity_by_id<'a>(
 
     Ok(entity::table
         .inner_join(nsdsl::namespace)
-        .filter(dsl::name.eq(id.name_part()).and(nsdsl::name.eq(&ns)))
+        .filter(
+            dsl::external_id
+                .eq(id.external_id_part())
+                .and(nsdsl::external_id.eq(&ns)),
+        )
         .select(Entity::as_select())
         .first::<Entity>(&mut connection)
         .optional()?)

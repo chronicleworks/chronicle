@@ -41,7 +41,7 @@ message TpRegisterRequest {
         RAW = 2;
     }
 
-    // A settled upon name for the capabilities of the transaction processor.
+    // A settled upon external_id for the capabilities of the transaction processor.
     // For example: intkey, xo
     string family = 1;
 

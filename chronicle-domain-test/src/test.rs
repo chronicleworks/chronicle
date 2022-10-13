@@ -162,7 +162,7 @@ mod test {
                 agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
                     ... on ProvAgent {
                         id
-                        name
+                        externalId
                         actedOnBehalfOf {
                             agent {
                                 ... on ProvAgent {
@@ -181,7 +181,7 @@ mod test {
         {
           "agentById": {
             "id": "http://blockchaintp.com/chronicle/ns#agent:responsible",
-            "name": "responsible",
+            "externalId": "responsible",
             "actedOnBehalfOf": [
               {
                 "agent": {
@@ -225,7 +225,7 @@ mod test {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
                     ... on ProvEntity {
                         id
-                        name
+                        externalId
                         wasDerivedFrom {
                             ... on ProvEntity {
                                 id
@@ -240,7 +240,7 @@ mod test {
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
         id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        name = 'generated'
+        externalId = 'generated'
 
         [[data.entityById.wasDerivedFrom]]
         id = 'http://blockchaintp.com/chronicle/ns#entity:used'
@@ -278,7 +278,7 @@ mod test {
 
                     ... on ProvEntity {
                         id
-                        name
+                        externalId
                         wasDerivedFrom {
                             ... on ProvEntity {
                                 id
@@ -298,7 +298,7 @@ mod test {
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
         id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        name = 'generated'
+        externalId = 'generated'
 
         [[data.entityById.wasDerivedFrom]]
         id = 'http://blockchaintp.com/chronicle/ns#entity:used'
@@ -338,7 +338,7 @@ mod test {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
                     ... on ProvEntity {
                         id
-                        name
+                        externalId
                         wasDerivedFrom {
                             ... on ProvEntity {
                                 id
@@ -358,7 +358,7 @@ mod test {
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
         id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        name = 'generated'
+        externalId = 'generated'
 
         [[data.entityById.wasDerivedFrom]]
         id = 'http://blockchaintp.com/chronicle/ns#entity:used'
@@ -398,7 +398,7 @@ mod test {
                 entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
                     ... on ProvEntity {
                         id
-                        name
+                        externalId
                         wasDerivedFrom {
                             ... on ProvEntity {
                                 id
@@ -418,7 +418,7 @@ mod test {
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
         id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        name = 'generated'
+        externalId = 'generated'
 
         [[data.entityById.wasDerivedFrom]]
         id = 'http://blockchaintp.com/chronicle/ns#entity:used'
@@ -436,7 +436,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                agent(name:"bobross", attributes: { type: "artist" }) {
+                agent(externalId:"bobross", attributes: { type: "artist" }) {
                     context
                 }
             }
@@ -459,7 +459,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation one {
-                      gardening(name:"composting", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      gardening(externalId:"composting", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                             context
                         }
                     }
@@ -478,7 +478,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation two {
-                      gardening(name:"lawnmowing", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      gardening(externalId:"lawnmowing", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                             context
                         }
                     }
@@ -520,11 +520,11 @@ mod test {
                 activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
                     ... on Gardening {
                         id
-                        name
+                        externalId
                         wasInformedBy {
                             ... on Gardening {
                                 id
-                                name
+                                externalId
                             }
                         }
                     }
@@ -536,11 +536,11 @@ mod test {
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
         id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        name = 'composting'
+        externalId = 'composting'
 
         [[data.activityById.wasInformedBy]]
         id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        name = 'lawnmowing'
+        externalId = 'lawnmowing'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -549,7 +549,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation three {
-                      gardening(name:"mowermaintenance", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
+                      gardening(externalId:"mowermaintenance", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
                             context
                         }
                     }
@@ -591,11 +591,11 @@ mod test {
                 activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
                     ... on Gardening {
                         id
-                        name
+                        externalId
                         wasInformedBy {
                             ... on Gardening {
                                 id
-                                name
+                                externalId
                             }
                         }
                     }
@@ -607,15 +607,15 @@ mod test {
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
         id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        name = 'composting'
+        externalId = 'composting'
 
         [[data.activityById.wasInformedBy]]
         id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        name = 'lawnmowing'
+        externalId = 'lawnmowing'
 
         [[data.activityById.wasInformedBy]]
         id = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
-        name = 'mowermaintenance'
+        externalId = 'mowermaintenance'
         "###);
     }
 
@@ -627,7 +627,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(name:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                friend(externalId:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                     context
                 }
             }
@@ -643,7 +643,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(name:"john", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                friend(externalId:"john", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                     context
                 }
             }
@@ -659,7 +659,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                theSea(name:"coral", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                theSea(externalId:"coral", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                     context
                 }
             }
@@ -675,7 +675,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                theSea(name:"fish", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                theSea(externalId:"fish", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
                     context
                 }
             }
@@ -702,7 +702,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        gardening(name:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        gardening(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
                             context
                         }}
                     }}
@@ -719,7 +719,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        swimAbout(name:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        swimAbout(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
                             context
                         }}
                     }}
@@ -808,7 +808,7 @@ mod test {
                             __typename
                             ... on Gardening {
                                 id
-                                name
+                                externalId
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
@@ -819,7 +819,7 @@ mod test {
                                             agent {
                                                 ... on Friend {
                                                     id
-                                                    name
+                                                    externalId
                                                 }
                                             }
                                             role
@@ -828,7 +828,7 @@ mod test {
                                 used {
                                     ... on TheSea {
                                         id
-                                        name
+                                        externalId
                                     }
                                 }
                             }
@@ -862,7 +862,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "name": "gardening2",
+                    "externalId": "gardening2",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -873,7 +873,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -882,7 +882,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -898,7 +898,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "name": "gardening4",
+                    "externalId": "gardening4",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -909,7 +909,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -918,7 +918,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -934,7 +934,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "name": "gardening6",
+                    "externalId": "gardening6",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -945,7 +945,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -954,7 +954,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -970,7 +970,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "name": "gardening8",
+                    "externalId": "gardening8",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -981,7 +981,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -990,7 +990,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -1029,7 +1029,7 @@ mod test {
                             __typename
                             ... on Gardening {
                                 id
-                                name
+                                externalId
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
@@ -1040,7 +1040,7 @@ mod test {
                                             agent {
                                                 ... on Friend {
                                                     id
-                                                    name
+                                                    externalId
                                                 }
                                             }
                                             role
@@ -1049,7 +1049,7 @@ mod test {
                                 used {
                                     ... on TheSea {
                                         id
-                                        name
+                                        externalId
                                     }
                                 }
                             }
@@ -1083,7 +1083,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "name": "gardening8",
+                    "externalId": "gardening8",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -1094,7 +1094,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -1103,7 +1103,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -1119,7 +1119,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "name": "gardening6",
+                    "externalId": "gardening6",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -1130,7 +1130,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -1139,7 +1139,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -1155,7 +1155,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "name": "gardening4",
+                    "externalId": "gardening4",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -1166,7 +1166,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -1175,7 +1175,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -1191,7 +1191,7 @@ mod test {
                   "node": {
                     "__typename": "Gardening",
                     "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "name": "gardening2",
+                    "externalId": "gardening2",
                     "stringAttribute": "string",
                     "intAttribute": 1,
                     "boolAttribute": false,
@@ -1202,7 +1202,7 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "name": "ringo"
+                            "externalId": "ringo"
                           },
                           "role": "RESPONSIBLE"
                         }
@@ -1211,7 +1211,7 @@ mod test {
                     "used": [
                       {
                         "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "name": "coral"
+                        "externalId": "coral"
                       }
                     ]
                   },
@@ -1389,7 +1389,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                friend(name:"bobross{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
+                friend(externalId:"bobross{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
                     context
                 }}
             }}
@@ -1418,7 +1418,7 @@ mod test {
                             __typename
                             ... on Friend {
                                 id
-                                name
+                                externalId
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
@@ -1447,7 +1447,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
-                    "name": "bobross0",
+                    "externalId": "bobross0",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1458,7 +1458,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
-                    "name": "bobross1",
+                    "externalId": "bobross1",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1469,7 +1469,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
-                    "name": "bobross10",
+                    "externalId": "bobross10",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1480,7 +1480,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
-                    "name": "bobross11",
+                    "externalId": "bobross11",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1491,7 +1491,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "name": "bobross12",
+                    "externalId": "bobross12",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1502,7 +1502,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "name": "bobross13",
+                    "externalId": "bobross13",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1513,7 +1513,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "name": "bobross14",
+                    "externalId": "bobross14",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1524,7 +1524,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "name": "bobross15",
+                    "externalId": "bobross15",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1535,7 +1535,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "name": "bobross16",
+                    "externalId": "bobross16",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1546,7 +1546,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "name": "bobross17",
+                    "externalId": "bobross17",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1575,7 +1575,7 @@ mod test {
                             __typename
                             ... on Friend {
                                 id
-                                name
+                                externalId
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
@@ -1604,7 +1604,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "name": "bobross12",
+                    "externalId": "bobross12",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1615,7 +1615,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "name": "bobross13",
+                    "externalId": "bobross13",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1626,7 +1626,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "name": "bobross14",
+                    "externalId": "bobross14",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1637,7 +1637,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "name": "bobross15",
+                    "externalId": "bobross15",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1648,7 +1648,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "name": "bobross16",
+                    "externalId": "bobross16",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1659,7 +1659,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "name": "bobross17",
+                    "externalId": "bobross17",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1670,7 +1670,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross18",
-                    "name": "bobross18",
+                    "externalId": "bobross18",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1681,7 +1681,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross19",
-                    "name": "bobross19",
+                    "externalId": "bobross19",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1692,7 +1692,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross2",
-                    "name": "bobross2",
+                    "externalId": "bobross2",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1703,7 +1703,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross20",
-                    "name": "bobross20",
+                    "externalId": "bobross20",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1714,7 +1714,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross21",
-                    "name": "bobross21",
+                    "externalId": "bobross21",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1725,7 +1725,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross22",
-                    "name": "bobross22",
+                    "externalId": "bobross22",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1736,7 +1736,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross23",
-                    "name": "bobross23",
+                    "externalId": "bobross23",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1747,7 +1747,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross24",
-                    "name": "bobross24",
+                    "externalId": "bobross24",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1758,7 +1758,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross25",
-                    "name": "bobross25",
+                    "externalId": "bobross25",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1769,7 +1769,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross26",
-                    "name": "bobross26",
+                    "externalId": "bobross26",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1780,7 +1780,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross27",
-                    "name": "bobross27",
+                    "externalId": "bobross27",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1791,7 +1791,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross28",
-                    "name": "bobross28",
+                    "externalId": "bobross28",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1802,7 +1802,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross29",
-                    "name": "bobross29",
+                    "externalId": "bobross29",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1813,7 +1813,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross3",
-                    "name": "bobross3",
+                    "externalId": "bobross3",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1842,7 +1842,7 @@ mod test {
                             __typename
                             ... on Friend {
                                 id
-                                name
+                                externalId
                                 stringAttribute
                                 intAttribute
                                 boolAttribute
@@ -1871,7 +1871,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross91",
-                    "name": "bobross91",
+                    "externalId": "bobross91",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1882,7 +1882,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross92",
-                    "name": "bobross92",
+                    "externalId": "bobross92",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1893,7 +1893,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross93",
-                    "name": "bobross93",
+                    "externalId": "bobross93",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1904,7 +1904,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross94",
-                    "name": "bobross94",
+                    "externalId": "bobross94",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1915,7 +1915,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross95",
-                    "name": "bobross95",
+                    "externalId": "bobross95",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1926,7 +1926,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross96",
-                    "name": "bobross96",
+                    "externalId": "bobross96",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1937,7 +1937,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross97",
-                    "name": "bobross97",
+                    "externalId": "bobross97",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1948,7 +1948,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross98",
-                    "name": "bobross98",
+                    "externalId": "bobross98",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false
@@ -1959,7 +1959,7 @@ mod test {
                   "node": {
                     "__typename": "Friend",
                     "id": "http://blockchaintp.com/chronicle/ns#agent:bobross99",
-                    "name": "bobross99",
+                    "externalId": "bobross99",
                     "stringAttribute": "String",
                     "intAttribute": 1,
                     "boolAttribute": false

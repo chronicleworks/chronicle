@@ -15,8 +15,8 @@ use crate::{
             WasInformedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, IdentityId, NamePart,
-        NamespaceId, ParseIriError, ProcessorError, ProvModel,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, ExternalIdPart,
+        IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -437,11 +437,13 @@ impl ChronicleOperation {
                 vec![LedgerAddress::namespace(id)]
             }
             ChronicleOperation::AgentExists(AgentExists {
-                namespace, name, ..
+                namespace,
+                external_id,
+                ..
             }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
-                    LedgerAddress::in_namespace(namespace, AgentId::from_name(name)),
+                    LedgerAddress::in_namespace(namespace, AgentId::from_external_id(external_id)),
                 ]
             }
             // Key registration requires identity + agent
@@ -455,15 +457,20 @@ impl ChronicleOperation {
                 LedgerAddress::in_namespace(namespace, id.clone()),
                 LedgerAddress::in_namespace(
                     namespace,
-                    IdentityId::from_name(id.name_part(), publickey),
+                    IdentityId::from_external_id(id.external_id_part(), publickey),
                 ),
             ],
             ChronicleOperation::ActivityExists(ActivityExists {
-                namespace, name, ..
+                namespace,
+                external_id,
+                ..
             }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
-                    LedgerAddress::in_namespace(namespace, ActivityId::from_name(name)),
+                    LedgerAddress::in_namespace(
+                        namespace,
+                        ActivityId::from_external_id(external_id),
+                    ),
                 ]
             }
             ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
@@ -501,10 +508,13 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, id.clone()),
                 ]
             }
-            ChronicleOperation::EntityExists(EntityExists { namespace, name }) => {
+            ChronicleOperation::EntityExists(EntityExists {
+                namespace,
+                external_id,
+            }) => {
                 vec![
                     LedgerAddress::namespace(namespace),
-                    LedgerAddress::in_namespace(namespace, EntityId::from_name(name)),
+                    LedgerAddress::in_namespace(namespace, EntityId::from_external_id(external_id)),
                 ]
             }
             ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
@@ -672,7 +682,8 @@ pub mod test {
         ledger::{InMemLedger, StateInput},
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-            ActivityId, AgentId, DelegationId, Name, NamePart, NamespaceId, ProvModel, Role,
+            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, ProvModel,
+            Role,
         },
     };
     use uuid::Uuid;
@@ -687,31 +698,35 @@ pub mod test {
     }
 
     fn create_namespace_id_helper(tag: Option<i32>) -> NamespaceId {
-        let name = if tag.is_none() || tag == Some(0) {
+        let external_id = if tag.is_none() || tag == Some(0) {
             "testns".to_string()
         } else {
             format!("testns{}", tag.unwrap())
         };
-        NamespaceId::from_name(&name, uuid())
+        NamespaceId::from_external_id(&external_id, uuid())
     }
 
     fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
         let id = create_namespace_id_helper(tag);
-        let name = &id.name_part().to_string();
-        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, uuid()))
+        let external_id = &id.external_id_part().to_string();
+        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, external_id, uuid()))
     }
 
     fn agent_exists_helper() -> ChronicleOperation {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
-        ChronicleOperation::AgentExists(AgentExists { namespace, name })
+        let namespace: NamespaceId = NamespaceId::from_external_id("testns", uuid());
+        let external_id: ExternalId =
+            ExternalIdPart::external_id_part(&AgentId::from_external_id("test_agent")).clone();
+        ChronicleOperation::AgentExists(AgentExists {
+            namespace,
+            external_id,
+        })
     }
 
     fn create_agent_acts_on_behalf_of() -> ChronicleOperation {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", uuid());
-        let responsible_id = AgentId::from_name("test_agent");
-        let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = ActivityId::from_name("test_activity");
+        let namespace: NamespaceId = NamespaceId::from_external_id("testns", uuid());
+        let responsible_id = AgentId::from_external_id("test_agent");
+        let delegate_id = AgentId::from_external_id("test_delegate");
+        let activity_id = ActivityId::from_external_id("test_activity");
         let role = "test_role";
         let id = DelegationId::from_component_ids(
             &delegate_id,

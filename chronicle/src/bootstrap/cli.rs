@@ -10,7 +10,7 @@ use common::{
     },
     prov::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
-        Name, NamePart, ParseIriError,
+        ExternalId, ExternalIdPart, ParseIriError,
     },
     signing::SignerError,
 };
@@ -86,7 +86,7 @@ pub struct AgentCliModel {
     pub attributes: Vec<AttributeCliModel>,
     pub about: String,
     pub define_about: String,
-    pub name: String,
+    pub external_id: String,
 }
 
 impl AgentCliModel {
@@ -99,9 +99,9 @@ impl AgentCliModel {
         Self {
             agent: agent.clone(),
             attributes,
-            name: agent.as_cli_name(),
+            external_id: agent.as_cli_name(),
             about: format!("Operations on {} agents", agent.as_type_name()),
-            define_about: format!("Define an agent of type {} with the given name or IRI, re-definition with different attribute values is not allowed", agent.as_type_name())
+            define_about: format!("Define an agent of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", agent.as_type_name())
         }
     }
 }
@@ -110,16 +110,16 @@ fn name_from<'a, Id>(
     args: &'a ArgMatches,
     name_param: &str,
     id_param: &str,
-) -> Result<Name, CliError>
+) -> Result<ExternalId, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
-    if let Some(name) = args.get_one::<String>(name_param) {
-        Ok(Name::from(name))
+    if let Some(external_id) = args.get_one::<String>(name_param) {
+        Ok(ExternalId::from(external_id))
     } else if let Some(id) = args.get_one::<String>(id_param) {
         let iri = Iri::from_str(id)?;
         let id = Id::try_from(iri)?;
-        Ok(id.name_part().to_owned())
+        Ok(id.external_id_part().to_owned())
     } else {
         Err(CliError::MissingArgument {
             arg: format!("Missing {} and {}", name_param, id_param),
@@ -129,7 +129,7 @@ where
 
 fn id_from<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Id, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
     if let Some(id) = args.get_one::<String>(id_param) {
         Ok(Id::try_from(Iri::from_str(id)?)?)
@@ -142,7 +142,7 @@ where
 
 fn id_from_option<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Option<Id>, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + NamePart,
+    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
     match id_from(args, id_param) {
         Err(CliError::MissingArgument { .. }) => Ok(None),
@@ -151,9 +151,9 @@ where
     }
 }
 
-fn namespace_from(args: &ArgMatches) -> Result<Name, CliError> {
+fn namespace_from(args: &ArgMatches) -> Result<ExternalId, CliError> {
     if let Some(namespace) = args.get_one::<String>("namespace") {
-        Ok(Name::from(namespace))
+        Ok(ExternalId::from(namespace))
     } else {
         Err(CliError::MissingArgument {
             arg: "namespace".to_owned(),
@@ -225,7 +225,7 @@ fn attributes_from(
     attributes: &[AttributeCliModel],
 ) -> Result<Attributes, CliError> {
     Ok(Attributes {
-        typ: Some(DomaintypeId::from_name(typ)),
+        typ: Some(DomaintypeId::from_external_id(typ)),
         attributes: attributes
             .iter()
             .map(|attr| {
@@ -248,11 +248,11 @@ fn attributes_from(
 
 impl SubCommand for AgentCliModel {
     fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&*self.name).about(&*self.about);
+        let cmd = Command::new(&*self.external_id).about(&*self.about);
 
         let mut define = Command::new("define")
                         .about(&*self.define_about)
-                        .arg(Arg::new("name")
+                        .arg(Arg::new("external_id")
                             .help("An externally meaningful identifier for the agent, e.g. a URI or relational id")
                             .takes_value(true))
                         .arg(Arg::new("id")
@@ -260,7 +260,7 @@ impl SubCommand for AgentCliModel {
                             .long("id")
                             .takes_value(true))
                         .group(ArgGroup::new("identifier")
-                                    .args(&["name","id"])
+                                    .args(&["external_id","id"])
                                     .required(true))
                         .arg(
                             Arg::new("namespace")
@@ -336,9 +336,9 @@ impl SubCommand for AgentCliModel {
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
-                name: name_from::<AgentId>(matches, "name", "id")?,
+                external_id: name_from::<AgentId>(matches, "external_id", "id")?,
                 namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.agent.name, &self.attributes)?,
+                attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
             })));
         }
         if let Some(matches) = matches.subcommand_matches("register-key") {
@@ -378,7 +378,7 @@ pub struct ActivityCliModel {
     pub attributes: Vec<AttributeCliModel>,
     pub about: String,
     pub define_about: String,
-    pub name: String,
+    pub external_id: String,
 }
 
 impl ActivityCliModel {
@@ -391,22 +391,22 @@ impl ActivityCliModel {
         Self {
             activity: activity.clone(),
             attributes,
-            name: activity.as_cli_name(),
+            external_id: activity.as_cli_name(),
             about: format!("Operations on {} activities", activity.as_type_name()),
-            define_about: format!("Define an activity of type {} with the given name or IRI, re-definition with different attribute values is not allowed", activity.as_type_name()),
+            define_about: format!("Define an activity of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", activity.as_type_name()),
         }
     }
 }
 
 impl SubCommand for ActivityCliModel {
     fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&*self.name).about(&*self.about);
+        let cmd = Command::new(&*self.external_id).about(&*self.about);
 
         let mut define =
                     Command::new("define")
                         .about(&*self.define_about)
 
-                        .arg(Arg::new("name")
+                        .arg(Arg::new("external_id")
                             .help("An externally meaningful identifier for the activity , e.g. a URI or relational id")
                             .takes_value(true))
                         .arg(Arg::new("id")
@@ -414,7 +414,7 @@ impl SubCommand for ActivityCliModel {
                             .help("A valid chronicle activity IRI")
                             .takes_value(true))
                         .group(ArgGroup::new("identifier")
-                                    .args(&["name","id"])
+                                    .args(&["external_id","id"])
                                     .required(true))
                         .arg(
                             Arg::new("namespace")
@@ -539,9 +539,9 @@ impl SubCommand for ActivityCliModel {
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
-                name: name_from::<ActivityId>(matches, "name", "id")?,
+                external_id: name_from::<ActivityId>(matches, "external_id", "id")?,
                 namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.activity.name, &self.attributes)?,
+                attributes: attributes_from(matches, &self.activity.external_id, &self.attributes)?,
             })));
         }
 
@@ -594,7 +594,7 @@ pub struct EntityCliModel {
     pub attributes: Vec<AttributeCliModel>,
     pub about: String,
     pub define_about: String,
-    pub name: String,
+    pub external_id: String,
 }
 
 impl EntityCliModel {
@@ -607,21 +607,21 @@ impl EntityCliModel {
         Self {
             entity: entity.clone(),
             attributes,
-            name: entity.as_cli_name(),
+            external_id: entity.as_cli_name(),
             about: format!("Operations on {} entities", entity.as_type_name()),
-            define_about: format!("Define an entity of type {} with the given name or IRI, re-definition with different attribute values is not allowed", entity.as_type_name()),
+            define_about: format!("Define an entity of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", entity.as_type_name()),
         }
     }
 }
 
 impl SubCommand for EntityCliModel {
     fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&self.name).about(&*self.about);
+        let cmd = Command::new(&self.external_id).about(&*self.about);
 
         let mut define =
                     Command::new("define")
                         .about(&*self.define_about)
-                        .arg(Arg::new("name")
+                        .arg(Arg::new("external_id")
                            .help("An externally meaningful identifier for the entity, e.g. a URI or relational id")
                             .takes_value(true))
                         .arg(Arg::new("id")
@@ -629,7 +629,7 @@ impl SubCommand for EntityCliModel {
                             .help("A valid chronicle entity IRI")
                             .takes_value(true))
                         .group(ArgGroup::new("identifier")
-                                    .args(&["name","id"])
+                                    .args(&["external_id","id"])
                                     .required(true))
                         .arg(
                             Arg::new("namespace")
@@ -738,9 +738,9 @@ impl SubCommand for EntityCliModel {
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
-                name: name_from::<EntityId>(matches, "name", "id")?,
+                external_id: name_from::<EntityId>(matches, "external_id", "id")?,
                 namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.entity.name, &self.attributes)?,
+                attributes: attributes_from(matches, &self.entity.external_id, &self.attributes)?,
             })));
         }
 
@@ -889,7 +889,7 @@ impl SubCommand for CliModel {
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         for (agent, matches) in self.agents.iter().filter_map(|agent| {
             matches
-                .subcommand_matches(&agent.name)
+                .subcommand_matches(&agent.external_id)
                 .map(|matches| (agent, matches))
         }) {
             if let Some(cmd) = agent.matches(matches)? {
@@ -898,7 +898,7 @@ impl SubCommand for CliModel {
         }
         for (entity, matches) in self.entities.iter().filter_map(|entity| {
             matches
-                .subcommand_matches(&entity.name)
+                .subcommand_matches(&entity.external_id)
                 .map(|matches| (entity, matches))
         }) {
             if let Some(cmd) = entity.matches(matches)? {
@@ -907,7 +907,7 @@ impl SubCommand for CliModel {
         }
         for (activity, matches) in self.activities.iter().filter_map(|activity| {
             matches
-                .subcommand_matches(&activity.name)
+                .subcommand_matches(&activity.external_id)
                 .map(|matches| (activity, matches))
         }) {
             if let Some(cmd) = activity.matches(matches)? {

@@ -160,13 +160,13 @@ mod test {
     #[tokio::test]
     async fn sawtooth_batch_roundtrip() {
         let secret = SecretKey::random(StdRng::from_entropy());
-        let mut builder = MessageBuilder::new(SigningKey::from(secret), "name", "version");
+        let mut builder = MessageBuilder::new(SigningKey::from(secret), "external_id", "version");
 
         let uuid = Uuid::new_v4();
 
         let batch = vec![ChronicleOperation::CreateNamespace(CreateNamespace {
-            id: NamespaceId::from_name("t", uuid),
-            name: "t".into(),
+            id: NamespaceId::from_external_id("t", uuid),
+            external_id: "t".into(),
             uuid,
         })];
 

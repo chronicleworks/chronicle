@@ -34,8 +34,8 @@ message Policy {
     string  key = 2;
   }
 
-  // name of the policy, this should be unique.
-  string name = 1;
+  // external_id of the policy, this should be unique.
+  string external_id = 1;
 
   // list of Entries
   // The entries will be processed in order from first to last.
@@ -49,10 +49,10 @@ message PolicyList {
 
 
 message Role {
-  // Role name
-  string name = 1;
+  // Role external_id
+  string external_id = 1;
 
-  // Name of corresponding policy
+  // ExternalId of corresponding policy
   string policy_name = 2;
 }
 

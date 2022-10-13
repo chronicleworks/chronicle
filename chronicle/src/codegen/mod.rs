@@ -108,7 +108,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for agent in domain.agents.iter() =>
-                AgentType::#(agent.as_type_name()) => Some(#domain_type_id::from_name(#_(#(agent.as_type_name())))),
+                AgentType::#(agent.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(agent.as_type_name())))),
                 )
                 AgentType::ProvAgent => None
                 }
@@ -127,7 +127,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for entity in domain.entities.iter() =>
-                EntityType::#(entity.as_type_name()) => Some(#domain_type_id::from_name(#_(#(entity.as_type_name())))),
+                EntityType::#(entity.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(entity.as_type_name())))),
                 )
                 EntityType::ProvEntity => None
                 }
@@ -146,7 +146,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for activity in domain.activities.iter() =>
-                ActivityType::#(activity.as_type_name()) => Some(#domain_type_id::from_name(#_(#(activity.as_type_name())))),
+                ActivityType::#(activity.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(activity.as_type_name())))),
                 )
                 ActivityType::ProvActivity => None
                 }
@@ -220,15 +220,15 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     #[#object]
     impl #(&activity.as_type_name()) {
         async fn id(&self) -> #activity_id {
-            #activity_id::from_name(&*self.0.name)
+            #activity_id::from_external_id(&*self.0.external_id)
         }
 
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
             #activity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        async fn name(&self) -> &str {
-            &self.0.name
+        async fn external_id(&self) -> &str {
+            &self.0.external_id
         }
 
         async fn started(&self) -> Option<#date_time<#utc>> {
@@ -241,7 +241,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
-            self.0.domaintype.as_deref().map(#domain_type_id::from_name)
+            self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
         }
 
         async fn was_associated_with<'a>(
@@ -326,20 +326,20 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     #[#object]
     impl #(&entity.as_type_name()){
         async fn id(&self) -> #entity_id {
-            #entity_id::from_name(&*self.0.name)
+            #entity_id::from_external_id(&*self.0.external_id)
         }
 
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
             #entity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-        async fn name(&self) -> &str {
-            &self.0.name
+        async fn external_id(&self) -> &str {
+            &self.0.external_id
         }
 
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
-            self.0.domaintype.as_deref().map(#domain_type_id::from_name)
+            self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
         }
 
         async fn evidence<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#evidence>> {
@@ -449,11 +449,11 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     #[#object]
     impl #(agent.as_type_name()) {
         async fn id(&self) -> #agent_id {
-            #agent_id::from_name(&*self.0.name)
+            #agent_id::from_external_id(&*self.0.external_id)
         }
 
-        async fn name(&self) -> &str {
-            &self.0.name
+        async fn external_id(&self) -> &str {
+            &self.0.external_id
         }
 
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
@@ -500,7 +500,7 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
 
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
-            self.0.domaintype.as_deref().map(#domain_type_id::from_name)
+            self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
         }
     }
     }
@@ -522,7 +522,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
     impl From<ProvAgentAttributes> for #abstract_attributes {
         fn from(attributes: ProvAgentAttributes) -> Self {
             Self {
-                typ: attributes.typ.map(#domain_type_id::from_name),
+                typ: attributes.typ.map(#domain_type_id::from_external_id),
                 ..Default::default()
             }
         }
@@ -538,7 +538,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
     impl From<ProvEntityAttributes> for #abstract_attributes {
         fn from(attributes: ProvEntityAttributes) -> Self {
             Self {
-                typ: attributes.typ.map(#domain_type_id::from_name),
+                typ: attributes.typ.map(#domain_type_id::from_external_id),
                 ..Default::default()
             }
         }
@@ -553,7 +553,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
     impl From<ProvActivityAttributes> for #abstract_attributes {
         fn from(attributes: ProvActivityAttributes) -> Self {
             Self {
-                typ: attributes.typ.map(#domain_type_id::from_name),
+                typ: attributes.typ.map(#domain_type_id::from_external_id),
                 ..Default::default()
             }
         }
@@ -592,7 +592,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
         impl From<#(typ.attributes_type_name())> for #abstract_attributes{
             fn from(attributes: #(typ.attributes_type_name())) -> Self {
                 #abstract_attributes {
-                    typ: Some(#domain_type_id::from_name(#_(#(typ.as_type_name())))),
+                    typ: Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
                     attributes: vec![
                     #(for attribute in attributes =>
                         (#_(#(&attribute.as_type_name())).to_owned() ,
@@ -859,11 +859,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub async fn agent<'a>(
             &self,
             ctx: &#graphql_context<'a>,
-            name: String,
+            external_id: String,
             namespace: Option<String>,
             attributes: ProvAgentAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #impls::agent(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for agent in domain.agents.iter() =>
@@ -871,12 +871,12 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::agent(ctx, name, namespace,
+                #impls::agent(ctx, external_id, namespace,
                     #abstract_attributes::type_only(Some(
-                        #domain_type_id::from_name(#_(#(agent.as_type_name())))
+                        #domain_type_id::from_external_id(#_(#(agent.as_type_name())))
                     ))
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
@@ -884,11 +884,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
                 attributes: #(agent.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::agent(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::agent(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -897,11 +897,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub async fn activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
-            name: String,
+            external_id: String,
             namespace: Option<String>,
             attributes: ProvActivityAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #impls::activity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for activity in domain.activities.iter() =>
@@ -909,12 +909,12 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::activity(ctx, name, namespace,
+                #impls::activity(ctx, external_id, namespace,
                     #abstract_attributes::type_only(Some(
-                        #domain_type_id::from_name(#_(#(activity.as_type_name())))
+                        #domain_type_id::from_external_id(#_(#(activity.as_type_name())))
                     ))
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
@@ -922,11 +922,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
                 attributes: #(activity.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::activity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::activity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -935,11 +935,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub async fn entity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
-            name: String,
+            external_id: String,
             namespace: Option<String>,
             attributes: ProvEntityAttributes,
         ) -> async_graphql::#graphql_result<#submission> {
-            #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+            #impls::entity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #(for entity in domain.entities.iter() =>
@@ -947,12 +947,12 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::entity(ctx, name, namespace,
+                #impls::entity(ctx, external_id, namespace,
                     #abstract_attributes::type_only(Some(
-                        #domain_type_id::from_name(#_(#(entity.as_type_name())))
+                        #domain_type_id::from_external_id(#_(#(entity.as_type_name())))
                     ))
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
@@ -960,11 +960,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
-                name: String,
+                external_id: String,
                 namespace: Option<String>,
                 attributes: #(entity.attributes_type_name()),
             ) -> async_graphql::#graphql_result<#submission> {
-                #impls::entity(ctx, name, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+                #impls::entity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             }
             )
@@ -1120,15 +1120,15 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
 fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     let prov_agent = AgentDef {
-        name: "ProvAgent".to_owned(),
+        external_id: "ProvAgent".to_owned(),
         attributes: vec![],
     };
     let prov_activity = ActivityDef {
-        name: "ProvActivity".to_owned(),
+        external_id: "ProvActivity".to_owned(),
         attributes: vec![],
     };
     let prov_entity = EntityDef {
-        name: "ProvEntity".to_owned(),
+        external_id: "ProvEntity".to_owned(),
         attributes: vec![],
     };
 

@@ -46,7 +46,7 @@ Range: chronicle:Identity
 
 ### chronicle:Namespace
 
-An IRI containing a name and uuid part, used for disambiguation. Discrete
+An IRI containing an external id and uuid part, used for disambiguation. Discrete
 chronicle instances that with to work on the same namespace must share the uuid
 part.
 

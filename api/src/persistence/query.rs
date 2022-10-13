@@ -4,7 +4,7 @@ use diesel::prelude::*;
 
 #[derive(Queryable)]
 pub struct Namespace {
-    pub name: String,
+    pub external_id: String,
     pub uuid: String,
 }
 
@@ -17,7 +17,7 @@ pub struct LedgerSync {
 #[derive(Insertable)]
 #[diesel(table_name = namespace)]
 pub struct NewNamespace<'a> {
-    pub name: &'a str,
+    pub external_id: &'a str,
     pub uuid: &'a str,
 }
 
@@ -55,7 +55,7 @@ pub struct AgentAttribute {
 #[derive(Insertable)]
 #[diesel(table_name = activity)]
 pub struct NewActivity<'a> {
-    pub name: &'a str,
+    pub external_id: &'a str,
     pub namespace_id: i32,
     pub started: Option<NaiveDateTime>,
     pub ended: Option<NaiveDateTime>,
@@ -66,7 +66,7 @@ pub struct NewActivity<'a> {
 #[diesel(table_name = agent)]
 pub struct Agent {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub current: i32,
@@ -83,7 +83,7 @@ pub struct Identity {
 #[derive(Debug, Queryable)]
 pub struct Activity {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub started: Option<NaiveDateTime>,
@@ -104,7 +104,7 @@ pub struct Attachment {
 #[diesel(table_name = entity)]
 pub struct Entity {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub attachment_id: Option<i32>,
@@ -113,7 +113,7 @@ pub struct Entity {
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = agent)]
 pub struct NewAgent<'a> {
-    pub name: &'a str,
+    pub external_id: &'a str,
     pub namespace_id: i32,
     pub current: i32,
     pub domaintype: Option<&'a str>,

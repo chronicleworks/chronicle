@@ -1,11 +1,11 @@
 create table namespace (
     id integer primary key not null,
-    name text not null,
+    external_id text not null,
     uuid text not null,
-    unique(name)
+    unique(external_id)
 );
 
-create unique index namespace_idx on namespace(name,uuid);
+create unique index namespace_idx on namespace(external_id,uuid);
 
 create table ledgersync (
     correlation_id text primary key not null,
@@ -17,17 +17,17 @@ create index ledger_index on ledgersync(sync_time,offset);
 
 create table agent (
     id integer primary key not null,
-    name text key not null,
+    external_id text key not null,
     namespace_id integer not null,
     domaintype text,
     current integer not null,
     identity_id integer,
     foreign key(identity_id) references identity(id),
     foreign key(namespace_id) references namespace(id),
-    unique(name,namespace_id)
+    unique(external_id,namespace_id)
 );
 
-create index agent_name_idx on agent(name,namespace_id);
+create index agent_external_id_idx on agent(external_id,namespace_id);
 
 create table identity (
     id integer primary key not null,
@@ -40,24 +40,24 @@ create index identity_public_key_idx on identity(public_key);
 
 create table activity (
     id integer primary key not null,
-    name text not null,
+    external_id text not null,
     namespace_id integer not null,
     domaintype text,
     started timestamp,
     ended timestamp,
     foreign key(namespace_id) references namespace(id),
-    unique(name,namespace_id)
+    unique(external_id,namespace_id)
 );
 
 create table entity (
     id integer primary key not null,
-    name text not null,
+    external_id text not null,
     namespace_id integer not null,
     domaintype text,
     attachment_id integer,
     foreign key(attachment_id) references attachment(id),
     foreign key(namespace_id) references namespace(id),
-    unique(name,namespace_id)
+    unique(external_id,namespace_id)
 );
 
 create table attachment (

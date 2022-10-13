@@ -67,7 +67,7 @@ mod test {
     use super::*;
     use crate::prov::{
         operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-        ActivityId, AgentId, DelegationId, Name, NamePart, NamespaceId, Role,
+        ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
     };
     use api::UuidGen;
     use sawtooth_sdk::processor::handler::ApplyError;
@@ -83,31 +83,35 @@ mod test {
     }
 
     fn create_namespace_id_helper(tag: Option<i32>) -> NamespaceId {
-        let name = if tag.is_none() || tag == Some(0) {
+        let external_id = if tag.is_none() || tag == Some(0) {
             "testns".to_string()
         } else {
             format!("testns{}", tag.unwrap())
         };
-        NamespaceId::from_name(&name, SameUuid::uuid())
+        NamespaceId::from_external_id(&external_id, SameUuid::uuid())
     }
 
     fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
         let id = create_namespace_id_helper(tag);
-        let name = &id.name_part().to_string();
-        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, name, SameUuid::uuid()))
+        let external_id = &id.external_id_part().to_string();
+        ChronicleOperation::CreateNamespace(CreateNamespace::new(id, external_id, SameUuid::uuid()))
     }
 
     fn agent_exists_helper() -> ChronicleOperation {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", SameUuid::uuid());
-        let name: Name = NamePart::name_part(&AgentId::from_name("test_agent")).clone();
-        ChronicleOperation::AgentExists(AgentExists { namespace, name })
+        let namespace: NamespaceId = NamespaceId::from_external_id("testns", SameUuid::uuid());
+        let external_id: ExternalId =
+            ExternalIdPart::external_id_part(&AgentId::from_external_id("test_agent")).clone();
+        ChronicleOperation::AgentExists(AgentExists {
+            namespace,
+            external_id,
+        })
     }
 
     fn create_agent_acts_on_behalf_of() -> ChronicleOperation {
-        let namespace: NamespaceId = NamespaceId::from_name("testns", SameUuid::uuid());
-        let responsible_id = AgentId::from_name("test_agent");
-        let delegate_id = AgentId::from_name("test_delegate");
-        let activity_id = ActivityId::from_name("test_activity");
+        let namespace: NamespaceId = NamespaceId::from_external_id("testns", SameUuid::uuid());
+        let responsible_id = AgentId::from_external_id("test_agent");
+        let delegate_id = AgentId::from_external_id("test_delegate");
+        let activity_id = ActivityId::from_external_id("test_activity");
         let role = "test_role";
         let id = DelegationId::from_component_ids(
             &delegate_id,

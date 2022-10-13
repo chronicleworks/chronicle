@@ -10,13 +10,13 @@ use crate::{
     attributes::Attributes,
     prov::{
         operations::DerivationType, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
-        EntityId, Name, ProvModel, Role,
+        EntityId, ExternalId, ProvModel, Role,
     },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
-    Create { name: Name },
+    Create { external_id: ExternalId },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,24 +35,24 @@ pub enum KeyRegistration {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentCommand {
     Create {
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     },
     RegisterKey {
         id: AgentId,
-        namespace: Name,
+        namespace: ExternalId,
         registration: KeyRegistration,
     },
     UseInContext {
         id: AgentId,
-        namespace: Name,
+        namespace: ExternalId,
     },
     Delegate {
         id: AgentId,
         delegate: AgentId,
         activity: Option<ActivityId>,
-        namespace: Name,
+        namespace: ExternalId,
         role: Option<Role>,
     },
 }
@@ -60,40 +60,40 @@ pub enum AgentCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityCommand {
     Create {
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     },
     Start {
         id: ActivityId,
-        namespace: Name,
+        namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
     },
     End {
         id: Option<ActivityId>,
-        namespace: Name,
+        namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
     },
     Use {
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         activity: Option<ActivityId>,
     },
     WasInformedBy {
         id: ActivityId,
-        namespace: Name,
+        namespace: ExternalId,
         informing_activity: ActivityId,
     },
     Generate {
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         activity: Option<ActivityId>,
     },
     Associate {
         id: ActivityId,
-        namespace: Name,
+        namespace: ExternalId,
         responsible: AgentId,
         role: Option<Role>,
     },
@@ -101,12 +101,12 @@ pub enum ActivityCommand {
 
 impl ActivityCommand {
     pub fn create(
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         namespace: impl AsRef<str>,
         attributes: Attributes,
     ) -> Self {
         Self::Create {
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             namespace: namespace.as_ref().into(),
             attributes,
         }
@@ -206,20 +206,20 @@ impl<'de> Deserialize<'de> for PathOrFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityCommand {
     Create {
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     },
     Attach {
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         file: PathOrFile,
         locator: Option<String>,
         agent: Option<AgentId>,
     },
     Derive {
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         derivation: Option<DerivationType>,
         activity: Option<ActivityId>,
         used_entity: EntityId,
@@ -228,12 +228,12 @@ pub enum EntityCommand {
 
 impl EntityCommand {
     pub fn create(
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         namespace: impl AsRef<str>,
         attributes: Attributes,
     ) -> Self {
         Self::Create {
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             namespace: namespace.as_ref().into(),
             attributes,
         }

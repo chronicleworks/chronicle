@@ -89,7 +89,7 @@ entity from our example domain as a sample.
 type Guidance {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -105,17 +105,17 @@ type Guidance {
 
 #### Entity: id
 
-The EntityID of the entity. This is derived from name, but clients should not
-attempt to synthesize it themselves.
+The EntityID of the entity. This is derived from external_id, but clients should
+not attempt to synthesize it themselves.
 
 #### Entity: namespace
 
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-#### Entity: name
+#### Entity: external_id
 
-The name of the entity, determined when defined.
+The external_id of the entity, determined when defined.
 
 #### Entity: type
 
@@ -163,7 +163,7 @@ determined by the [domain model](domain_modelling).
 type Published {
   id: ActivityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
@@ -175,17 +175,17 @@ type Published {
 
 #### Activity: id
 
-The EntityID of the entity. This is derived from name, but clients should not
-attempt to synthesize it themselves.
+The EntityID of the entity. This is derived from external_id, but clients
+should not attempt to synthesize it themselves.
 
 #### Activity: namespace
 
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-#### Activity: name
+#### Activity: external_id
 
-The name of the entity, determined when defined.
+The external_id of the entity, determined when defined.
 
 #### Activity: type
 

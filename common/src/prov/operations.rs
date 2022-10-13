@@ -12,7 +12,8 @@ use uuid::Uuid;
 use crate::attributes::Attributes;
 
 use super::{
-    ActivityId, AgentId, AssociationId, DelegationId, EntityId, IdentityId, Name, NamespaceId, Role,
+    ActivityId, AgentId, AssociationId, DelegationId, EntityId, ExternalId, IdentityId,
+    NamespaceId, Role,
 };
 
 #[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -70,15 +71,15 @@ impl DerivationType {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CreateNamespace {
     pub id: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
     pub uuid: Uuid,
 }
 
 impl CreateNamespace {
-    pub fn new(id: NamespaceId, name: impl AsRef<str>, uuid: Uuid) -> Self {
+    pub fn new(id: NamespaceId, external_id: impl AsRef<str>, uuid: Uuid) -> Self {
         Self {
             id,
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             uuid,
         }
     }
@@ -87,14 +88,14 @@ impl CreateNamespace {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct AgentExists {
     pub namespace: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
 }
 
 impl AgentExists {
-    pub fn new(namespace: NamespaceId, name: impl AsRef<str>) -> Self {
+    pub fn new(namespace: NamespaceId, external_id: impl AsRef<str>) -> Self {
         Self {
             namespace,
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
         }
     }
 }
@@ -143,7 +144,7 @@ pub struct RegisterKey {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ActivityExists {
     pub namespace: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -170,7 +171,7 @@ pub struct ActivityUses {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct EntityExists {
     pub namespace: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]

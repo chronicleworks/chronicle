@@ -41,20 +41,20 @@ impl AttributeDef {
         to_snake_case(&to_singular(&format!("{}Attribute", self.typ)))
     }
 
-    pub fn from_attribute_file_input(name: String, attr: AttributeFileInput) -> Self {
+    pub fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
         AttributeDef {
-            typ: name,
+            typ: external_id,
             primitive_type: attr.typ,
         }
     }
 }
 
-/// A name formatted for CLI use - kebab-case, singular, lowercase
+/// A external_id formatted for CLI use - kebab-case, singular, lowercase
 pub trait CliName {
     fn as_cli_name(&self) -> String;
 }
 
-/// A correctly cased and singularized name for the type
+/// A correctly cased and singularized external_id for the type
 pub trait TypeName {
     fn as_type_name(&self) -> String;
 }
@@ -97,31 +97,31 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentDef {
-    pub(crate) name: String,
+    pub(crate) external_id: String,
     pub attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &AgentDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.name))
+        to_pascal_case(&to_singular(&self.external_id))
     }
 }
 
 impl AgentDef {
-    pub fn new(name: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
         Self {
-            name: name.as_ref().to_string(),
+            external_id: external_id.as_ref().to_string(),
             attributes,
         }
     }
 
     pub fn from_input<'a>(
-        name: String,
+        external_id: String,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
-            name,
+            external_id,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -141,31 +141,31 @@ impl AgentDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityDef {
-    pub(crate) name: String,
+    pub(crate) external_id: String,
     pub attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &EntityDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.name))
+        to_pascal_case(&to_singular(&self.external_id))
     }
 }
 
 impl EntityDef {
-    pub fn new(name: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
         Self {
-            name: name.as_ref().to_string(),
+            external_id: external_id.as_ref().to_string(),
             attributes,
         }
     }
 
     pub fn from_input<'a>(
-        name: String,
+        external_id: String,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
-            name,
+            external_id,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -185,31 +185,31 @@ impl EntityDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityDef {
-    pub(crate) name: String,
+    pub(crate) external_id: String,
     pub attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &ActivityDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.name))
+        to_pascal_case(&to_singular(&self.external_id))
     }
 }
 
 impl ActivityDef {
-    pub fn new(name: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
         Self {
-            name: name.as_ref().to_string(),
+            external_id: external_id.as_ref().to_string(),
             attributes,
         }
     }
 
     pub fn from_input<'a>(
-        name: String,
+        external_id: String,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
-            name,
+            external_id,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -229,24 +229,24 @@ impl ActivityDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleDef {
-    pub(crate) name: String,
+    pub(crate) external_id: String,
 }
 
 impl RoleDef {
-    pub fn new(name: impl AsRef<str>) -> Self {
+    pub fn new(external_id: impl AsRef<str>) -> Self {
         Self {
-            name: name.as_ref().to_string(),
+            external_id: external_id.as_ref().to_string(),
         }
     }
 
-    pub fn from_role_file_input(name: String) -> Self {
-        RoleDef { name }
+    pub fn from_role_file_input(external_id: String) -> Self {
+        RoleDef { external_id }
     }
 }
 
 impl TypeName for &RoleDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.name))
+        to_pascal_case(&to_singular(&self.external_id))
     }
 }
 
@@ -263,8 +263,8 @@ pub struct ChronicleDomainDef {
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
 
 impl<'a> AgentBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, name: impl AsRef<str>) -> Self {
-        Self(domain, AgentDef::new(name, vec![]))
+    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
+        Self(domain, AgentDef::new(external_id, vec![]))
     }
 
     pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
@@ -288,8 +288,8 @@ impl<'a> From<AgentBuilder<'a>> for AgentDef {
 pub struct EntityBuilder<'a>(&'a ChronicleDomainDef, EntityDef);
 
 impl<'a> EntityBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, name: impl AsRef<str>) -> Self {
-        Self(domain, EntityDef::new(name, vec![]))
+    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
+        Self(domain, EntityDef::new(external_id, vec![]))
     }
 
     pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
@@ -313,8 +313,8 @@ impl<'a> From<EntityBuilder<'a>> for EntityDef {
 pub struct ActivityBuilder<'a>(&'a ChronicleDomainDef, ActivityDef);
 
 impl<'a> ActivityBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, name: impl AsRef<str>) -> Self {
-        Self(domain, ActivityDef::new(name, vec![]))
+    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
+        Self(domain, ActivityDef::new(external_id, vec![]))
     }
 
     pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
@@ -347,11 +347,11 @@ impl Builder {
 
     pub fn with_attribute_type(
         mut self,
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         typ: PrimitiveType,
     ) -> Result<Self, ModelError> {
         self.0.attributes.push(AttributeDef {
-            typ: name.as_ref().to_string(),
+            typ: external_id.as_ref().to_string(),
             primitive_type: typ,
         });
 
@@ -360,40 +360,44 @@ impl Builder {
 
     pub fn with_agent(
         mut self,
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         b: impl FnOnce(AgentBuilder<'_>) -> Result<AgentBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
         self.0
             .agents
-            .push(b(AgentBuilder(&self.0, AgentDef::new(name, vec![])))?.into());
+            .push(b(AgentBuilder(&self.0, AgentDef::new(external_id, vec![])))?.into());
         Ok(self)
     }
 
     pub fn with_entity(
         mut self,
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         b: impl FnOnce(EntityBuilder<'_>) -> Result<EntityBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
         self.0
             .entities
-            .push(b(EntityBuilder(&self.0, EntityDef::new(name, vec![])))?.into());
+            .push(b(EntityBuilder(&self.0, EntityDef::new(external_id, vec![])))?.into());
         Ok(self)
     }
 
     pub fn with_activity(
         mut self,
-        name: impl AsRef<str>,
+        external_id: impl AsRef<str>,
         b: impl FnOnce(ActivityBuilder<'_>) -> Result<ActivityBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
-        self.0
-            .activities
-            .push(b(ActivityBuilder(&self.0, ActivityDef::new(name, vec![])))?.into());
+        self.0.activities.push(
+            b(ActivityBuilder(
+                &self.0,
+                ActivityDef::new(external_id, vec![]),
+            ))?
+            .into(),
+        );
 
         Ok(self)
     }
 
-    pub fn with_role(mut self, name: impl AsRef<str>) -> Result<Self, ModelError> {
-        self.0.roles.push(RoleDef::new(name));
+    pub fn with_role(mut self, external_id: impl AsRef<str>) -> Result<Self, ModelError> {
+        self.0.roles.push(RoleDef::new(external_id));
 
         Ok(self)
     }
@@ -499,8 +503,8 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
         let mut file = Self::new(&domain.name);
 
         for attr in &domain.attributes {
-            let name = attr.typ.to_string();
-            file.attributes.insert(name, attr.into());
+            let external_id = attr.typ.to_string();
+            file.attributes.insert(external_id, attr.into());
         }
 
         file.agents = domain
@@ -528,8 +532,8 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 }
 
 impl ChronicleDomainDef {
-    pub fn build(name: &str) -> Builder {
-        Builder::new(name)
+    pub fn build(external_id: &str) -> Builder {
+        Builder::new(external_id)
     }
 
     pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
@@ -568,29 +572,29 @@ impl ChronicleDomainDef {
     fn from_model(model: DomainFileInput) -> Result<Self, ModelError> {
         let mut builder = Builder::new(model.name);
 
-        for (name, attr) in model.attributes.iter() {
-            builder = builder.with_attribute_type(name, attr.typ)?;
+        for (external_id, attr) in model.attributes.iter() {
+            builder = builder.with_attribute_type(external_id, attr.typ)?;
         }
 
-        for (name, def) in model.agents {
+        for (external_id, def) in model.agents {
             builder.0.agents.push(AgentDef::from_input(
-                name,
+                external_id,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
         }
 
-        for (name, def) in model.entities {
+        for (external_id, def) in model.entities {
             builder.0.entities.push(EntityDef::from_input(
-                name,
+                external_id,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
         }
 
-        for (name, def) in model.activities {
+        for (external_id, def) in model.activities {
             builder.0.activities.push(ActivityDef::from_input(
-                name,
+                external_id,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
@@ -633,7 +637,7 @@ pub mod test {
 
     impl PartialEq for EntityDef {
         fn eq(&self, other: &Self) -> bool {
-            self.name == other.name
+            self.external_id == other.external_id
         }
     }
 
@@ -647,7 +651,7 @@ pub mod test {
 
     impl Ord for EntityDef {
         fn cmp(&self, other: &Self) -> Ordering {
-            self.name.cmp(&other.name)
+            self.external_id.cmp(&other.external_id)
         }
     }
 
@@ -787,26 +791,26 @@ pub mod test {
           - typ: String
             primitive_type: String
         agents:
-          - name: friend
+          - external_id: friend
             attributes:
               - typ: String
                 primitive_type: String
         entities:
-          - name: octopi
+          - external_id: octopi
             attributes:
               - typ: String
                 primitive_type: String
-          - name: the sea
+          - external_id: the sea
             attributes:
               - typ: String
                 primitive_type: String
         activities:
-          - name: gardening
+          - external_id: gardening
             attributes:
               - typ: String
                 primitive_type: String
         roles:
-          - name: drummer
+          - external_id: drummer
         "###);
 
         Ok(())
@@ -831,7 +835,7 @@ pub mod test {
           - typ: String
             primitive_type: String
         agents:
-          - name: friends
+          - external_id: friends
             attributes:
               - typ: String
                 primitive_type: String
@@ -840,7 +844,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         entities:
-          - name: octopi
+          - external_id: octopi
             attributes:
               - typ: String
                 primitive_type: String
@@ -848,7 +852,7 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
-          - name: the sea
+          - external_id: the sea
             attributes:
               - typ: String
                 primitive_type: String
@@ -857,7 +861,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         activities:
-          - name: gardening
+          - external_id: gardening
             attributes:
               - typ: String
                 primitive_type: String
@@ -865,7 +869,7 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
-          - name: swim about
+          - external_id: swim about
             attributes:
               - typ: String
                 primitive_type: String
@@ -874,7 +878,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         roles:
-          - name: drummer
+          - external_id: drummer
         "###);
 
         Ok(())
@@ -899,7 +903,7 @@ pub mod test {
           - typ: String
             primitive_type: String
         agents:
-          - name: friends
+          - external_id: friends
             attributes:
               - typ: String
                 primitive_type: String
@@ -908,7 +912,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         entities:
-          - name: octopi
+          - external_id: octopi
             attributes:
               - typ: String
                 primitive_type: String
@@ -916,7 +920,7 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
-          - name: the sea
+          - external_id: the sea
             attributes:
               - typ: String
                 primitive_type: String
@@ -925,7 +929,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         activities:
-          - name: gardening
+          - external_id: gardening
             attributes:
               - typ: String
                 primitive_type: String
@@ -933,7 +937,7 @@ pub mod test {
                 primitive_type: Int
               - typ: Bool
                 primitive_type: Bool
-          - name: swim about
+          - external_id: swim about
             attributes:
               - typ: String
                 primitive_type: String
@@ -942,7 +946,7 @@ pub mod test {
               - typ: Bool
                 primitive_type: Bool
         roles:
-          - name: drummer
+          - external_id: drummer
         "###);
 
         Ok(())
@@ -1008,22 +1012,22 @@ pub mod test {
           - typ: String
             primitive_type: String
         agents:
-          - name: friend
+          - external_id: friend
             attributes:
               - typ: String
                 primitive_type: String
         entities:
-          - name: octopi
+          - external_id: octopi
             attributes:
               - typ: String
                 primitive_type: String
         activities:
-          - name: gardening
+          - external_id: gardening
             attributes:
               - typ: String
                 primitive_type: String
         roles:
-          - name: drummer
+          - external_id: drummer
         "###);
 
         Ok(())
@@ -1042,22 +1046,22 @@ pub mod test {
           - typ: String
             primitive_type: String
         agents:
-          - name: friend
+          - external_id: friend
             attributes:
               - typ: String
                 primitive_type: String
         entities:
-          - name: octopi
+          - external_id: octopi
             attributes:
               - typ: String
                 primitive_type: String
         activities:
-          - name: gardening
+          - external_id: gardening
             attributes:
               - typ: String
                 primitive_type: String
         roles:
-          - name: drummer
+          - external_id: drummer
         "###);
 
         Ok(())
