@@ -36,7 +36,9 @@ stop:
 
 $(MARKERS)/binfmt:
 	mkdir -p $(MARKERS)
-	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+	if [ `uname -m` = "x86_64" ]; then \
+		docker run --rm --privileged multiarch/qemu-user-static --reset -p yes; \
+	fi
 	touch $@
 
 define multi-arch-docker =
