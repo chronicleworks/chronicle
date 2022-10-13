@@ -612,7 +612,7 @@ pub mod test {
 
     #[tokio::test]
     async fn agent_define_id() {
-        let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+        let id = ChronicleIri::from(common::prov::AgentId::from_external_id("test_agent"));
         let command_line = format!(
             r#"chronicle test-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
@@ -756,7 +756,7 @@ pub mod test {
     #[tokio::test]
     async fn agent_register_key() {
         let mut api = test_api().await;
-        let id = ChronicleIri::from(common::prov::AgentId::from_name("test_agent"));
+        let id = ChronicleIri::from(common::prov::AgentId::from_external_id("test_agent"));
         let command_line =
             format!(r#"chronicle test-agent register-key --namespace testns {id} -g "#);
         let cmd = get_api_cmd(&command_line);
@@ -767,46 +767,46 @@ pub mod test {
         }, @r###"
         ---
         namespaces:
-          ? name: testns
+          ? external_id: testns
             uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
           : id:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: testns
+            external_id: testns
         agents:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - test_agent
           : id: test_agent
             namespaceid:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: test_agent
+            external_id: test_agent
             domaintypeid: ~
             attributes: {}
         activities: {}
         entities: {}
         identities:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: test_agent
+            - external_id: test_agent
               public_key: "[public]"
           : id:
-              name: test_agent
+              external_id: test_agent
               public_key: "[public]"
             namespaceid:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             public_key: "[public]"
         attachments: {}
         has_identity:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - test_agent
-          : - name: testns
+          : - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: test_agent
+            - external_id: test_agent
               public_key: "[public]"
         had_identity: {}
         has_evidence: {}
@@ -830,13 +830,13 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = AgentId::from_name("testagent");
+        let id = AgentId::from_external_id("testagent");
 
         let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ActivityId::from_name("testactivity");
+        let id = ActivityId::from_external_id("testactivity");
         let command_line = format!(
             r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
@@ -1158,7 +1158,7 @@ pub mod test {
 
     #[tokio::test]
     async fn entity_define_id() {
-        let id = ChronicleIri::from(common::prov::EntityId::from_name("test_entity"));
+        let id = ChronicleIri::from(common::prov::EntityId::from_external_id("test_entity"));
         let command_line = format!(
             r#"chronicle test-entity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
@@ -1313,8 +1313,8 @@ pub mod test {
     async fn entity_derive_abstract() {
         let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_name("testgeneratedentity");
-        let used_entity_id = EntityId::from_name("testusedentity");
+        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+        let used_entity_id = EntityId::from_external_id("testusedentity");
 
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns "#
@@ -1468,8 +1468,8 @@ pub mod test {
     async fn entity_derive_primary_source() {
         let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_name("testgeneratedentity");
-        let used_entity_id = EntityId::from_name("testusedentity");
+        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+        let used_entity_id = EntityId::from_external_id("testusedentity");
 
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype primary-source "#
@@ -1623,8 +1623,8 @@ pub mod test {
     async fn entity_derive_revision() {
         let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_name("testgeneratedentity");
-        let used_entity_id = EntityId::from_name("testusedentity");
+        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+        let used_entity_id = EntityId::from_external_id("testusedentity");
 
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype revision "#
@@ -1778,8 +1778,8 @@ pub mod test {
     async fn entity_derive_quotation() {
         let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_name("testgeneratedentity");
-        let used_entity_id = EntityId::from_name("testusedentity");
+        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+        let used_entity_id = EntityId::from_external_id("testusedentity");
 
         let command_line = format!(
             r#"chronicle test-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype quotation "#
@@ -2081,7 +2081,7 @@ pub mod test {
 
     #[tokio::test]
     async fn activity_define_id() {
-        let id = ChronicleIri::from(common::prov::ActivityId::from_name("test_activity"));
+        let id = ChronicleIri::from(common::prov::ActivityId::from_external_id("test_activity"));
         let command_line = format!(
             r#"chronicle test-activity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
         );
@@ -2240,12 +2240,12 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ChronicleIri::from(ActivityId::from_name("testactivity"));
+        let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
         let command_line = format!(
             r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
@@ -2417,12 +2417,12 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ChronicleIri::from(ActivityId::from_name("testactivity"));
+        let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
         let command_line = format!(
             r#"chronicle test-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
@@ -2430,7 +2430,7 @@ pub mod test {
         api.dispatch(cmd).await.unwrap();
 
         // Should end the last opened activity
-        let id = ActivityId::from_name("testactivity");
+        let id = ActivityId::from_external_id("testactivity");
         let command_line = format!(
             r#"chronicle test-activity end --namespace testns --time 2014-08-09T09:10:12Z {id} "#
         );
@@ -2602,8 +2602,8 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let activity_id = ActivityId::from_name("testactivity");
-        let entity_id = EntityId::from_name("testentity");
+        let activity_id = ActivityId::from_external_id("testactivity");
+        let entity_id = EntityId::from_external_id("testentity");
         let command_line = format!(
             r#"chronicle test-activity generate --namespace testns {entity_id} {activity_id} "#
         );
@@ -2763,7 +2763,7 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_name("testagent"));
+        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
         api.dispatch(cmd).await.unwrap();
@@ -2772,8 +2772,8 @@ pub mod test {
         let cmd = get_api_cmd(command_line);
         api.dispatch(cmd).await.unwrap();
 
-        let activity_id = ActivityId::from_name("testactivity");
-        let entity_id = EntityId::from_name("testentity");
+        let activity_id = ActivityId::from_external_id("testactivity");
+        let entity_id = EntityId::from_external_id("testentity");
         let command_line =
             format!(r#"chronicle test-activity use --namespace testns {entity_id} {activity_id} "#);
 

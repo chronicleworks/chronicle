@@ -6,7 +6,7 @@ use crate::{
     prov::{
         operations::{ChronicleOperation, CreateNamespace, DerivationType},
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ChronicleIri, NamePart, UuidPart,
+        ChronicleIri, ExternalIdPart, UuidPart,
     },
 };
 
@@ -26,7 +26,7 @@ impl ToJson for ProvModel {
                 "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                    "@value": ns.name.as_str(),
+                    "@value": ns.external_id.as_str(),
                 }]
             })
         }
@@ -83,7 +83,7 @@ impl ToJson for ProvModel {
                 "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": agent.name.as_str(),
+                   "@value": agent.external_id.as_str(),
                 }]
             };
 
@@ -262,7 +262,7 @@ impl ToJson for ProvModel {
                 "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": activity.name.as_str(),
+                   "@value": activity.external_id.as_str(),
                 }]
             };
 
@@ -358,7 +358,7 @@ impl ToJson for ProvModel {
                 "@id": (*id.to_string()),
                 "@type": typ,
                 "http://www.w3.org/2000/01/rdf-schema#label": [{
-                   "@value": entity.name.as_str()
+                   "@value": entity.external_id.as_str()
                 }]
             };
 
@@ -490,7 +490,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::CreateNamespace);
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -501,11 +501,14 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::AgentExists(AgentExists { namespace, name }) => {
+            ChronicleOperation::AgentExists(AgentExists {
+                namespace,
+                external_id,
+            }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::AgentExists);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -514,7 +517,10 @@ impl ToJson for ChronicleOperation {
                     ChronicleOperations::NamespaceUuid,
                 );
 
-                o.has_value(OperationValue::string(name), ChronicleOperations::AgentName);
+                o.has_value(
+                    OperationValue::string(external_id),
+                    ChronicleOperations::AgentName,
+                );
 
                 o
             }
@@ -529,7 +535,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::AgentActsOnBehalfOf);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -539,12 +545,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(delegate_id.name_part()),
+                    OperationValue::string(delegate_id.external_id_part()),
                     ChronicleOperations::DelegateId,
                 );
 
                 o.has_value(
-                    OperationValue::string(responsible_id.name_part()),
+                    OperationValue::string(responsible_id.external_id_part()),
                     ChronicleOperations::ResponsibleId,
                 );
 
@@ -554,7 +560,7 @@ impl ToJson for ChronicleOperation {
 
                 if let Some(activity_id) = activity_id {
                     o.has_value(
-                        OperationValue::string(activity_id.name_part()),
+                        OperationValue::string(activity_id.external_id_part()),
                         ChronicleOperations::ActivityName,
                     );
                 }
@@ -569,7 +575,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::RegisterKey);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -579,7 +585,7 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::AgentName,
                 );
 
@@ -590,11 +596,14 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::ActivityExists(ActivityExists { namespace, name }) => {
+            ChronicleOperation::ActivityExists(ActivityExists {
+                namespace,
+                external_id,
+            }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::ActivityExists);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -604,7 +613,7 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(name),
+                    OperationValue::string(external_id),
                     ChronicleOperations::ActivityName,
                 );
 
@@ -618,7 +627,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::StartActivity);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -628,7 +637,7 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
@@ -647,7 +656,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EndActivity);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -657,7 +666,7 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
@@ -676,7 +685,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::ActivityUses);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -686,22 +695,25 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::EntityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(activity.name_part()),
+                    OperationValue::string(activity.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
                 o
             }
-            ChronicleOperation::EntityExists(EntityExists { namespace, name }) => {
+            ChronicleOperation::EntityExists(EntityExists {
+                namespace,
+                external_id,
+            }) => {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EntityExists);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -711,7 +723,7 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(name),
+                    OperationValue::string(external_id),
                     ChronicleOperations::EntityName,
                 );
 
@@ -725,7 +737,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::WasGeneratedBy);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -735,12 +747,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::EntityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(activity.name_part()),
+                    OperationValue::string(activity.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
@@ -754,7 +766,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::WasInformedBy);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -764,12 +776,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(activity.name_part()),
+                    OperationValue::string(activity.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(informing_activity.name_part()),
+                    OperationValue::string(informing_activity.external_id_part()),
                     ChronicleOperations::InformingActivityName,
                 );
 
@@ -787,7 +799,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EntityHasEvidence);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -797,12 +809,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::EntityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(agent.name_part()),
+                    OperationValue::string(agent.external_id_part()),
                     ChronicleOperations::AgentName,
                 );
 
@@ -846,7 +858,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::EntityDerive);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -856,18 +868,18 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::EntityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(used_id.name_part()),
+                    OperationValue::string(used_id.external_id_part()),
                     ChronicleOperations::UsedEntityName,
                 );
 
                 if let Some(activity) = activity_id {
                     o.has_value(
-                        OperationValue::string(activity.name_part()),
+                        OperationValue::string(activity.external_id_part()),
                         ChronicleOperations::ActivityName,
                     );
                 }
@@ -886,7 +898,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -896,12 +908,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::EntityName,
                 );
 
                 if let Some(domaintypeid) = &attributes.typ {
-                    let id = OperationValue::string(domaintypeid.name_part());
+                    let id = OperationValue::string(domaintypeid.external_id_part());
                     o.has_value(id, ChronicleOperations::DomaintypeId);
                 }
 
@@ -917,7 +929,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -927,12 +939,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
                 if let Some(domaintypeid) = &attributes.typ {
-                    let id = OperationValue::string(domaintypeid.name_part());
+                    let id = OperationValue::string(domaintypeid.external_id_part());
                     o.has_value(id, ChronicleOperations::DomaintypeId);
                 }
 
@@ -948,7 +960,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -958,12 +970,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(id.name_part()),
+                    OperationValue::string(id.external_id_part()),
                     ChronicleOperations::AgentName,
                 );
 
                 if let Some(domaintypeid) = &attributes.typ {
-                    let id = OperationValue::string(domaintypeid.name_part());
+                    let id = OperationValue::string(domaintypeid.external_id_part());
                     o.has_value(id, ChronicleOperations::DomaintypeId);
                 }
 
@@ -981,7 +993,7 @@ impl ToJson for ChronicleOperation {
                 let mut o = JsonValue::new_operation(ChronicleOperations::WasAssociatedWith);
 
                 o.has_value(
-                    OperationValue::string(namespace.name_part()),
+                    OperationValue::string(namespace.external_id_part()),
                     ChronicleOperations::NamespaceName,
                 );
 
@@ -991,12 +1003,12 @@ impl ToJson for ChronicleOperation {
                 );
 
                 o.has_value(
-                    OperationValue::string(activity_id.name_part()),
+                    OperationValue::string(activity_id.external_id_part()),
                     ChronicleOperations::ActivityName,
                 );
 
                 o.has_value(
-                    OperationValue::string(agent_id.name_part()),
+                    OperationValue::string(agent_id.external_id_part()),
                     ChronicleOperations::AgentName,
                 );
 

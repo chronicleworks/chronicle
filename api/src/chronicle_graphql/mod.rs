@@ -32,7 +32,7 @@ pub mod query;
 #[diesel(table_name = crate::persistence::schema::agent)]
 pub struct Agent {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub current: i32,
@@ -58,7 +58,7 @@ impl Identity {
 #[diesel(table_name = crate::persistence::schema::activity)]
 pub struct Activity {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub started: Option<NaiveDateTime>,
@@ -69,7 +69,7 @@ pub struct Activity {
 #[diesel(table_name = crate::persistence::schema::entity)]
 pub struct Entity {
     pub id: i32,
-    pub name: String,
+    pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
     pub attachment_id: Option<i32>,
@@ -106,13 +106,13 @@ impl Evidence {
 pub struct Namespace {
     _id: i32,
     uuid: String,
-    name: String,
+    external_id: String,
 }
 
 #[Object]
 impl Namespace {
-    async fn name(&self) -> &str {
-        &self.name
+    async fn external_id(&self) -> &str {
+        &self.external_id
     }
 
     async fn uuid(&self) -> &str {

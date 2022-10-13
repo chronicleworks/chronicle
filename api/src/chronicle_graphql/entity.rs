@@ -117,7 +117,7 @@ pub async fn was_quoted_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::R
 
 pub async fn load_attribute<'a>(
     id: i32,
-    name: &str,
+    external_id: &str,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
     use crate::persistence::schema::entity_attribute;
@@ -130,7 +130,7 @@ pub async fn load_attribute<'a>(
         .filter(
             entity_attribute::entity_id
                 .eq(id)
-                .and(entity_attribute::typename.eq(name)),
+                .and(entity_attribute::typename.eq(external_id)),
         )
         .select(entity_attribute::value)
         .first::<String>(&mut connection)

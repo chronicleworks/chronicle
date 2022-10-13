@@ -102,15 +102,15 @@ impl AsRef<str> for &Role {
     FromSqlRow,
 )]
 #[diesel(sql_type = diesel::sql_types::Text)]
-pub struct Name(String);
+pub struct ExternalId(String);
 
-impl Display for Name {
+impl Display for ExternalId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl<DB> ToSql<Text, DB> for Name
+impl<DB> ToSql<Text, DB> for ExternalId
 where
     DB: Backend,
     String: ToSql<Text, DB>,
@@ -120,7 +120,7 @@ where
     }
 }
 
-impl<DB> FromSql<Text, DB> for Name
+impl<DB> FromSql<Text, DB> for ExternalId
 where
     DB: Backend,
     String: FromSql<Text, DB>,
@@ -130,29 +130,29 @@ where
     }
 }
 
-impl<T> From<T> for Name
+impl<T> From<T> for ExternalId
 where
     T: AsRef<str>,
 {
     fn from(s: T) -> Self {
-        Name(s.as_ref().to_owned())
+        ExternalId(s.as_ref().to_owned())
     }
 }
 
-impl Name {
+impl ExternalId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-impl AsRef<str> for &Name {
+impl AsRef<str> for &ExternalId {
     fn as_ref(&self) -> &str {
         &self.0
     }
 }
 
-pub trait NamePart {
-    fn name_part(&self) -> &Name;
+pub trait ExternalIdPart {
+    fn external_id_part(&self) -> &ExternalId;
 }
 
 pub trait UuidPart {
@@ -315,7 +315,7 @@ impl ChronicleIri {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct EvidenceId {
-    name: Name,
+    external_id: ExternalId,
     signature: String,
 }
 
@@ -327,22 +327,22 @@ impl Display for EvidenceId {
 
 impl From<&EvidenceId> for IriRefBuf {
     fn from(val: &EvidenceId) -> Self {
-        Chronicle::attachment(val.name_part(), &val.signature).into()
+        Chronicle::attachment(val.external_id_part(), &val.signature).into()
     }
 }
 
 impl EvidenceId {
-    pub fn from_name(name: impl AsRef<str>, signature: impl AsRef<str>) -> Self {
+    pub fn from_external_id(external_id: impl AsRef<str>, signature: impl AsRef<str>) -> Self {
         Self {
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             signature: signature.as_ref().to_string(),
         }
     }
 }
 
-impl NamePart for EvidenceId {
-    fn name_part(&self) -> &Name {
-        &self.name
+impl ExternalIdPart for EvidenceId {
+    fn external_id_part(&self) -> &ExternalId {
+        &self.external_id
     }
 }
 
@@ -367,11 +367,11 @@ fn fragment_components(iri: Iri) -> Vec<String> {
     }
 }
 
-fn optional_component(name: &str, component: &str) -> Result<Option<String>, ParseIriError> {
-    let kv = format!("{}=", name);
+fn optional_component(external_id: &str, component: &str) -> Result<Option<String>, ParseIriError> {
+    let kv = format!("{}=", external_id);
     if !component.starts_with(&*kv) {
         return Err(ParseIriError::MissingComponent {
-            component: name.to_string(),
+            component: external_id.to_string(),
         });
     }
 
@@ -386,8 +386,8 @@ impl<'a> TryFrom<Iri<'a>> for EvidenceId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name, signature] => Ok(Self {
-                name: Name::from(name),
+            [_, external_id, signature] => Ok(Self {
+                external_id: ExternalId::from(external_id),
                 signature: signature.to_string(),
             }),
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -398,9 +398,9 @@ impl<'a> TryFrom<Iri<'a>> for EvidenceId {
 // A composite identifier of agent, activity and role
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct DelegationId {
-    delegate: Name,
-    responsible: Name,
-    activity: Option<Name>,
+    delegate: ExternalId,
+    responsible: ExternalId,
+    activity: Option<ExternalId>,
     role: Option<Role>,
 }
 
@@ -418,23 +418,23 @@ impl DelegationId {
         role: Option<impl AsRef<str>>,
     ) -> Self {
         Self {
-            delegate: delegate.name_part().clone(),
-            responsible: responsible.name_part().clone(),
-            activity: activity.map(|x| NamePart::name_part(x).to_owned()),
+            delegate: delegate.external_id_part().clone(),
+            responsible: responsible.external_id_part().clone(),
+            activity: activity.map(|x| ExternalIdPart::external_id_part(x).to_owned()),
             role: role.map(|x| Role::from(x.as_ref())),
         }
     }
 
     pub fn delegate(&self) -> AgentId {
-        AgentId::from_name(&self.delegate)
+        AgentId::from_external_id(&self.delegate)
     }
 
     pub fn responsible(&self) -> AgentId {
-        AgentId::from_name(&self.responsible)
+        AgentId::from_external_id(&self.responsible)
     }
 
     pub fn activity(&self) -> Option<ActivityId> {
-        self.activity.as_ref().map(ActivityId::from_name)
+        self.activity.as_ref().map(ActivityId::from_external_id)
     }
 
     pub fn role(&self) -> &Option<Role> {
@@ -448,10 +448,10 @@ impl<'a> TryFrom<Iri<'a>> for DelegationId {
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
             [_, delegate, responsible, role, activity] => Ok(Self {
-                delegate: Name::from(delegate),
-                responsible: Name::from(responsible),
+                delegate: ExternalId::from(delegate),
+                responsible: ExternalId::from(responsible),
                 role: optional_component("role", role)?.map(Role::from),
-                activity: optional_component("activity", activity)?.map(Name::from),
+                activity: optional_component("activity", activity)?.map(ExternalId::from),
             }),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -462,9 +462,10 @@ impl<'a> TryFrom<Iri<'a>> for DelegationId {
 impl From<&DelegationId> for IriRefBuf {
     fn from(val: &DelegationId) -> Self {
         Chronicle::delegation(
-            &AgentId::from_name(&val.delegate),
-            &AgentId::from_name(&val.responsible),
-            &val.activity().map(|n| ActivityId::from_name(n.name_part())),
+            &AgentId::from_external_id(&val.delegate),
+            &AgentId::from_external_id(&val.responsible),
+            &val.activity()
+                .map(|n| ActivityId::from_external_id(n.external_id_part())),
             &val.role,
         )
         .into()
@@ -474,8 +475,8 @@ impl From<&DelegationId> for IriRefBuf {
 // A composite identifier of agent, activity and role
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct AssociationId {
-    agent: Name,
-    activity: Name,
+    agent: ExternalId,
+    activity: ExternalId,
     role: Option<Role>,
 }
 
@@ -492,18 +493,18 @@ impl AssociationId {
         role: Option<impl AsRef<str>>,
     ) -> Self {
         Self {
-            agent: agent.name_part().clone(),
-            activity: activity.name_part().clone(),
+            agent: agent.external_id_part().clone(),
+            activity: activity.external_id_part().clone(),
             role: role.map(|x| Role::from(x.as_ref())),
         }
     }
 
     pub fn agent(&self) -> AgentId {
-        AgentId::from_name(&self.agent)
+        AgentId::from_external_id(&self.agent)
     }
 
     pub fn activity(&self) -> ActivityId {
-        ActivityId::from_name(&self.activity)
+        ActivityId::from_external_id(&self.activity)
     }
 }
 
@@ -513,8 +514,8 @@ impl<'a> TryFrom<Iri<'a>> for AssociationId {
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
             [_, agent, activity, role] => Ok(Self {
-                agent: Name::from(agent),
-                activity: Name::from(activity),
+                agent: ExternalId::from(agent),
+                activity: ExternalId::from(activity),
                 role: optional_component("role", role)?.map(Role::from),
             }),
 
@@ -526,8 +527,8 @@ impl<'a> TryFrom<Iri<'a>> for AssociationId {
 impl From<&AssociationId> for IriRefBuf {
     fn from(val: &AssociationId) -> Self {
         Chronicle::association(
-            &AgentId::from_name(&val.agent),
-            &ActivityId::from_name(&val.activity),
+            &AgentId::from_external_id(&val.agent),
+            &ActivityId::from_external_id(&val.activity),
             &val.role,
         )
         .into()
@@ -536,7 +537,7 @@ impl From<&AssociationId> for IriRefBuf {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct IdentityId {
-    name: Name,
+    external_id: ExternalId,
     public_key: String,
 }
 
@@ -547,17 +548,17 @@ impl Display for IdentityId {
 }
 
 impl IdentityId {
-    pub fn from_name(name: impl AsRef<str>, public_key: impl AsRef<str>) -> Self {
+    pub fn from_external_id(external_id: impl AsRef<str>, public_key: impl AsRef<str>) -> Self {
         Self {
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             public_key: public_key.as_ref().to_string(),
         }
     }
 }
 
-impl NamePart for IdentityId {
-    fn name_part(&self) -> &Name {
-        &self.name
+impl ExternalIdPart for IdentityId {
+    fn external_id_part(&self) -> &ExternalId {
+        &self.external_id
     }
 }
 
@@ -572,8 +573,8 @@ impl<'a> TryFrom<Iri<'a>> for IdentityId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name, public_key] => Ok(Self {
-                name: Name::from(name.as_str()),
+            [_, external_id, public_key] => Ok(Self {
+                external_id: ExternalId::from(external_id.as_str()),
                 public_key: public_key.to_string(),
             }),
 
@@ -584,12 +585,12 @@ impl<'a> TryFrom<Iri<'a>> for IdentityId {
 
 impl From<&IdentityId> for IriRefBuf {
     fn from(val: &IdentityId) -> Self {
-        Chronicle::identity(val.name_part(), &val.public_key).into()
+        Chronicle::identity(val.external_id_part(), &val.public_key).into()
     }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct DomaintypeId(Name);
+pub struct DomaintypeId(ExternalId);
 
 impl Display for DomaintypeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -597,15 +598,15 @@ impl Display for DomaintypeId {
     }
 }
 
-impl NamePart for DomaintypeId {
-    fn name_part(&self) -> &Name {
+impl ExternalIdPart for DomaintypeId {
+    fn external_id_part(&self) -> &ExternalId {
         &self.0
     }
 }
 
 impl DomaintypeId {
-    pub fn from_name(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().into())
+    pub fn from_external_id(external_id: impl AsRef<str>) -> Self {
+        Self(external_id.as_ref().into())
     }
 }
 
@@ -614,7 +615,7 @@ impl<'a> TryFrom<Iri<'a>> for DomaintypeId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name] => Ok(Self(Name::from(name.as_str()))),
+            [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }
     }
@@ -628,7 +629,7 @@ impl From<&DomaintypeId> for IriRefBuf {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct NamespaceId {
-    name: Name,
+    external_id: ExternalId,
     uuid: Uuid,
 }
 
@@ -639,17 +640,17 @@ impl Display for NamespaceId {
 }
 
 impl NamespaceId {
-    pub fn from_name(name: impl AsRef<str>, uuid: Uuid) -> Self {
+    pub fn from_external_id(external_id: impl AsRef<str>, uuid: Uuid) -> Self {
         Self {
-            name: name.as_ref().into(),
+            external_id: external_id.as_ref().into(),
             uuid,
         }
     }
 }
 
-impl NamePart for NamespaceId {
-    fn name_part(&self) -> &Name {
-        &self.name
+impl ExternalIdPart for NamespaceId {
+    fn external_id_part(&self) -> &ExternalId {
+        &self.external_id
     }
 }
 
@@ -664,8 +665,8 @@ impl<'a> TryFrom<Iri<'a>> for NamespaceId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name, uuid] => Ok(Self {
-                name: Name::from(name.as_str()),
+            [_, external_id, uuid] => Ok(Self {
+                external_id: ExternalId::from(external_id.as_str()),
                 uuid: Uuid::parse_str(uuid.as_str())?,
             }),
 
@@ -676,12 +677,12 @@ impl<'a> TryFrom<Iri<'a>> for NamespaceId {
 
 impl From<&NamespaceId> for IriRefBuf {
     fn from(val: &NamespaceId) -> Self {
-        Chronicle::namespace(&val.name, &val.uuid).into()
+        Chronicle::namespace(&val.external_id, &val.uuid).into()
     }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct EntityId(Name);
+pub struct EntityId(ExternalId);
 
 impl Display for EntityId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -690,13 +691,13 @@ impl Display for EntityId {
 }
 
 impl EntityId {
-    pub fn from_name(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().into())
+    pub fn from_external_id(external_id: impl AsRef<str>) -> Self {
+        Self(external_id.as_ref().into())
     }
 }
 
-impl NamePart for EntityId {
-    fn name_part(&self) -> &Name {
+impl ExternalIdPart for EntityId {
+    fn external_id_part(&self) -> &ExternalId {
         &self.0
     }
 }
@@ -706,7 +707,7 @@ impl<'a> TryFrom<Iri<'a>> for EntityId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name] => Ok(Self(Name::from(name.as_str()))),
+            [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }
@@ -720,7 +721,7 @@ impl From<&EntityId> for IriRefBuf {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct AgentId(Name);
+pub struct AgentId(ExternalId);
 
 impl Display for AgentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -729,13 +730,13 @@ impl Display for AgentId {
 }
 
 impl AgentId {
-    pub fn from_name(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().into())
+    pub fn from_external_id(external_id: impl AsRef<str>) -> Self {
+        Self(external_id.as_ref().into())
     }
 }
 
-impl NamePart for AgentId {
-    fn name_part(&self) -> &Name {
+impl ExternalIdPart for AgentId {
+    fn external_id_part(&self) -> &ExternalId {
         &self.0
     }
 }
@@ -745,7 +746,7 @@ impl<'a> TryFrom<Iri<'a>> for AgentId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name] => Ok(Self(Name::from(name.as_str()))),
+            [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }
@@ -759,7 +760,7 @@ impl From<&AgentId> for IriRefBuf {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct ActivityId(Name);
+pub struct ActivityId(ExternalId);
 
 impl Display for ActivityId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -768,13 +769,13 @@ impl Display for ActivityId {
 }
 
 impl ActivityId {
-    pub fn from_name(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().into())
+    pub fn from_external_id(external_id: impl AsRef<str>) -> Self {
+        Self(external_id.as_ref().into())
     }
 }
 
-impl NamePart for ActivityId {
-    fn name_part(&self) -> &Name {
+impl ExternalIdPart for ActivityId {
+    fn external_id_part(&self) -> &ExternalId {
         &self.0
     }
 }
@@ -784,7 +785,7 @@ impl<'a> TryFrom<Iri<'a>> for ActivityId {
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
         match fragment_components(value).as_slice() {
-            [_, name] => Ok(Self(Name::from(name.as_str()))),
+            [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }

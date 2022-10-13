@@ -332,7 +332,7 @@ syntax. Chronicle domain models are specified in YAML, a complete model for the
 conceptual design can be written like this:
 
 ```yaml
-name: 'evidence'
+external_id: 'evidence'
 attributes:
   Content:
     type: String
@@ -388,20 +388,20 @@ roles:
   - Editor
 ```
 
-### Name
+### ExternalId
 
 A string that names your domain, used to coordinate deployments that require
 multiple namespaces.
 
 ```yaml
-name: "evidence"
+external_id: "evidence"
 ```
 
 ### Attributes
 
 Attributes are used to assign additional data to the prov terms - `Agent`,
-`Activity` and `Entity`. They are defined by their name and Primitive type, one
-of:
+`Activity` and `Entity`. They are defined by their external_id and Primitive type,
+one of:
 
 - String
 - Int

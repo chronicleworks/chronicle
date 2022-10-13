@@ -1,6 +1,6 @@
 abstract Activity {
     + id
-    + name
+    + external_id
     + startedAtTime
     + endedAtTime
 }

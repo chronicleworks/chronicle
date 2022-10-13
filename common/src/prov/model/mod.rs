@@ -24,7 +24,7 @@ use super::{
         WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
-    IdentityId, Name, NamePart, NamespaceId, PublicKeyPart, Role, UuidPart,
+    ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role, UuidPart,
 };
 
 pub mod to_json_ld;
@@ -91,15 +91,15 @@ impl ChronicleTransaction {
 pub struct Namespace {
     pub id: NamespaceId,
     pub uuid: Uuid,
-    pub name: Name,
+    pub external_id: ExternalId,
 }
 
 impl Namespace {
-    pub fn new(id: NamespaceId, uuid: Uuid, name: &Name) -> Self {
+    pub fn new(id: NamespaceId, uuid: Uuid, external_id: &ExternalId) -> Self {
         Self {
             id,
             uuid,
-            name: name.to_owned(),
+            external_id: external_id.to_owned(),
         }
     }
 }
@@ -108,7 +108,7 @@ impl Namespace {
 pub struct Agent {
     pub id: AgentId,
     pub namespaceid: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,
 }
@@ -123,7 +123,7 @@ pub struct Identity {
 impl Identity {
     pub fn new(namespace: &NamespaceId, agent: &AgentId, public_key: &str) -> Self {
         Self {
-            id: IdentityId::from_name(agent.name_part(), public_key),
+            id: IdentityId::from_external_id(agent.external_id_part(), public_key),
             namespaceid: namespace.clone(),
             public_key: public_key.to_owned(),
         }
@@ -135,24 +135,24 @@ impl Agent {
         let Self {
             id,
             namespaceid,
-            name,
+            external_id,
             ..
         } = self;
 
         Self {
             id,
             namespaceid,
-            name,
+            external_id,
             domaintypeid: attributes.typ,
             attributes: attributes.attributes,
         }
     }
 
-    // Create a prototypical agent from its IRI, we can only determine name
+    // Create a prototypical agent from its IRI, we can only determine external_id
     pub fn exists(namespaceid: NamespaceId, id: AgentId) -> Self {
         Self {
             namespaceid,
-            name: id.name_part().to_owned(),
+            external_id: id.external_id_part().to_owned(),
             id,
             domaintypeid: None,
             attributes: BTreeMap::new(),
@@ -164,7 +164,7 @@ impl Agent {
 pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,
     pub started: Option<DateTime<Utc>>,
@@ -176,7 +176,7 @@ impl Activity {
         let Self {
             id,
             namespaceid,
-            name,
+            external_id,
             started,
             ended,
             ..
@@ -184,7 +184,7 @@ impl Activity {
         Self {
             id,
             namespaceid,
-            name,
+            external_id,
             started,
             ended,
             domaintypeid: attributes.typ,
@@ -192,11 +192,11 @@ impl Activity {
         }
     }
 
-    // Create a prototypical agent from its IRI, we can only determine name
+    // Create a prototypical agent from its IRI, we can only determine external_id
     pub fn exists(namespaceid: NamespaceId, id: ActivityId) -> Self {
         Self {
             namespaceid,
-            name: id.name_part().to_owned(),
+            external_id: id.external_id_part().to_owned(),
             id,
             started: None,
             ended: None,
@@ -226,7 +226,7 @@ impl Attachment {
         signature_time: DateTime<Utc>,
     ) -> Attachment {
         Self {
-            id: EvidenceId::from_name(entity.name_part(), signature),
+            id: EvidenceId::from_external_id(entity.external_id_part(), signature),
             namespaceid: namespace,
             signature: signature.to_owned(),
             signer: signer.clone(),
@@ -240,7 +240,7 @@ impl Attachment {
 pub struct Entity {
     pub id: EntityId,
     pub namespaceid: NamespaceId,
-    pub name: Name,
+    pub external_id: ExternalId,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,
 }
@@ -250,13 +250,13 @@ impl Entity {
         let Self {
             id,
             namespaceid,
-            name,
+            external_id,
             ..
         } = self;
         Self {
             id,
             namespaceid,
-            name,
+            external_id,
             domaintypeid: attributes.typ,
             attributes: attributes.attributes,
         }
@@ -264,7 +264,7 @@ impl Entity {
 
     pub fn exists(namespaceid: NamespaceId, id: EntityId) -> Self {
         Self {
-            name: id.name_part().to_owned(),
+            external_id: id.external_id_part().to_owned(),
             id,
             namespaceid,
             domaintypeid: None,
@@ -678,14 +678,14 @@ impl ProvModel {
     }
 
     pub fn namespace_context(&mut self, ns: &NamespaceId) {
-        let (namespacename, uuid) = (ns.name_part(), ns.uuid_part());
+        let (namespacename, uuid) = (ns.external_id_part(), ns.uuid_part());
 
         self.namespaces.insert(
             ns.clone(),
             Namespace {
                 id: ns.clone(),
                 uuid: uuid.to_owned(),
-                name: namespacename.to_owned(),
+                external_id: namespacename.to_owned(),
             },
         );
     }
@@ -697,15 +697,17 @@ impl ProvModel {
         match tx {
             ChronicleOperation::CreateNamespace(CreateNamespace {
                 id,
-                name: _,
+                external_id: _,
                 uuid: _,
             }) => {
                 self.namespace_context(&id);
             }
             ChronicleOperation::AgentExists(AgentExists {
-                namespace, name, ..
+                namespace,
+                external_id,
+                ..
             }) => {
-                let id = AgentId::from_name(&name);
+                let id = AgentId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
                 self.agents.insert(
                     (namespace.clone(), id.clone()),
@@ -758,9 +760,11 @@ impl ProvModel {
                 self.new_identity(&namespace, &id, &publickey);
             }
             ChronicleOperation::ActivityExists(ActivityExists {
-                namespace, name, ..
+                namespace,
+                external_id,
+                ..
             }) => {
-                let id = ActivityId::from_name(&name);
+                let id = ActivityId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
 
                 self.activities
@@ -855,9 +859,11 @@ impl ProvModel {
                 self.used(namespace, &activity, &id);
             }
             ChronicleOperation::EntityExists(EntityExists {
-                namespace, name, ..
+                namespace,
+                external_id,
+                ..
             }) => {
-                let id = EntityId::from_name(&name);
+                let id = EntityId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
                 self.entities.insert(
                     (namespace.clone(), id.clone()),

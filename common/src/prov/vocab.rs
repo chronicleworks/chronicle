@@ -2,7 +2,7 @@ use iref::IriBuf;
 use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
 use uuid::Uuid;
 
-use super::{ActivityId, AgentId, Name, NamePart, Role};
+use super::{ActivityId, AgentId, ExternalId, ExternalIdPart, Role};
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("chronicleop" = "http://blockchaintp.com/chronicleoperations/ns#")]
@@ -182,53 +182,53 @@ impl Chronicle {
         percent_encode(s.as_bytes(), NON_ALPHANUMERIC).to_string()
     }
 
-    pub fn namespace(name: &Name, id: &Uuid) -> IriBuf {
+    pub fn namespace(external_id: &ExternalId, id: &Uuid) -> IriBuf {
         IriBuf::new(&format!(
             "{}ns:{}:{}",
             Self::PREFIX,
-            Self::encode(name.as_str()),
+            Self::encode(external_id.as_str()),
             id
         ))
         .unwrap()
     }
 
-    pub fn agent(name: &Name) -> IriBuf {
+    pub fn agent(external_id: &ExternalId) -> IriBuf {
         IriBuf::new(&format!(
             "{}agent:{}",
             Self::PREFIX,
-            Self::encode(name.as_str())
+            Self::encode(external_id.as_str())
         ))
         .unwrap()
     }
 
-    pub fn activity(name: &Name) -> IriBuf {
+    pub fn activity(external_id: &ExternalId) -> IriBuf {
         IriBuf::new(&format!(
             "{}activity:{}",
             Self::PREFIX,
-            Self::encode(name.as_str())
+            Self::encode(external_id.as_str())
         ))
         .unwrap()
     }
 
-    pub fn entity(name: &Name) -> IriBuf {
+    pub fn entity(external_id: &ExternalId) -> IriBuf {
         IriBuf::new(&format!(
             "{}entity:{}",
             Self::PREFIX,
-            Self::encode(name.as_str())
+            Self::encode(external_id.as_str())
         ))
         .unwrap()
     }
 
-    pub fn domaintype(name: &Name) -> IriBuf {
+    pub fn domaintype(external_id: &ExternalId) -> IriBuf {
         IriBuf::new(&format!(
             "{}domaintype:{}",
             Self::PREFIX,
-            Self::encode(name.as_str())
+            Self::encode(external_id.as_str())
         ))
         .unwrap()
     }
 
-    pub fn attachment(entity_name: &Name, signature: impl AsRef<str>) -> IriBuf {
+    pub fn attachment(entity_name: &ExternalId, signature: impl AsRef<str>) -> IriBuf {
         IriBuf::new(&format!(
             "{}evidence:{}:{}",
             Self::PREFIX,
@@ -238,7 +238,7 @@ impl Chronicle {
         .unwrap()
     }
 
-    pub fn identity(agent_name: &Name, public_key: impl AsRef<str>) -> IriBuf {
+    pub fn identity(agent_name: &ExternalId, public_key: impl AsRef<str>) -> IriBuf {
         IriBuf::new(&format!(
             "{}identity:{}:{}",
             Self::PREFIX,
@@ -252,8 +252,8 @@ impl Chronicle {
         IriBuf::new(&format!(
             "{}association:{}:{}:role={}",
             Self::PREFIX,
-            Self::encode(agent.name_part().as_str()),
-            Self::encode(activity.name_part().as_ref()),
+            Self::encode(agent.external_id_part().as_str()),
+            Self::encode(activity.external_id_part().as_ref()),
             Self::encode(
                 &role
                     .as_ref()
@@ -273,13 +273,13 @@ impl Chronicle {
         IriBuf::new(&format!(
             "{}delegation:{}:{}:role={}:activity={}",
             Self::PREFIX,
-            Self::encode(delegate.name_part().as_str()),
-            Self::encode(responsible.name_part().as_str()),
+            Self::encode(delegate.external_id_part().as_str()),
+            Self::encode(responsible.external_id_part().as_str()),
             Self::encode(role.as_ref().map(|x| x.as_str()).unwrap_or("")),
             Self::encode(
                 activity
                     .as_ref()
-                    .map(|x| x.name_part().as_str())
+                    .map(|x| x.external_id_part().as_str())
                     .unwrap_or("")
             ),
         ))
@@ -291,7 +291,7 @@ impl Chronicle {
 #[cfg(test)]
 #[allow(clippy::useless_conversion)]
 mod test {
-    use crate::prov::{ActivityId, AgentId, EntityId, Name, NamespaceId};
+    use crate::prov::{ActivityId, AgentId, EntityId, ExternalId, NamespaceId};
 
     use super::Chronicle;
     use iref::IriBuf;
@@ -303,30 +303,30 @@ mod test {
             max_shrink_iters: std::u32::MAX, verbose: 0, .. ProptestConfig::default()
     })]
         #[test]
-        fn namespace(name in ".*") {
+        fn namespace(external_id in ".*") {
             NamespaceId::try_from(
-                IriBuf::from(Chronicle::namespace(&Name::from(name), &Uuid::new_v4())).as_iri()
+                IriBuf::from(Chronicle::namespace(&ExternalId::from(external_id), &Uuid::new_v4())).as_iri()
             ).unwrap();
         }
 
         #[test]
-        fn agent(name in ".*") {
+        fn agent(external_id in ".*") {
             AgentId::try_from(
-                IriBuf::from(Chronicle::agent(&Name::from(name))).as_iri()
+                IriBuf::from(Chronicle::agent(&ExternalId::from(external_id))).as_iri()
             ).unwrap();
         }
 
         #[test]
-        fn entity(name in ".*") {
+        fn entity(external_id in ".*") {
             EntityId::try_from(
-             IriBuf::from(Chronicle::entity(&Name::from(name))).as_iri()
+             IriBuf::from(Chronicle::entity(&ExternalId::from(external_id))).as_iri()
             ).unwrap();
         }
 
         #[test]
-        fn activity(name in ".*") {
+        fn activity(external_id in ".*") {
             ActivityId::try_from(
-                IriBuf::from(Chronicle::activity(&Name::from(name))).as_iri()
+                IriBuf::from(Chronicle::activity(&ExternalId::from(external_id))).as_iri()
             ).unwrap();
         }
     }

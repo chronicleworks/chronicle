@@ -15,7 +15,7 @@ same way as typed Chronicle.
 
 ```graphql
 mutation {
-    agent(name: "agent",
+    agent(external_id: "agent",
           attributes: {type:"artist"}) {
             context
     }
@@ -41,14 +41,14 @@ query {
             node {
                 ... on ProvActivity {
                     id
-                    name
+                    external_id
                     type
                     wasAssociatedWith {
                             responsible {
                                 agent {
                                     ... on ProvAgent {
                                         id
-                                        name
+                                        external_id
                                         type
                                     }
                                 }
@@ -58,7 +58,7 @@ query {
                     used {
                         ... on ProvEntity {
                             id
-                            name
+                            external_id
                             type
                         }
                     }

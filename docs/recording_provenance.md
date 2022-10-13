@@ -27,7 +27,7 @@ mutation {
 ```graphql title="An activity 'writing-the-iliad' that took place in Ionia"
 mutation {
     writing(
-        name: "writing-the-iliad",
+        external_id: "writing-the-iliad",
         attributes: {
             location: "ionia"
         }
@@ -38,7 +38,7 @@ mutation {
 ```graphql title="An agent 'homer' exists and was a person"
 mutation {
     person(
-        name: "homer",
+        external_id: "homer",
         attributes: {
             email: "homer@ionia.gr"
         }
@@ -83,13 +83,13 @@ will fail.
 ```graphql
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
-            name: "Tennyson"
+            external_id: "Tennyson"
         })
     }
 
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
-            name: "Kipling"
+            external_id: "Kipling"
         })
     }
 ```
@@ -104,13 +104,13 @@ as long as the values of the already recorded ones are unchanged.
 
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
-            name: "Tennyson"
+            external_id: "Tennyson"
         })
     }
 
     mutation {
         writer(id: "chronicle:agent:poet", attributes: {
-            name: "Tennyson",
+            external_id: "Tennyson",
             heightInCentimeters: "185"
         })
     }
@@ -126,16 +126,16 @@ people who may be any combination of authors, editors or researchers
 collaborating to produce documents from evidence produced by a search process.
 An external CMS is being used that has identifiers for documents and users.
 
-### The `name` parameter
+### The `external_id` parameter
 
 The definition mutations for prov terms -  Entity, Activity and Agent - are all
-supplied with a `name` parameter. This should be something meaningful to the
+supplied with a `external_id` parameter. This should be something meaningful to the
 domain you are recording provenance for - a unique identifier from an external
 system or a natural key. This will form part of the identity of the term.
 
 ### A note on identities
 
-Chronicle identities will contain an encoded form of the name parameter, but
+Chronicle identities will contain an encoded form of the external_id parameter, but
 should be treated as opaque. Under no circumstances should you attempt to
 synthesize an identity from Chronicle in client code as the scheme may be
 subject to change.
@@ -215,7 +215,7 @@ scalar DomaintypeID
 type Evidence {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -233,7 +233,7 @@ input EvidenceAttributes {
 type Guidance {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -255,7 +255,7 @@ input PublishedAttributes {
 type PublishedGuidance {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -268,7 +268,7 @@ type PublishedGuidance {
 type Question {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -288,7 +288,7 @@ input QuestionAttributes {
 type ProvEntity {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -305,11 +305,11 @@ input ProvEntityAttributes {
 union Entity = | ProvEntity | Evidence | Guidance | PublishedGuidance | Question
 
 mutation {
-  entity(name: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
-  evidence(name: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
-  guidance(name: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
-  publishedGuidance(name: String!, namespace: String): Submission!
-  question(name: String!, namespace: String, attributes: QuestionAttributes!): Submission!
+  entity(external_id: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
+  evidence(external_id: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
+  guidance(external_id: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
+  publishedGuidance(external_id: String!, namespace: String): Submission!
+  question(external_id: String!, namespace: String, attributes: QuestionAttributes!): Submission!
 }
 
 ```
@@ -319,7 +319,7 @@ subtype `Question`, along with its attributes.
 
 ```graphql
 mutation {
-    question(name: "anaphylaxis-referral", attributes: {
+    question(external_id: "anaphylaxis-referral", attributes: {
         cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
         contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
     })
@@ -365,7 +365,7 @@ union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revis
 type ProvEntity {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -380,7 +380,7 @@ input ProvEntityAttributes {
 type Published {
   id: ActivityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
@@ -394,7 +394,7 @@ input PublishedAttributes {
 type PublishedGuidance {
   id: EntityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   type: DomaintypeID
   evidence: ChronicleEvidence
   wasGeneratedBy: [Activity!]!
@@ -407,7 +407,7 @@ type PublishedGuidance {
 type Researched {
   id: ActivityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
@@ -421,7 +421,7 @@ input ResearchedAttributes {
 type Revised {
   id: ActivityID!
   namespace: Namespace!
-  name: String!
+  external_id: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
@@ -436,11 +436,11 @@ input RevisedAttributes {
 }
 
 mutation {
-  activity(name: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
-  published(name: String!, namespace: String, attributes: PublishedAttributes!): Submission!
-  questionAsked(name: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
-  researched(name: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
-  revised(name: String!, namespace: String, attributes: RevisedAttributes!): Submission!
+  activity(external_id: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
+  published(external_id: String!, namespace: String, attributes: PublishedAttributes!): Submission!
+  questionAsked(external_id: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
+  researched(external_id: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
+  revised(external_id: String!, namespace: String, attributes: RevisedAttributes!): Submission!
 }
 ```
 
@@ -449,7 +449,7 @@ The following example mutation `revised` will define an `Activity` of subtype
 
 ```graphql title="Define a revised activity with graphql"
 mutation {
-    revised(name: "september-2018-review", attributes: {
+    revised(external_id: "september-2018-review", attributes: {
         versionAttribute: 14,
     })
 }
@@ -480,7 +480,7 @@ details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
-    organization(name: "health-trust", attributes: {})
+    organization(external_id: "health-trust", attributes: {})
 }
 ```
 

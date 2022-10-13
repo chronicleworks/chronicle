@@ -1,4 +1,4 @@
 abstract Entity {
     + id
-    + name
+    + external_id
 }

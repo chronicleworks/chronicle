@@ -1,4 +1,4 @@
 abstract Agent {
     + id
-    + name
+    + external_id
 }

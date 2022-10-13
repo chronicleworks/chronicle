@@ -32,7 +32,7 @@ pub async fn was_associated_with<'a>(
     let res = association::table
         .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::agent::table)
-        .order(crate::persistence::schema::agent::name)
+        .order(crate::persistence::schema::agent::external_id)
         .select((Agent::as_select(), association::role))
         .load::<(Agent, Option<Role>)>(&mut connection)?;
 
@@ -49,7 +49,7 @@ pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<E
     let res = usage::table
         .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::entity::table)
-        .order(crate::persistence::schema::entity::name)
+        .order(crate::persistence::schema::entity::external_id)
         .select(Entity::as_select())
         .load::<Entity>(&mut connection)?;
 
@@ -72,7 +72,7 @@ pub async fn was_informed_by<'a>(
             .inner_join(crate::persistence::schema::activity::table.on(
                 wasinformedby::informing_activity_id.eq(crate::persistence::schema::activity::id),
             ))
-            .order(crate::persistence::schema::activity::name)
+            .order(crate::persistence::schema::activity::external_id)
             .select(Activity::as_select())
             .load::<Activity>(&mut connection)?;
 
@@ -81,7 +81,7 @@ pub async fn was_informed_by<'a>(
 
 pub async fn load_attribute<'a>(
     id: i32,
-    name: &str,
+    external_id: &str,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
     use crate::persistence::schema::activity_attribute;
@@ -94,7 +94,7 @@ pub async fn load_attribute<'a>(
         .filter(
             activity_attribute::activity_id
                 .eq(id)
-                .and(activity_attribute::typename.eq(name)),
+                .and(activity_attribute::typename.eq(external_id)),
         )
         .select(activity_attribute::value)
         .first::<String>(&mut connection)

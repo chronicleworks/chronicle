@@ -55,14 +55,14 @@ pub async fn acted_on_behalf_of<'a>(
     Ok(delegation::table
         .filter(dsl::responsible_id.eq(id))
         .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
-        .order(agentdsl::name)
+        .order(agentdsl::external_id)
         .select((Agent::as_select(), dsl::role))
         .load::<(Agent, Option<Role>)>(&mut connection)?)
 }
 
 pub async fn load_attribute<'a>(
     id: i32,
-    name: &str,
+    external_id: &str,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
     use crate::persistence::schema::agent_attribute;
@@ -75,7 +75,7 @@ pub async fn load_attribute<'a>(
         .filter(
             agent_attribute::agent_id
                 .eq(id)
-                .and(agent_attribute::typename.eq(name)),
+                .and(agent_attribute::typename.eq(external_id)),
         )
         .select(agent_attribute::value)
         .first::<String>(&mut connection)

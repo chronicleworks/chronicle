@@ -37,8 +37,8 @@ use common::{
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
         },
-        ActivityId, AgentId, ChronicleTransactionId, EntityId, IdentityId, Name, NamePart,
-        NamespaceId, ProvModel,
+        ActivityId, AgentId, ChronicleTransactionId, EntityId, ExternalId, ExternalIdPart,
+        IdentityId, NamespaceId, ProvModel,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -305,28 +305,30 @@ where
 
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
     ///
-    /// A namespace uri is of the form chronicle:ns:{name}:{uuid}
-    /// Namespaces must be globally unique, so are disambiguated by uuid but are locally referred to by name only
-    /// For coordination between chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to a name
+    /// A namespace uri is of the form chronicle:ns:{external_id}:{uuid}
+    /// Namespaces must be globally unique, so are disambiguated by uuid but are locally referred to by external_id only
+    /// For coordination between chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to a external_id
     /// # Arguments
-    /// * `name` - an arbitrary namespace identifier
+    /// * `external_id` - an arbitrary namespace identifier
     #[instrument(skip(connection))]
     fn ensure_namespace(
         &mut self,
         connection: &mut SqliteConnection,
-        name: &Name,
+        external_id: &ExternalId,
     ) -> Result<(NamespaceId, Vec<ChronicleOperation>), ApiError> {
-        let ns = self.store.namespace_by_name(connection, name);
+        let ns = self.store.namespace_by_external_id(connection, external_id);
 
         if ns.is_err() {
             debug!(?ns, "Namespace does not exist, creating");
 
             let uuid = U::uuid();
-            let id: NamespaceId = NamespaceId::from_name(name, uuid);
+            let id: NamespaceId = NamespaceId::from_external_id(external_id, uuid);
             Ok((
                 id.clone(),
                 vec![ChronicleOperation::CreateNamespace(CreateNamespace::new(
-                    id, name, uuid,
+                    id,
+                    external_id,
+                    uuid,
                 ))],
             ))
         } else {
@@ -336,12 +338,12 @@ where
 
     /// Creates and submits a (ChronicleTransaction::GenerateEntity), and possibly (ChronicleTransaction::Domaintype) if specified
     ///
-    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
+    /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
     #[instrument]
     async fn activity_generate(
         &self,
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         activity: Option<ActivityId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -350,38 +352,38 @@ where
 
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-                let activity = api.store.get_activity_by_name_or_last_started(
+                let activity = api.store.get_activity_by_external_id_or_last_started(
                     connection,
-                    activity.map(|x| x.name_part().clone()),
+                    activity.map(|x| x.external_id_part().clone()),
                     namespace.clone(),
                 )?;
 
-                let entity = api.store.entity_by_entity_name_and_namespace(
+                let entity = api.store.entity_by_entity_external_id_and_namespace(
                     connection,
-                    id.name_part(),
+                    id.external_id_part(),
                     &namespace,
                 );
 
-                let name: Name = {
+                let external_id: ExternalId = {
                     if let Ok(existing) = entity {
                         debug!(?existing, "Use existing entity");
-                        existing.name.into()
+                        existing.external_id.into()
                     } else {
                         debug!(?id, "Need new entity");
-                        api.store.disambiguate_entity_name(
+                        api.store.disambiguate_entity_external_id(
                             connection,
-                            id.name_part().clone(),
+                            id.external_id_part().clone(),
                             namespace.clone(),
                         )?
                     }
                 };
 
-                let id = EntityId::from_name(&name);
+                let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                     namespace,
                     id: id.clone(),
-                    activity: ActivityId::from_name(&activity.name),
+                    activity: ActivityId::from_external_id(&activity.external_id),
                 });
 
                 to_apply.push(create);
@@ -400,12 +402,12 @@ where
 
     /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
     ///
-    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
+    /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
     #[instrument]
     async fn activity_use(
         &self,
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         activity: Option<ActivityId>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -415,38 +417,38 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api.store.get_activity_by_name_or_last_started(
+                    let activity = api.store.get_activity_by_external_id_or_last_started(
                         connection,
-                        activity.map(|x| x.name_part().clone()),
+                        activity.map(|x| x.external_id_part().clone()),
                         namespace.clone(),
                     )?;
 
-                    let entity = api.store.entity_by_entity_name_and_namespace(
+                    let entity = api.store.entity_by_entity_external_id_and_namespace(
                         connection,
-                        id.name_part(),
+                        id.external_id_part(),
                         &namespace,
                     );
 
-                    let name: Name = {
+                    let external_id: ExternalId = {
                         if let Ok(existing) = entity {
                             debug!(?existing, "Use existing entity");
-                            existing.name.into()
+                            existing.external_id.into()
                         } else {
                             debug!(?id, "Need new entity");
-                            api.store.disambiguate_entity_name(
+                            api.store.disambiguate_entity_external_id(
                                 connection,
-                                id.name_part().clone(),
+                                id.external_id_part().clone(),
                                 namespace.clone(),
                             )?
                         }
                     };
 
-                    let id = EntityId::from_name(&name);
+                    let id = EntityId::from_external_id(&external_id);
 
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
                         namespace,
                         id: id.clone(),
-                        activity: ActivityId::from_name(&activity.name),
+                        activity: ActivityId::from_external_id(&activity.external_id),
                     });
 
                     to_apply.push(create);
@@ -468,12 +470,12 @@ where
 
     /// Creates and submits a (ChronicleTransaction::ActivityWasInformedBy)
     ///
-    /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
+    /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
     #[instrument]
     async fn activity_was_informed_by(
         &self,
         id: ActivityId,
-        namespace: Name,
+        namespace: ExternalId,
         informing_activity_id: ActivityId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -483,49 +485,50 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
-                    let activity = api.store.get_activity_by_name_or_last_started(
+                    let activity = api.store.get_activity_by_external_id_or_last_started(
                         connection,
-                        Some(id.name_part().clone()),
+                        Some(id.external_id_part().clone()),
                         namespace.clone(),
                     );
 
-                    let informing_activity = api.store.activity_by_activity_name_and_namespace(
-                        connection,
-                        informing_activity_id.name_part(),
-                        &namespace,
-                    );
+                    let informing_activity =
+                        api.store.activity_by_activity_external_id_and_namespace(
+                            connection,
+                            informing_activity_id.external_id_part(),
+                            &namespace,
+                        );
 
-                    let name: Name = {
+                    let external_id: ExternalId = {
                         if let Ok(existing) = activity {
                             debug!(?existing, "Use existing activity");
-                            existing.name.into()
+                            existing.external_id.into()
                         } else {
                             debug!(?id, "Need new activity");
-                            api.store.disambiguate_activity_name(
+                            api.store.disambiguate_activity_external_id(
                                 connection,
-                                id.name_part(),
+                                id.external_id_part(),
                                 &namespace,
                             )?
                         }
                     };
 
-                    let id = ActivityId::from_name(&name);
+                    let id = ActivityId::from_external_id(&external_id);
 
-                    let name: Name = {
+                    let external_id: ExternalId = {
                         if let Ok(existing) = informing_activity {
                             debug!(?existing, "Use existing activity as informing activity");
-                            existing.name.into()
+                            existing.external_id.into()
                         } else {
                             debug!(?id, "Need new activity as informing activity");
-                            api.store.disambiguate_activity_name(
+                            api.store.disambiguate_activity_external_id(
                                 connection,
-                                id.name_part(),
+                                id.external_id_part(),
                                 &namespace,
                             )?
                         }
                     };
 
-                    let informing_activity = ActivityId::from_name(&name);
+                    let informing_activity = ActivityId::from_external_id(&external_id);
 
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
                         namespace,
@@ -556,8 +559,8 @@ where
     #[instrument]
     async fn create_entity(
         &self,
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -567,21 +570,23 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name: Name =
-                    api.store
-                        .disambiguate_entity_name(connection, name, namespace.clone())?;
+                let external_id: ExternalId = api.store.disambiguate_entity_external_id(
+                    connection,
+                    external_id,
+                    namespace.clone(),
+                )?;
 
-                let id = EntityId::from_name(&name);
+                let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::EntityExists(EntityExists {
                     namespace: namespace.clone(),
-                    name: name.clone(),
+                    external_id: external_id.clone(),
                 });
 
                 to_apply.push(create);
 
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
-                    id: EntityId::from_name(&name),
+                    id: EntityId::from_external_id(&external_id),
                     namespace,
                     attributes,
                 });
@@ -606,8 +611,8 @@ where
     #[instrument]
     async fn create_activity(
         &self,
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -617,18 +622,20 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name: Name = api
-                    .store
-                    .disambiguate_activity_name(connection, &name, &namespace)?;
+                let external_id: ExternalId = api.store.disambiguate_activity_external_id(
+                    connection,
+                    &external_id,
+                    &namespace,
+                )?;
 
                 let create = ChronicleOperation::ActivityExists(ActivityExists {
                     namespace: namespace.clone(),
-                    name: name.clone(),
+                    external_id: external_id.clone(),
                 });
 
                 to_apply.push(create);
 
-                let id = ActivityId::from_name(&name);
+                let id = ActivityId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
                     id: id.clone(),
                     namespace,
@@ -654,8 +661,8 @@ where
     #[instrument]
     async fn create_agent(
         &self,
-        name: Name,
-        namespace: Name,
+        external_id: ExternalId,
+        namespace: ExternalId,
         attributes: Attributes,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -665,18 +672,20 @@ where
             connection.immediate_transaction(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
-                let name: Name = api
-                    .store
-                    .disambiguate_agent_name(connection, &name, &namespace)?;
+                let external_id: ExternalId = api.store.disambiguate_agent_external_id(
+                    connection,
+                    &external_id,
+                    &namespace,
+                )?;
 
                 let create = ChronicleOperation::AgentExists(AgentExists {
-                    name: name.to_owned(),
+                    external_id: external_id.to_owned(),
                     namespace: namespace.clone(),
                 });
 
                 to_apply.push(create);
 
-                let id = AgentId::from_name(&name);
+                let id = AgentId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
                     id: id.clone(),
                     namespace,
@@ -697,14 +706,14 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the name part does not already exist in local storage
-    async fn create_namespace(&self, name: &Name) -> Result<ApiResponse, ApiError> {
+    /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the external_id part does not already exist in local storage
+    async fn create_namespace(&self, external_id: &ExternalId) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
-        let name = name.to_owned();
+        let external_id = external_id.to_owned();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
             connection.immediate_transaction(|connection| {
-                let (namespace, to_apply) = api.ensure_namespace(connection, &name)?;
+                let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
 
@@ -721,14 +730,14 @@ where
     #[instrument]
     async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
         match command {
-            ApiCommand::NameSpace(NamespaceCommand::Create { name }) => {
-                self.create_namespace(&name).await
+            ApiCommand::NameSpace(NamespaceCommand::Create { external_id }) => {
+                self.create_namespace(&external_id).await
             }
             ApiCommand::Agent(AgentCommand::Create {
-                name,
+                external_id,
                 namespace,
                 attributes,
-            }) => self.create_agent(name, namespace, attributes).await,
+            }) => self.create_agent(external_id, namespace, attributes).await,
             ApiCommand::Agent(AgentCommand::RegisterKey {
                 id,
                 namespace,
@@ -745,10 +754,13 @@ where
                 role,
             }) => self.delegate(namespace, id, delegate, activity, role).await,
             ApiCommand::Activity(ActivityCommand::Create {
-                name,
+                external_id,
                 namespace,
                 attributes,
-            }) => self.create_activity(name, namespace, attributes).await,
+            }) => {
+                self.create_activity(external_id, namespace, attributes)
+                    .await
+            }
             ApiCommand::Activity(ActivityCommand::Start {
                 id,
                 namespace,
@@ -781,10 +793,10 @@ where
                 role,
             }) => self.associate(namespace, responsible, id, role).await,
             ApiCommand::Entity(EntityCommand::Create {
-                name,
+                external_id,
                 namespace,
                 attributes,
-            }) => self.create_entity(name, namespace, attributes).await,
+            }) => self.create_entity(external_id, namespace, attributes).await,
             ApiCommand::Activity(ActivityCommand::Generate {
                 id,
                 namespace,
@@ -817,7 +829,7 @@ where
     #[instrument(skip(self))]
     async fn delegate(
         &self,
-        namespace: Name,
+        namespace: ExternalId,
         responsible_id: AgentId,
         delegate_id: AgentId,
         activity_id: Option<ActivityId>,
@@ -855,7 +867,7 @@ where
     #[instrument(skip(self))]
     async fn associate(
         &self,
-        namespace: Name,
+        namespace: ExternalId,
         responsible_id: AgentId,
         activity_id: ActivityId,
         role: Option<Role>,
@@ -892,7 +904,7 @@ where
     async fn entity_derive(
         &self,
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         activity_id: Option<ActivityId>,
         used_id: EntityId,
         typ: Option<DerivationType>,
@@ -929,12 +941,12 @@ where
     /// Creates and submits a (ChronicleTransaction::EntityAttach), reading input files and using the agent's private keys as required
     ///
     /// # Notes
-    /// Slighty messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
+    /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
     #[instrument]
     async fn entity_attach(
         &self,
         id: EntityId,
-        namespace: Name,
+        namespace: ExternalId,
         file: PathOrFile,
         locator: Option<String>,
         agent: Option<AgentId>,
@@ -966,15 +978,15 @@ where
                 let mut connection = api.store.connection()?;
                 let agent = agent
                     .map(|agent| {
-                        api.store.agent_by_agent_name_and_namespace(
+                        api.store.agent_by_agent_external_id_and_namespace(
                             &mut connection,
-                            agent.name_part(),
+                            agent.external_id_part(),
                             &namespace,
                         )
                     })
                     .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
 
-                let agent_id = AgentId::from_name(&agent.name);
+                let agent_id = AgentId::from_external_id(&agent.external_id);
 
                 let signer = api.keystore.agent_signing(&agent_id)?;
 
@@ -984,8 +996,8 @@ where
                     namespace,
                     id: id.clone(),
                     agent: agent_id.clone(),
-                    identityid: Some(IdentityId::from_name(
-                        agent_id.name_part(),
+                    identityid: Some(IdentityId::from_external_id(
+                        agent_id.external_id_part(),
                         &*hex::encode(signer.to_bytes()),
                     )),
                     signature: Some(hex::encode(signature)),
@@ -1014,7 +1026,7 @@ where
 
             let (_id, _) = api
                 .store
-                .namespace_by_name(&mut connection, &Name::from(&query.namespace))?;
+                .namespace_by_external_id(&mut connection, &ExternalId::from(&query.namespace))?;
             Ok(ApiResponse::query_reply(
                 api.store.prov_model_for_namespace(&mut connection, query)?,
             ))
@@ -1047,7 +1059,7 @@ where
     async fn register_key(
         &self,
         id: AgentId,
-        namespace: Name,
+        namespace: ExternalId,
         registration: KeyRegistration,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -1092,12 +1104,12 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
+    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by external_id, or via [use_agent] context
     #[instrument]
     async fn start_activity(
         &self,
         id: ActivityId,
-        namespace: Name,
+        namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
     ) -> Result<ApiResponse, ApiError> {
@@ -1109,9 +1121,9 @@ where
                 let agent = {
                     if let Some(agent) = agent {
                         api.store
-                            .agent_by_agent_name_and_namespace(
+                            .agent_by_agent_external_id_and_namespace(
                                 connection,
-                                agent.name_part(),
+                                agent.external_id_part(),
                                 &namespace,
                             )
                             .ok()
@@ -1120,27 +1132,27 @@ where
                     }
                 };
 
-                let activity = api.store.activity_by_activity_name_and_namespace(
+                let activity = api.store.activity_by_activity_external_id_and_namespace(
                     connection,
-                    id.name_part(),
+                    id.external_id_part(),
                     &namespace,
                 );
 
-                let name: Name = {
+                let external_id: ExternalId = {
                     if let Ok(existing) = activity {
                         debug!(?existing, "Use existing activity");
-                        existing.name.into()
+                        existing.external_id.into()
                     } else {
                         debug!(?id, "Need new activity");
-                        api.store.disambiguate_activity_name(
+                        api.store.disambiguate_activity_external_id(
                             connection,
-                            id.name_part(),
+                            id.external_id_part(),
                             &namespace,
                         )?
                     }
                 };
 
-                let id = ActivityId::from_name(&name);
+                let id = ActivityId::from_external_id(&external_id);
                 to_apply.push(ChronicleOperation::StartActivity(StartActivity {
                     namespace: namespace.clone(),
                     id: id.clone(),
@@ -1152,7 +1164,7 @@ where
                         WasAssociatedWith::new(
                             &namespace,
                             &id,
-                            &AgentId::from_name(&agent.name),
+                            &AgentId::from_external_id(&agent.external_id),
                             None,
                         ),
                     ));
@@ -1170,12 +1182,12 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name, or via [use_agent] context
+    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by external_id, or via [use_agent] context
     #[instrument]
     async fn end_activity(
         &self,
         id: Option<ActivityId>,
-        namespace: Name,
+        namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
     ) -> Result<ApiResponse, ApiError> {
@@ -1186,9 +1198,9 @@ where
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let activity = api
                     .store
-                    .get_activity_by_name_or_last_started(
+                    .get_activity_by_external_id_or_last_started(
                         connection,
-                        id.map(|id| id.name_part().clone()),
+                        id.map(|id| id.external_id_part().clone()),
                         namespace.clone(),
                     )
                     .map_err(|_| ApiError::NotCurrentActivity {})?;
@@ -1196,9 +1208,9 @@ where
                 let agent = {
                     if let Some(agent) = agent {
                         api.store
-                            .agent_by_agent_name_and_namespace(
+                            .agent_by_agent_external_id_and_namespace(
                                 connection,
-                                agent.name_part(),
+                                agent.external_id_part(),
                                 &namespace,
                             )
                             .ok()
@@ -1210,7 +1222,7 @@ where
                     }
                 };
 
-                let id = ActivityId::from_name(&activity.name);
+                let id = ActivityId::from_external_id(&activity.external_id);
                 to_apply.push(ChronicleOperation::EndActivity(EndActivity {
                     namespace: namespace.clone(),
                     id: id.clone(),
@@ -1222,7 +1234,7 @@ where
                         WasAssociatedWith::new(
                             &namespace,
                             &id,
-                            &AgentId::from_name(&agent.name),
+                            &AgentId::from_external_id(&agent.external_id),
                             None,
                         ),
                     ));
@@ -1241,13 +1253,18 @@ where
     }
 
     #[instrument]
-    async fn use_in_context(&self, id: AgentId, namespace: Name) -> Result<ApiResponse, ApiError> {
+    async fn use_in_context(
+        &self,
+        id: AgentId,
+        namespace: ExternalId,
+    ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
             connection.immediate_transaction(|connection| {
-                api.store.use_agent(connection, id.name_part(), &namespace)
+                api.store
+                    .use_agent(connection, id.external_id_part(), &namespace)
             })?;
 
             Ok(ApiResponse::Unit)
@@ -1375,7 +1392,7 @@ mod test {
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".into(),
+            external_id: "testns".into(),
         }))
         .await
         .unwrap();
@@ -1388,10 +1405,10 @@ mod test {
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
+            external_id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1422,13 +1439,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 "#;
 
         api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            name: "testns".into(),
+            external_id: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-            id: AgentId::from_name("testagent"),
+            id: AgentId::from_external_id("testagent"),
             namespace: "testns".into(),
             registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
                 buffer: pk.as_bytes().into(),
@@ -1442,46 +1459,46 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }, @r###"
         ---
         namespaces:
-          ? name: testns
+          ? external_id: testns
             uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
           : id:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: testns
+            external_id: testns
         agents:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - testagent
           : id: testagent
             namespaceid:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            name: testagent
+            external_id: testagent
             domaintypeid: ~
             attributes: {}
         activities: {}
         entities: {}
         identities:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: testagent
+            - external_id: testagent
               public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
           : id:
-              name: testagent
+              external_id: testagent
               public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
             namespaceid:
-              name: testns
+              external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
         attachments: {}
         has_identity:
-          ? - name: testns
+          ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - testagent
-          : - name: testns
+          : - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - name: testagent
+            - external_id: testagent
               public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
         had_identity: {}
         has_evidence: {}
@@ -1500,10 +1517,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".into(),
+            external_id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1526,10 +1543,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
+            external_id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1545,14 +1562,14 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_name("testagent"),
+            id: AgentId::from_external_id("testagent"),
             namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_name("testactivity"),
+            id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
@@ -1568,10 +1585,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
+            external_id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1587,14 +1604,14 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_name("testagent"),
+            id: AgentId::from_external_id("testagent"),
             namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_name("testactivity"),
+            id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
@@ -1620,10 +1637,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: "testagent".into(),
+            external_id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1639,17 +1656,17 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_name("testagent"),
+            id: AgentId::from_external_id("testagent"),
             namespace: "testns".into(),
         }))
         .await
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".into(),
+            external_id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1665,9 +1682,9 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            id: EntityId::from_name("testentity"),
+            id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
-            activity: Some(ActivityId::from_name("testactivity")),
+            activity: Some(ActivityId::from_external_id("testactivity")),
         }))
         .await
         .unwrap();
@@ -1676,7 +1693,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             id: None,
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
-            agent: Some(AgentId::from_name("testagent")),
+            agent: Some(AgentId::from_external_id("testagent")),
         }))
         .await
         .unwrap();
@@ -1689,10 +1706,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: "testactivity".into(),
+            external_id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes {
-                typ: Some(DomaintypeId::from_name("test")),
+                typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
                     "test".to_owned(),
                     Attribute {
@@ -1708,9 +1725,9 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .unwrap();
 
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            id: EntityId::from_name("testentity"),
+            id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
-            activity: Some(ActivityId::from_name("testactivity")),
+            activity: Some(ActivityId::from_external_id("testactivity")),
         }))
         .await
         .unwrap();
@@ -1723,10 +1740,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_name("testgeneratedentity"),
+            id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
             activity: None,
-            used_entity: EntityId::from_name("testusedentity"),
+            used_entity: EntityId::from_external_id("testusedentity"),
             derivation: None,
         }))
         .await
@@ -1740,11 +1757,11 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_name("testgeneratedentity"),
+            id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
             activity: None,
             derivation: Some(DerivationType::PrimarySource),
-            used_entity: EntityId::from_name("testusedentity"),
+            used_entity: EntityId::from_external_id("testusedentity"),
         }))
         .await
         .unwrap();
@@ -1757,10 +1774,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_name("testgeneratedentity"),
+            id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
             activity: None,
-            used_entity: EntityId::from_name("testusedentity"),
+            used_entity: EntityId::from_external_id("testusedentity"),
             derivation: Some(DerivationType::Revision),
         }))
         .await
@@ -1774,10 +1791,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         let mut api = test_api().await;
 
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_name("testgeneratedentity"),
+            id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
             activity: None,
-            used_entity: EntityId::from_name("testusedentity"),
+            used_entity: EntityId::from_external_id("testusedentity"),
             derivation: Some(DerivationType::Quotation),
         }))
         .await
@@ -1792,10 +1809,10 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
         for i in 0..100 {
             api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-                name: format!("testactivity{}", i).into(),
+                external_id: format!("testactivity{}", i).into(),
                 namespace: "testns".into(),
                 attributes: Attributes {
-                    typ: Some(DomaintypeId::from_name("test")),
+                    typ: Some(DomaintypeId::from_external_id("test")),
                     attributes: [(
                         "test".to_owned(),
                         Attribute {

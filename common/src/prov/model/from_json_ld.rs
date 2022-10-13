@@ -18,8 +18,8 @@ use crate::{
             WasGeneratedBy, WasInformedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId, NamePart, NamespaceId,
-        Role, UuidPart,
+        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, ExternalIdPart, IdentityId,
+        NamespaceId, Role, UuidPart,
     },
 };
 
@@ -531,25 +531,25 @@ impl Operation for Node {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::NamespaceName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
         let uuid = uuid::Uuid::parse_str(uuid).unwrap();
-        NamespaceId::from_name(name, uuid)
+        NamespaceId::from_external_id(external_id, uuid)
     }
 
     fn agent(&self) -> AgentId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::AgentName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        AgentId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        AgentId::from_external_id(external_id)
     }
 
     fn delegate(&self) -> AgentId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::DelegateId.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        AgentId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        AgentId::from_external_id(external_id)
     }
 
     fn optional_activity(&self) -> Option<ActivityId> {
@@ -560,7 +560,7 @@ impl Operation for Node {
             Some(object) => object,
             None => return None,
         };
-        Some(ActivityId::from_name(object.as_str().unwrap()))
+        Some(ActivityId::from_external_id(object.as_str().unwrap()))
     }
 
     fn key(&self) -> String {
@@ -590,16 +590,16 @@ impl Operation for Node {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::EntityName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        EntityId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        EntityId::from_external_id(external_id)
     }
 
     fn used_entity(&self) -> EntityId {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::UsedEntityName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        EntityId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        EntityId::from_external_id(external_id)
     }
 
     fn derivation(&self) -> Option<DerivationType> {
@@ -628,7 +628,7 @@ impl Operation for Node {
             Some(object) => object.as_str().unwrap(),
             None => return None,
         };
-        Some(DomaintypeId::from_name(d))
+        Some(DomaintypeId::from_external_id(d))
     }
 
     fn attributes(&self) -> BTreeMap<String, Attribute> {
@@ -659,8 +659,8 @@ impl Operation for Node {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ResponsibleId.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        AgentId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        AgentId::from_external_id(external_id)
     }
 
     fn optional_role(&self) -> Option<Role> {
@@ -676,8 +676,8 @@ impl Operation for Node {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::ActivityName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        ActivityId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        ActivityId::from_external_id(external_id)
     }
 
     fn identity(&self) -> Option<IdentityId> {
@@ -738,8 +738,8 @@ impl Operation for Node {
         let mut name_objects = self.get(&Reference::Id(
             ChronicleOperations::InformingActivityName.as_iri().into(),
         ));
-        let name = name_objects.next().unwrap().as_str().unwrap();
-        ActivityId::from_name(name)
+        let external_id = name_objects.next().unwrap().as_str().unwrap();
+        ActivityId::from_external_id(external_id)
     }
 }
 
@@ -760,11 +760,11 @@ impl ChronicleOperation {
                 ChronicleOperations::CreateNamespace.as_iri().into(),
             )) {
                 let namespace = o.namespace();
-                let name = namespace.name_part().to_owned();
+                let external_id = namespace.external_id_part().to_owned();
                 let uuid = namespace.uuid_part().to_owned();
                 Ok(ChronicleOperation::CreateNamespace(CreateNamespace {
                     id: namespace,
-                    name,
+                    external_id,
                     uuid,
                 }))
             } else if o.has_type(&Reference::Id(
@@ -772,10 +772,10 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.namespace();
                 let agent = o.agent();
-                let name = agent.name_part();
+                let external_id = agent.external_id_part();
                 Ok(ChronicleOperation::AgentExists(AgentExists {
                     namespace,
-                    name: name.into(),
+                    external_id: external_id.into(),
                 }))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::AgentActsOnBehalfOf.as_iri().into(),
@@ -810,10 +810,10 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.namespace();
                 let activity_id = o.optional_activity().unwrap();
-                let name = activity_id.name_part().to_owned();
+                let external_id = activity_id.external_id_part().to_owned();
                 Ok(ChronicleOperation::ActivityExists(ActivityExists {
                     namespace,
-                    name,
+                    external_id,
                 }))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::StartActivity.as_iri().into(),
@@ -853,10 +853,10 @@ impl ChronicleOperation {
             )) {
                 let namespace = o.namespace();
                 let entity = o.entity();
-                let id = entity.name_part().into();
+                let id = entity.external_id_part().into();
                 Ok(ChronicleOperation::EntityExists(EntityExists {
                     namespace,
-                    name: id,
+                    external_id: id,
                 }))
             } else if o.has_type(&Reference::Id(
                 ChronicleOperations::WasGeneratedBy.as_iri().into(),

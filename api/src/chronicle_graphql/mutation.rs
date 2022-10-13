@@ -59,7 +59,7 @@ async fn derivation<'a>(
 
 pub async fn agent<'a>(
     ctx: &Context<'a>,
-    name: String,
+    external_id: String,
     namespace: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
@@ -69,7 +69,7 @@ pub async fn agent<'a>(
 
     let res = api
         .dispatch(ApiCommand::Agent(AgentCommand::Create {
-            name: name.into(),
+            external_id: external_id.into(),
             namespace: namespace.into(),
             attributes,
         }))
@@ -80,7 +80,7 @@ pub async fn agent<'a>(
 
 pub async fn activity<'a>(
     ctx: &Context<'a>,
-    name: String,
+    external_id: String,
     namespace: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
@@ -90,7 +90,7 @@ pub async fn activity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            name: name.into(),
+            external_id: external_id.into(),
             namespace: namespace.into(),
             attributes,
         }))
@@ -101,7 +101,7 @@ pub async fn activity<'a>(
 
 pub async fn entity<'a>(
     ctx: &Context<'a>,
-    name: String,
+    external_id: String,
     namespace: Option<String>,
     attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
@@ -111,7 +111,7 @@ pub async fn entity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Entity(EntityCommand::Create {
-            name: name.into(),
+            external_id: external_id.into(),
             namespace: namespace.into(),
             attributes,
         }))
