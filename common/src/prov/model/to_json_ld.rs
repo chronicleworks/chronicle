@@ -1018,6 +1018,35 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
+            ChronicleOperation::Generated(Generated {
+                namespace,
+                id,
+                entity,
+            }) => {
+                let mut o = JsonValue::new_operation(ChronicleOperations::Generated);
+
+                o.has_value(
+                    OperationValue::string(namespace.external_id_part()),
+                    ChronicleOperations::NamespaceName,
+                );
+
+                o.has_value(
+                    OperationValue::string(namespace.uuid_part()),
+                    ChronicleOperations::NamespaceUuid,
+                );
+
+                o.has_value(
+                    OperationValue::string(id.external_id_part()),
+                    ChronicleOperations::ActivityName,
+                );
+
+                o.has_value(
+                    OperationValue::string(entity.external_id_part()),
+                    ChronicleOperations::EntityName,
+                );
+
+                o
+            }
         };
         operation.push(o);
         super::ExpandedJson(operation.into())

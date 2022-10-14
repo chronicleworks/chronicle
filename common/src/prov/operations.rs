@@ -234,6 +234,13 @@ pub struct WasInformedBy {
     pub informing_activity: ActivityId,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct Generated {
+    pub namespace: NamespaceId,
+    pub id: ActivityId,
+    pub entity: EntityId,
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum SetAttributes {
     Entity {
@@ -270,4 +277,5 @@ pub enum ChronicleOperation {
     SetAttributes(SetAttributes),
     WasAssociatedWith(WasAssociatedWith),
     WasInformedBy(WasInformedBy),
+    Generated(Generated),
 }

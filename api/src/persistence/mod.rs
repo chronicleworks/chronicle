@@ -13,8 +13,8 @@ use common::{
     prov::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
-        EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
-        NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
+        EvidenceId, ExternalId, ExternalIdPart, GeneratedEntity, Generation, Identity, IdentityId,
+        Namespace, NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
     },
 };
 use custom_error::custom_error;
@@ -132,6 +132,26 @@ impl Store {
                     .and(dsl::namespace_id.eq(nsid)),
             )
             .first::<query::Activity>(connection)?)
+    }
+
+    /// Fetch the entity record for the IRI
+    pub fn entity_by_entity_external_id_and_namespace(
+        &self,
+        connection: &mut SqliteConnection,
+        external_id: &ExternalId,
+        namespaceid: &NamespaceId,
+    ) -> Result<query::Entity, StoreError> {
+        let (_namespaceid, nsid) =
+            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+        use schema::entity::dsl;
+
+        Ok(schema::entity::table
+            .filter(
+                dsl::external_id
+                    .eq(external_id)
+                    .and(dsl::namespace_id.eq(nsid)),
+            )
+            .first::<query::Entity>(connection)?)
     }
 
     /// Fetch the agent record for the IRI
@@ -611,6 +631,12 @@ impl Store {
             }
         }
 
+        for ((namespaceid, _), generated) in model.generated.iter() {
+            for generated in generated.iter() {
+                self.apply_generated(connection, namespaceid, generated)?;
+            }
+        }
+
         for ((namespaceid, _), derivation) in model.derivation.iter() {
             for derivation in derivation.iter() {
                 self.apply_derivation(connection, namespaceid, derivation)?;
@@ -873,6 +899,36 @@ impl Store {
         Ok(())
     }
 
+    #[instrument(skip(connection))]
+    fn apply_generated(
+        &self,
+        connection: &mut SqliteConnection,
+        namespace: &common::prov::NamespaceId,
+        generated: &GeneratedEntity,
+    ) -> Result<(), StoreError> {
+        let storedentity = self.entity_by_entity_external_id_and_namespace(
+            connection,
+            generated.entity_id.external_id_part(),
+            namespace,
+        )?;
+
+        let storedactivity = self.activity_by_activity_external_id_and_namespace(
+            connection,
+            generated.generated_id.external_id_part(),
+            namespace,
+        )?;
+
+        use schema::generated::dsl as link;
+        diesel::insert_or_ignore_into(schema::generated::table)
+            .values((
+                &link::entity_id.eq(storedentity.id),
+                &link::generated_activity_id.eq(storedactivity.id),
+            ))
+            .execute(connection)?;
+
+        Ok(())
+    }
+
     pub fn connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
@@ -976,23 +1032,25 @@ impl Store {
         Ok(format!("{}-{}", external_id, ambiguous.unwrap_or_default()).into())
     }
 
-    pub(crate) fn entity_by_entity_external_id_and_namespace(
+    /// Get the named entity
+    #[instrument(skip(connection))]
+    pub(crate) fn get_entity_by_external_id(
         &self,
         connection: &mut SqliteConnection,
-        external_id: &ExternalId,
-        namespaceid: &NamespaceId,
+        external_id: Option<ExternalId>,
+        namespace: NamespaceId,
     ) -> Result<query::Entity, StoreError> {
-        let (_namespaceid, nsid) =
-            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-        use schema::entity::dsl;
-
-        Ok(schema::entity::table
-            .filter(
-                dsl::external_id
-                    .eq(external_id)
-                    .and(dsl::namespace_id.eq(nsid)),
-            )
-            .first::<query::Entity>(connection)?)
+        if let Some(external_id) = external_id {
+            trace!(%external_id, "Use existing");
+            Ok(self.entity_by_entity_external_id_and_namespace(
+                connection,
+                &external_id,
+                &namespace,
+            )?)
+        } else {
+            trace!("Use last started");
+            Ok(schema::entity::table.first::<query::Entity>(connection)?)
+        }
     }
 
     /// Get the named activity or the last started one, a useful context aware shortcut for the CLI

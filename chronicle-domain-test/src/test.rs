@@ -620,6 +620,171 @@ mod test {
     }
 
     #[tokio::test]
+    async fn generated() {
+        let schema = test_schema().await;
+
+        // create an entity
+        let entity = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation entity {
+                      theSea(externalId:"tide", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(entity, @r###"
+        [data.theSea]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create an activity
+        let activity = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation activity {
+                      gardening(externalId:"damming", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(activity, @r###"
+        [data.gardening]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // establish Generated relationship
+        let generated = schema
+            .execute(Request::new(
+                r#"
+            mutation generated {
+                generated(entity: "http://blockchaintp.com/chronicle/ns#activity:tide",
+                id: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(generated, @r###"
+        [data.generated]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query Generated relationship
+        let response = schema
+            .execute(Request::new(
+                r#"
+            query test {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
+                    ... on Gardening {
+                        id
+                        externalId
+                        generated {
+                            ... on TheSea {
+                                id
+                                externalId
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(response, @r###"
+        [data.activityById]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        externalId = 'damming'
+
+        [[data.activityById.generated]]
+        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        externalId = 'tide'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create another entity
+        let entity2 = schema
+                    .execute(Request::new(
+                        r#"
+                    mutation second {
+                      theSea(externalId:"storm", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
+                            context
+                        }
+                    }
+                "#
+                        ),
+                    )
+                    .await;
+        insta::assert_toml_snapshot!(entity2, @r###"
+        [data.theSea]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // establish another Generated relationship
+        let generated2 = schema
+            .execute(Request::new(
+                r#"
+            mutation again {
+                generated(entity: "http://blockchaintp.com/chronicle/ns#activity:storm",
+                id: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(generated2, @r###"
+        [data.generated]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        "###);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query Generated relationship
+        let response = schema
+            .execute(Request::new(
+                r#"
+            query testagain {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
+                    ... on Gardening {
+                        id
+                        externalId
+                        generated {
+                            ... on TheSea {
+                                id
+                                externalId
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            ))
+            .await;
+        insta::assert_toml_snapshot!(response, @r###"
+        [data.activityById]
+        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        externalId = 'damming'
+
+        [[data.activityById.generated]]
+        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        externalId = 'tide'
+        "###);
+    }
+
+    #[tokio::test]
     async fn query_activity_timeline() {
         let schema = test_schema().await;
 

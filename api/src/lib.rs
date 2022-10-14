@@ -35,7 +35,8 @@ use common::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
+            EntityHasEvidence, Generated, RegisterKey, SetAttributes, StartActivity,
+            WasGeneratedBy,
         },
         ActivityId, AgentId, ChronicleTransactionId, EntityId, ExternalId, ExternalIdPart,
         IdentityId, NamespaceId, ProvModel,
@@ -822,6 +823,11 @@ where
                 self.entity_derive(id, namespace, activity, used_entity, derivation)
                     .await
             }
+            ApiCommand::Entity(EntityCommand::Generated {
+                id,
+                namespace,
+                entity,
+            }) => self.entity_generated(id, namespace, entity).await,
             ApiCommand::Query(query) => self.query(query).await,
         }
     }
@@ -928,6 +934,67 @@ where
                 to_apply.push(tx);
 
                 let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+                Ok(ApiResponse::submission(
+                    id,
+                    ProvModel::from_tx(&to_apply),
+                    correlation_id,
+                ))
+            })
+        })
+        .await?
+    }
+
+    #[instrument]
+    async fn entity_generated(
+        &self,
+        id: ActivityId,
+        namespace: ExternalId,
+        entity: Option<EntityId>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.immediate_transaction(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+                let entity = api.store.get_entity_by_external_id(
+                    connection,
+                    entity.map(|x| x.external_id_part().clone()),
+                    namespace.clone(),
+                )?;
+
+                let activity = api.store.activity_by_activity_external_id_and_namespace(
+                    connection,
+                    id.external_id_part(),
+                    &namespace,
+                );
+
+                let external_id: ExternalId = {
+                    if let Ok(existing) = activity {
+                        debug!(?existing, "Use existing activity");
+                        existing.external_id.into()
+                    } else {
+                        debug!(?id, "Need new activity");
+                        api.store.disambiguate_entity_external_id(
+                            connection,
+                            id.external_id_part().to_owned(),
+                            namespace.clone(),
+                        )?
+                    }
+                };
+
+                let id = ActivityId::from_external_id(&external_id);
+
+                let create = ChronicleOperation::Generated(Generated {
+                    namespace,
+                    id: id.clone(),
+                    entity: EntityId::from_external_id(&entity.external_id),
+                });
+
+                to_apply.push(create);
+
+                let correlation_id = api.ledger_writer.submit_blocking(&to_apply)?;
+
                 Ok(ApiResponse::submission(
                     id,
                     ProvModel::from_tx(&to_apply),
@@ -1509,6 +1576,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         generation: {}
         usage: {}
         was_informed_by: {}
+        generated: {}
         "###);
     }
 
