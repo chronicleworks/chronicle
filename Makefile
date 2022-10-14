@@ -74,10 +74,10 @@ endef
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
 
 chronicle-builder-ensure-context:
-	docker buildx create --name $(ISOLATION_ID) \
+	docker buildx create --name ctx-$(ISOLATION_ID) \
 		--driver docker-container \
 		--bootstrap || true
-	docker buildx use $(ISOLATION_ID)
+	docker buildx use ctx-$(ISOLATION_ID)
 
 chronicle-builder-build: chronicle-builder-ensure-context
 	docker buildx build -f ./docker/chronicle-builder.dockerfile \
