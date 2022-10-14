@@ -76,7 +76,7 @@ impl From<&str> for ChronicleTransactionId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct ChronicleTransaction {
     pub tx: Vec<ChronicleOperation>,
 }
