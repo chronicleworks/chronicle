@@ -4,45 +4,45 @@ use chronicle::{codegen::ChronicleDomainDef, generate_chronicle_domain_schema};
 
 fn main() {
     let s = r#"
-    name: "chronicle"
+    name: "airworthiness"
     attributes:
-      String:
+      CertId:
         type: "String"
-      Int:
-        type: "Int"
-      Bool:
-        type: "Bool"
+      BatchId:
+        type: "String"
+      PartId:
+        type: "String"
+      Location:
+        type: "String"
     agents:
-      friend:
+      Contractor:
         attributes:
-          - String
-          - Int
-          - Bool
+          - Location
+      NCB:
+        attributes: []
     entities:
-      octopi:
+      Certificate:
         attributes:
-          - String
-          - Int
-          - Bool
-      the sea:
+          - CertId
+      Item:
         attributes:
-          - String
-          - Int
-          - Bool
+          - PartId
+      NCBRecord:
+        attributes: []
     activities:
-      gardening:
+      ItemCertified:
         attributes:
-          - String
-          - Int
-          - Bool
-      swim about:
+          - CertId
+      ItemCodified:
+        attributes: []
+      ItemManufactured:
         attributes:
-          - String
-          - Int
-          - Bool
+          - BatchId
     roles:
-        - delegate
-        - responsible
+      - CERTIFIER
+      - CODIFIER
+      - MANUFACTURER
+      - SUBMITTER
      "#
     .to_string();
 

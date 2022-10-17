@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, path::Path, str::FromStr};
 
-use inflector::{
-    cases::{kebabcase::to_kebab_case, pascalcase::to_pascal_case, snakecase::to_snake_case},
-    string::singularize::to_singular,
+use inflector::cases::{
+    camelcase::to_camel_case, kebabcase::to_kebab_case, pascalcase::to_pascal_case,
+    snakecase::to_snake_case,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,17 +28,37 @@ pub struct AttributeDef {
 
 impl TypeName for AttributeDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.typ))
+        to_pascal_case(&self.typ)
+    }
+
+    fn preserve_inflection(&self) -> String {
+        match (
+            self.typ.chars().next(),
+            self.typ.chars().nth(1),
+            &self.typ[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => format!("{}Attribute", self.typ),
+            (Some(first), _, body) => format!("{}{}Attribute", first.to_lowercase(), body),
+            _ => format!("{}Attribute", self.typ),
+        }
     }
 }
 
 impl AttributeDef {
     pub fn as_scalar_type(&self) -> String {
-        to_pascal_case(&format!("{}Attribute", self.as_type_name()))
+        match (
+            self.typ.chars().next(),
+            self.typ.chars().nth(1),
+            &self.typ[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => format!("{}Attribute", self.typ),
+            (Some(first), _, body) => format!("{}{}Attribute", first.to_uppercase(), body),
+            _ => format!("{}Attribute", self.as_type_name()),
+        }
     }
 
     pub fn as_property(&self) -> String {
-        to_snake_case(&to_singular(&format!("{}Attribute", self.typ)))
+        to_snake_case(&format!("{}Attribute", self.typ))
     }
 
     pub fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
@@ -57,11 +77,13 @@ pub trait CliName {
 /// A correctly cased and singularized external_id for the type
 pub trait TypeName {
     fn as_type_name(&self) -> String;
+    fn preserve_inflection(&self) -> String;
 }
 
 /// Entities, Activites and Agents have a specific set of attributes.
 pub trait AttributesTypeName {
     fn attributes_type_name(&self) -> String;
+    fn attributes_type_name_preserve_inflection(&self) -> String;
 }
 
 pub trait Property {
@@ -74,6 +96,10 @@ where
 {
     fn attributes_type_name(&self) -> String {
         to_pascal_case(&format!("{}Attributes", self.as_type_name()))
+    }
+
+    fn attributes_type_name_preserve_inflection(&self) -> String {
+        format!("{}Attributes", self.as_type_name())
     }
 }
 
@@ -103,7 +129,27 @@ pub struct AgentDef {
 
 impl TypeName for &AgentDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.external_id))
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
+            _ => to_pascal_case(&self.external_id),
+        }
+    }
+
+    fn preserve_inflection(&self) -> String {
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
+            _ => to_camel_case(&self.external_id),
+        }
     }
 }
 
@@ -147,7 +193,27 @@ pub struct EntityDef {
 
 impl TypeName for &EntityDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.external_id))
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
+            _ => to_pascal_case(&self.external_id),
+        }
+    }
+
+    fn preserve_inflection(&self) -> String {
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
+            _ => to_camel_case(&self.external_id),
+        }
     }
 }
 
@@ -191,7 +257,27 @@ pub struct ActivityDef {
 
 impl TypeName for &ActivityDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.external_id))
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
+            _ => to_pascal_case(&self.external_id),
+        }
+    }
+
+    fn preserve_inflection(&self) -> String {
+        match (
+            self.external_id.chars().next(),
+            self.external_id.chars().nth(1),
+            &self.external_id[1..],
+        ) {
+            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
+            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
+            _ => to_camel_case(&self.external_id),
+        }
     }
 }
 
@@ -246,7 +332,11 @@ impl RoleDef {
 
 impl TypeName for &RoleDef {
     fn as_type_name(&self) -> String {
-        to_pascal_case(&to_singular(&self.external_id))
+        to_pascal_case(&self.external_id)
+    }
+
+    fn preserve_inflection(&self) -> String {
+        self.external_id.clone()
     }
 }
 
@@ -970,7 +1060,7 @@ pub mod test {
             attributes:
               - String
         entities:
-          Octopus:
+          Octopi:
             attributes:
               - String
         activities:

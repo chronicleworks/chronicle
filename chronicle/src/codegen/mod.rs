@@ -25,11 +25,11 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     quote! {
         #(for attribute in attributes.iter() =>
         #[derive(Clone, #graphql_new_type)]
-        #[graphql(name,visible=true)]
+        #[graphql(name = #_(#(attribute.as_scalar_type())), visible=true)]
         pub struct #(attribute.as_scalar_type())(#(match attribute.primitive_type {
-                        PrimitiveType::String => String,
-                        PrimitiveType::Bool => bool,
-                        PrimitiveType::Int => i32,
+                PrimitiveType::String => String,
+                PrimitiveType::Bool => bool,
+                PrimitiveType::Int => i32,
             }
         ));
        )
@@ -64,32 +64,36 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
 
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[allow(clippy::upper_case_acronyms)]
         pub enum RoleType {
             Unspecified,
             #(for role in domain.roles.iter() =>
+            #[graphql(name = #_(#(role.preserve_inflection())), visible=true)]
                 #(role.as_type_name()),
             )
         }
 
+        #[allow(clippy::from_over_into)]
         impl Into<RoleType> for Option<#prov_role> {
             fn into(self) -> RoleType {
                 match self.as_ref().map(|x| x.as_str()) {
                 None => {RoleType::Unspecified}
                 #(for role in domain.roles.iter() =>
-                   Some(#_(#(role.as_type_name()))) => { RoleType::#(role.as_type_name())}
+                   Some(#_(#(role.preserve_inflection()))) => { RoleType::#(role.as_type_name())}
                 )
                 Some(&_) => {RoleType::Unspecified}
                 }
             }
         }
 
+        #[allow(clippy::from_over_into)]
         impl Into<Option<#prov_role>> for RoleType {
             fn into(self) -> Option<#prov_role> {
                 match self {
                 Self::Unspecified => None,
                 #(for role in domain.roles.iter() =>
                     RoleType::#(role.as_type_name()) => {
-                        Some(#prov_role::from(#_(#(role.as_type_name()))))
+                        Some(#prov_role::from(#_(#(role.preserve_inflection()))))
                     }
                 )
             }
@@ -97,13 +101,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[allow(clippy::upper_case_acronyms)]
         pub enum AgentType {
+            #[graphql(name = "ProvAgent", visible=true)]
             ProvAgent,
             #(for agent in domain.agents.iter() =>
+            #[graphql(name = #_(#(agent.as_type_name())), visible=true)]
                 #(agent.as_type_name()),
             )
         }
 
+        #[allow(clippy::from_over_into)]
         impl Into<Option<#domain_type_id>> for AgentType {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
@@ -116,13 +124,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[allow(clippy::upper_case_acronyms)]
         pub enum EntityType {
+            #[graphql(name = "ProvEntity", visible=true)]
             ProvEntity,
             #(for entity in domain.entities.iter() =>
+            #[graphql(name = #_(#(entity.as_type_name())), visible=true)]
                 #(entity.as_type_name()),
             )
         }
 
+        #[allow(clippy::from_over_into)]
         impl Into<Option<#domain_type_id>> for EntityType {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
@@ -135,13 +147,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[allow(clippy::upper_case_acronyms)]
         pub enum ActivityType {
+            #[graphql(name = "ProvActivity", visible=true)]
             ProvActivity,
             #(for activity in domain.activities.iter() =>
+            #[graphql(name = #_(#(activity.as_type_name())), visible=true)]
                 #(activity.as_type_name()),
             )
         }
 
+        #[allow(clippy::from_over_into)]
         impl Into<Option<#domain_type_id>> for ActivityType {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
@@ -159,6 +175,7 @@ fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
+        #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Agent {
             ProvAgent(ProvAgent),
@@ -173,6 +190,7 @@ fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
+        #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Entity {
             ProvEntity(ProvEntity),
@@ -187,6 +205,7 @@ fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
     quote! {
         #[allow(clippy::enum_variant_names)]
+        #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Activity {
             ProvActivity(ProvActivity),
@@ -215,9 +234,10 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     quote! {
     #(register(activity_impl))
 
+    #[allow(clippy::upper_case_acronyms)]
     pub struct #(&activity.as_type_name())(#abstract_activity);
 
-    #[#object]
+    #[#object(name = #_(#(activity.as_type_name())))]
     impl #(&activity.as_type_name()) {
         async fn id(&self) -> #activity_id {
             #activity_id::from_external_id(&*self.0.external_id)
@@ -289,22 +309,23 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
         }
 
         #(for attribute in &activity.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_inflection())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Bool =>
-                #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -333,9 +354,10 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     quote! {
 
     #(register(entity_impl))
+    #[allow(clippy::upper_case_acronyms)]
     pub struct #(&entity.as_type_name())(#abstract_entity);
 
-    #[#object]
+    #[#object(name = #_(#(entity.as_type_name())))]
     impl #(&entity.as_type_name()){
         async fn id(&self) -> #entity_id {
             #entity_id::from_external_id(&*self.0.external_id)
@@ -411,22 +433,23 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         }
 
         #(for attribute in &entity.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_inflection())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Bool =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -456,9 +479,10 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
 
     #(register(agent_impl))
 
+    #[allow(clippy::upper_case_acronyms)]
     pub struct #(agent.as_type_name())(#abstract_agent);
 
-    #[#object]
+    #[#object(name = #_(#(agent.as_type_name())))]
     impl #(agent.as_type_name()) {
         async fn id(&self) -> #agent_id {
             #agent_id::from_external_id(&*self.0.external_id)
@@ -487,22 +511,23 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
         }
 
         #(for attribute in &agent.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_inflection())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Bool =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -588,8 +613,10 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 
     quote! {
         #[derive(#input_object)]
+        #[graphql(name = #_(#(typ.attributes_type_name_preserve_inflection())))]
         pub struct #(typ.attributes_type_name()) {
             #(for attribute in attributes =>
+                #[graphql(name = #_(#(attribute.preserve_inflection())))]
                 pub #(&attribute.as_property()): #(
                     match attribute.primitive_type {
                         PrimitiveType::String => String,
@@ -607,8 +634,8 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
                     typ: Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
                     attributes: vec![
                     #(for attribute in attributes =>
-                        (#_(#(&attribute.as_type_name())).to_owned() ,
-                            #abstract_attribute::new(#_(#(&attribute.as_type_name())),
+                        (#_(#(&attribute.preserve_inflection())).to_owned() ,
+                            #abstract_attribute::new(#_(#(&attribute.preserve_inflection())),
                             #serde_value::from(attributes.#(&attribute.as_property())))),
                     )
                     ].into_iter().collect(),
@@ -643,7 +670,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                     AgentRef{ agent: map_agent_to_domain_type(responsible), role: RoleType::Unspecified }
                 },
                 #(for role in domain.roles.iter() =>
-                Some(#_(#(&role.as_type_name()))) => {AgentRef { role: RoleType::#(role.as_type_name()),
+                Some(#_(#(&role.preserve_inflection()))) => {AgentRef { role: RoleType::#(role.as_type_name()),
                     agent: map_agent_to_domain_type(responsible)
                 }}
                 )
@@ -657,7 +684,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                     Some(AgentRef{role: RoleType::Unspecified, agent: map_agent_to_domain_type(delegate)})
                 },
                 #(for role in domain.roles.iter() =>
-                (Some(delegate),Some(#_(#(&role.as_type_name())))) => {
+                (Some(delegate),Some(#_(#(&role.preserve_inflection())))) => {
                     Some(AgentRef{ role: RoleType::#(role.as_type_name()),
                      agent: map_agent_to_domain_type(delegate)
                 })})
@@ -880,6 +907,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for agent in domain.agents.iter() =>
             #(if agent.attributes.is_empty() {
+            #[graphql(name = #_(#(agent.preserve_inflection())))]
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -893,6 +921,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
+            #[graphql(name = #_(#(agent.preserve_inflection())))]
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -918,6 +947,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for activity in domain.activities.iter() =>
             #(if activity.attributes.is_empty() {
+            #[graphql(name = #_(#(activity.preserve_inflection())))]
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -931,6 +961,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
+            #[graphql(name = #_(#(activity.preserve_inflection())))]
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -956,6 +987,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for entity in domain.entities.iter() =>
             #(if entity.attributes.is_empty() {
+            #[graphql(name = #_(#(entity.preserve_inflection())))]
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -969,6 +1001,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
+            #[graphql(name = #_(#(entity.preserve_inflection())))]
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
