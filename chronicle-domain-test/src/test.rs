@@ -669,7 +669,7 @@ mod test {
                 r#"
             mutation generated {
                 wasGeneratedBy(activity: "chronicle:activity:damming",
-                id: "chronicle:activity:tide",)
+                id: "chronicle:entity:tide",)
                 {
                     context
                 }
