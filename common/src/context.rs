@@ -8,7 +8,7 @@ lazy_static! {
         "provext": "https://openprovenance.org/ns/provext#",
         "xsd": "http://www.w3.org/2001/XMLSchema#",
         "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-        "chronicle":"http://blockchaintp.com/chronicle/ns#",
+        "chronicle":"chronicle:",
         "entity": {
             "@id": "prov:entity",
             "@type": "@id"

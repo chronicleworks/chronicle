@@ -4,4 +4,4 @@
 #
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
-cc 33eb56f784221d700a7a878e07454fe00e91f4573e017e4b3bf3f2dee5f2326c # shrinks to tx = [StartActivity(StartActivity { namespace: NamespaceId("http://blockchaintp.com/chronicle/ns#ns:a:00000000-0000-0000-0000-000000000000"), id: ActivityId("http://blockchaintp.com/chronicle/ns#activity:A"), agent: AgentId("http://blockchaintp.com/chronicle/ns#agent:A"), time: 2021-11-29T00:00:00Z })]
+cc 33eb56f784221d700a7a878e07454fe00e91f4573e017e4b3bf3f2dee5f2326c # shrinks to tx = [StartActivity(StartActivity { namespace: NamespaceId("chronicle:ns:a:00000000-0000-0000-0000-000000000000"), id: ActivityId("chronicle:activity:A"), agent: AgentId("chronicle:agent:A"), time: 2021-11-29T00:00:00Z })]

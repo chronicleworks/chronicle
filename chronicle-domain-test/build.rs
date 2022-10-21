@@ -6,43 +6,43 @@ fn main() {
     let s = r#"
     name: "chronicle"
     attributes:
-      String:
+      NYU:
         type: "String"
-      Int:
+      UCL:
         type: "Int"
-      Bool:
+      LSE:
         type: "Bool"
     agents:
-      friend:
+      DOE:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     entities:
-      octopi:
+      NEH:
         attributes:
-          - String
-          - Int
-          - Bool
-      the sea:
+          - NYU
+          - UCL
+          - LSE
+      NIH:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     activities:
-      gardening:
+      RND:
         attributes:
-          - String
-          - Int
-          - Bool
-      swim about:
+          - NYU
+          - UCL
+          - LSE
+      RNR:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     roles:
-        - delegate
-        - responsible
+        - VIP
+        - SMH
      "#
     .to_string();
 

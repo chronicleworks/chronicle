@@ -25,7 +25,7 @@ impl ToJson for ProvModel {
             doc.push(object! {
                 "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "chronicle:externalId": [{
                     "@value": ns.external_id.as_str(),
                 }]
             })
@@ -35,10 +35,10 @@ impl ToJson for ProvModel {
             doc.push(object! {
                 "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Identity).as_str(),
-                "http://blockchaintp.com/chronicle/ns#publicKey": [{
+                "chronicle:publicKey": [{
                     "@value": identity.public_key.to_string(),
                 }],
-                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                "chronicle:hasNamespace": [{
                     "@id": ns.to_string()
                 }],
             })
@@ -48,12 +48,12 @@ impl ToJson for ProvModel {
             let mut attachmentdoc = object! {
                 "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::HasEvidence).as_str(),
-                "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
-                "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
-                "http://blockchaintp.com/chronicle/ns#signedBy": {
+                "chronicle:entitySignature": attachment.signature.to_string(),
+                "chronicle:signedAtTime": attachment.signature_time.to_rfc3339(),
+                "chronicle:signedBy": {
                     "@id": attachment.signer.to_string()
                 },
-                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                "chronicle:hasNamespace": [{
                     "@id": ns.to_string()
                 }],
             };
@@ -82,7 +82,7 @@ impl ToJson for ProvModel {
             let mut agentdoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "chronicle:externalId": [{
                    "@value": agent.external_id.as_str(),
                 }]
             };
@@ -261,7 +261,7 @@ impl ToJson for ProvModel {
             let mut activitydoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "chronicle:externalId": [{
                    "@value": activity.external_id.as_str(),
                 }]
             };
@@ -357,7 +357,7 @@ impl ToJson for ProvModel {
             let mut entitydoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "chronicle:externalId": [{
                    "@value": entity.external_id.as_str()
                 }]
             };

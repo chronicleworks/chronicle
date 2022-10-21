@@ -30,6 +30,13 @@ impl TypeName for AttributeDef {
     fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.typ))
     }
+
+    fn preserve_acronym(&self) -> String {
+        match self {
+            s if s.typ.chars().all(|c| c.is_uppercase()) => format!("{}attribute", s.typ),
+            s => format!("{}Attribute", s.as_type_name()),
+        }
+    }
 }
 
 impl AttributeDef {
@@ -57,11 +64,13 @@ pub trait CliName {
 /// A correctly cased and singularized external_id for the type
 pub trait TypeName {
     fn as_type_name(&self) -> String;
+    fn preserve_acronym(&self) -> String;
 }
 
 /// Entities, Activites and Agents have a specific set of attributes.
 pub trait AttributesTypeName {
     fn attributes_type_name(&self) -> String;
+    fn attributes_type_name_preserve_acronym(&self) -> String;
 }
 
 pub trait Property {
@@ -74,6 +83,10 @@ where
 {
     fn attributes_type_name(&self) -> String {
         to_pascal_case(&format!("{}Attributes", self.as_type_name()))
+    }
+
+    fn attributes_type_name_preserve_acronym(&self) -> String {
+        format!("{}attributes", self.preserve_acronym())
     }
 }
 
@@ -104,6 +117,13 @@ pub struct AgentDef {
 impl TypeName for &AgentDef {
     fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.external_id))
+    }
+
+    fn preserve_acronym(&self) -> String {
+        match self {
+            s if s.external_id.chars().all(|c| c.is_uppercase()) => s.external_id.clone(),
+            s => s.as_type_name(),
+        }
     }
 }
 
@@ -149,6 +169,13 @@ impl TypeName for &EntityDef {
     fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.external_id))
     }
+
+    fn preserve_acronym(&self) -> String {
+        match self {
+            s if s.external_id.chars().all(|c| c.is_uppercase()) => s.external_id.clone(),
+            s => s.as_type_name(),
+        }
+    }
 }
 
 impl EntityDef {
@@ -192,6 +219,13 @@ pub struct ActivityDef {
 impl TypeName for &ActivityDef {
     fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.external_id))
+    }
+
+    fn preserve_acronym(&self) -> String {
+        match self {
+            s if s.external_id.chars().all(|c| c.is_uppercase()) => s.external_id.clone(),
+            s => s.as_type_name(),
+        }
     }
 }
 
@@ -247,6 +281,13 @@ impl RoleDef {
 impl TypeName for &RoleDef {
     fn as_type_name(&self) -> String {
         to_pascal_case(&to_singular(&self.external_id))
+    }
+
+    fn preserve_acronym(&self) -> String {
+        match self {
+            s if s.external_id.chars().all(|c| c.is_uppercase()) => s.external_id.clone(),
+            s => s.as_type_name(),
+        }
     }
 }
 
@@ -1065,5 +1106,14 @@ pub mod test {
         "###);
 
         Ok(())
+    }
+
+    #[test]
+    fn singularize_acronym() {
+        use inflector::string::singularize::to_singular;
+        let mock_string: &str = "PIDs";
+        let expected_string: String = "PID".to_owned();
+        let asserted_string: String = to_singular(mock_string);
+        assert!(asserted_string == expected_string);
     }
 }

@@ -12,43 +12,43 @@ pub async fn main() {
     let s = r#"
     name: "chronicle"
     attributes:
-      String:
+      NYU:
         type: "String"
-      Int:
+      UCL:
         type: "Int"
-      Bool:
+      LSE:
         type: "Bool"
     agents:
-      friend:
+      DOE:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     entities:
-      octopi:
+      NEH:
         attributes:
-          - String
-          - Int
-          - Bool
-      the sea:
+          - NYU
+          - UCL
+          - LSE
+      NIH:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     activities:
-      gardening:
+      RND:
         attributes:
-          - String
-          - Int
-          - Bool
-      swim about:
+          - NYU
+          - UCL
+          - LSE
+      RNR:
         attributes:
-          - String
-          - Int
-          - Bool
+          - NYU
+          - UCL
+          - LSE
     roles:
-        - delegate
-        - responsible
+        - VIP
+        - SMH
      "#
     .to_string();
 
@@ -137,9 +137,9 @@ mod test {
                 r#"
             mutation {
                 actedOnBehalfOf(
-                    responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
-                    delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
-                    role: DELEGATE
+                    responsible: "chronicle:agent:DOE",
+                    delegate: "chronicle:agent:VIP",
+                    role: VIP
                     ) {
                     context
                 }
@@ -152,7 +152,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.actedOnBehalfOf]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
+        context = 'chronicle:agent:DOE'
         "###);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -161,7 +161,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                agentById(id: "chronicle:agent:DOE") {
                     ... on ProvAgent {
                         id
                         externalId
@@ -182,14 +182,14 @@ mod test {
         insta::assert_json_snapshot!(derived.data, @r###"
         {
           "agentById": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:responsible",
-            "externalId": "responsible",
+            "id": "chronicle:agent:DOE",
+            "externalId": "DOE",
             "actedOnBehalfOf": [
               {
                 "agent": {
-                  "id": "http://blockchaintp.com/chronicle/ns#agent:delegate"
+                  "id": "chronicle:agent:VIP"
                 },
-                "role": "DELEGATE"
+                "role": "VIP"
               }
             ]
           }
@@ -205,8 +205,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasDerivedFrom(generatedEntity: "chronicle:entity:NEH",
+                               usedEntity: "chronicle:entity:NIH") {
                     context
                 }
             }
@@ -216,7 +216,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasDerivedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'chronicle:entity:NEH'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -224,7 +224,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "chronicle:entity:NEH") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -241,11 +241,11 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'chronicle:entity:NEH'
+        externalId = 'NEH'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
         "###);
     }
 
@@ -257,8 +257,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                hadPrimarySource(generatedEntity: "chronicle:entity:NEH",
+                               usedEntity: "chronicle:entity:NIH") {
                     context
                 }
             }
@@ -268,7 +268,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.hadPrimarySource]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'chronicle:entity:NEH'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -276,7 +276,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "chronicle:entity:NEH") {
 
                     ... on ProvEntity {
                         id
@@ -299,14 +299,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'chronicle:entity:NEH'
+        externalId = 'NEH'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
 
         [[data.entityById.hadPrimarySource]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
         "###);
     }
 
@@ -318,8 +318,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasRevisionOf(generatedEntity: "chronicle:entity:NEH",
+                            usedEntity: "chronicle:entity:NIH") {
                     context
                 }
             }
@@ -329,7 +329,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasRevisionOf]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'chronicle:entity:NEH'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -337,7 +337,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "chronicle:entity:NEH") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -359,14 +359,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'chronicle:entity:NEH'
+        externalId = 'NEH'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
 
         [[data.entityById.wasRevisionOf]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
         "###);
     }
 
@@ -378,8 +378,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasQuotedFrom(generatedEntity: "chronicle:entity:NEH",
+                            usedEntity: "chronicle:entity:NIH") {
                     context
                 }
             }
@@ -389,7 +389,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasQuotedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'chronicle:entity:NEH'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -397,7 +397,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "chronicle:entity:NEH") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -419,14 +419,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'chronicle:entity:NEH'
+        externalId = 'NEH'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
 
         [[data.entityById.wasQuotedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'chronicle:entity:NIH'
         "###);
     }
 
@@ -438,7 +438,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                agent(externalId:"bobross", attributes: { type: "artist" }) {
+                agent(externalId:"DOE", attributes: { type: "LSE" }) {
                     context
                 }
             }
@@ -448,7 +448,7 @@ mod test {
 
         insta::assert_toml_snapshot!(create, @r###"
         [data.agent]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'
+        context = 'chronicle:agent:DOE'
         "###);
     }
 
@@ -461,7 +461,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation one {
-                      gardening(externalId:"composting", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      rnd(externalId:"urban development", attributes: { NYUattribute: "real estate", UCLattribute: 1, LSEattribute: false }) {
                             context
                         }
                     }
@@ -470,8 +470,8 @@ mod test {
                     )
                     .await;
         insta::assert_toml_snapshot!(activity1, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        [data.rnd]
+        context = 'chronicle:activity:urban%20development'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -480,7 +480,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation two {
-                      gardening(externalId:"lawnmowing", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      rnr(externalId:"researching urban history", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                             context
                         }
                     }
@@ -489,8 +489,8 @@ mod test {
                     )
                     .await;
         insta::assert_toml_snapshot!(activity2, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
+        [data.rnr]
+        context = 'chronicle:activity:researching%20urban%20history'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -499,8 +499,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation exec {
-                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
-                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:lawnmowing",)
+                wasInformedBy(activity: "chronicle:activity:urban%20development",
+                informingActivity: "chronicle:activity:researching%20urban%20history",)
                 {
                     context
                 }
@@ -510,7 +510,7 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(was_informed_by, @r###"
         [data.wasInformedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        context = 'chronicle:activity:urban%20development'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -519,12 +519,12 @@ mod test {
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
-                    ... on Gardening {
+                activityById(id: "chronicle:activity:urban%20development") {
+                    ... on RND {
                         id
                         externalId
                         wasInformedBy {
-                            ... on Gardening {
+                            ... on RNR {
                                 id
                                 externalId
                             }
@@ -537,12 +537,12 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        externalId = 'composting'
+        id = 'chronicle:activity:urban%20development'
+        externalId = 'urban development'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        externalId = 'lawnmowing'
+        id = 'chronicle:activity:researching%20urban%20history'
+        externalId = 'researching urban history'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -551,7 +551,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation three {
-                      gardening(externalId:"mowermaintenance", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
+                      rnr(externalId:"travel", attributes: { NYUattribute: "str", UCLattribute: 2, LSEattribute: true }) {
                             context
                         }
                     }
@@ -560,8 +560,8 @@ mod test {
                     )
                     .await;
         insta::assert_toml_snapshot!(activity3, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
+        [data.rnr]
+        context = 'chronicle:activity:travel'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -570,8 +570,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation execagain {
-                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
-                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:mowermaintenance",)
+                wasInformedBy(activity: "chronicle:activity:urban%20development",
+                informingActivity: "chronicle:activity:travel",)
                 {
                     context
                 }
@@ -581,7 +581,7 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(was_informed_by2, @r###"
         [data.wasInformedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        context = 'chronicle:activity:urban%20development'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -590,12 +590,12 @@ mod test {
             .execute(Request::new(
                 r#"
             query testagain {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
-                    ... on Gardening {
+                activityById(id: "chronicle:activity:urban%20development") {
+                    ... on RND {
                         id
                         externalId
                         wasInformedBy {
-                            ... on Gardening {
+                            ... on RNR {
                                 id
                                 externalId
                             }
@@ -608,16 +608,16 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        externalId = 'composting'
+        id = 'chronicle:activity:urban%20development'
+        externalId = 'urban development'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        externalId = 'lawnmowing'
+        id = 'chronicle:activity:researching%20urban%20history'
+        externalId = 'researching urban history'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
-        externalId = 'mowermaintenance'
+        id = 'chronicle:activity:travel'
+        externalId = 'travel'
         "###);
     }
 
@@ -630,7 +630,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation entity {
-                      theSea(externalId:"tide", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      neh(externalId:"endowment", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                             context
                         }
                     }
@@ -639,8 +639,8 @@ mod test {
                     )
                     .await;
         insta::assert_toml_snapshot!(entity, @r###"
-        [data.theSea]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        [data.neh]
+        context = 'chronicle:entity:endowment'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -649,7 +649,7 @@ mod test {
                     .execute(Request::new(
                         r#"
                     mutation activity {
-                      gardening(externalId:"damming", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                      rnd(externalId:"researching congestion", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                             context
                         }
                     }
@@ -658,8 +658,8 @@ mod test {
                     )
                     .await;
         insta::assert_toml_snapshot!(activity, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        [data.rnd]
+        context = 'chronicle:activity:researching%20congestion'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -668,8 +668,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation generated {
-                wasGeneratedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:damming",
-                id: "http://blockchaintp.com/chronicle/ns#activity:tide",)
+                wasGeneratedBy(activity: "chronicle:activity:damming",
+                id: "chronicle:activity:tide",)
                 {
                     context
                 }
@@ -679,7 +679,7 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(generated, @r###"
         [data.wasGeneratedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        context = 'chronicle:entity:tide'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -688,12 +688,12 @@ mod test {
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
-                    ... on Gardening {
+                activityById(id: "chronicle:activity:researching%20congestion") {
+                    ... on RND {
                         id
                         externalId
                         generated {
-                            ... on TheSea {
+                            ... on NEH {
                                 id
                                 externalId
                             }
@@ -706,12 +706,12 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
-        externalId = 'damming'
+        id = 'chronicle:activity:researching%20congestion'
+        externalId = 'researching congestion'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
-        externalId = 'tide'
+        id = 'chronicle:entity:endowment'
+        externalId = 'endowment'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -730,7 +730,7 @@ mod test {
                     .await;
         insta::assert_toml_snapshot!(entity2, @r###"
         [data.theSea]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
+        context = 'chronicle:entity:storm'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -739,8 +739,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation again {
-                wasGeneratedBy(id: "http://blockchaintp.com/chronicle/ns#entity:storm",
-                activity: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                wasGeneratedBy(id: "chronicle:entity:storm",
+                activity: "chronicle:activity:damming",)
                 {
                     context
                 }
@@ -750,7 +750,7 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(generated2, @r###"
         [data.wasGeneratedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
+        context = 'chronicle:entity:storm'
         "###);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -759,7 +759,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query testagain {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
+                activityById(id: "chronicle:entity:damming") {
                     ... on Gardening {
                         id
                         externalId
@@ -777,15 +777,15 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(response, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        id = 'chronicle:activity:damming'
         externalId = 'damming'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        id = 'chronicle:entity:tide'
         externalId = 'tide'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:storm'
+        id = 'chronicle:entity:storm'
         externalId = 'storm'
         "###);
     }
@@ -798,7 +798,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(externalId:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                doe(externalId:"minister", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                     context
                 }
             }
@@ -814,7 +814,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(externalId:"john", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                doe(externalId:"inspector", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                     context
                 }
             }
@@ -830,7 +830,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                theSea(externalId:"coral", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                neh(externalId:"fundraising", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                     context
                 }
             }
@@ -846,7 +846,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                theSea(externalId:"fish", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                nih(externalId:"health", attributes: { NYUattribute: "string", UCLattribute: 1, LSEattribute: false }) {
                     context
                 }
             }
@@ -862,9 +862,9 @@ mod test {
 
         for i in 1..10 {
             let activity_name = if i % 2 == 0 {
-                format!("gardening{}", i)
+                format!("rnd{}", i)
             } else {
-                format!("swimming{}", i)
+                format!("rnr{}", i)
             };
 
             if (i % 2) == 0 {
@@ -873,7 +873,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        gardening(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        rnd(externalId:"{}", attributes: {{ NYUattribute: "string", UCLattribute: 1, LSEattribute: false }}) {{
                             context
                         }}
                     }}
@@ -890,7 +890,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        swimAbout(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        rnr(externalId:"{}", attributes: {{ NYUattribute: "string", UCLattribute: 1, LSEattribute: false }}) {{
                             context
                         }}
                     }}
@@ -908,7 +908,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: "http://blockchaintp.com/chronicle/ns#entity:coral", activity: "http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                used(id: "chronicle:entity:fundraising", activity: "chronicle:activity:{}") {{
                     context
                 }}
             }}
@@ -924,12 +924,15 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
                   mutation {{
-                      startActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                      startActivity( time: "{}", id: "http://chronicle:activity:{}") {{
                           context
                       }}
                   }}
                 "#,
-                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
+                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
+                        .unwrap()
+                        .to_rfc3339(),
+                    activity_name
                 )))
                 .await;
 
@@ -939,12 +942,15 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                endActivity( time: "{}", id: "http://chronicle:activity:{}") {{
                     context
                 }}
             }}
         "#,
-                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
+                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
+                        .unwrap()
+                        .to_rfc3339(),
+                    activity_name
                 )))
                 .await;
 
@@ -952,13 +958,13 @@ mod test {
 
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            let agent = if i % 2 == 0 { "ringo" } else { "john" };
+            let agent = if i % 2 == 0 { "minister" } else { "inspector" };
 
             let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:{}", activity: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                wasAssociatedWith( role: VIP, responsible: "chronicle:agent:{}", activity: "http://chronicle:activity:{}") {{
                     context
                 }}
             }}
@@ -992,18 +998,18 @@ mod test {
                     edges {
                         node {
                             __typename
-                            ... on Gardening {
+                            ... on RND {
                                 id
                                 externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
+                                NYUattribute
+                                UCLattribute
+                                LSEattribute
                                 started
                                 ended
                                 wasAssociatedWith {
                                         responsible {
                                             agent {
-                                                ... on Friend {
+                                                ... on DOE {
                                                     id
                                                     externalId
                                                 }
@@ -1012,7 +1018,7 @@ mod test {
                                         }
                                 }
                                 used {
-                                    ... on TheSea {
+                                    ... on NEH {
                                         id
                                         externalId
                                     }
@@ -1040,35 +1046,35 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "externalId": "gardening2",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd2",
+                    "externalId": "rnd2",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1076,35 +1082,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "externalId": "gardening4",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd4",
+                    "externalId": "rnd4",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1112,35 +1118,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "externalId": "gardening6",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd6",
+                    "externalId": "rnd6",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1148,35 +1154,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "externalId": "gardening8",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd8",
+                    "externalId": "rnd8",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1184,7 +1190,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "8"
                 }
@@ -1213,18 +1219,18 @@ mod test {
                     edges {
                         node {
                             __typename
-                            ... on Gardening {
+                            ... on RND {
                                 id
                                 externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
+                                NYUattribute
+                                UCLattribute
+                                LSEattribute
                                 started
                                 ended
                                 wasAssociatedWith {
                                         responsible {
                                             agent {
-                                                ... on Friend {
+                                                ... on DOE {
                                                     id
                                                     externalId
                                                 }
@@ -1233,7 +1239,7 @@ mod test {
                                         }
                                 }
                                 used {
-                                    ... on TheSea {
+                                    ... on NEH {
                                         id
                                         externalId
                                     }
@@ -1261,35 +1267,35 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "externalId": "gardening8",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd8",
+                    "externalId": "rnd8",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1297,35 +1303,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "externalId": "gardening6",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd6",
+                    "externalId": "rnd6",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1333,35 +1339,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "externalId": "gardening4",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd4",
+                    "externalId": "rnd4",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1369,35 +1375,35 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "externalId": "gardening2",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "RND",
+                    "id": "chronicle:activity:rnd2",
+                    "externalId": "rnd2",
+                    "NYUattribute": "string",
+                    "UCLattribute": 1,
+                    "LSEattribute": null,
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "chronicle:agent:minister",
+                            "externalId": "minister"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "VIP"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "chronicle:entity:fundraising",
+                        "externalId": "fundraising"
                       }
                     ]
                   },
@@ -1405,7 +1411,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "8"
                 }
@@ -1423,7 +1429,7 @@ mod test {
                   forEntity: [],
                   forAgent: [],
                   order: NEWEST_FIRST,
-                  activityTypes: [SWIM_ABOUT],
+                  activityTypes: [RND, RNR],
                                 ) {
                     pageInfo {
                         hasPreviousPage
@@ -1451,38 +1457,62 @@ mod test {
                 "hasPreviousPage": false,
                 "hasNextPage": false,
                 "startCursor": "0",
-                "endCursor": "4"
+                "endCursor": "8"
               },
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RND"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RND"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "RND"
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "RNR"
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "RND"
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "RNR"
+                  },
+                  "cursor": "8"
                 }
               ]
             }
@@ -1496,7 +1526,7 @@ mod test {
                 query {
                 activityTimeline(
                   forEntity: [],
-                  forAgent: ["http://blockchaintp.com/chronicle/ns#agent:john"],
+                  forAgent: ["chronicle:agent:inspector"],
                   order: NEWEST_FIRST,
                   activityTypes: [],
                                 ) {
@@ -1531,31 +1561,31 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "RNR"
                   },
                   "cursor": "4"
                 }
@@ -1575,7 +1605,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                friend(externalId:"bobross{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
+                doe(externalId:"minister{}", attributes: {{ NYUattribute: "String", UCLattribute: 1, LSEattribute: false }}) {{
                     context
                 }}
             }}
@@ -1592,7 +1622,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: FRIEND) {
+                agentsByType(agentType: DOE) {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -1602,12 +1632,12 @@ mod test {
                     edges {
                         node {
                             __typename
-                            ... on Friend {
+                            ... on DOE {
                                 id
                                 externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
+                                NYUattribute
+                                UCLattribute
+                                LSEattribute
                             }
                        }
                         cursor
@@ -1631,111 +1661,111 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
-                    "externalId": "bobross0",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister0",
+                    "externalId": "minister0",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
-                    "externalId": "bobross1",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister1",
+                    "externalId": "minister1",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
-                    "externalId": "bobross10",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister10",
+                    "externalId": "minister10",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
-                    "externalId": "bobross11",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister11",
+                    "externalId": "minister11",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "externalId": "bobross12",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister12",
+                    "externalId": "minister12",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "externalId": "bobross13",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister13",
+                    "externalId": "minister13",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "externalId": "bobross14",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister14",
+                    "externalId": "minister14",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "externalId": "bobross15",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister15",
+                    "externalId": "minister15",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "externalId": "bobross16",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister16",
+                    "externalId": "minister16",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "8"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "externalId": "bobross17",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister17",
+                    "externalId": "minister17",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "9"
                 }
@@ -1749,7 +1779,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: FRIEND, first: 20, after: "3") {
+                agentsByType(agentType: DOE, first: 20, after: "3") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -1759,12 +1789,12 @@ mod test {
                     edges {
                         node {
                             __typename
-                            ... on Friend {
+                            ... on DOE {
                                 id
                                 externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
+                                NYUattribute
+                                UCLattribute
+                                LSEattribute
                             }
                         }
                         cursor
@@ -1788,221 +1818,221 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "externalId": "bobross12",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister12",
+                    "externalId": "minister12",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "externalId": "bobross13",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister13",
+                    "externalId": "minister13",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "externalId": "bobross14",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister14",
+                    "externalId": "minister14",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "externalId": "bobross15",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister15",
+                    "externalId": "minister15",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "externalId": "bobross16",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister16",
+                    "externalId": "minister16",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "externalId": "bobross17",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister17",
+                    "externalId": "minister17",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross18",
-                    "externalId": "bobross18",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister18",
+                    "externalId": "minister18",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross19",
-                    "externalId": "bobross19",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister19",
+                    "externalId": "minister19",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross2",
-                    "externalId": "bobross2",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister2",
+                    "externalId": "minister2",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "8"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross20",
-                    "externalId": "bobross20",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister20",
+                    "externalId": "minister20",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "9"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross21",
-                    "externalId": "bobross21",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister21",
+                    "externalId": "minister21",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "10"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross22",
-                    "externalId": "bobross22",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister22",
+                    "externalId": "minister22",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "11"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross23",
-                    "externalId": "bobross23",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister23",
+                    "externalId": "minister23",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "12"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross24",
-                    "externalId": "bobross24",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister24",
+                    "externalId": "minister24",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "13"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross25",
-                    "externalId": "bobross25",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister25",
+                    "externalId": "minister25",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "14"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross26",
-                    "externalId": "bobross26",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister26",
+                    "externalId": "minister26",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "15"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross27",
-                    "externalId": "bobross27",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister27",
+                    "externalId": "minister27",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "16"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross28",
-                    "externalId": "bobross28",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister28",
+                    "externalId": "minister28",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "17"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross29",
-                    "externalId": "bobross29",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister29",
+                    "externalId": "minister29",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "18"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross3",
-                    "externalId": "bobross3",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister3",
+                    "externalId": "minister3",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "19"
                 }
@@ -2016,7 +2046,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query {
-                agentsByType(agentType: FRIEND, first: 20, after: "90") {
+                agentsByType(agentType: DOE, first: 20, after: "90") {
                     pageInfo {
                         hasPreviousPage
                         hasNextPage
@@ -2026,12 +2056,12 @@ mod test {
                     edges {
                         node {
                             __typename
-                            ... on Friend {
+                            ... on DOE {
                                 id
                                 externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
+                                NYUattribute
+                                UCLattribute
+                                LSEattribute
                             }
                         }
                         cursor
@@ -2055,100 +2085,100 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross91",
-                    "externalId": "bobross91",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister91",
+                    "externalId": "minister91",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross92",
-                    "externalId": "bobross92",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister92",
+                    "externalId": "minister92",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross93",
-                    "externalId": "bobross93",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister93",
+                    "externalId": "minister93",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross94",
-                    "externalId": "bobross94",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister94",
+                    "externalId": "minister94",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross95",
-                    "externalId": "bobross95",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister95",
+                    "externalId": "minister95",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross96",
-                    "externalId": "bobross96",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister96",
+                    "externalId": "minister96",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross97",
-                    "externalId": "bobross97",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister97",
+                    "externalId": "minister97",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross98",
-                    "externalId": "bobross98",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister98",
+                    "externalId": "minister98",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross99",
-                    "externalId": "bobross99",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "DOE",
+                    "id": "chronicle:agent:minister99",
+                    "externalId": "minister99",
+                    "NYUattribute": "String",
+                    "UCLattribute": 1,
+                    "LSEattribute": false
                   },
                   "cursor": "8"
                 }

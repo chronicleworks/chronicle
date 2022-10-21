@@ -25,7 +25,7 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     quote! {
         #(for attribute in attributes.iter() =>
         #[derive(Clone, #graphql_new_type)]
-        #[graphql(name,visible=true)]
+        #[graphql(name = #_(#(attribute.preserve_acronym())), visible=true)]
         pub struct #(attribute.as_scalar_type())(#(match attribute.primitive_type {
                         PrimitiveType::String => String,
                         PrimitiveType::Bool => bool,
@@ -67,6 +67,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub enum RoleType {
             Unspecified,
             #(for role in domain.roles.iter() =>
+            #[graphql(name = #_(#(role.preserve_acronym())), visible=true)]
                 #(role.as_type_name()),
             )
         }
@@ -76,7 +77,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
                 match self.as_ref().map(|x| x.as_str()) {
                 None => {RoleType::Unspecified}
                 #(for role in domain.roles.iter() =>
-                   Some(#_(#(role.as_type_name()))) => { RoleType::#(role.as_type_name())}
+                   Some(#_(#(role.preserve_acronym()))) => { RoleType::#(role.as_type_name())}
                 )
                 Some(&_) => {RoleType::Unspecified}
                 }
@@ -89,7 +90,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
                 Self::Unspecified => None,
                 #(for role in domain.roles.iter() =>
                     RoleType::#(role.as_type_name()) => {
-                        Some(#prov_role::from(#_(#(role.as_type_name()))))
+                        Some(#prov_role::from(#_(#(role.preserve_acronym()))))
                     }
                 )
             }
@@ -100,7 +101,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub enum AgentType {
             ProvAgent,
             #(for agent in domain.agents.iter() =>
-                #(agent.as_type_name()),
+                #(agent.preserve_acronym()),
             )
         }
 
@@ -108,7 +109,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for agent in domain.agents.iter() =>
-                AgentType::#(agent.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(agent.as_type_name())))),
+                AgentType::#(agent.preserve_acronym()) => Some(#domain_type_id::from_external_id(#_(#(agent.preserve_acronym())))),
                 )
                 AgentType::ProvAgent => None
                 }
@@ -119,7 +120,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub enum EntityType {
             ProvEntity,
             #(for entity in domain.entities.iter() =>
-                #(entity.as_type_name()),
+                #(entity.preserve_acronym()),
             )
         }
 
@@ -127,7 +128,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for entity in domain.entities.iter() =>
-                EntityType::#(entity.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(entity.as_type_name())))),
+                EntityType::#(entity.preserve_acronym()) => Some(#domain_type_id::from_external_id(#_(#(entity.preserve_acronym())))),
                 )
                 EntityType::ProvEntity => None
                 }
@@ -138,7 +139,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         pub enum ActivityType {
             ProvActivity,
             #(for activity in domain.activities.iter() =>
-                #(activity.as_type_name()),
+                #(activity.preserve_acronym()),
             )
         }
 
@@ -146,7 +147,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
             fn into(self) -> Option<#domain_type_id> {
                 match self {
                 #(for activity in domain.activities.iter() =>
-                ActivityType::#(activity.as_type_name()) => Some(#domain_type_id::from_external_id(#_(#(activity.as_type_name())))),
+                ActivityType::#(activity.preserve_acronym()) => Some(#domain_type_id::from_external_id(#_(#(activity.preserve_acronym())))),
                 )
                 ActivityType::ProvActivity => None
                 }
@@ -163,7 +164,7 @@ fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
         pub enum Agent {
             ProvAgent(ProvAgent),
             #(for agent in agents =>
-                #(&agent.as_type_name())(#(&agent.as_type_name())),
+                #(&agent.preserve_acronym())(#(&agent.as_type_name())),
             )
         }
     }
@@ -177,7 +178,7 @@ fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
         pub enum Entity {
             ProvEntity(ProvEntity),
             #(for entity in entities =>
-                #(&entity.as_type_name())(#(&entity.as_type_name())),
+                #(&entity.preserve_acronym())(#(&entity.as_type_name())),
             )
         }
     }
@@ -191,7 +192,7 @@ fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
         pub enum Activity {
             ProvActivity(ProvActivity),
             #(for activity in activities =>
-                #(&activity.as_type_name())(#(&activity.as_type_name())),
+                #(&activity.preserve_acronym())(#(&activity.as_type_name())),
             )
         }
     }
@@ -217,7 +218,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 
     pub struct #(&activity.as_type_name())(#abstract_activity);
 
-    #[#object]
+    #[#object(name = #_(#(activity.preserve_acronym())))]
     impl #(&activity.as_type_name()) {
         async fn id(&self) -> #activity_id {
             #activity_id::from_external_id(&*self.0.external_id)
@@ -289,10 +290,11 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
         }
 
         #(for attribute in &activity.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_acronym())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
@@ -304,7 +306,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #activity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -335,7 +337,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     #(register(entity_impl))
     pub struct #(&entity.as_type_name())(#abstract_entity);
 
-    #[#object]
+    #[#object(name = #_(#(entity.preserve_acronym())))]
     impl #(&entity.as_type_name()){
         async fn id(&self) -> #entity_id {
             #entity_id::from_external_id(&*self.0.external_id)
@@ -411,22 +413,23 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         }
 
         #(for attribute in &entity.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_acronym())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Bool =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #entity_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -458,7 +461,7 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
 
     pub struct #(agent.as_type_name())(#abstract_agent);
 
-    #[#object]
+    #[#object(name = #_(#(agent.preserve_acronym())))]
     impl #(agent.as_type_name()) {
         async fn id(&self) -> #agent_id {
             #agent_id::from_external_id(&*self.0.external_id)
@@ -487,22 +490,23 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
         }
 
         #(for attribute in &agent.attributes =>
+        #[graphql(name = #_(#(attribute.preserve_acronym())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_str().map(|attr| attr.to_owned()))
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Bool =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_bool())
                     .map(#(attribute.as_scalar_type())),
               PrimitiveType::Int =>
-                #agent_impl::load_attribute(self.0.id, #_(#(attribute.as_type_name())), ctx)
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_acronym())), ctx)
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
@@ -588,8 +592,10 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 
     quote! {
         #[derive(#input_object)]
+        #[graphql(name = #_(#(typ.attributes_type_name_preserve_acronym())))]
         pub struct #(typ.attributes_type_name()) {
             #(for attribute in attributes =>
+                #[graphql(name = #_(#(attribute.preserve_acronym())))]
                 pub #(&attribute.as_property()): #(
                     match attribute.primitive_type {
                         PrimitiveType::String => String,
@@ -604,11 +610,11 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
         impl From<#(typ.attributes_type_name())> for #abstract_attributes{
             fn from(attributes: #(typ.attributes_type_name())) -> Self {
                 #abstract_attributes {
-                    typ: Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
+                    typ: Some(#domain_type_id::from_external_id(#_(#(typ.preserve_acronym())))),
                     attributes: vec![
                     #(for attribute in attributes =>
-                        (#_(#(&attribute.as_type_name())).to_owned() ,
-                            #abstract_attribute::new(#_(#(&attribute.as_type_name())),
+                        (#_(#(&attribute.preserve_acronym())).to_owned() ,
+                            #abstract_attribute::new(#_(#(&attribute.preserve_acronym())),
                             #serde_value::from(attributes.#(&attribute.as_property())))),
                     )
                     ].into_iter().collect(),
@@ -628,7 +634,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
     fn map_agent_to_domain_type(agent: #agent_impl) -> #(agent_union_type_name()) {
         match agent.domaintype.as_deref() {
             #(for agent in domain.agents.iter() =>
-            Some(#_(#(&agent.as_type_name()))) => #(agent_union_type_name())::#(&agent.as_type_name())(
+            Some(#_(#(&agent.preserve_acronym()))) => #(agent_union_type_name())::#(&agent.preserve_acronym())(
                 #(&agent.as_type_name())(agent)
             ),
             )
@@ -643,7 +649,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                     AgentRef{ agent: map_agent_to_domain_type(responsible), role: RoleType::Unspecified }
                 },
                 #(for role in domain.roles.iter() =>
-                Some(#_(#(&role.as_type_name()))) => {AgentRef { role: RoleType::#(role.as_type_name()),
+                Some(#_(#(&role.preserve_acronym()))) => {AgentRef { role: RoleType::#(role.as_type_name()),
                     agent: map_agent_to_domain_type(responsible)
                 }}
                 )
@@ -657,7 +663,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                     Some(AgentRef{role: RoleType::Unspecified, agent: map_agent_to_domain_type(delegate)})
                 },
                 #(for role in domain.roles.iter() =>
-                (Some(delegate),Some(#_(#(&role.as_type_name())))) => {
+                (Some(delegate),Some(#_(#(&role.preserve_acronym())))) => {
                     Some(AgentRef{ role: RoleType::#(role.as_type_name()),
                      agent: map_agent_to_domain_type(delegate)
                 })})
@@ -671,7 +677,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
     fn map_activity_to_domain_type(activity: #activity_impl) -> #(activity_union_type_name()) {
         match activity.domaintype.as_deref() {
             #(for activity in domain.activities.iter() =>
-            Some(#_(#(&activity.as_type_name()))) => #(activity_union_type_name())::#(&activity.as_type_name())(
+            Some(#_(#(&activity.preserve_acronym()))) => #(activity_union_type_name())::#(&activity.preserve_acronym())(
                 #(&activity.as_type_name())(activity)
             ),
             )
@@ -682,7 +688,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
     fn map_entity_to_domain_type(entity: #entity_impl) -> #(entity_union_type_name()) {
         match entity.domaintype.as_deref() {
             #(for entity in domain.entities.iter() =>
-           Some(#_(#(&entity.as_type_name()))) => #(entity_union_type_name())::#(&entity.as_type_name())(
+           Some(#_(#(&entity.preserve_acronym()))) => #(entity_union_type_name())::#(&entity.preserve_acronym())(
                 #(entity.as_type_name())(entity)
             ),
             )
