@@ -21,13 +21,9 @@ pub async fn transaction_context<'a>(
     _ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {
     match res {
-        ApiResponse::Submission {
-            subject,
-            correlation_id,
-            ..
-        } => Ok(Submission {
+        ApiResponse::Submission { subject, tx_id, .. } => Ok(Submission {
             context: subject.to_string(),
-            correlation_id: correlation_id.to_string(),
+            tx_id: tx_id.to_string(),
         }),
         _ => unreachable!(),
     }
@@ -256,7 +252,30 @@ pub async fn end_activity<'a>(
 
     let res = api
         .dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: Some(id),
+            id,
+            namespace,
+            time,
+            agent,
+        }))
+        .await?;
+
+    transaction_context(res, ctx).await
+}
+
+pub async fn instant_activity<'a>(
+    ctx: &Context<'a>,
+    id: ActivityId,
+    namespace: Option<String>,
+    agent: Option<AgentId>,
+    time: Option<DateTime<Utc>>,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
+
+    let res = api
+        .dispatch(ApiCommand::Activity(ActivityCommand::Instant {
+            id,
             namespace,
             time,
             agent,
@@ -303,7 +322,7 @@ pub async fn used<'a>(
         .dispatch(ApiCommand::Activity(ActivityCommand::Use {
             id: entity,
             namespace,
-            activity: Some(activity),
+            activity,
         }))
         .await?;
 
@@ -345,28 +364,7 @@ pub async fn was_generated_by<'a>(
         .dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             id: entity,
             namespace,
-            activity: Some(activity),
-        }))
-        .await?;
-
-    transaction_context(res, ctx).await
-}
-
-pub async fn generated<'a>(
-    ctx: &Context<'a>,
-    entity: EntityId,
-    activity: ActivityId,
-    namespace: Option<String>,
-) -> async_graphql::Result<Submission> {
-    let api = ctx.data_unchecked::<ApiDispatch>();
-
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
-
-    let res = api
-        .dispatch(ApiCommand::Entity(EntityCommand::Generated {
-            id: activity,
-            namespace,
-            entity: Some(entity),
+            activity,
         }))
         .await?;
 

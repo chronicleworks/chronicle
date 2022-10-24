@@ -26,7 +26,7 @@ async fn main() {
             Arg::new("completions")
                 .long("completions")
                 .value_name("completions")
-                .value_parser(PossibleValuesParser::new(&["bash", "zsh", "fish"]))
+                .value_parser(PossibleValuesParser::new(["bash", "zsh", "fish"]))
                 .help("Generate shell completions and exit"),
         )
         .arg(
@@ -49,7 +49,7 @@ async fn main() {
     telemetry(
         matches
             .get_one::<String>("instrument")
-            .and_then(|s| Url::parse(&*s).ok()),
+            .and_then(|s| Url::parse(s).ok()),
         match matches.get_one::<String>("console-logging") {
             Some(level) => match level.as_str() {
                 "pretty" => ConsoleLogging::Pretty,

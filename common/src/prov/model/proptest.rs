@@ -8,8 +8,8 @@ use crate::{
     attributes::{Attribute, Attributes},
     prov::{
         operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
-        Delegation, DelegationId, Derivation, DomaintypeId, EntityId, ExternalId, ExternalIdPart,
-        GeneratedEntity, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage, UuidPart,
+        Contradiction, Delegation, DelegationId, Derivation, DomaintypeId, EntityId, ExternalId,
+        ExternalIdPart, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage, UuidPart,
     },
 };
 
@@ -155,20 +155,6 @@ prop_compose! {
         EntityExists {
             namespace,
             external_id,
-        }
-    }
-}
-
-prop_compose! {
-    fn generate_entity() (activity_name in external_id(), entity_name in external_id(),namespace in namespace()) -> WasGeneratedBy {
-        let activity = ActivityId::from_external_id(&activity_name);
-        let id = EntityId::from_external_id(&entity_name);
-
-
-        WasGeneratedBy {
-            namespace,
-            id,
-            activity
         }
     }
 }
@@ -355,7 +341,6 @@ fn transaction() -> impl Strategy<Value = ChronicleOperation> {
         1 => end_activity().prop_map(ChronicleOperation::EndActivity),
         1 => used().prop_map(ChronicleOperation::ActivityUses),
         1 => create_entity().prop_map(ChronicleOperation::EntityExists),
-        1 => generate_entity().prop_map(ChronicleOperation::WasGeneratedBy),
         1 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
         1 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
         1 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
@@ -388,8 +373,9 @@ fn prov_from_json_ld(json: JsonValue) -> ProvModel {
         .unwrap();
 
     rt.block_on(async move {
-        let prov = ProvModel::default();
-        prov.apply_json_ld(json).await.unwrap()
+        let mut prov = ProvModel::default();
+        prov.apply_json_ld(json).await.unwrap();
+        prov
     })
 }
 
@@ -406,19 +392,39 @@ proptest! {
                 .build()
                 .unwrap();
 
-        // Apply each operation in order
+
+        // Keep track of the operations that were applied successfully
+        let mut applied_operations = vec![];
+        // If we encounter a contradiction, store it along with the operation
+        // that caused it. prov will be in the final state before the contradiction
+        let mut contradiction: Option<(ChronicleOperation,Contradiction)> = None;
+
+        // Apply each operation in order, stopping if any fail
         for op in operations.iter() {
-            // Check that serialisation of operation is symmetric
+            // Check that serialization of operation is symmetric
             let op_json = op.to_json().0;
             prop_assert_eq!(op,
                 &rt.block_on(ChronicleOperation::from_json(op.to_json())).unwrap(),
-                "Serialised operation {}",json::stringify_pretty(op_json,2));
+                "Serialized operation {}",json::stringify_pretty(op_json,2));
 
-            prov.apply(op);
+            let res = prov.apply(op);
+            if let Err(raised) = res {
+                contradiction = Some((op.clone(), raised));
+                break;
+            } else {
+                applied_operations.push(op.clone());
+            }
+        }
+
+        // If we encountered a contradiction, check it is consistent with the
+        // operation
+
+        if let Some((_op,Contradiction {id: _,namespace: _,contradiction})) = contradiction {
+          let _contradiction = contradiction.get(0).unwrap();
         }
 
         // Now assert that the final prov object matches what we would expect from the input operations
-        for op in operations.iter() {
+        for op in applied_operations.iter() {
             match op {
                 ChronicleOperation::CreateNamespace(CreateNamespace{id,external_id,uuid}) => {
                     prop_assert!(prov.namespaces.contains_key(id));
@@ -497,8 +503,6 @@ proptest! {
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     prop_assert!(activity.started == Some(time.to_owned()));
-                    prop_assert!(activity.ended.is_none() || activity.ended.unwrap() >= activity.started.unwrap());
-
                 },
                 ChronicleOperation::EndActivity(
                     EndActivity { namespace, id, time }) => {
@@ -509,8 +513,6 @@ proptest! {
                     prop_assert_eq!(&activity.namespaceid, namespace);
 
                     prop_assert!(activity.ended == Some(time.to_owned()));
-                    prop_assert!(activity.started.unwrap() <= *time);
-
                 }
                 ChronicleOperation::WasAssociatedWith(WasAssociatedWith { id : _, role, namespace, activity_id, agent_id }) => {
                     let has_asoc = prov.association.get(&(namespace.to_owned(), activity_id.to_owned()))
@@ -580,30 +582,6 @@ proptest! {
                             time: None });
 
                     prop_assert!(has_generation);
-                }
-                ChronicleOperation::Generated(Generated{namespace, id, entity}) => {
-                    let entity_id = entity;
-                    let activity = &prov.activities.get(&(namespace.to_owned(),id.to_owned()));
-                    prop_assert!(activity.is_some());
-                    let activity = activity.unwrap();
-                    prop_assert_eq!(&activity.external_id, id.external_id_part());
-                    prop_assert_eq!(&activity.namespaceid, namespace);
-
-                    let entity = &prov.entities.get(&(namespace.to_owned(),entity.to_owned()));
-                    prop_assert!(entity.is_some());
-                    let entity = entity.unwrap();
-                    prop_assert_eq!(&entity.external_id, entity_id.external_id_part());
-                    prop_assert_eq!(&entity.namespaceid, namespace);
-
-                    let has_generated = prov.generated.get(
-                        &(namespace.clone(),id.clone()))
-                        .unwrap()
-                        .contains(& GeneratedEntity {
-                            entity_id: entity_id.clone(),
-                            generated_id: id.clone(),
-                            time: None });
-
-                    prop_assert!(has_generated);
                 }
                 ChronicleOperation::WasInformedBy(WasInformedBy{namespace, activity, informing_activity}) => {
                     let informed_activity = &prov.activities.get(&(namespace.to_owned(), activity.to_owned()));

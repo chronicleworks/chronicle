@@ -25,7 +25,7 @@ impl ToJson for ProvModel {
             doc.push(object! {
                 "@id": (*id.to_string()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
-                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                "http://blockchaintp.com/chronicle/ns#externalId": [{
                     "@value": ns.external_id.as_str(),
                 }]
             })
@@ -82,7 +82,7 @@ impl ToJson for ProvModel {
             let mut agentdoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": agent.external_id.as_str(),
                 }]
             };
@@ -261,7 +261,7 @@ impl ToJson for ProvModel {
             let mut activitydoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": activity.external_id.as_str(),
                 }]
             };
@@ -357,7 +357,7 @@ impl ToJson for ProvModel {
             let mut entitydoc = object! {
                 "@id": (*id.to_string()),
                 "@type": typ,
-                "http://www.w3.org/2000/01/rdf-schema#label": [{
+                "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": entity.external_id.as_str()
                 }]
             };
@@ -465,7 +465,7 @@ impl ProvModel {
         for attribute in attributes {
             attribute_node
                 .insert(
-                    &*attribute.typ,
+                    &attribute.typ,
                     we_need_to_update_the_ld_library_to_a_version_that_supports_serde(
                         &attribute.value,
                     ),
@@ -1018,35 +1018,6 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::Generated(Generated {
-                namespace,
-                id,
-                entity,
-            }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::Generated);
-
-                o.has_value(
-                    OperationValue::string(namespace.external_id_part()),
-                    ChronicleOperations::NamespaceName,
-                );
-
-                o.has_value(
-                    OperationValue::string(namespace.uuid_part()),
-                    ChronicleOperations::NamespaceUuid,
-                );
-
-                o.has_value(
-                    OperationValue::string(id.external_id_part()),
-                    ChronicleOperations::ActivityName,
-                );
-
-                o.has_value(
-                    OperationValue::string(entity.external_id_part()),
-                    ChronicleOperations::EntityName,
-                );
-
-                o
-            }
         };
         operation.push(o);
         super::ExpandedJson(operation.into())
@@ -1122,7 +1093,7 @@ impl Operate for JsonValue {
         for attribute in attributes.attributes.values() {
             attribute_node
                 .insert(
-                    &*attribute.typ,
+                    &attribute.typ,
                     we_need_to_update_the_ld_library_to_a_version_that_supports_serde(
                         &attribute.value,
                     ),

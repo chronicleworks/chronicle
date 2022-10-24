@@ -26,31 +26,31 @@ RUN apt-get update && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
-    TARGET=x86_64-unknown-linux-gnu; \
+  TARGET=x86_64-unknown-linux-gnu; \
   elif [ "$TARGETARCH" = "arm64" ]; then \
-    TARGET=aarch64-unknown-linux-gnu; \
+  TARGET=aarch64-unknown-linux-gnu; \
   else \
-    echo "Unsupported architecture: $TARGETARCH"; \
-    exit 1; \
+  echo "Unsupported architecture: $TARGETARCH"; \
+  exit 1; \
   fi \
   && rustup target add "${TARGET}"
 
 FROM builder AS test
 COPY . .
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
-    TARGET=x86_64-unknown-linux-gnu; \
+  TARGET=x86_64-unknown-linux-gnu; \
   elif [ "$TARGETARCH" = "arm64" ]; then \
-    TARGET=aarch64-unknown-linux-gnu; \
+  TARGET=aarch64-unknown-linux-gnu; \
   else \
-    echo "Unsupported architecture: $TARGETARCH"; \
-    exit 1; \
+  echo "Unsupported architecture: $TARGETARCH"; \
+  exit 1; \
   fi \
   && cargo clean \
   && if [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
-    cargo test --target "${TARGET}"; \
+  cargo test --target "${TARGET}"; \
   fi \
   && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
-    --bin chronicle \
+  --bin chronicle \
   && mv -f "target/${TARGET}" "target/${TARGETARCH}"
 
 FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle

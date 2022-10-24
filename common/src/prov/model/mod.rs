@@ -1,5 +1,9 @@
+mod contradiction;
+pub use contradiction::Contradiction;
+
 use chrono::{DateTime, Utc};
 use custom_error::custom_error;
+
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 
@@ -11,6 +15,7 @@ use std::{
     fmt::Display,
 };
 use tokio::task::JoinError;
+use tracing::{instrument, trace};
 use uuid::Uuid;
 
 use crate::attributes::{Attribute, Attributes};
@@ -20,30 +25,31 @@ use super::{
     operations::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-        EntityHasEvidence, Generated, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
+        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
         WasGeneratedBy, WasInformedBy,
     },
-    ActivityId, AgentId, AssociationId, DelegationId, DomaintypeId, EntityId, EvidenceId,
-    ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role, UuidPart,
+    ActivityId, AgentId, AssociationId, ChronicleIri, DelegationId, DomaintypeId, EntityId,
+    EvidenceId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role, UuidPart,
 };
 
 pub mod to_json_ld;
 
 custom_error! {pub ProcessorError
     Address{} = "Invalid address",
-    Compaction{source: CompactionError} = "Json Ld Error",
-    Expansion{inner: String} = "Json Ld Error",
-    IRef{source: iref::Error} = "Invalid IRI",
-    NotAChronicleIri{source: id::ParseIriError } = "Not a Chronicle IRI",
+    Compaction{source: CompactionError} = "Json Ld Error {source}",
+    Expansion{inner: String} = "Json Ld Error {inner}",
+    IRef{source: iref::Error} = "Invalid IRI {source}",
+    NotAChronicleIri{source: id::ParseIriError } = "Not a Chronicle IRI {source}",
     Tokio{source: JoinError} = "Tokio Error",
-    MissingId{object: JsonValue} = "Missing @id",
-    MissingProperty{iri: String, object: JsonValue} = "Missing property",
+    MissingId{object: JsonValue} = "Missing @id {object:?}",
+    MissingProperty{iri: String, object: JsonValue} = "Missing property {iri}:{object:?}",
     NotANode{} = "Json LD object is not a node",
-    NotAnObject{} = "Chronicle value is not a json object",
-    Time{source: chrono::ParseError} = "Unparsable date/time",
-    Json{source: json::JsonError} = "Malformed JSON",
-    SerdeJson{source: serde_json::Error } = "Malformed JSON",
-    Utf8{source: std::str::Utf8Error} = "State is not valid utf8",
+    NotAnObject {} = "Chronicle value is not a json object",
+    Time{source: chrono::ParseError} = "Unparsable date/time {source}",
+    Json{source: json::JsonError} = "Malformed JSON {source}",
+    SerdeJson{source: serde_json::Error } = "Malformed JSON {source}",
+    Utf8{source: std::str::Utf8Error} = "State is not valid utf8 {source}",
+    Contradiction{source: Contradiction} = "Contradiction {source}",
 }
 
 impl From<Infallible> for ProcessorError {
@@ -61,7 +67,7 @@ pub struct ChronicleTransactionId(String);
 
 impl Display for ChronicleTransactionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&*self.0)
+        f.write_str(&self.0)
     }
 }
 impl From<Uuid> for ChronicleTransactionId {
@@ -76,7 +82,13 @@ impl From<&str> for ChronicleTransactionId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+impl ChronicleTransactionId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ChronicleTransaction {
     pub tx: Vec<ChronicleOperation>,
 }
@@ -392,113 +404,16 @@ pub struct ProvModel {
 
 impl ProvModel {
     /// Apply a sequence of `ChronicleTransaction` to an empty model, then return it
-    pub fn from_tx<'a, I>(tx: I) -> Self
+    pub fn from_tx<'a, I>(tx: I) -> Result<Self, Contradiction>
     where
         I: IntoIterator<Item = &'a ChronicleOperation>,
     {
         let mut model = Self::default();
         for tx in tx {
-            model.apply(tx);
+            model.apply(tx)?;
         }
 
-        model
-    }
-
-    /// Merge 2 prov models, consuming the other
-    pub fn merge(&mut self, other: ProvModel) {
-        for (id, ns) in other.namespaces {
-            self.namespaces.insert(id, ns);
-        }
-
-        for (id, agent) in other.agents {
-            self.agents.insert(id, agent);
-        }
-
-        for (id, activity) in other.activities {
-            self.activities.insert(id, activity);
-        }
-
-        for (id, entity) in other.entities {
-            self.entities.insert(id, entity);
-        }
-
-        for (id, identity) in other.identities {
-            self.identities.insert(id, identity);
-        }
-
-        for (id, attachment) in other.attachments {
-            self.attachments.insert(id, attachment);
-        }
-
-        for (id, other_link) in other.has_identity {
-            self.has_identity.insert(id, other_link);
-        }
-
-        for (id, other_link) in other.has_evidence {
-            self.has_evidence.insert(id, other_link);
-        }
-
-        for (id, links) in other.had_identity {
-            self.had_identity
-                .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
-        }
-        for (id, links) in other.had_attachment {
-            self.had_attachment
-                .entry(id.clone())
-                .and_modify(|map| {
-                    for link in links.clone() {
-                        map.insert(link);
-                    }
-                })
-                .or_insert(links);
-        }
-        for (id, mut rhs) in other.association {
-            self.association
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
-
-        for (id, mut rhs) in other.generation {
-            self.generation
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
-
-        for (id, mut rhs) in other.usage {
-            self.usage
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
-
-        for (id, mut rhs) in other.was_informed_by {
-            self.was_informed_by
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
-
-        for (id, mut rhs) in other.derivation {
-            self.derivation
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
-
-        for (id, mut rhs) in other.delegation {
-            self.delegation
-                .entry(id.clone())
-                .and_modify(|xs| xs.extend(rhs.drain()))
-                .or_insert(rhs);
-        }
+        Ok(model)
     }
 
     /// Append a derivation to the model
@@ -701,22 +616,93 @@ impl ProvModel {
         self.add_identity(new_identity);
     }
 
+    /// Ensure we have the referenced namespace in our model
     pub fn namespace_context(&mut self, ns: &NamespaceId) {
-        let (namespacename, uuid) = (ns.external_id_part(), ns.uuid_part());
+        let (namespace_name, uuid) = (ns.external_id_part(), ns.uuid_part());
 
         self.namespaces.insert(
             ns.clone(),
             Namespace {
                 id: ns.clone(),
                 uuid: uuid.to_owned(),
-                external_id: namespacename.to_owned(),
+                external_id: namespace_name.to_owned(),
             },
         );
     }
 
+    /// Ensure we have the referenced agent in our model, so that open world
+    /// assumptions can be made
+    pub fn agent_context(&mut self, ns: &NamespaceId, agent: &AgentId) {
+        self.agents
+            .entry((ns.clone(), agent.clone()))
+            .or_insert_with(|| Agent::exists(ns.clone(), agent.clone()));
+    }
+
+    pub fn get_agent(&mut self, ns: &NamespaceId, agent: &AgentId) -> Option<&Agent> {
+        self.agents.get(&(ns.clone(), agent.clone()))
+    }
+
+    pub fn modify_agent<F: FnOnce(&mut Agent) + 'static>(
+        &mut self,
+        ns: &NamespaceId,
+        agent: &AgentId,
+        f: F,
+    ) {
+        self.agents.entry((ns.clone(), agent.clone())).and_modify(f);
+    }
+
+    /// Ensure we have the referenced entity in our model, so that open world
+    /// assumptions can be made
+    pub fn entity_context(&mut self, ns: &NamespaceId, entity: &EntityId) {
+        self.entities
+            .entry((ns.clone(), entity.clone()))
+            .or_insert_with(|| Entity::exists(ns.clone(), entity.clone()));
+    }
+
+    pub fn get_entity(&mut self, ns: &NamespaceId, entity: &EntityId) -> Option<&Entity> {
+        self.entities.get(&(ns.clone(), entity.clone()))
+    }
+
+    pub fn modify_entity<F: FnOnce(&mut Entity) + 'static>(
+        &mut self,
+        ns: &NamespaceId,
+        entity: &EntityId,
+        f: F,
+    ) {
+        self.entities
+            .entry((ns.clone(), entity.clone()))
+            .and_modify(f);
+    }
+
+    /// Ensure we have the referenced activity in our model, so that open world
+    /// assumptions can be made
+    pub fn activity_context(&mut self, ns: &NamespaceId, activity: &ActivityId) {
+        self.activities
+            .entry((ns.clone(), activity.clone()))
+            .or_insert_with(|| Activity::exists(ns.clone(), activity.clone()));
+    }
+
+    pub fn get_activity(&mut self, ns: &NamespaceId, activity: &ActivityId) -> Option<&Activity> {
+        self.activities.get(&(ns.clone(), activity.clone()))
+    }
+
+    pub fn modify_activity<F: FnOnce(&mut Activity) + 'static>(
+        &mut self,
+        ns: &NamespaceId,
+        activity: &ActivityId,
+        f: F,
+    ) {
+        self.activities
+            .entry((ns.clone(), activity.clone()))
+            .and_modify(f);
+    }
+
     /// Transform a sequence of `ChronicleOperation` events into a provenance model,
     /// If a statement requires a subject or object that does not currently exist in the model, then we create it
-    pub fn apply(&mut self, tx: &ChronicleOperation) {
+    /// If an operation contradicts a previous statement, then we record the
+    /// contradiction, but attempt to apply as much of the operation as possible
+    #[instrument(skip(self,tx), level = "debug", name="apply_chronicle_operation", fields(op = ?tx, model= ?self), ret(Debug))]
+    pub fn apply(&mut self, tx: &ChronicleOperation) -> Result<(), Contradiction> {
         let tx = tx.to_owned();
         match tx {
             ChronicleOperation::CreateNamespace(CreateNamespace {
@@ -725,18 +711,17 @@ impl ProvModel {
                 uuid: _,
             }) => {
                 self.namespace_context(&id);
+                Ok(())
             }
             ChronicleOperation::AgentExists(AgentExists {
                 namespace,
                 external_id,
                 ..
             }) => {
-                let id = AgentId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
-                self.agents.insert(
-                    (namespace.clone(), id.clone()),
-                    Agent::exists(namespace, id),
-                );
+                self.agent_context(&namespace, &AgentId::from_external_id(&external_id));
+
+                Ok(())
             }
             ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
                 id: _,
@@ -747,19 +732,11 @@ impl ProvModel {
                 responsible_id,
             }) => {
                 self.namespace_context(&namespace);
-
-                self.agents
-                    .entry((namespace.clone(), responsible_id.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), responsible_id.clone()));
-
-                self.agents
-                    .entry((namespace.clone(), delegate_id.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), delegate_id.clone()));
+                self.agent_context(&namespace, &delegate_id);
+                self.agent_context(&namespace, &responsible_id);
 
                 if let Some(activity_id) = activity_id.clone() {
-                    self.activities
-                        .entry((namespace.clone(), activity_id.clone()))
-                        .or_insert_with(|| Activity::exists(namespace.clone(), activity_id));
+                    self.activity_context(&namespace, &activity_id);
                 }
 
                 self.qualified_delegation(
@@ -768,7 +745,9 @@ impl ProvModel {
                     &delegate_id,
                     activity_id,
                     role,
-                )
+                );
+
+                Ok(())
             }
             ChronicleOperation::RegisterKey(RegisterKey {
                 namespace,
@@ -777,23 +756,21 @@ impl ProvModel {
                 ..
             }) => {
                 self.namespace_context(&namespace);
+                self.agent_context(&namespace, &id);
 
-                self.agents
-                    .entry((namespace.clone(), id.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), id.clone()));
                 self.new_identity(&namespace, &id, &publickey);
+
+                Ok(())
             }
             ChronicleOperation::ActivityExists(ActivityExists {
                 namespace,
                 external_id,
                 ..
             }) => {
-                let id = ActivityId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
+                self.activity_context(&namespace, &ActivityId::from_external_id(&external_id));
 
-                self.activities
-                    .entry((namespace.clone(), id.clone()))
-                    .or_insert_with(|| Activity::exists(namespace, id));
+                Ok(())
             }
             ChronicleOperation::StartActivity(StartActivity {
                 namespace,
@@ -801,22 +778,39 @@ impl ProvModel {
                 time,
             }) => {
                 self.namespace_context(&namespace);
+                self.activity_context(&namespace, &id);
 
-                // Ensure started <= ended
-                self.activities
-                    .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut activity| {
-                        match activity.ended {
-                            Some(ended) if ended < time => activity.ended = Some(time),
-                            _ => {}
-                        };
-                        activity.started = Some(time);
-                    })
-                    .or_insert_with(|| {
-                        let mut activity = Activity::exists(namespace.clone(), id.clone());
-                        activity.started = Some(time);
-                        activity
-                    });
+                let activity = self.get_activity(&namespace, &id);
+
+                trace!(check_start_contradiction = ?time, existing_time=?activity.and_then(|activity| activity.started));
+                match (
+                    activity.and_then(|activity| activity.started),
+                    activity.and_then(|activity| activity.ended),
+                ) {
+                    (Some(started), _) if started != time => {
+                        return Err(Contradiction::start_date_alteration(
+                            id.into(),
+                            namespace,
+                            started,
+                            time,
+                        ));
+                    }
+                    (_, Some(ended)) if ended < time => {
+                        return Err(Contradiction::invalid_range(
+                            id.into(),
+                            namespace,
+                            time,
+                            ended,
+                        ));
+                    }
+                    _ => {}
+                };
+
+                self.modify_activity(&namespace, &id, move |activity| {
+                    activity.started = Some(time);
+                });
+
+                Ok(())
             }
             ChronicleOperation::EndActivity(EndActivity {
                 namespace,
@@ -824,26 +818,39 @@ impl ProvModel {
                 time,
             }) => {
                 self.namespace_context(&namespace);
+                self.activity_context(&namespace, &id);
 
-                // Set our end time, and also the start date if this is a new resource, or the existing resource does not specify a start time
-                // Following our inference - an ended activity must have also started, so becomes an instant if the start time is not specified
-                // or is greater than the end time
-                self.activities
-                    .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut activity| {
-                        match activity.started {
-                            None => activity.started = Some(time),
-                            Some(started) if started > time => activity.started = Some(time),
-                            _ => {}
-                        };
-                        activity.ended = Some(time);
-                    })
-                    .or_insert({
-                        let mut activity = Activity::exists(namespace.clone(), id);
-                        activity.ended = Some(time);
-                        activity.started = Some(time);
-                        activity
-                    });
+                let activity = self.get_activity(&namespace, &id);
+
+                trace!(check_end_contradiction = ?time, existing_time=?activity.and_then(|activity| activity.ended));
+                match (
+                    activity.and_then(|activity| activity.started),
+                    activity.and_then(|activity| activity.ended),
+                ) {
+                    (_, Some(ended)) if ended != time => {
+                        return Err(Contradiction::end_date_alteration(
+                            id.into(),
+                            namespace,
+                            ended,
+                            time,
+                        ));
+                    }
+                    (Some(started), _) if started > time => {
+                        return Err(Contradiction::invalid_range(
+                            id.into(),
+                            namespace,
+                            started,
+                            time,
+                        ));
+                    }
+                    _ => {}
+                };
+
+                self.modify_activity(&namespace, &id, move |mut activity| {
+                    activity.ended = Some(time);
+                });
+
+                Ok(())
             }
             ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
                 id: _,
@@ -853,16 +860,11 @@ impl ProvModel {
                 agent_id,
             }) => {
                 self.namespace_context(&namespace);
-
-                self.agents
-                    .entry((namespace.clone(), agent_id.clone()))
-                    .or_insert_with(|| Agent::exists(namespace.clone(), agent_id.clone()));
-
-                self.activities
-                    .entry((namespace.clone(), activity_id.clone()))
-                    .or_insert_with(|| Activity::exists(namespace.clone(), activity_id.clone()));
-
+                self.agent_context(&namespace, &agent_id);
+                self.activity_context(&namespace, &activity_id);
                 self.qualified_association(&namespace, &activity_id, &agent_id, role);
+
+                Ok(())
             }
             ChronicleOperation::ActivityUses(ActivityUses {
                 namespace,
@@ -870,29 +872,22 @@ impl ProvModel {
                 activity,
             }) => {
                 self.namespace_context(&namespace);
-                if !self
-                    .activities
-                    .contains_key(&(namespace.clone(), activity.clone()))
-                {
-                    self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
-                }
-                if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
-                    self.add_entity(Entity::exists(namespace.clone(), id.clone()));
-                }
+
+                self.activity_context(&namespace, &activity);
+                self.entity_context(&namespace, &id);
 
                 self.used(namespace, &activity, &id);
+
+                Ok(())
             }
             ChronicleOperation::EntityExists(EntityExists {
                 namespace,
                 external_id,
                 ..
             }) => {
-                let id = EntityId::from_external_id(&external_id);
                 self.namespace_context(&namespace);
-                self.entities.insert(
-                    (namespace.clone(), id.clone()),
-                    Entity::exists(namespace, id),
-                );
+                self.entity_context(&namespace, &EntityId::from_external_id(&external_id));
+                Ok(())
             }
             ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
                 namespace,
@@ -900,17 +895,13 @@ impl ProvModel {
                 activity,
             }) => {
                 self.namespace_context(&namespace);
-                if !self
-                    .activities
-                    .contains_key(&(namespace.clone(), activity.clone()))
-                {
-                    self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
-                }
-                if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
-                    self.add_entity(Entity::exists(namespace.clone(), id.clone()));
-                }
 
-                self.was_generated_by(namespace, &id, &activity)
+                self.entity_context(&namespace, &id);
+                self.activity_context(&namespace, &activity);
+
+                self.was_generated_by(namespace, &id, &activity);
+
+                Ok(())
             }
             ChronicleOperation::WasInformedBy(WasInformedBy {
                 namespace,
@@ -918,20 +909,12 @@ impl ProvModel {
                 informing_activity,
             }) => {
                 self.namespace_context(&namespace);
-                if !self
-                    .activities
-                    .contains_key(&(namespace.clone(), activity.clone()))
-                {
-                    self.add_activity(Activity::exists(namespace.clone(), activity.clone()));
-                }
-                self.was_informed_by
-                    .entry((namespace.clone(), activity.clone()))
-                    .or_insert_with(|| {
-                        let mut values = HashSet::new();
-                        values.insert((namespace.clone(), informing_activity.clone()));
-                        values
-                    });
+                self.activity_context(&namespace, &activity);
+                self.activity_context(&namespace, &informing_activity);
+
                 self.was_informed_by(namespace, &activity, &informing_activity);
+
+                Ok(())
             }
             ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
                 namespace,
@@ -944,40 +927,34 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
 
-                if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
-                    self.add_entity(Entity::exists(namespace.clone(), id.clone()));
-                }
-
-                let agent_key = (namespace.clone(), agent.clone());
-                if !self.agents.contains_key(&agent_key) {
-                    self.add_agent(Agent::exists(namespace.clone(), agent));
-                }
+                self.entity_context(&namespace, &id);
+                self.agent_context(&namespace, &agent);
 
                 let identity_key = (namespace.clone(), identityid.as_ref().unwrap().clone());
 
                 if !self.identities.contains_key(&identity_key) {
-                    let agent = self.agents.get(&agent_key).unwrap().id.clone();
+                    let agent = self
+                        .agents
+                        .get(&(namespace.clone(), agent))
+                        .unwrap()
+                        .id
+                        .clone();
                     let id = identityid.clone().unwrap();
                     let public_key = &id.public_key_part().to_owned();
                     self.add_identity(Identity::new(&namespace, &agent, public_key));
                     self.has_identity(namespace.clone(), &agent, &id);
                 }
 
-                let entity = self
-                    .entities
-                    .get(&(namespace.clone(), id))
-                    .unwrap()
-                    .id
-                    .clone();
-
                 self.sign(
                     namespace,
                     &identityid.unwrap(),
-                    &entity,
-                    &*signature.unwrap(),
+                    &id,
+                    &signature.unwrap(),
                     locator,
                     signature_time.unwrap(),
                 );
+
+                Ok(())
             }
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
@@ -988,20 +965,16 @@ impl ProvModel {
             }) => {
                 self.namespace_context(&namespace);
 
-                // Ensure the generated entity is in the graph
-                if !self.entities.contains_key(&(namespace.clone(), id.clone())) {
-                    self.add_entity(Entity::exists(namespace.clone(), id.clone()));
-                }
+                self.entity_context(&namespace, &id);
+                self.entity_context(&namespace, &used_id);
 
-                // Ensure the used entity is in the graph
-                if !self
-                    .entities
-                    .contains_key(&(namespace.clone(), used_id.clone()))
-                {
-                    self.add_entity(Entity::exists(namespace.clone(), used_id.clone()));
+                if let Some(activity_id) = &activity_id {
+                    self.activity_context(&namespace, activity_id);
                 }
 
                 self.was_derived_from(namespace, typ, used_id, id, activity_id);
+
+                Ok(())
             }
             ChronicleOperation::SetAttributes(SetAttributes::Entity {
                 namespace,
@@ -1009,16 +982,27 @@ impl ProvModel {
                 attributes,
             }) => {
                 self.namespace_context(&namespace);
+                self.entity_context(&namespace, &id);
 
-                self.entities
-                    .entry((namespace.clone(), id.clone()))
-                    .and_modify(|entity| {
-                        entity.domaintypeid = attributes.typ.clone();
-                        entity.attributes = attributes.attributes.clone();
-                    })
-                    .or_insert_with(|| {
-                        Entity::exists(namespace, id.clone()).has_attributes(attributes)
-                    });
+                if let Some(current) = self
+                    .entities
+                    .get(&(namespace.clone(), id.clone()))
+                    .map(|entity| &entity.attributes)
+                {
+                    Self::validate_attribute_changes(
+                        &id.clone().into(),
+                        &namespace,
+                        current,
+                        &attributes,
+                    )?;
+                };
+
+                self.modify_entity(&namespace, &id, move |entity| {
+                    entity.domaintypeid = attributes.typ.clone();
+                    entity.attributes = attributes.attributes;
+                });
+
+                Ok(())
             }
             ChronicleOperation::SetAttributes(SetAttributes::Activity {
                 namespace,
@@ -1026,16 +1010,27 @@ impl ProvModel {
                 attributes,
             }) => {
                 self.namespace_context(&namespace);
+                self.activity_context(&namespace, &id);
 
-                self.activities
-                    .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut activity| {
-                        activity.domaintypeid = attributes.typ.clone();
-                        activity.attributes = attributes.attributes.clone();
-                    })
-                    .or_insert_with(|| {
-                        Activity::exists(namespace, id.clone()).has_attributes(attributes)
-                    });
+                if let Some(current) = self
+                    .activities
+                    .get(&(namespace.clone(), id.clone()))
+                    .map(|activity| &activity.attributes)
+                {
+                    Self::validate_attribute_changes(
+                        &id.clone().into(),
+                        &namespace,
+                        current,
+                        &attributes,
+                    )?;
+                };
+
+                self.modify_activity(&namespace, &id, move |activity| {
+                    activity.domaintypeid = attributes.typ.clone();
+                    activity.attributes = attributes.attributes;
+                });
+
+                Ok(())
             }
             ChronicleOperation::SetAttributes(SetAttributes::Agent {
                 namespace,
@@ -1043,39 +1038,68 @@ impl ProvModel {
                 attributes,
             }) => {
                 self.namespace_context(&namespace);
+                self.agent_context(&namespace, &id);
 
-                self.agents
-                    .entry((namespace.clone(), id.clone()))
-                    .and_modify(|mut agent| {
-                        agent.domaintypeid = attributes.typ.clone();
-                        agent.attributes = attributes.attributes.clone();
-                    })
-                    .or_insert_with(|| {
-                        Agent::exists(namespace, id.clone()).has_attributes(attributes)
-                    });
-            }
-            ChronicleOperation::Generated(Generated {
-                namespace,
-                id,
-                entity,
-            }) => {
-                self.namespace_context(&namespace);
-                if !self
-                    .entities
-                    .contains_key(&(namespace.clone(), entity.clone()))
+                if let Some(current) = self
+                    .agents
+                    .get(&(namespace.clone(), id.clone()))
+                    .map(|agent| &agent.attributes)
                 {
-                    self.add_entity(Entity::exists(namespace.clone(), entity.clone()));
-                }
-                if !self
-                    .activities
-                    .contains_key(&(namespace.clone(), id.clone()))
-                {
-                    self.add_activity(Activity::exists(namespace.clone(), id.clone()));
-                }
+                    Self::validate_attribute_changes(
+                        &id.clone().into(),
+                        &namespace,
+                        current,
+                        &attributes,
+                    )?;
+                };
 
-                self.generated(namespace, &id, &entity)
+                self.modify_agent(&namespace, &id, move |agent| {
+                    agent.domaintypeid = attributes.typ.clone();
+                    agent.attributes = attributes.attributes;
+                });
+
+                Ok(())
             }
-        };
+        }
+    }
+
+    /// Allow additional attributes, but changing an existing attribute is not allowed
+    #[instrument(level = "trace", ret(Debug))]
+    fn validate_attribute_changes(
+        id: &ChronicleIri,
+        namespace: &NamespaceId,
+        current: &BTreeMap<String, Attribute>,
+        attempted: &Attributes,
+    ) -> Result<(), Contradiction> {
+        let contradictions = attempted
+            .attributes
+            .iter()
+            .filter_map(|(current_name, current_value)| {
+                if let Some(attempted_value) = current.get(current_name) {
+                    if current_value != attempted_value {
+                        Some((
+                            current_name.clone(),
+                            current_value.clone(),
+                            attempted_value.clone(),
+                        ))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if contradictions.is_empty() {
+            Ok(())
+        } else {
+            Err(Contradiction::attribute_value_change(
+                id.clone(),
+                namespace.clone(),
+                contradictions,
+            ))
+        }
     }
 
     pub(crate) fn add_attachment(&mut self, attachment: Attachment) {
@@ -1111,9 +1135,9 @@ impl ProvModel {
 }
 
 custom_error::custom_error! {pub CompactionError
-    JsonLd{inner: String}                  = "JsonLd", //TODO: contribute Send to the upstream JsonLD error type
+    JsonLd{inner: String}                  = "JsonLd {inner}", //TODO: contribute Send to the upstream JsonLD error type
     Join{source : JoinError}               = "Tokio",
-    Serde{source: serde_json::Error }      = "Serde conversion",
+    Serde{source: serde_json::Error }      = "Serde conversion {source}",
 }
 pub struct ExpandedJson(pub JsonValue);
 
@@ -1126,7 +1150,7 @@ impl ExpandedJson {
                 inner: e.to_string(),
             })?;
 
-        let output = self
+        let mut output = self
             .0
             .compact_with(
                 None,
@@ -1144,11 +1168,15 @@ impl ExpandedJson {
                 inner: e.to_string(),
             })?;
 
+        output
+            .insert("@context", "https://blockchaintp.com/chr/1.0/c.jsonld")
+            .unwrap();
+
         Ok(CompactedJson(output))
     }
 
     pub async fn compact_stable_order(self) -> Result<Value, CompactionError> {
-        let mut v: serde_json::Value = serde_json::from_str(&*self.compact().await?.0.to_string())?;
+        let mut v: serde_json::Value = serde_json::from_str(&self.compact().await?.0.to_string())?;
 
         // Sort @graph by //@id, as objects are unordered
         if let Some(v) = v.pointer_mut("/@graph").and_then(|p| p.as_array_mut()) {
@@ -1175,6 +1203,12 @@ impl std::ops::Deref for CompactedJson {
     }
 }
 
-/// Property testing of prov models created transactionally and round tripped via JSON / LD
+impl CompactedJson {
+    pub fn pretty(&self) -> String {
+        self.0.pretty(2)
+    }
+}
+
+/// Property testing of prov models created and round tripped via JSON / LD
 #[cfg(test)]
 pub mod proptest;

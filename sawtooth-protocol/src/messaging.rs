@@ -1,14 +1,15 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     address::{SawtoothAddress, FAMILY, VERSION},
     messages::MessageBuilder,
-    sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse},
+    sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse, Transaction},
 };
 
 use common::{
     k256::ecdsa::SigningKey,
     ledger::{LedgerWriter, SubmissionError},
+    protocol::ProtocolError,
     prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
@@ -37,18 +38,10 @@ pub struct SawtoothSubmitter {
 custom_error! {pub SawtoothSubmissionError
     Send{source: SendError}                                 = "Submission failed to send to validator",
     Recv{source: ReceiveError}                              = "Submission failed to send to validator",
-    UnexpectedStatus{status: i32}                           = "Validator status unexpected {}",
+    UnexpectedStatus{status: i32}                           = "Validator status unexpected {status}",
     Join{source: JoinError}                                 = "Submission blocking thread pool",
     Ld{source: ProcessorError}                              = "Json LD processing",
-    Decode{source: prost::DecodeError}                      = "Response decoding",
-}
-
-impl From<SawtoothSubmissionError> for SubmissionError {
-    fn from(val: SawtoothSubmissionError) -> Self {
-        SubmissionError::Implementation {
-            source: Box::new(val),
-        }
-    }
+    Protocol{source: ProtocolError}                         = "Protocol {source}",
 }
 
 /// The sawtooth futures and their sockets are not controlled by a compatible reactor
@@ -60,11 +53,10 @@ impl SawtoothSubmitter {
         SawtoothSubmitter { tx, rx, builder }
     }
 
-    #[instrument]
-    async fn submit(
+    async fn make_tx(
         &mut self,
         transactions: &[ChronicleOperation],
-    ) -> Result<ChronicleTransactionId, SawtoothSubmissionError> {
+    ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
         let addresses = transactions
             .iter()
             .flat_map(|tx| tx.dependencies())
@@ -73,45 +65,70 @@ impl SawtoothSubmitter {
 
         debug!(address_map = ?addresses);
 
-        let (sawtooth_transaction, tx_id) = self
-            .builder
+        self.builder
             .make_sawtooth_transaction(
                 addresses.iter().map(|x| x.0.clone()).collect(),
                 addresses.into_iter().map(|x| x.0).collect(),
                 vec![],
                 transactions,
             )
-            .await;
+            .await
+    }
 
-        let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
+    #[instrument(
+        name = "submit_sawtooth_tx",
+        level = "info",
+        skip(self, transactions),
+        ret(Debug)
+    )]
+    async fn submit(
+        &mut self,
+        transactions: &[ChronicleOperation],
+    ) -> Result<ChronicleTransactionId, (ChronicleTransactionId, SawtoothSubmissionError)> {
+        // Practically, a protobuf serialization error here is probably a crash
+        // loop level fault, but we will handle it without panic for now
+        let (sawtooth_transaction, tx_id) = self
+            .make_tx(transactions)
+            .await
+            .map_err(|e| (ChronicleTransactionId::from(""), e.into()))?;
 
-        trace!(?batch, "Validator request");
+        let ret_tx_id = tx_id.clone();
 
-        let request = ClientBatchSubmitRequest {
-            batches: vec![batch],
-        };
+        let res = async move {
+            let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
-        let mut future = self.tx.send(
-            Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
-            &*tx_id.to_string(),
-            &*request.encode_to_vec(),
-        )?;
+            trace!(?batch, "Validator request");
 
-        debug!(submit_transaction=%tx_id);
+            let request = ClientBatchSubmitRequest {
+                batches: vec![batch],
+            };
 
-        let result = future.get_timeout(std::time::Duration::from_secs(10))?;
+            let mut future = self.tx.send(
+                Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
+                &tx_id.to_string(),
+                &request.encode_to_vec(),
+            )?;
 
-        let response = ClientBatchSubmitResponse::decode(&*result.content)?;
+            debug!(submit_transaction=%tx_id);
 
-        debug!(validator_response=?response);
+            let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
-        if response.status == 1 {
-            Ok(tx_id)
-        } else {
-            Err(SawtoothSubmissionError::UnexpectedStatus {
-                status: response.status,
-            })
+            let response =
+                ClientBatchSubmitResponse::decode(&*result.content).map_err(ProtocolError::from)?;
+
+            debug!(validator_response=?response);
+
+            if response.status == 1 {
+                Ok(tx_id)
+            } else {
+                Err(SawtoothSubmissionError::UnexpectedStatus {
+                    status: response.status,
+                })
+            }
         }
+        .await;
+
+        res.map_err(|e| (ret_tx_id, e))
     }
 }
 
@@ -123,6 +140,8 @@ impl LedgerWriter for SawtoothSubmitter {
         &mut self,
         tx: &[ChronicleOperation],
     ) -> Result<ChronicleTransactionId, SubmissionError> {
-        self.submit(tx).await.map_err(SawtoothSubmissionError::into)
+        self.submit(tx)
+            .await
+            .map_err(|(tx_id, e)| SubmissionError::implementation(&tx_id, Arc::new(e.into())))
     }
 }

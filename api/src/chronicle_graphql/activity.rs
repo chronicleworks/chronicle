@@ -80,14 +80,14 @@ pub async fn was_informed_by<'a>(
 }
 
 pub async fn generated<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-    use crate::persistence::schema::generated::{self, dsl};
+    use crate::persistence::schema::generation::{self, dsl};
 
     let store = ctx.data_unchecked::<Store>();
 
     let mut connection = store.pool.get()?;
 
-    let res = generated::table
-        .filter(dsl::generated_activity_id.eq(id))
+    let res = generation::table
+        .filter(dsl::activity_id.eq(id))
         .inner_join(crate::persistence::schema::entity::table)
         .select(Entity::as_select())
         .load::<Entity>(&mut connection)?;
