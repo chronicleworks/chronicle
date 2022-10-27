@@ -177,7 +177,7 @@ pub enum Chronicle {
 
 /// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible
 impl Chronicle {
-    pub const PREFIX: &'static str = "http://blockchaintp.com/chronicle/ns#";
+    pub const PREFIX: &'static str = "chronicle:";
 
     fn encode(s: &str) -> String {
         percent_encode(s.as_bytes(), NON_ALPHANUMERIC).to_string()

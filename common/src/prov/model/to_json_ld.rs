@@ -6,7 +6,7 @@ use crate::{
     prov::{
         operations::{ChronicleOperation, CreateNamespace, DerivationType},
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ChronicleIri, ExternalIdPart, UuidPart,
+        ChronicleIri, ExternalIdPart, FromCompact, UuidPart,
     },
 };
 
@@ -23,7 +23,7 @@ impl ToJson for ProvModel {
 
         for (id, ns) in self.namespaces.iter() {
             doc.push(object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
                 "http://blockchaintp.com/chronicle/ns#externalId": [{
                     "@value": ns.external_id.as_str(),
@@ -33,28 +33,28 @@ impl ToJson for ProvModel {
 
         for ((ns, id), identity) in self.identities.iter() {
             doc.push(object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::Identity).as_str(),
                 "http://blockchaintp.com/chronicle/ns#publicKey": [{
                     "@value": identity.public_key.to_string(),
                 }],
                 "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
-                    "@id": ns.to_string()
+                    "@id": ns.de_compact()
                 }],
             })
         }
 
         for ((ns, id), attachment) in self.attachments.iter() {
             let mut attachmentdoc = object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::HasEvidence).as_str(),
                 "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
                 "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
                 "http://blockchaintp.com/chronicle/ns#signedBy": {
-                    "@id": attachment.signer.to_string()
+                    "@id": attachment.signer.de_compact()
                 },
                 "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
-                    "@id": ns.to_string()
+                    "@id": ns.de_compact()
                 }],
             };
 
@@ -76,11 +76,11 @@ impl ToJson for ProvModel {
         for ((_, id), agent) in self.agents.iter() {
             let mut typ = vec![Iri::from(Prov::Agent).to_string()];
             if let Some(x) = agent.domaintypeid.as_ref() {
-                typ.push(x.to_string())
+                typ.push(x.de_compact())
             }
 
             let mut agentdoc = object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": agent.external_id.as_str(),
@@ -93,7 +93,7 @@ impl ToJson for ProvModel {
                 agentdoc
                     .insert(
                         Iri::from(Chronicle::HasIdentity).as_str(),
-                        object! {"@id": identity.to_string()},
+                        object! {"@id": identity.de_compact()},
                     )
                     .ok();
             }
@@ -102,7 +102,7 @@ impl ToJson for ProvModel {
                 let mut values = json::Array::new();
 
                 for (_, id) in identities {
-                    values.push(object! { "@id": id.to_string()});
+                    values.push(object! { "@id": id.de_compact()});
                 }
                 agentdoc
                     .insert(Iri::from(Chronicle::HadIdentity).as_str(), values)
@@ -117,8 +117,8 @@ impl ToJson for ProvModel {
                 let mut qualified_ids = json::Array::new();
 
                 for delegation in delegation.iter() {
-                    ids.push(object! {"@id": delegation.delegate_id.to_string()});
-                    qualified_ids.push(object! {"@id": delegation.id.to_string()});
+                    ids.push(object! {"@id": delegation.delegate_id.de_compact()});
+                    qualified_ids.push(object! {"@id": delegation.id.de_compact()});
                 }
 
                 agentdoc
@@ -133,7 +133,7 @@ impl ToJson for ProvModel {
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(agent.namespaceid.to_string()),
+                "@id": JsonValue::String(agent.namespaceid.de_compact()),
             });
 
             agentdoc
@@ -148,14 +148,14 @@ impl ToJson for ProvModel {
         for (_, associations) in self.association.iter() {
             for association in associations {
                 let mut associationdoc = object! {
-                    "@id": association.id.to_string(),
+                    "@id": association.id.de_compact(),
                     "@type": Iri::from(Prov::Association).as_str(),
                 };
 
                 let mut values = json::Array::new();
 
                 values.push(object! {
-                    "@id": JsonValue::String(association.agent_id.to_string()),
+                    "@id": JsonValue::String(association.agent_id.de_compact()),
                 });
 
                 associationdoc
@@ -166,7 +166,7 @@ impl ToJson for ProvModel {
                     .insert(
                         Iri::from(Prov::HadActivity).as_str(),
                         vec![object! {
-                            "@id": JsonValue::String(association.activity_id.to_string()),
+                            "@id": JsonValue::String(association.activity_id.de_compact()),
                         }],
                     )
                     .ok();
@@ -183,7 +183,7 @@ impl ToJson for ProvModel {
                 let mut values = json::Array::new();
 
                 values.push(object! {
-                    "@id": JsonValue::String(association.namespace_id.to_string()),
+                    "@id": JsonValue::String(association.namespace_id.de_compact()),
                 });
 
                 associationdoc
@@ -197,7 +197,7 @@ impl ToJson for ProvModel {
         for (_, delegations) in self.delegation.iter() {
             for delegation in delegations {
                 let mut delegationdoc = object! {
-                    "@id": delegation.id.to_string(),
+                    "@id": delegation.id.de_compact(),
                     "@type": Iri::from(Prov::Delegation).as_str(),
                 };
 
@@ -206,7 +206,7 @@ impl ToJson for ProvModel {
                         .insert(
                             Iri::from(Prov::HadActivity).as_str(),
                             vec![object! {
-                                "@id": JsonValue::String(activity_id.to_string()),
+                                "@id": JsonValue::String(activity_id.de_compact()),
                             }],
                         )
                         .ok();
@@ -223,7 +223,7 @@ impl ToJson for ProvModel {
 
                 let mut responsible_ids = json::Array::new();
                 responsible_ids.push(
-                    object! { "@id": JsonValue::String(delegation.responsible_id.to_string())},
+                    object! { "@id": JsonValue::String(delegation.responsible_id.de_compact())},
                 );
 
                 delegationdoc
@@ -232,7 +232,7 @@ impl ToJson for ProvModel {
 
                 let mut delegate_ids = json::Array::new();
                 delegate_ids
-                    .push(object! { "@id": JsonValue::String(delegation.delegate_id.to_string())});
+                    .push(object! { "@id": JsonValue::String(delegation.delegate_id.de_compact())});
 
                 delegationdoc
                     .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), delegate_ids)
@@ -241,7 +241,7 @@ impl ToJson for ProvModel {
                 let mut values = json::Array::new();
 
                 values.push(object! {
-                    "@id": JsonValue::String(delegation.namespace_id.to_string()),
+                    "@id": JsonValue::String(delegation.namespace_id.de_compact()),
                 });
 
                 delegationdoc
@@ -253,13 +253,13 @@ impl ToJson for ProvModel {
         }
 
         for ((namespace, id), activity) in self.activities.iter() {
-            let mut typ = vec![Iri::from(Prov::Activity).to_string()];
+            let mut typ = vec![Iri::from(Prov::Activity).de_compact()];
             if let Some(x) = activity.domaintypeid.as_ref() {
-                typ.push(x.to_string())
+                typ.push(x.de_compact())
             }
 
             let mut activitydoc = object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": activity.external_id.as_str(),
@@ -289,17 +289,17 @@ impl ToJson for ProvModel {
 
                 let mut qualified_ids = json::Array::new();
                 for asoc in asoc.iter() {
-                    ids.push(object! {"@id": asoc.agent_id.to_string()});
-                    qualified_ids.push(object! {"@id": asoc.id.to_string()});
+                    ids.push(object! {"@id": asoc.agent_id.de_compact()});
+                    qualified_ids.push(object! {"@id": asoc.id.de_compact()});
                 }
 
                 activitydoc
-                    .insert(&Iri::from(Prov::WasAssociatedWith).to_string(), ids)
+                    .insert(&Iri::from(Prov::WasAssociatedWith).de_compact(), ids)
                     .ok();
 
                 activitydoc
                     .insert(
-                        &Iri::from(Prov::QualifiedAssociation).to_string(),
+                        &Iri::from(Prov::QualifiedAssociation).de_compact(),
                         qualified_ids,
                     )
                     .ok();
@@ -309,18 +309,18 @@ impl ToJson for ProvModel {
                 let mut ids = json::Array::new();
 
                 for usage in usage.iter() {
-                    ids.push(object! {"@id": usage.entity_id.to_string()});
+                    ids.push(object! {"@id": usage.entity_id.de_compact()});
                 }
 
                 activitydoc
-                    .insert(&Iri::from(Prov::Used).to_string(), ids)
+                    .insert(&Iri::from(Prov::Used).de_compact(), ids)
                     .ok();
             }
 
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(activity.namespaceid.to_string()),
+                "@id": JsonValue::String(activity.namespaceid.de_compact()),
             });
 
             activitydoc
@@ -335,7 +335,7 @@ impl ToJson for ProvModel {
 
                 for (_, activity) in activities {
                     values.push(object! {
-                        "@id": JsonValue::String(activity.to_string()),
+                        "@id": JsonValue::String(activity.de_compact()),
                     });
                 }
                 activitydoc
@@ -349,13 +349,13 @@ impl ToJson for ProvModel {
         }
 
         for ((namespace, id), entity) in self.entities.iter() {
-            let mut typ = vec![Iri::from(Prov::Entity).to_string()];
+            let mut typ = vec![Iri::from(Prov::Entity).de_compact()];
             if let Some(x) = entity.domaintypeid.as_ref() {
-                typ.push(x.to_string())
+                typ.push(x.de_compact())
             }
 
             let mut entitydoc = object! {
-                "@id": (*id.to_string()),
+                "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://blockchaintp.com/chronicle/ns#externalId": [{
                    "@value": entity.external_id.as_str()
@@ -369,7 +369,7 @@ impl ToJson for ProvModel {
                 let mut revision_ids = json::Array::new();
 
                 for derivation in derivation.iter() {
-                    let id = object! {"@id": derivation.used_id.to_string()};
+                    let id = object! {"@id": derivation.used_id.de_compact()};
                     match derivation.typ {
                         Some(DerivationType::PrimarySource) => primary_ids.push(id),
                         Some(DerivationType::Quotation) => quotation_ids.push(id),
@@ -403,7 +403,7 @@ impl ToJson for ProvModel {
                 let mut ids = json::Array::new();
 
                 for generation in generation.iter() {
-                    ids.push(object! {"@id": generation.activity_id.to_string()});
+                    ids.push(object! {"@id": generation.activity_id.de_compact()});
                 }
 
                 entitydoc
@@ -417,7 +417,7 @@ impl ToJson for ProvModel {
                 entitydoc
                     .insert(
                         Iri::from(Chronicle::HasEvidence).as_str(),
-                        object! {"@id": identity.to_string()},
+                        object! {"@id": identity.de_compact()},
                     )
                     .ok();
             }
@@ -426,7 +426,7 @@ impl ToJson for ProvModel {
                 let mut values = json::Array::new();
 
                 for (_, id) in identities {
-                    values.push(object! { "@id": id.to_string()});
+                    values.push(object! { "@id": id.de_compact()});
                 }
                 entitydoc
                     .insert(Iri::from(Chronicle::HadEvidence).as_str(), values)
@@ -436,7 +436,7 @@ impl ToJson for ProvModel {
             let mut values = json::Array::new();
 
             values.push(object! {
-                "@id": JsonValue::String(entity.namespaceid.to_string()),
+                "@id": JsonValue::String(entity.namespaceid.de_compact()),
             });
 
             entitydoc
