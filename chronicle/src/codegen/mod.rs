@@ -895,7 +895,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     #[#graphql_object]
     impl Mutation {
 
-        pub async fn agent<'a>(
+        pub async fn define_agent<'a>(
             &self,
             ctx: &#graphql_context<'a>,
             external_id: String,
@@ -907,7 +907,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for agent in domain.agents.iter() =>
             #(if agent.attributes.is_empty() {
-            #[graphql(name = #_(#(agent.preserve_inflection())))]
+            #[graphql(name = #_(#(agent.as_method_name())))]
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -921,7 +921,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
-            #[graphql(name = #_(#(agent.preserve_inflection())))]
+            #[graphql(name = #_(#(agent.as_method_name())))]
             pub async fn #(&agent.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -935,7 +935,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
         )
 
-        pub async fn activity<'a>(
+        pub async fn define_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
             external_id: String,
@@ -947,7 +947,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for activity in domain.activities.iter() =>
             #(if activity.attributes.is_empty() {
-            #[graphql(name = #_(#(activity.preserve_inflection())))]
+            #[graphql(name = #_(#(activity.as_method_name())))]
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -961,7 +961,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
-            #[graphql(name = #_(#(activity.preserve_inflection())))]
+            #[graphql(name = #_(#(activity.as_method_name())))]
             pub async fn #(&activity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -975,7 +975,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
         )
 
-        pub async fn entity<'a>(
+        pub async fn define_entity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
             external_id: String,
@@ -987,7 +987,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #(for entity in domain.entities.iter() =>
             #(if entity.attributes.is_empty() {
-            #[graphql(name = #_(#(entity.preserve_inflection())))]
+            #[graphql(name = #_(#(entity.as_method_name())))]
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,
@@ -1001,7 +1001,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
             } else {
-            #[graphql(name = #_(#(entity.preserve_inflection())))]
+            #[graphql(name = #_(#(entity.as_method_name())))]
             pub async fn #(&entity.as_property())<'a>(
                 &self,
                 ctx: &#graphql_context<'a>,

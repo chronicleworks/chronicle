@@ -42,6 +42,10 @@ impl TypeName for AttributeDef {
             _ => format!("{}Attribute", self.typ),
         }
     }
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_scalar_type())
+    }
 }
 
 impl AttributeDef {
@@ -78,6 +82,7 @@ pub trait CliName {
 pub trait TypeName {
     fn as_type_name(&self) -> String;
     fn preserve_inflection(&self) -> String;
+    fn as_method_name(&self) -> String;
 }
 
 /// Entities, Activites and Agents have a specific set of attributes.
@@ -151,6 +156,10 @@ impl TypeName for &AgentDef {
             _ => to_camel_case(&self.external_id),
         }
     }
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_type_name())
+    }
 }
 
 impl AgentDef {
@@ -214,6 +223,10 @@ impl TypeName for &EntityDef {
             (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
             _ => to_camel_case(&self.external_id),
         }
+    }
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_type_name())
     }
 }
 
@@ -279,6 +292,10 @@ impl TypeName for &ActivityDef {
             _ => to_camel_case(&self.external_id),
         }
     }
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_type_name())
+    }
 }
 
 impl ActivityDef {
@@ -337,6 +354,10 @@ impl TypeName for &RoleDef {
 
     fn preserve_inflection(&self) -> String {
         self.external_id.clone()
+    }
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_type_name())
     }
 }
 

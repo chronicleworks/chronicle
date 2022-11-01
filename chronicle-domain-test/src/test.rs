@@ -435,7 +435,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                agent(externalId:"testentity1", attributes: { type: "type" }) {
+                defineAgent(externalId:"testentity1", attributes: { type: "type" }) {
                     context
                 }
             }
@@ -444,7 +444,7 @@ mod test {
             .await;
 
         insta::assert_toml_snapshot!(create, @r###"
-        [data.agent]
+        [data.defineAgent]
         context = 'chronicle:agent:testentity1'
         "###);
     }
@@ -458,14 +458,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation one {
-                    itemCertified(externalId:"testactivityid1", attributes: { certIdAttribute: "testcertid" }) {
+                    defineItemCertified(externalId:"testactivityid1", attributes: { certIdAttribute: "testcertid" }) {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.itemCertified]
+        [data.defineItemCertified]
         context = 'chronicle:activity:testactivityid1'
         "###);
 
@@ -474,7 +474,7 @@ mod test {
           .execute(Request::new(
               r#"
           mutation two {
-            itemManufactured(externalId:"testactivityid2", attributes: { batchIdAttribute: "testbatchid" }) {
+            defineItemManufactured(externalId:"testactivityid2", attributes: { batchIdAttribute: "testbatchid" }) {
                   context
               }
           }
@@ -482,7 +482,7 @@ mod test {
               ),
           )
           .await, @r###"
-        [data.itemManufactured]
+        [data.defineItemManufactured]
         context = 'chronicle:activity:testactivityid2'
         "###);
 
@@ -545,14 +545,14 @@ mod test {
           .execute(Request::new(
               r#"
                     mutation three {
-                      itemCodified(externalId:"testactivityid3") {
+                      defineItemCodified(externalId:"testactivityid3") {
                             context
                         }
                     }
                 "#,
           ))
           .await, @r###"
-        [data.itemCodified]
+        [data.defineItemCodified]
         context = 'chronicle:activity:testactivityid3'
         "###);
 
@@ -626,14 +626,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation activity {
-                    itemCertified(externalId:"testactivity1", attributes: { certIdAttribute: "testcertid" }) {
+                    defineItemCertified(externalId:"testactivity1", attributes: { certIdAttribute: "testcertid" }) {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.itemCertified]
+        [data.defineItemCertified]
         context = 'chronicle:activity:testactivity1'
         "###);
 
@@ -642,14 +642,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation entity {
-                    NCBRecord(externalId:"testentity1") {
+                    defineNCBRecord(externalId:"testentity1") {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.NCBRecord]
+        [data.defineNCBRecord]
         context = 'chronicle:entity:testentity1'
         "###);
 
@@ -713,7 +713,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation second {
-              item(externalId:"testitem", attributes: { partIdAttribute: "testpartid" }) {
+              defineItem(externalId:"testitem", attributes: { partIdAttribute: "testpartid" }) {
                     context
                 }
             }
@@ -721,7 +721,7 @@ mod test {
                 ),
             )
             .await, @r###"
-        [data.item]
+        [data.defineItem]
         context = 'chronicle:entity:testitem'
         "###);
 
@@ -788,7 +788,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                contractor(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
+                defineContractor(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
                     context
                 }
             }
@@ -804,7 +804,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-              NCB(externalId:"testagent2") {
+              defineNCB(externalId:"testagent2") {
                     context
                 }
             }
@@ -820,7 +820,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                certificate(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
+              defineCertificate(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
                     context
                 }
             }
@@ -836,7 +836,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                NCBRecord(externalId:"testentity2") {
+              defineNCBRecord(externalId:"testentity2") {
                     context
                 }
             }
@@ -863,7 +863,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        itemCertified(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
+                      defineItemCertified(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
                             context
                         }}
                     }}
@@ -879,7 +879,7 @@ mod test {
                     .execute(Request::new(&format!(
                         r#"
                     mutation {{
-                        itemCodified(externalId:"{}") {{
+                      defineItemCodified(externalId:"{}") {{
                             context
                         }}
                     }}
@@ -1855,7 +1855,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                contractor(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
+                defineContractor(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
                     context
                 }}
             }}
