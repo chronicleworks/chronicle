@@ -547,6 +547,11 @@ Roles MUST be in SCREAMING_SNAKE_CASE.
 
 When describing domains in GraphQL, the following transformations take place:
 
+Definition methods will be prefixed with "define." The method for creating a
+generic agent will be `defineAgent`. Defining an agent named NCB will require
+the `defineNCB` method, while an entity named Item will be defined with
+`defineItem`, and so on.
+
 Case is preserved in pascal for GraphQL objects, except when acronyms are
 preserved in object names, while case is camelised for non-acronym attributes.
 
