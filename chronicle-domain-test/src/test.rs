@@ -10,45 +10,45 @@ mod main;
 #[tokio::main]
 pub async fn main() {
     let s = r#"
-    name: "chronicle"
+    name: "airworthiness"
     attributes:
-      String:
+      CertId:
         type: "String"
-      Int:
-        type: "Int"
-      Bool:
-        type: "Bool"
+      BatchId:
+        type: "String"
+      PartId:
+        type: "String"
+      Location:
+        type: "String"
     agents:
-      friend:
+      Contractor:
         attributes:
-          - String
-          - Int
-          - Bool
+          - Location
+      NCB:
+        attributes: []
     entities:
-      octopi:
+      Certificate:
         attributes:
-          - String
-          - Int
-          - Bool
-      the sea:
+          - CertId
+      Item:
         attributes:
-          - String
-          - Int
-          - Bool
+          - PartId
+      NCBRecord:
+        attributes: []
     activities:
-      gardening:
+      ItemCertified:
         attributes:
-          - String
-          - Int
-          - Bool
-      swim about:
+          - CertId
+      ItemCodified:
+        attributes: []
+      ItemManufactured:
         attributes:
-          - String
-          - Int
-          - Bool
+          - BatchId
     roles:
-        - delegate
-        - responsible
+      - CERTIFIER
+      - CODIFIER
+      - MANUFACTURER
+      - SUBMITTER
      "#
     .to_string();
 
@@ -137,9 +137,9 @@ mod test {
                 r#"
             mutation {
                 actedOnBehalfOf(
-                    responsible: "http://blockchaintp.com/chronicle/ns#agent:responsible",
-                    delegate: "http://blockchaintp.com/chronicle/ns#agent:delegate",
-                    role: DELEGATE
+                    responsible: "http://blockchaintp.com/chronicle/ns#agent:testagent",
+                    delegate: "http://blockchaintp.com/chronicle/ns#agent:testdelegate",
+                    role: MANUFACTURER
                     ) {
                     context
                 }
@@ -152,7 +152,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.actedOnBehalfOf]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:responsible'
+        context = 'http://blockchaintp.com/chronicle/ns#agent:testagent'
         "###);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -161,7 +161,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:responsible") {
+                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:testagent") {
                     ... on ProvAgent {
                         id
                         externalId
@@ -182,14 +182,14 @@ mod test {
         insta::assert_json_snapshot!(derived.data, @r###"
         {
           "agentById": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:responsible",
-            "externalId": "responsible",
+            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent",
+            "externalId": "testagent",
             "actedOnBehalfOf": [
               {
                 "agent": {
-                  "id": "http://blockchaintp.com/chronicle/ns#agent:delegate"
+                  "id": "http://blockchaintp.com/chronicle/ns#agent:testdelegate"
                 },
-                "role": "DELEGATE"
+                "role": "MANUFACTURER"
               }
             ]
           }
@@ -205,8 +205,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
                     context
                 }
             }
@@ -216,7 +216,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasDerivedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -224,7 +224,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -241,11 +241,11 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
         "###);
     }
 
@@ -257,8 +257,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
                     context
                 }
             }
@@ -268,7 +268,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.hadPrimarySource]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -276,7 +276,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
 
                     ... on ProvEntity {
                         id
@@ -299,14 +299,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
 
         [[data.entityById.hadPrimarySource]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
         "###);
     }
 
@@ -318,8 +318,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
                     context
                 }
             }
@@ -329,7 +329,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasRevisionOf]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -337,7 +337,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -359,14 +359,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
 
         [[data.entityById.wasRevisionOf]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
         "###);
     }
 
@@ -378,8 +378,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:generated",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:used") {
+                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
                     context
                 }
             }
@@ -389,7 +389,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasQuotedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:generated'
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -397,7 +397,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:generated") {
+                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -419,14 +419,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:generated'
-        externalId = 'generated'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
 
         [[data.entityById.wasQuotedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:used'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
         "###);
     }
 
@@ -438,7 +438,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                agent(externalId:"bobross", attributes: { type: "artist" }) {
+                agent(externalId:"testentity1", attributes: { type: "type" }) {
                     context
                 }
             }
@@ -448,7 +448,7 @@ mod test {
 
         insta::assert_toml_snapshot!(create, @r###"
         [data.agent]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:bobross'
+        context = 'http://blockchaintp.com/chronicle/ns#agent:testentity1'
         "###);
     }
 
@@ -457,74 +457,70 @@ mod test {
         let schema = test_schema().await;
 
         // create an activity
-        let activity1 = schema
-                    .execute(Request::new(
-                        r#"
-                    mutation one {
-                      gardening(externalId:"composting", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
-                            context
-                        }
-                    }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(activity1, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+                  mutation one {
+                    itemCertified(externalId:"testactivityid1", attributes: { certIdAttribute: "testcertid" }) {
+                          context
+                      }
+                  }
+              "#,
+          ))
+          .await, @r###"
+        [data.itemCertified]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
         "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // create another activity
-        let activity2 = schema
-                    .execute(Request::new(
-                        r#"
-                    mutation two {
-                      gardening(externalId:"lawnmowing", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
-                            context
-                        }
-                    }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(activity2, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation two {
+            itemManufactured(externalId:"testactivityid2", attributes: { batchIdAttribute: "testbatchid" }) {
+                  context
+              }
+          }
+      "#
+              ),
+          )
+          .await, @r###"
+        [data.itemManufactured]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
         "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // establish WasInformedBy relationship
-        let was_informed_by = schema
-            .execute(Request::new(
-                r#"
-            mutation exec {
-                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
-                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:lawnmowing",)
-                {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(was_informed_by, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation exec {
+              wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",
+              informingActivity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid2",)
+              {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.wasInformedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
+        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
         "###);
+
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // query WasInformedBy relationship
-        let response = schema
+        insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
-                    ... on Gardening {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1") {
+                    ... on ItemCertified {
                         id
                         externalId
                         wasInformedBy {
-                            ... on Gardening {
+                            ... on ItemManufactured {
+                                batchIdAttribute
                                 id
                                 externalId
                             }
@@ -534,90 +530,93 @@ mod test {
             }
         "#,
             ))
-            .await;
-        insta::assert_toml_snapshot!(response, @r###"
+            .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        externalId = 'composting'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        externalId = 'testactivityid1'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        externalId = 'lawnmowing'
+        batchIdAttribute = 'testbatchid'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
+        externalId = 'testactivityid2'
         "###);
+
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // create a third activity
-        let activity3 = schema
-                    .execute(Request::new(
-                        r#"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
                     mutation three {
-                      gardening(externalId:"mowermaintenance", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
+                      itemCodified(externalId:"testactivityid3") {
                             context
                         }
                     }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(activity3, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
+                "#,
+          ))
+          .await, @r###"
+        [data.itemCodified]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid3'
         "###);
+
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // establish another WasInformedBy relationship
-        let was_informed_by2 = schema
-            .execute(Request::new(
-                r#"
-            mutation execagain {
-                wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:composting",
-                informingActivity: "http://blockchaintp.com/chronicle/ns#activity:mowermaintenance",)
-                {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(was_informed_by2, @r###"
-        [data.wasInformedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        "###);
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation execagain {
+              wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",
+              informingActivity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid3",)
+              {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
+          [data.wasInformedBy]
+          context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+          "###);
+
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // query WasInformedBy relationship
-        let response = schema
+        insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
-            query testagain {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:composting") {
-                    ... on Gardening {
-                        id
-                        externalId
-                        wasInformedBy {
-                            ... on Gardening {
-                                id
-                                externalId
-                            }
-                        }
-                    }
-                }
-            }
+                query test {
+                  activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1") {
+                      ... on ItemCertified {
+                          id
+                          externalId
+                          wasInformedBy {
+                              ... on ItemManufactured {
+                                  id
+                                  externalId
+                              }
+                              ... on ItemCodified {
+                                  id
+                                  externalId
+                              }
+                          }
+                      }
+                  }
+              }
         "#,
             ))
-            .await;
-        insta::assert_toml_snapshot!(response, @r###"
+            .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:composting'
-        externalId = 'composting'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        externalId = 'testactivityid1'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:lawnmowing'
-        externalId = 'lawnmowing'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
+        externalId = 'testactivityid2'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:mowermaintenance'
-        externalId = 'mowermaintenance'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid3'
+        externalId = 'testactivityid3'
         "###);
     }
 
@@ -625,77 +624,70 @@ mod test {
     async fn generated() {
         let schema = test_schema().await;
 
-        // create an entity
-        let entity = schema
-                    .execute(Request::new(
-                        r#"
-                    mutation entity {
-                      theSea(externalId:"tide", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
-                            context
-                        }
-                    }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(entity, @r###"
-        [data.theSea]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
-        "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         // create an activity
-        let activity = schema
-                    .execute(Request::new(
-                        r#"
-                    mutation activity {
-                      gardening(externalId:"damming", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
-                            context
-                        }
-                    }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(activity, @r###"
-        [data.gardening]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:damming'
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+                  mutation activity {
+                    itemCertified(externalId:"testactivity1", attributes: { certIdAttribute: "testcertid" }) {
+                          context
+                      }
+                  }
+              "#,
+          ))
+          .await, @r###"
+        [data.itemCertified]
+        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
         "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create an entity
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+                  mutation entity {
+                    NCBRecord(externalId:"testentity1") {
+                          context
+                      }
+                  }
+              "#,
+          ))
+          .await, @r###"
+        [data.NCBRecord]
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        "###);
 
         // establish Generated relationship
-        let generated = schema
-            .execute(Request::new(
-                r#"
-            mutation generated {
-                wasGeneratedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:damming",
-                id: "http://blockchaintp.com/chronicle/ns#entity:tide",)
-                {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(generated, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation generated {
+              wasGeneratedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivity1",
+              id: "http://blockchaintp.com/chronicle/ns#entity:testentity1",)
+              {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.wasGeneratedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:tide'
+        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
         "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // query Generated relationship
-        let response = schema
+        insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
-                    ... on Gardening {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivity1") {
+                  ... on ItemCertified {
                         id
                         externalId
+                        certIdAttribute
                         generated {
-                            ... on TheSea {
-                                id
-                                externalId
+                            ... on NCBRecord {
+                              id
+                              externalId
                             }
                         }
                     }
@@ -703,90 +695,89 @@ mod test {
             }
         "#,
             ))
-            .await;
-        insta::assert_toml_snapshot!(response, @r###"
+            .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
-        externalId = 'damming'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
+        externalId = 'testactivity1'
+        certIdAttribute = 'testcertid'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
-        externalId = 'tide'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
         "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // The following demonstrates that a second wasGeneratedBy
+        // relationship cannot be made once the first has been established.
 
         // create another entity
-        let entity2 = schema
-                    .execute(Request::new(
-                        r#"
-                    mutation second {
-                      theSea(externalId:"storm", attributes: { stringAttribute: "str", intAttribute: 2, boolAttribute: true }) {
-                            context
-                        }
-                    }
-                "#
-                        ),
-                    )
-                    .await;
-        insta::assert_toml_snapshot!(entity2, @r###"
-        [data.theSea]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
-        "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        insta::assert_toml_snapshot!(schema
+            .execute(Request::new(
+                r#"
+            mutation second {
+              item(externalId:"testitem", attributes: { partIdAttribute: "testpartid" }) {
+                    context
+                }
+            }
+        "#
+                ),
+            )
+            .await, @r###"
+          [data.item]
+          context = 'http://blockchaintp.com/chronicle/ns#entity:testitem'
+          "###);
 
         // establish another Generated relationship
-        let generated2 = schema
+        insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             mutation again {
-                wasGeneratedBy(id: "http://blockchaintp.com/chronicle/ns#entity:storm",
-                activity: "http://blockchaintp.com/chronicle/ns#activity:damming",)
+                wasGeneratedBy(id: "http://blockchaintp.com/chronicle/ns#entity:testitem",
+                activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",)
                 {
                     context
                 }
             }
         "#,
             ))
-            .await;
-        insta::assert_toml_snapshot!(generated2, @r###"
-        [data.wasGeneratedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:storm'
-        "###);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+            .await, @r###"
+          [data.wasGeneratedBy]
+          context = 'http://blockchaintp.com/chronicle/ns#entity:testitem'
+          "###);
 
         // query Generated relationship
-        let response = schema
-            .execute(Request::new(
-                r#"
-            query testagain {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#entity:damming") {
-                    ... on Gardening {
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query testagain {
+                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivity1") {
+                  ... on ItemCertified {
                         id
                         externalId
+                        certIdAttribute
                         generated {
-                            ... on TheSea {
+                            ... on Item {
                                 id
                                 externalId
+                            }
+                            ... on NCBRecord {
+                              id
+                              externalId
                             }
                         }
                     }
                 }
             }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(response, @r###"
+    "#,
+          ))
+          .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:damming'
-        externalId = 'damming'
+        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
+        externalId = 'testactivity1'
+        certIdAttribute = 'testcertid'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:tide'
-        externalId = 'tide'
-
-        [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:storm'
-        externalId = 'storm'
+        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        externalId = 'testentity1'
         "###);
     }
 
@@ -798,7 +789,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(externalId:"ringo", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                contractor(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
                     context
                 }
             }
@@ -811,10 +802,26 @@ mod test {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let res = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+              NCB(externalId:"testagent2") {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let res = schema
                 .execute(Request::new(
                     r#"
             mutation {
-                friend(externalId:"john", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                certificate(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
                     context
                 }
             }
@@ -827,32 +834,16 @@ mod test {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let res = schema
-                .execute(Request::new(
-                    r#"
+            .execute(Request::new(
+                r#"
             mutation {
-                theSea(externalId:"coral", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
+                NCBRecord(externalId:"testentity2") {
                     context
                 }
             }
         "#,
-                ))
-                .await;
-
-        assert_eq!(res.errors, vec![]);
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let res = schema
-                .execute(Request::new(
-                    r#"
-            mutation {
-                theSea(externalId:"fish", attributes: { stringAttribute: "string", intAttribute: 1, boolAttribute: false }) {
-                    context
-                }
-            }
-        "#,
-                ))
-                .await;
+            ))
+            .await;
 
         assert_eq!(res.errors, vec![]);
 
@@ -862,9 +853,9 @@ mod test {
 
         for i in 1..10 {
             let activity_name = if i % 2 == 0 {
-                format!("gardening{}", i)
+                format!("testactivity{}", i)
             } else {
-                format!("swimming{}", i)
+                format!("anothertestactivity{}", i)
             };
 
             if (i % 2) == 0 {
@@ -873,7 +864,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                        gardening(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        itemCertified(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
                             context
                         }}
                     }}
@@ -886,18 +877,16 @@ mod test {
                 assert_eq!(res.errors, vec![]);
             } else {
                 let res = schema
-                    .execute(Request::new(
-                        &format!(
-                            r#"
+                    .execute(Request::new(&format!(
+                        r#"
                     mutation {{
-                        swimAbout(externalId:"{}", attributes: {{ stringAttribute: "string", intAttribute: 1, boolAttribute: false }}) {{
+                        itemCodified(externalId:"{}") {{
                             context
                         }}
                     }}
                 "#,
-                            activity_name
-                        ),
-                    ))
+                        activity_name
+                    )))
                     .await;
 
                 assert_eq!(res.errors, vec![]);
@@ -908,7 +897,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: "http://blockchaintp.com/chronicle/ns#entity:coral", activity: "http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                used(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1", activity: "http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
                 }}
             }}
@@ -952,13 +941,17 @@ mod test {
 
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            let agent = if i % 2 == 0 { "ringo" } else { "john" };
+            let agent = if i % 2 == 0 {
+                "testagent1"
+            } else {
+                "testagent2"
+            };
 
             let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: RESPONSIBLE, responsible: "http://blockchaintp.com/chronicle/ns#agent:{}", activity: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                wasAssociatedWith( role: CERTIFIER, responsible: "http://blockchaintp.com/chronicle/ns#agent:{}", activity: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
                     context
                 }}
             }}
@@ -973,61 +966,96 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
-        let entire_timeline_in_order = schema
-            .execute(Request::new(
-                r#"
-                query {
-                activityTimeline(
-                  forEntity: [],
-                  forAgent: [],
-                  order: OLDEST_FIRST,
-                  activityTypes: [],
-                                ) {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                            ... on Gardening {
-                                id
-                                externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
-                                started
-                                ended
-                                wasAssociatedWith {
-                                        responsible {
-                                            agent {
-                                                ... on Friend {
-                                                    id
-                                                    externalId
-                                                }
-                                            }
-                                            role
+        // Entire timeline in order
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                forEntity: [],
+                forAgent: [],
+                order: OLDEST_FIRST,
+                activityTypes: [],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                          ... on ItemCertified {
+                            id
+                            externalId
+                            started
+                            ended
+                            wasAssociatedWith {
+                                    responsible {
+                                      agent {
+                                        ... on Contractor {
+                                            id
+                                            externalId
                                         }
-                                }
-                                used {
-                                    ... on TheSea {
-                                        id
-                                        externalId
+                                        ... on NCB {
+                                          id
+                                          externalId
+                                        }
                                     }
+                                        role
+                                    }
+                            }
+                            used {
+                                ... on Certificate {
+                                  id
+                                  externalId
+                                }
+                                ... on NCBRecord {
+                                  id
+                                  externalId
                                 }
                             }
-                       }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
-
-        insta::assert_json_snapshot!(entire_timeline_in_order, @r###"
+                        }
+                          ... on ItemCodified {
+                            id
+                            externalId
+                            started
+                            ended
+                            wasAssociatedWith {
+                                    responsible {
+                                        agent {
+                                            ... on Contractor {
+                                                id
+                                                externalId
+                                            }
+                                            ... on NCB {
+                                              id
+                                              externalId
+                                            }
+                                        }
+                                        role
+                                    }
+                            }
+                            used {
+                                ... on Certificate {
+                                  id
+                                  externalId
+                                }
+                                ... on NCBRecord {
+                                  id
+                                  externalId
+                                }
+                            }
+                        }
+                     }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "activityTimeline": {
@@ -1040,35 +1068,53 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity1",
+                    "externalId": "anothertestactivity1",
+                    "started": "1968-09-02T00:00:00+00:00",
+                    "ended": "1968-09-02T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "externalId": "gardening2",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity2",
+                    "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1076,35 +1122,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity3",
+                    "externalId": "anothertestactivity3",
+                    "started": "1968-09-04T00:00:00+00:00",
+                    "ended": "1968-09-04T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "externalId": "gardening4",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity4",
+                    "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1112,35 +1176,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity5",
+                    "externalId": "anothertestactivity5",
+                    "started": "1968-09-06T00:00:00+00:00",
+                    "ended": "1968-09-06T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "externalId": "gardening6",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity6",
+                    "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1148,35 +1230,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity7",
+                    "externalId": "anothertestactivity7",
+                    "started": "1968-09-08T00:00:00+00:00",
+                    "ended": "1968-09-08T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "externalId": "gardening8",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity8",
+                    "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1184,7 +1284,28 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity9",
+                    "externalId": "anothertestactivity9",
+                    "started": "1968-09-10T00:00:00+00:00",
+                    "ended": "1968-09-10T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "8"
                 }
@@ -1194,61 +1315,96 @@ mod test {
         }
         "###);
 
-        let entire_timeline_reverse_order = schema
-            .execute(Request::new(
-                r#"
-                query {
-                activityTimeline(
-                  forEntity: [],
-                  forAgent: [],
-                  order: NEWEST_FIRST,
-                  activityTypes: [],
-                                ) {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                            ... on Gardening {
-                                id
-                                externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
-                                started
-                                ended
-                                wasAssociatedWith {
-                                        responsible {
-                                            agent {
-                                                ... on Friend {
-                                                    id
-                                                    externalId
-                                                }
+        // Entire timeline reverse order
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                forEntity: [],
+                forAgent: [],
+                order: NEWEST_FIRST,
+                activityTypes: [],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                          ... on ItemCertified {
+                            id
+                            externalId
+                            started
+                            ended
+                            wasAssociatedWith {
+                                    responsible {
+                                        agent {
+                                            ... on Contractor {
+                                                id
+                                                externalId
                                             }
-                                            role
+                                            ... on NCB {
+                                              id
+                                              externalId
+                                            }
                                         }
-                                }
-                                used {
-                                    ... on TheSea {
-                                        id
-                                        externalId
+                                        role
                                     }
+                            }
+                            used {
+                                ... on Certificate {
+                                  id
+                                  externalId
+                                }
+                                ... on NCBRecord {
+                                  id
+                                  externalId
                                 }
                             }
-                       }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
-
-        insta::assert_json_snapshot!(entire_timeline_reverse_order, @r###"
+                        }
+                        ... on ItemCodified {
+                          id
+                          externalId
+                          started
+                          ended
+                          wasAssociatedWith {
+                                  responsible {
+                                      agent {
+                                          ... on Contractor {
+                                                id
+                                                externalId
+                                            }
+                                          ... on NCB {
+                                              id
+                                              externalId
+                                            }
+                                      }
+                                      role
+                                  }
+                          }
+                          used {
+                          ... on Certificate {
+                            id
+                            externalId
+                          }
+                          ... on NCBRecord {
+                            id
+                            externalId
+                          }
+                          }
+                      }
+                     }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "activityTimeline": {
@@ -1261,35 +1417,53 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity9",
+                    "externalId": "anothertestactivity9",
+                    "started": "1968-09-10T00:00:00+00:00",
+                    "ended": "1968-09-10T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening8",
-                    "externalId": "gardening8",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity8",
+                    "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1297,35 +1471,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity7",
+                    "externalId": "anothertestactivity7",
+                    "started": "1968-09-08T00:00:00+00:00",
+                    "ended": "1968-09-08T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening6",
-                    "externalId": "gardening6",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity6",
+                    "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1333,35 +1525,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity5",
+                    "externalId": "anothertestactivity5",
+                    "started": "1968-09-06T00:00:00+00:00",
+                    "ended": "1968-09-06T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening4",
-                    "externalId": "gardening4",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity4",
+                    "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1369,35 +1579,53 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity3",
+                    "externalId": "anothertestactivity3",
+                    "started": "1968-09-04T00:00:00+00:00",
+                    "ended": "1968-09-04T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Gardening",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:gardening2",
-                    "externalId": "gardening2",
-                    "stringAttribute": "string",
-                    "intAttribute": 1,
-                    "boolAttribute": false,
+                    "__typename": "ItemCertified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity2",
+                    "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
                     "wasAssociatedWith": [
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:ringo",
-                            "externalId": "ringo"
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "externalId": "testagent1"
                           },
-                          "role": "RESPONSIBLE"
+                          "role": "CERTIFIER"
                         }
                       }
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:coral",
-                        "externalId": "coral"
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
                       }
                     ]
                   },
@@ -1405,7 +1633,28 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified",
+                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity1",
+                    "externalId": "anothertestactivity1",
+                    "started": "1968-09-02T00:00:00+00:00",
+                    "ended": "1968-09-02T00:00:00+00:00",
+                    "wasAssociatedWith": [
+                      {
+                        "responsible": {
+                          "agent": {
+                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "externalId": "testagent2"
+                          },
+                          "role": "CERTIFIER"
+                        }
+                      }
+                    ],
+                    "used": [
+                      {
+                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "externalId": "testentity1"
+                      }
+                    ]
                   },
                   "cursor": "8"
                 }
@@ -1415,35 +1664,38 @@ mod test {
         }
         "###);
 
-        let by_activity_type = schema
-            .execute(Request::new(
-                r#"
-                query {
-                activityTimeline(
-                  forEntity: [],
-                  forAgent: [],
-                  order: NEWEST_FIRST,
-                  activityTypes: [SWIM_ABOUT],
-                                ) {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                        }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
+        // By activity type
 
-        insta::assert_json_snapshot!(by_activity_type, @r###"
+        // Note the case of `ItemCertified` and `ItemCodified` in the `activityTypes`
+        // field of the query here, as it is not standard GraphQL but is tailored to
+        // meet client requirements of preserving domain case inflections.
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                forEntity: [],
+                forAgent: [],
+                order: NEWEST_FIRST,
+                activityTypes: [ItemCertified, ItemCodified],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "activityTimeline": {
@@ -1451,38 +1703,62 @@ mod test {
                 "hasPreviousPage": false,
                 "hasNextPage": false,
                 "startCursor": "0",
-                "endCursor": "4"
+                "endCursor": "8"
               },
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCertified"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCertified"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertified"
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodified"
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertified"
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodified"
+                  },
+                  "cursor": "8"
                 }
               ]
             }
@@ -1490,35 +1766,34 @@ mod test {
         }
         "###);
 
-        let by_agent = schema
-            .execute(Request::new(
-                r#"
-                query {
-                activityTimeline(
-                  forEntity: [],
-                  forAgent: ["http://blockchaintp.com/chronicle/ns#agent:john"],
-                  order: NEWEST_FIRST,
-                  activityTypes: [],
-                                ) {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                        }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
-
-        insta::assert_json_snapshot!(by_agent, @r###"
+        // By agent
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                forEntity: [],
+                forAgent: ["http://blockchaintp.com/chronicle/ns#agent:testagent2"],
+                order: NEWEST_FIRST,
+                activityTypes: [],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "activityTimeline": {
@@ -1531,31 +1806,31 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "SwimAbout"
+                    "__typename": "ItemCodified"
                   },
                   "cursor": "4"
                 }
@@ -1575,7 +1850,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                friend(externalId:"bobross{}", attributes: {{ stringAttribute: "String", intAttribute: 1, boolAttribute: false }}) {{
+                contractor(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
                     context
                 }}
             }}
@@ -1586,39 +1861,39 @@ mod test {
 
             assert_eq!(res.errors, vec![]);
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let default_cursor = schema
-            .execute(Request::new(
-                r#"
-                query {
-                agentsByType(agentType: FRIEND) {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                            ... on Friend {
-                                id
-                                externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
-                            }
-                       }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
+        // Default cursor
 
-        insta::assert_json_snapshot!(default_cursor, @r###"
+        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
+        // the query here, as it is not standard GraphQL but is tailored to meet
+        // client requirements of preserving domain case inflections.
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              agentsByType(agentType: Contractor) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                          ... on Contractor {
+                              id
+                              externalId
+                              locationAttribute
+                          }
+                     }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "agentsByType": {
@@ -1631,111 +1906,91 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross0",
-                    "externalId": "bobross0",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent0",
+                    "externalId": "testagent0",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross1",
-                    "externalId": "bobross1",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                    "externalId": "testagent1",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross10",
-                    "externalId": "bobross10",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent10",
+                    "externalId": "testagent10",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross11",
-                    "externalId": "bobross11",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent11",
+                    "externalId": "testagent11",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "externalId": "bobross12",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent12",
+                    "externalId": "testagent12",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "externalId": "bobross13",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent13",
+                    "externalId": "testagent13",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "externalId": "bobross14",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent14",
+                    "externalId": "testagent14",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "externalId": "bobross15",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent15",
+                    "externalId": "testagent15",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "externalId": "bobross16",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent16",
+                    "externalId": "testagent16",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "8"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "externalId": "bobross17",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent17",
+                    "externalId": "testagent17",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "9"
                 }
@@ -1745,37 +2000,38 @@ mod test {
         }
         "###);
 
-        let middle_cursor = schema
-            .execute(Request::new(
-                r#"
-                query {
-                agentsByType(agentType: FRIEND, first: 20, after: "3") {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                            ... on Friend {
-                                id
-                                externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
-                            }
-                        }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
+        // Middle cursor
 
-        insta::assert_json_snapshot!(middle_cursor, @r###"
+        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
+        // the query here, as it is not standard GraphQL but is tailored to meet
+        // client requirements of preserving domain case inflections.
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              agentsByType(agentType: Contractor, first: 20, after: "3") {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                          ... on Contractor {
+                              id
+                              externalId
+                              locationAttribute
+                          }
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "agentsByType": {
@@ -1788,221 +2044,181 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross12",
-                    "externalId": "bobross12",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent12",
+                    "externalId": "testagent12",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross13",
-                    "externalId": "bobross13",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent13",
+                    "externalId": "testagent13",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross14",
-                    "externalId": "bobross14",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent14",
+                    "externalId": "testagent14",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross15",
-                    "externalId": "bobross15",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent15",
+                    "externalId": "testagent15",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross16",
-                    "externalId": "bobross16",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent16",
+                    "externalId": "testagent16",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross17",
-                    "externalId": "bobross17",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent17",
+                    "externalId": "testagent17",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross18",
-                    "externalId": "bobross18",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent18",
+                    "externalId": "testagent18",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross19",
-                    "externalId": "bobross19",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent19",
+                    "externalId": "testagent19",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross2",
-                    "externalId": "bobross2",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                    "externalId": "testagent2",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "8"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross20",
-                    "externalId": "bobross20",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent20",
+                    "externalId": "testagent20",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "9"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross21",
-                    "externalId": "bobross21",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent21",
+                    "externalId": "testagent21",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "10"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross22",
-                    "externalId": "bobross22",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent22",
+                    "externalId": "testagent22",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "11"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross23",
-                    "externalId": "bobross23",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent23",
+                    "externalId": "testagent23",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "12"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross24",
-                    "externalId": "bobross24",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent24",
+                    "externalId": "testagent24",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "13"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross25",
-                    "externalId": "bobross25",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent25",
+                    "externalId": "testagent25",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "14"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross26",
-                    "externalId": "bobross26",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent26",
+                    "externalId": "testagent26",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "15"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross27",
-                    "externalId": "bobross27",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent27",
+                    "externalId": "testagent27",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "16"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross28",
-                    "externalId": "bobross28",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent28",
+                    "externalId": "testagent28",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "17"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross29",
-                    "externalId": "bobross29",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent29",
+                    "externalId": "testagent29",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "18"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross3",
-                    "externalId": "bobross3",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent3",
+                    "externalId": "testagent3",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "19"
                 }
@@ -2012,37 +2228,38 @@ mod test {
         }
         "###);
 
-        let out_of_bound_cursor = schema
-            .execute(Request::new(
-                r#"
-                query {
-                agentsByType(agentType: FRIEND, first: 20, after: "90") {
-                    pageInfo {
-                        hasPreviousPage
-                        hasNextPage
-                        startCursor
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            __typename
-                            ... on Friend {
-                                id
-                                externalId
-                                stringAttribute
-                                intAttribute
-                                boolAttribute
-                            }
-                        }
-                        cursor
-                    }
-                }
-                }
-        "#,
-            ))
-            .await;
+        // Out of bound cursor
 
-        insta::assert_json_snapshot!(out_of_bound_cursor , @r###"
+        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
+        // the query here, as it is not standard GraphQL but is tailored to meet
+        // client requirements of preserving domain case inflections.
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              agentsByType(agentType: Contractor, first: 20, after: "90") {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                          ... on Contractor {
+                              id
+                              externalId
+                              locationAttribute
+                          }
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
         {
           "data": {
             "agentsByType": {
@@ -2055,100 +2272,82 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross91",
-                    "externalId": "bobross91",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent91",
+                    "externalId": "testagent91",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross92",
-                    "externalId": "bobross92",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent92",
+                    "externalId": "testagent92",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross93",
-                    "externalId": "bobross93",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent93",
+                    "externalId": "testagent93",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross94",
-                    "externalId": "bobross94",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent94",
+                    "externalId": "testagent94",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross95",
-                    "externalId": "bobross95",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent95",
+                    "externalId": "testagent95",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross96",
-                    "externalId": "bobross96",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent96",
+                    "externalId": "testagent96",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross97",
-                    "externalId": "bobross97",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent97",
+                    "externalId": "testagent97",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross98",
-                    "externalId": "bobross98",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent98",
+                    "externalId": "testagent98",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "Friend",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:bobross99",
-                    "externalId": "bobross99",
-                    "stringAttribute": "String",
-                    "intAttribute": 1,
-                    "boolAttribute": false
+                    "__typename": "Contractor",
+                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent99",
+                    "externalId": "testagent99",
+                    "locationAttribute": "testattribute"
                   },
                   "cursor": "8"
                 }

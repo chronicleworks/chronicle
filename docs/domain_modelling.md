@@ -534,3 +534,32 @@ You can add new attributes, and add their values to both existing and new data.
 
 This conforms to most reasonable models of interface and protocol evolution,
 where you should design for extension rather than modification.
+
+### Formatting Domain Terms
+
+In order to keep the GraphQL description of data readable and consistent,
+devise domain terms with the following in mind:
+
+Domain terms (agents, activities, entities, attributes) MUST be alphanumeric,
+not starting with a digit, and MUST start with at least one capital letter.
+
+Roles MUST be in SCREAMING_SNAKE_CASE.
+
+When describing domains in GraphQL, the following transformations take place:
+
+Case is preserved in pascal for GraphQL objects, except when acronyms are
+preserved in object names, while case is camelised for non-acronym attributes.
+
+An activity named ItemChecked with an associated attribute named Item will be
+represented in GraphQL as `ItemChecked { itemAttribute }`.
+
+Acronyms in domain terms are preserved.
+
+An agent named NYU will be described as `NYU`, while NPRListener will be
+described in GraphQL as `NPRListener`, including in operations:
+
+`NYU(id:)`
+
+```graphql
+... on NPRListener { NPRListenerAttribute }
+```
