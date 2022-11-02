@@ -91,7 +91,7 @@ type Guidance {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
