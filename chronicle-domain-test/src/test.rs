@@ -128,66 +128,63 @@ mod test {
             .finish()
     }
 
+    // Note that this test demonstrates Chronicle accepting
+    // long-form and short-form iris as input
     #[tokio::test]
     async fn agent_delegation() {
         let schema = test_schema().await;
 
-        let created = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                actedOnBehalfOf(
-                    responsible: "http://blockchaintp.com/chronicle/ns#agent:testagent",
-                    delegate: "http://blockchaintp.com/chronicle/ns#agent:testdelegate",
-                    role: MANUFACTURER
-                    ) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-
-        insta::assert_toml_snapshot!(created, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              actedOnBehalfOf(
+                  responsible: "chronicle:agent:testagent",
+                  delegate: "http://blockchaintp.com/chronicle/ns#agent:testdelegate",
+                  role: MANUFACTURER
+                  ) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.actedOnBehalfOf]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:testagent'
+        context = 'chronicle:agent:testagent'
         "###);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let derived = schema
-            .execute(Request::new(
-                r#"
-            query {
-                agentById(id: "http://blockchaintp.com/chronicle/ns#agent:testagent") {
-                    ... on ProvAgent {
-                        id
-                        externalId
-                        actedOnBehalfOf {
-                            agent {
-                                ... on ProvAgent {
-                                    id
-                                }
-                            }
-                            role
-                        }
-                    }
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_json_snapshot!(derived.data, @r###"
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              agentById(id: "chronicle:agent:testagent") {
+                  ... on ProvAgent {
+                      id
+                      externalId
+                      actedOnBehalfOf {
+                          agent {
+                              ... on ProvAgent {
+                                  id
+                              }
+                          }
+                          role
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await.data, @r###"
         {
           "agentById": {
-            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent",
+            "id": "chronicle:agent:testagent",
             "externalId": "testagent",
             "actedOnBehalfOf": [
               {
                 "agent": {
-                  "id": "http://blockchaintp.com/chronicle/ns#agent:testdelegate"
+                  "id": "chronicle:agent:testdelegate"
                 },
                 "role": "MANUFACTURER"
               }
@@ -205,8 +202,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasDerivedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
+                wasDerivedFrom(generatedEntity: "chronicle:entity:testentity1",
+                               usedEntity: "chronicle:entity:testentity2") {
                     context
                 }
             }
@@ -216,7 +213,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasDerivedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -224,7 +221,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
+                entityById(id: "chronicle:entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -241,11 +238,11 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
         "###);
     }
 
@@ -257,8 +254,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                hadPrimarySource(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
-                               usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
+                hadPrimarySource(generatedEntity: "chronicle:entity:testentity1",
+                               usedEntity: "chronicle:entity:testentity2") {
                     context
                 }
             }
@@ -268,7 +265,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.hadPrimarySource]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -276,7 +273,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
+                entityById(id: "chronicle:entity:testentity1") {
 
                     ... on ProvEntity {
                         id
@@ -299,14 +296,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
 
         [[data.entityById.hadPrimarySource]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
         "###);
     }
 
@@ -318,8 +315,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasRevisionOf(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
+                wasRevisionOf(generatedEntity: "chronicle:entity:testentity1",
+                            usedEntity: "chronicle:entity:testentity2") {
                     context
                 }
             }
@@ -329,7 +326,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasRevisionOf]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -337,7 +334,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
+                entityById(id: "chronicle:entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -359,14 +356,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
 
         [[data.entityById.wasRevisionOf]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
         "###);
     }
 
@@ -378,8 +375,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasQuotedFrom(generatedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity1",
-                            usedEntity: "http://blockchaintp.com/chronicle/ns#entity:testentity2") {
+                wasQuotedFrom(generatedEntity: "chronicle:entity:testentity1",
+                            usedEntity: "chronicle:entity:testentity2") {
                     context
                 }
             }
@@ -389,7 +386,7 @@ mod test {
 
         insta::assert_toml_snapshot!(created, @r###"
         [data.wasQuotedFrom]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -397,7 +394,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1") {
+                entityById(id: "chronicle:entity:testentity1") {
                     ... on ProvEntity {
                         id
                         externalId
@@ -419,14 +416,14 @@ mod test {
             .await;
         insta::assert_toml_snapshot!(derived, @r###"
         [data.entityById]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
 
         [[data.entityById.wasDerivedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
 
         [[data.entityById.wasQuotedFrom]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity2'
+        id = 'chronicle:entity:testentity2'
         "###);
     }
 
@@ -448,7 +445,7 @@ mod test {
 
         insta::assert_toml_snapshot!(create, @r###"
         [data.agent]
-        context = 'http://blockchaintp.com/chronicle/ns#agent:testentity1'
+        context = 'chronicle:agent:testentity1'
         "###);
     }
 
@@ -469,7 +466,7 @@ mod test {
           ))
           .await, @r###"
         [data.itemCertified]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        context = 'chronicle:activity:testactivityid1'
         "###);
 
         // create another activity
@@ -486,7 +483,7 @@ mod test {
           )
           .await, @r###"
         [data.itemManufactured]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
+        context = 'chronicle:activity:testactivityid2'
         "###);
 
         // establish WasInformedBy relationship
@@ -494,8 +491,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation exec {
-              wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",
-              informingActivity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid2",)
+              wasInformedBy(activity: "chronicle:activity:testactivityid1",
+              informingActivity: "chronicle:activity:testactivityid2",)
               {
                   context
               }
@@ -504,7 +501,7 @@ mod test {
           ))
           .await, @r###"
         [data.wasInformedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        context = 'chronicle:activity:testactivityid1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -514,7 +511,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1") {
+                activityById(id: "chronicle:activity:testactivityid1") {
                     ... on ItemCertified {
                         id
                         externalId
@@ -532,12 +529,12 @@ mod test {
             ))
             .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        id = 'chronicle:activity:testactivityid1'
         externalId = 'testactivityid1'
 
         [[data.activityById.wasInformedBy]]
         batchIdAttribute = 'testbatchid'
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
+        id = 'chronicle:activity:testactivityid2'
         externalId = 'testactivityid2'
         "###);
 
@@ -556,7 +553,7 @@ mod test {
           ))
           .await, @r###"
         [data.itemCodified]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid3'
+        context = 'chronicle:activity:testactivityid3'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -566,8 +563,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation execagain {
-              wasInformedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",
-              informingActivity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid3",)
+              wasInformedBy(activity: "chronicle:activity:testactivityid1",
+              informingActivity: "chronicle:activity:testactivityid3",)
               {
                   context
               }
@@ -575,9 +572,9 @@ mod test {
       "#,
           ))
           .await, @r###"
-          [data.wasInformedBy]
-          context = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
-          "###);
+        [data.wasInformedBy]
+        context = 'chronicle:activity:testactivityid1'
+        "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -586,7 +583,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query test {
-                  activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1") {
+                  activityById(id: "chronicle:activity:testactivityid1") {
                       ... on ItemCertified {
                           id
                           externalId
@@ -607,15 +604,15 @@ mod test {
             ))
             .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid1'
+        id = 'chronicle:activity:testactivityid1'
         externalId = 'testactivityid1'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid2'
+        id = 'chronicle:activity:testactivityid2'
         externalId = 'testactivityid2'
 
         [[data.activityById.wasInformedBy]]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivityid3'
+        id = 'chronicle:activity:testactivityid3'
         externalId = 'testactivityid3'
         "###);
     }
@@ -637,7 +634,7 @@ mod test {
           ))
           .await, @r###"
         [data.itemCertified]
-        context = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
+        context = 'chronicle:activity:testactivity1'
         "###);
 
         // create an entity
@@ -653,7 +650,7 @@ mod test {
           ))
           .await, @r###"
         [data.NCBRecord]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
 
         // establish Generated relationship
@@ -661,8 +658,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation generated {
-              wasGeneratedBy(activity: "http://blockchaintp.com/chronicle/ns#activity:testactivity1",
-              id: "http://blockchaintp.com/chronicle/ns#entity:testentity1",)
+              wasGeneratedBy(activity: "chronicle:activity:testactivity1",
+              id: "chronicle:entity:testentity1",)
               {
                   context
               }
@@ -671,15 +668,17 @@ mod test {
           ))
           .await, @r###"
         [data.wasGeneratedBy]
-        context = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        context = 'chronicle:entity:testentity1'
         "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // query Generated relationship
         insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivity1") {
+                activityById(id: "chronicle:activity:testactivity1") {
                   ... on ItemCertified {
                         id
                         externalId
@@ -697,12 +696,12 @@ mod test {
             ))
             .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
+        id = 'chronicle:activity:testactivity1'
         externalId = 'testactivity1'
         certIdAttribute = 'testcertid'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
         "###);
 
@@ -722,17 +721,17 @@ mod test {
                 ),
             )
             .await, @r###"
-          [data.item]
-          context = 'http://blockchaintp.com/chronicle/ns#entity:testitem'
-          "###);
+        [data.item]
+        context = 'chronicle:entity:testitem'
+        "###);
 
         // establish another Generated relationship
         insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             mutation again {
-                wasGeneratedBy(id: "http://blockchaintp.com/chronicle/ns#entity:testitem",
-                activity: "http://blockchaintp.com/chronicle/ns#activity:testactivityid1",)
+                wasGeneratedBy(id: "chronicle:entity:testitem",
+                activity: "chronicle:activity:testactivityid1",)
                 {
                     context
                 }
@@ -740,16 +739,16 @@ mod test {
         "#,
             ))
             .await, @r###"
-          [data.wasGeneratedBy]
-          context = 'http://blockchaintp.com/chronicle/ns#entity:testitem'
-          "###);
+        [data.wasGeneratedBy]
+        context = 'chronicle:entity:testitem'
+        "###);
 
         // query Generated relationship
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
               query testagain {
-                activityById(id: "http://blockchaintp.com/chronicle/ns#activity:testactivity1") {
+                activityById(id: "chronicle:activity:testactivity1") {
                   ... on ItemCertified {
                         id
                         externalId
@@ -771,12 +770,12 @@ mod test {
           ))
           .await, @r###"
         [data.activityById]
-        id = 'http://blockchaintp.com/chronicle/ns#activity:testactivity1'
+        id = 'chronicle:activity:testactivity1'
         externalId = 'testactivity1'
         certIdAttribute = 'testcertid'
 
         [[data.activityById.generated]]
-        id = 'http://blockchaintp.com/chronicle/ns#entity:testentity1'
+        id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
         "###);
     }
@@ -897,7 +896,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: "http://blockchaintp.com/chronicle/ns#entity:testentity1", activity: "http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                used(id: "chronicle:entity:testentity1", activity: "chronicle:activity:{}") {{
                     context
                 }}
             }}
@@ -913,12 +912,15 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
                   mutation {{
-                      startActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                      startActivity( time: "{}", id: "chronicle:activity:{}") {{
                           context
                       }}
                   }}
                 "#,
-                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
+                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
+                        .unwrap()
+                        .to_rfc3339(),
+                    activity_name
                 )))
                 .await;
 
@@ -928,12 +930,15 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", id: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                endActivity( time: "{}", id: "chronicle:activity:{}") {{
                     context
                 }}
             }}
         "#,
-                   from.checked_add_signed(chronicle::chrono::Duration::days(i)).unwrap().to_rfc3339() , activity_name
+                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
+                        .unwrap()
+                        .to_rfc3339(),
+                    activity_name
                 )))
                 .await;
 
@@ -951,7 +956,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: CERTIFIER, responsible: "http://blockchaintp.com/chronicle/ns#agent:{}", activity: "http://http://blockchaintp.com/chronicle/ns#activity:{}") {{
+                wasAssociatedWith( role: CERTIFIER, responsible: "chronicle:agent:{}", activity: "chronicle:activity:{}") {{
                     context
                 }}
             }}
@@ -1069,7 +1074,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity1",
+                    "id": "chronicle:activity:anothertestactivity1",
                     "externalId": "anothertestactivity1",
                     "started": "1968-09-02T00:00:00+00:00",
                     "ended": "1968-09-02T00:00:00+00:00",
@@ -1077,7 +1082,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1086,7 +1091,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1096,7 +1101,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity2",
+                    "id": "chronicle:activity:testactivity2",
                     "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
@@ -1104,7 +1109,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1113,7 +1118,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1123,7 +1128,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity3",
+                    "id": "chronicle:activity:anothertestactivity3",
                     "externalId": "anothertestactivity3",
                     "started": "1968-09-04T00:00:00+00:00",
                     "ended": "1968-09-04T00:00:00+00:00",
@@ -1131,7 +1136,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1140,7 +1145,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1150,7 +1155,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity4",
+                    "id": "chronicle:activity:testactivity4",
                     "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
@@ -1158,7 +1163,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1167,7 +1172,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1177,7 +1182,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity5",
+                    "id": "chronicle:activity:anothertestactivity5",
                     "externalId": "anothertestactivity5",
                     "started": "1968-09-06T00:00:00+00:00",
                     "ended": "1968-09-06T00:00:00+00:00",
@@ -1185,7 +1190,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1194,7 +1199,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1204,7 +1209,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity6",
+                    "id": "chronicle:activity:testactivity6",
                     "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
@@ -1212,7 +1217,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1221,7 +1226,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1231,7 +1236,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity7",
+                    "id": "chronicle:activity:anothertestactivity7",
                     "externalId": "anothertestactivity7",
                     "started": "1968-09-08T00:00:00+00:00",
                     "ended": "1968-09-08T00:00:00+00:00",
@@ -1239,7 +1244,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1248,7 +1253,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1258,7 +1263,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity8",
+                    "id": "chronicle:activity:testactivity8",
                     "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
@@ -1266,7 +1271,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1275,7 +1280,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1285,7 +1290,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity9",
+                    "id": "chronicle:activity:anothertestactivity9",
                     "externalId": "anothertestactivity9",
                     "started": "1968-09-10T00:00:00+00:00",
                     "ended": "1968-09-10T00:00:00+00:00",
@@ -1293,7 +1298,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1302,7 +1307,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1418,7 +1423,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity9",
+                    "id": "chronicle:activity:anothertestactivity9",
                     "externalId": "anothertestactivity9",
                     "started": "1968-09-10T00:00:00+00:00",
                     "ended": "1968-09-10T00:00:00+00:00",
@@ -1426,7 +1431,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1435,7 +1440,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1445,7 +1450,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity8",
+                    "id": "chronicle:activity:testactivity8",
                     "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
                     "ended": "1968-09-09T00:00:00+00:00",
@@ -1453,7 +1458,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1462,7 +1467,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1472,7 +1477,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity7",
+                    "id": "chronicle:activity:anothertestactivity7",
                     "externalId": "anothertestactivity7",
                     "started": "1968-09-08T00:00:00+00:00",
                     "ended": "1968-09-08T00:00:00+00:00",
@@ -1480,7 +1485,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1489,7 +1494,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1499,7 +1504,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity6",
+                    "id": "chronicle:activity:testactivity6",
                     "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
                     "ended": "1968-09-07T00:00:00+00:00",
@@ -1507,7 +1512,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1516,7 +1521,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1526,7 +1531,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity5",
+                    "id": "chronicle:activity:anothertestactivity5",
                     "externalId": "anothertestactivity5",
                     "started": "1968-09-06T00:00:00+00:00",
                     "ended": "1968-09-06T00:00:00+00:00",
@@ -1534,7 +1539,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1543,7 +1548,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1553,7 +1558,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity4",
+                    "id": "chronicle:activity:testactivity4",
                     "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
                     "ended": "1968-09-05T00:00:00+00:00",
@@ -1561,7 +1566,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1570,7 +1575,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1580,7 +1585,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity3",
+                    "id": "chronicle:activity:anothertestactivity3",
                     "externalId": "anothertestactivity3",
                     "started": "1968-09-04T00:00:00+00:00",
                     "ended": "1968-09-04T00:00:00+00:00",
@@ -1588,7 +1593,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1597,7 +1602,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1607,7 +1612,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCertified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:testactivity2",
+                    "id": "chronicle:activity:testactivity2",
                     "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
                     "ended": "1968-09-03T00:00:00+00:00",
@@ -1615,7 +1620,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                            "id": "chronicle:agent:testagent1",
                             "externalId": "testagent1"
                           },
                           "role": "CERTIFIER"
@@ -1624,7 +1629,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1634,7 +1639,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "ItemCodified",
-                    "id": "http://blockchaintp.com/chronicle/ns#activity:anothertestactivity1",
+                    "id": "chronicle:activity:anothertestactivity1",
                     "externalId": "anothertestactivity1",
                     "started": "1968-09-02T00:00:00+00:00",
                     "ended": "1968-09-02T00:00:00+00:00",
@@ -1642,7 +1647,7 @@ mod test {
                       {
                         "responsible": {
                           "agent": {
-                            "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                            "id": "chronicle:agent:testagent2",
                             "externalId": "testagent2"
                           },
                           "role": "CERTIFIER"
@@ -1651,7 +1656,7 @@ mod test {
                     ],
                     "used": [
                       {
-                        "id": "http://blockchaintp.com/chronicle/ns#entity:testentity1",
+                        "id": "chronicle:entity:testentity1",
                         "externalId": "testentity1"
                       }
                     ]
@@ -1773,7 +1778,7 @@ mod test {
               query {
               activityTimeline(
                 forEntity: [],
-                forAgent: ["http://blockchaintp.com/chronicle/ns#agent:testagent2"],
+                forAgent: ["chronicle:agent:testagent2"],
                 order: NEWEST_FIRST,
                 activityTypes: [],
                               ) {
@@ -1907,7 +1912,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent0",
+                    "id": "chronicle:agent:testagent0",
                     "externalId": "testagent0",
                     "locationAttribute": "testattribute"
                   },
@@ -1916,7 +1921,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent1",
+                    "id": "chronicle:agent:testagent1",
                     "externalId": "testagent1",
                     "locationAttribute": "testattribute"
                   },
@@ -1925,7 +1930,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent10",
+                    "id": "chronicle:agent:testagent10",
                     "externalId": "testagent10",
                     "locationAttribute": "testattribute"
                   },
@@ -1934,7 +1939,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent11",
+                    "id": "chronicle:agent:testagent11",
                     "externalId": "testagent11",
                     "locationAttribute": "testattribute"
                   },
@@ -1943,7 +1948,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent12",
+                    "id": "chronicle:agent:testagent12",
                     "externalId": "testagent12",
                     "locationAttribute": "testattribute"
                   },
@@ -1952,7 +1957,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent13",
+                    "id": "chronicle:agent:testagent13",
                     "externalId": "testagent13",
                     "locationAttribute": "testattribute"
                   },
@@ -1961,7 +1966,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent14",
+                    "id": "chronicle:agent:testagent14",
                     "externalId": "testagent14",
                     "locationAttribute": "testattribute"
                   },
@@ -1970,7 +1975,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent15",
+                    "id": "chronicle:agent:testagent15",
                     "externalId": "testagent15",
                     "locationAttribute": "testattribute"
                   },
@@ -1979,7 +1984,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent16",
+                    "id": "chronicle:agent:testagent16",
                     "externalId": "testagent16",
                     "locationAttribute": "testattribute"
                   },
@@ -1988,7 +1993,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent17",
+                    "id": "chronicle:agent:testagent17",
                     "externalId": "testagent17",
                     "locationAttribute": "testattribute"
                   },
@@ -2045,7 +2050,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent12",
+                    "id": "chronicle:agent:testagent12",
                     "externalId": "testagent12",
                     "locationAttribute": "testattribute"
                   },
@@ -2054,7 +2059,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent13",
+                    "id": "chronicle:agent:testagent13",
                     "externalId": "testagent13",
                     "locationAttribute": "testattribute"
                   },
@@ -2063,7 +2068,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent14",
+                    "id": "chronicle:agent:testagent14",
                     "externalId": "testagent14",
                     "locationAttribute": "testattribute"
                   },
@@ -2072,7 +2077,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent15",
+                    "id": "chronicle:agent:testagent15",
                     "externalId": "testagent15",
                     "locationAttribute": "testattribute"
                   },
@@ -2081,7 +2086,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent16",
+                    "id": "chronicle:agent:testagent16",
                     "externalId": "testagent16",
                     "locationAttribute": "testattribute"
                   },
@@ -2090,7 +2095,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent17",
+                    "id": "chronicle:agent:testagent17",
                     "externalId": "testagent17",
                     "locationAttribute": "testattribute"
                   },
@@ -2099,7 +2104,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent18",
+                    "id": "chronicle:agent:testagent18",
                     "externalId": "testagent18",
                     "locationAttribute": "testattribute"
                   },
@@ -2108,7 +2113,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent19",
+                    "id": "chronicle:agent:testagent19",
                     "externalId": "testagent19",
                     "locationAttribute": "testattribute"
                   },
@@ -2117,7 +2122,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent2",
+                    "id": "chronicle:agent:testagent2",
                     "externalId": "testagent2",
                     "locationAttribute": "testattribute"
                   },
@@ -2126,7 +2131,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent20",
+                    "id": "chronicle:agent:testagent20",
                     "externalId": "testagent20",
                     "locationAttribute": "testattribute"
                   },
@@ -2135,7 +2140,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent21",
+                    "id": "chronicle:agent:testagent21",
                     "externalId": "testagent21",
                     "locationAttribute": "testattribute"
                   },
@@ -2144,7 +2149,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent22",
+                    "id": "chronicle:agent:testagent22",
                     "externalId": "testagent22",
                     "locationAttribute": "testattribute"
                   },
@@ -2153,7 +2158,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent23",
+                    "id": "chronicle:agent:testagent23",
                     "externalId": "testagent23",
                     "locationAttribute": "testattribute"
                   },
@@ -2162,7 +2167,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent24",
+                    "id": "chronicle:agent:testagent24",
                     "externalId": "testagent24",
                     "locationAttribute": "testattribute"
                   },
@@ -2171,7 +2176,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent25",
+                    "id": "chronicle:agent:testagent25",
                     "externalId": "testagent25",
                     "locationAttribute": "testattribute"
                   },
@@ -2180,7 +2185,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent26",
+                    "id": "chronicle:agent:testagent26",
                     "externalId": "testagent26",
                     "locationAttribute": "testattribute"
                   },
@@ -2189,7 +2194,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent27",
+                    "id": "chronicle:agent:testagent27",
                     "externalId": "testagent27",
                     "locationAttribute": "testattribute"
                   },
@@ -2198,7 +2203,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent28",
+                    "id": "chronicle:agent:testagent28",
                     "externalId": "testagent28",
                     "locationAttribute": "testattribute"
                   },
@@ -2207,7 +2212,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent29",
+                    "id": "chronicle:agent:testagent29",
                     "externalId": "testagent29",
                     "locationAttribute": "testattribute"
                   },
@@ -2216,7 +2221,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent3",
+                    "id": "chronicle:agent:testagent3",
                     "externalId": "testagent3",
                     "locationAttribute": "testattribute"
                   },
@@ -2273,7 +2278,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent91",
+                    "id": "chronicle:agent:testagent91",
                     "externalId": "testagent91",
                     "locationAttribute": "testattribute"
                   },
@@ -2282,7 +2287,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent92",
+                    "id": "chronicle:agent:testagent92",
                     "externalId": "testagent92",
                     "locationAttribute": "testattribute"
                   },
@@ -2291,7 +2296,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent93",
+                    "id": "chronicle:agent:testagent93",
                     "externalId": "testagent93",
                     "locationAttribute": "testattribute"
                   },
@@ -2300,7 +2305,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent94",
+                    "id": "chronicle:agent:testagent94",
                     "externalId": "testagent94",
                     "locationAttribute": "testattribute"
                   },
@@ -2309,7 +2314,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent95",
+                    "id": "chronicle:agent:testagent95",
                     "externalId": "testagent95",
                     "locationAttribute": "testattribute"
                   },
@@ -2318,7 +2323,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent96",
+                    "id": "chronicle:agent:testagent96",
                     "externalId": "testagent96",
                     "locationAttribute": "testattribute"
                   },
@@ -2327,7 +2332,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent97",
+                    "id": "chronicle:agent:testagent97",
                     "externalId": "testagent97",
                     "locationAttribute": "testattribute"
                   },
@@ -2336,7 +2341,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent98",
+                    "id": "chronicle:agent:testagent98",
                     "externalId": "testagent98",
                     "locationAttribute": "testattribute"
                   },
@@ -2345,7 +2350,7 @@ mod test {
                 {
                   "node": {
                     "__typename": "Contractor",
-                    "id": "http://blockchaintp.com/chronicle/ns#agent:testagent99",
+                    "id": "chronicle:agent:testagent99",
                     "externalId": "testagent99",
                     "locationAttribute": "testattribute"
                   },

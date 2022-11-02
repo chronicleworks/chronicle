@@ -172,13 +172,22 @@ pub trait AsCompact {
     fn compact(&self) -> String;
 }
 
-pub trait TryFromCompact {
-    fn de_compact(&self) -> Result<String, ParseIriError>;
-}
-
 impl<T: Display> AsCompact for T {
     fn compact(&self) -> String {
-        self.to_string().replace(Chronicle::PREFIX, "chronicle:")
+        self.to_string()
+            .replace("http://blockchaintp.com/chronicle/ns#", Chronicle::PREFIX)
+    }
+}
+
+/// Transform a chronicle IRI into its long-form representation
+pub trait FromCompact {
+    fn de_compact(&self) -> String;
+}
+
+impl<T: Display> FromCompact for T {
+    fn de_compact(&self) -> String {
+        self.to_string()
+            .replace(Chronicle::PREFIX, "http://blockchaintp.com/chronicle/ns#")
     }
 }
 
@@ -272,8 +281,8 @@ impl FromStr for ChronicleIri {
         trace!(parsing_iri = %s);
         //Compacted form, expand
         let iri = {
-            if s.starts_with("chronicle:") {
-                s.replace("chronicle:", Chronicle::PREFIX)
+            if s.starts_with(Chronicle::PREFIX) {
+                s.replace(Chronicle::PREFIX, "http://blockchaintp.com/chronicle/ns#")
             } else {
                 s.to_owned()
             }
@@ -383,6 +392,10 @@ impl<'a> TryFrom<Iri<'a>> for EvidenceId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id, signature] => Ok(Self {
                 external_id: ExternalId::from(external_id),
@@ -444,6 +457,10 @@ impl<'a> TryFrom<Iri<'a>> for DelegationId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, delegate, responsible, role, activity] => Ok(Self {
                 delegate: ExternalId::from(delegate),
@@ -510,6 +527,10 @@ impl<'a> TryFrom<Iri<'a>> for AssociationId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, agent, activity, role] => Ok(Self {
                 agent: ExternalId::from(agent),
@@ -570,6 +591,10 @@ impl<'a> TryFrom<Iri<'a>> for IdentityId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id, public_key] => Ok(Self {
                 external_id: ExternalId::from(external_id.as_str()),
@@ -612,6 +637,10 @@ impl<'a> TryFrom<Iri<'a>> for DomaintypeId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -662,6 +691,10 @@ impl<'a> TryFrom<Iri<'a>> for NamespaceId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id, uuid] => Ok(Self {
                 external_id: ExternalId::from(external_id.as_str()),
@@ -704,6 +737,10 @@ impl<'a> TryFrom<Iri<'a>> for EntityId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
 
@@ -743,9 +780,12 @@ impl<'a> TryFrom<Iri<'a>> for AgentId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
-
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
         }
     }
@@ -782,6 +822,10 @@ impl<'a> TryFrom<Iri<'a>> for ActivityId {
     type Error = ParseIriError;
 
     fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
         match fragment_components(value).as_slice() {
             [_, external_id] => Ok(Self(ExternalId::from(external_id.as_str()))),
 
