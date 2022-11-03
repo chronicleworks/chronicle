@@ -56,25 +56,25 @@ This process represented as provenance will look like:
 
 The `Question` is used to inform one or more searches to a search engine by a
 researcher, the parameters to the search engine are recorded, and the results
-are used to create references to `Evidence`.
+are used to create references to some `EvidenceReference`.
 
 ![file](diagrams/out/research.svg)
 
 To model and record this process you will need the Chronicle domain model
 definition explained here, along with the following operations:
 
-- [question](recording_provenance#define-an-entity) - define an Entity of
+- [defineQuestion](recording_provenance#define-an-entity) - define an Entity of
   subtype Question
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
-  subtype Evidence
-- [researched](recording_provenance#define-an-activity)  - define an
+- [defineEvidenceReference](recording_provenance#define-an-entity) - define an
+  Entity of subtype EvidenceReference
+- [defineResearched](recording_provenance#define-an-activity)  - define an
   Activity of subtype Researched
-- [person](recording_provenance#define-an-agent)  - define an Agent of
+- [definePerson](recording_provenance#define-an-agent)  - define an Agent of
   subtype Person
 - [used](recording_provenance#usage) - specify that the Research Activity
   used the Question
 - [wasGeneratedBy](recording_provenance#generation) - specify that the
-  Research Activity produced the Evidence
+  Research Activity produced the EvidenceReference
 - [wasAssociatedWith](recording_provenance#association) - specify that the
   research was done by a Person acting as a researcher
 - [startedAtTime](recording_provenance#started-at-time) - specify the
@@ -89,26 +89,26 @@ This process represented as provenance will look like:
 ### Revision
 
 Guidance, like authorship, is triggered by research - in this case for changes
-or additions to the evidence base. Evidence is used to inform a new revision of
-the Guidance document.
+or additions to the evidence base. EvidenceReference is used to inform a new
+revision of the Guidance document.
 
 ![file](diagrams/out/revision.svg)
 
 To model and record this process you will need the Chronicle domain model
 definition explained here, along with the following operations:
 
-- [question](recording_provenance#define-an-entity) - define an Entity of
+- [defineQuestion](recording_provenance#define-an-entity) - define an Entity of
   subtype Question
-- [guidance](recording_provenance#define-an-entity) - define an Entity of
+- [defineGuidance](recording_provenance#define-an-entity) - define an Entity of
   subtype Guidance
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
-  subtype Evidence
-- [revised](recording_provenance#define-an-activity)  - define an Activity
+- [defineEvidenceReference](recording_provenance#define-an-entity) - define an
+  Entity of subtype EvidenceReference
+- [defineRevised](recording_provenance#define-an-activity)  - define an Activity
   of subtype Revised
 - [used](recording_provenance#usage) - specify that the Guidance Activity
   used the Question
 - [used](recording_provenance#usage) - specify that the Guidance Activity
-  used the Evidence
+  used the EvidenceReference
 - [wasGeneratedBy](recording_provenance#generation) - specify that the
   Guidance Activity produced the Guidance
 - [wasAssociatedWith](recording_provenance#association) - specify that the
@@ -134,13 +134,13 @@ Stakeholders. Publication produces a digital artifact that can be signed.
 
 ![file](diagrams/out/publication.svg)
 
-- [guidance](recording_provenance#define-an-entity) - define an Entity of
+- [defineGuidance](recording_provenance#define-an-entity) - define an Entity of
   subtype Guidance
-- [publishedGuidance](recording_provenance#define-an-entity) - define an
+- [definePublishedGuidance](recording_provenance#define-an-entity) - define an
   Entity of subtype PublishedGuidance
-- [evidence](recording_provenance#define-an-entity) - define an Entity of
-  subtype Evidence
-- [published](recording_provenance#define-an-activity)  - define an
+- [defineEvidenceReference](recording_provenance#define-an-entity) - define an
+  Entity of subtype EvidenceReference
+- [definePublished](recording_provenance#define-an-activity)  - define an
   Activity of subtype Published
 - [used](recording_provenance#usage) - specify that the Published Activity
   used the Guidance
@@ -219,7 +219,7 @@ Has attributes:
 - CmdId
 - Content
 
-#### Evidence
+#### EvidenceReference
 
 A reference to evidence gathered from a search engine.
 
@@ -268,12 +268,12 @@ The first Activity we need to record, it will Generate a Question.
 #### Researched
 
 This activity will model the use of a search engine by a Researcher to produce
-Evidence.
+an EvidenceReference.
 
 #### Revised
 
 This activity will model authorship and refinement by an Editor of a single
-revision of guidance, informed by the Question and Evidence from research.
+revision of guidance, informed by the Question and EvidenceReference from research.
 
 #### Published
 
@@ -318,7 +318,7 @@ Editor.
 #### Researcher
 
 A researcher is a Person who submits SearchParameter to a search engine and then
-creates References to Evidence.
+creates EvidenceReferences.
 
 #### Editor
 
@@ -351,7 +351,7 @@ entities:
     attributes:
       - CmsId
       - Content
-  Evidence:
+  EvidenceReference:
     attributes:
       - SearchParameter
       - Reference
@@ -448,9 +448,9 @@ agents:
 
 Using Chronicle's domain model definitions an Entity can be subtyped and
 associated with attributes like other provenance terms. In the following example
-we define the four Entity subtypes, Question has an id from the CMS and its
-content,  Evidence the search parameters and reference. Guidance a title and
-version and PublishedGuidance needs no attributes.
+we define the four Entity subtypes. Question has an id from the CMS and its
+content, EvidenceReference has at least one search parameter and a reference,
+Guidance has a title and version, and PublishedGuidance needs no attributes.
 
 ```yaml
 entities:
@@ -458,7 +458,7 @@ entities:
     attributes:
       - CmsId
       - Content
-  Evidence:
+  EvidenceReference:
     attributes:
       - SearchParameter
       - Reference
@@ -475,9 +475,9 @@ entities:
 
 Using Chronicle's domain model definitions an Activity can be subtyped and
 associated with attributes like other provenance terms. In the following example
-we define the four Activity subtypes, Question has an id from the CMS and its
-content, Evidence the search parameters and reference, Guidance a title and
-version and PublishedGuidance needs no attributes.
+we define the four Activity subtypes, QuestionAsked has content, Researched has
+no attributes, Published has a version, and Revised has an id from the CMS and a
+version.
 
 ```yaml
 activities:
@@ -516,19 +516,19 @@ domain. The next step is then [recording provenance](recording_provenance).
 Redefinition of a Chronicle domain with existing data is possible, with some
 caveats:
 
-### Type removal
+### Type Removal
 
 You can remove a prov term (Entity, Agent or Activity), but as Chronicle data is
 immutable it will still exist on the back end. Terms can still be returned via
 queries, but will be as their Untyped variant - ProvEntity, ProvAgent and
 ProvActivity and their attributes will no longer be available via GraphQL.
 
-### Attribute removal
+### Attribute Removal
 
 You can remove an attribute, but again it will still exist in provenance you
 have already recorded.
 
-### Attribute addition
+### Attribute Addition
 
 You can add new attributes, and add their values to both existing and new data.
 
@@ -563,7 +563,7 @@ Acronyms in domain terms are preserved.
 An agent named NYU will be described as `NYU`, while NPRListener will be
 described in GraphQL as `NPRListener`, including in operations:
 
-`NYU(id:)`
+`defineNYU(id:)`
 
 ```graphql
 ... on NPRListener { NPRListenerAttribute }

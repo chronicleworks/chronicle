@@ -7,9 +7,9 @@ actor "Author"
 
 Guidance -> Question : Has context
 Author -> Guidance : Creates version
-Author -> Evidence : Reviews
+Author -> EvidenceReference : Reviews
 Author -> Guidance : Authors
-Guidance -> Evidence : References
+Guidance -> EvidenceReference : References
 Editor -> Author: Helps refine
 
 @enduml

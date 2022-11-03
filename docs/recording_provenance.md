@@ -270,26 +270,26 @@ assumed to be non-resumable, as it will be a [contradiction](#contradiction).
 See [provenance concepts](provenance_concepts#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for
-us, `Question`, `Guidance`, `PublishedGuidance` and `Evidence`, as a GraphQL
+us, `Question`, `Guidance`, `PublishedGuidance` and `EvidenceReference`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
 evolved, see [evolving your domain](domain_modelling#evolution).
 
-The definition mutations `question`, `guidance`, `publishedGuidance`, and
-`evidence` will also have been created to allow you to define an instance of
-each subtype and their attributes. The generated GraphQL mutations and their
-associated types will look like this:
+The definition mutations `defineQuestion`, `defineGuidance`,
+`definePublishedGuidance`, and `defineEvidenceReference` will also have been
+created to allow you to define an instance of each subtype and their attributes.
+The generated GraphQL mutations and their associated types will look like this:
 
 ```graphql
 
 scalar EntityID
 scalar DomaintypeID
-type Evidence {
+type EvidenceReference {
   id: EntityID!
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -298,7 +298,7 @@ type Evidence {
   searchParametersAttribute: SearchParameterAttribute
   referenceAttribute: ReferenceAttribute
 }
-input EvidenceAttributes {
+input EvidenceReferenceAttributes {
   searchParametersAttribute: String!
   referenceAttribute: String!
 }
@@ -307,7 +307,7 @@ type Guidance {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -329,7 +329,7 @@ type PublishedGuidance {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -342,7 +342,7 @@ type Question {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -362,7 +362,7 @@ type ProvEntity {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -374,24 +374,24 @@ input ProvEntityAttributes {
   type: String
 }
 
-union Entity = | ProvEntity | Evidence | Guidance | PublishedGuidance | Question
+union Entity = | ProvEntity | EvidenceReference | Guidance | PublishedGuidance | Question
 
 mutation {
-  entity(external_id: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
-  evidence(external_id: String!, namespace: String, attributes: EvidenceAttributes!): Submission!
-  guidance(external_id: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
-  publishedGuidance(external_id: String!, namespace: String): Submission!
-  question(external_id: String!, namespace: String, attributes: QuestionAttributes!): Submission!
+  defineEntity(external_id: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
+  defineEvidenceReference(external_id: String!, namespace: String, attributes: EvidenceReferenceAttributes!): Submission!
+  defineGuidance(external_id: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
+  definePublishedGuidance(external_id: String!, namespace: String): Submission!
+  defineQuestion(external_id: String!, namespace: String, attributes: QuestionAttributes!): Submission!
 }
 
 ```
 
-Executing the following example mutation `question` will define an `Entity` of
-subtype `Question`, along with its attributes.
+Executing the following example mutation `defineQuestion` will define an `Entity`
+of subtype `Question`, along with its attributes.
 
 ```graphql
 mutation {
-    question(external_id: "anaphylaxis-referral", attributes: {
+    defineQuestion(external_id: "anaphylaxis-referral", attributes: {
         cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
         contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
     })
@@ -426,9 +426,9 @@ The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
 [evolving your domain](domain_modelling#evolution).
 
-The definition mutations `questionAsked`, `researched`, `revised` and
-`published` will also have been created to allow you to define an instance of
-each subtype and their attributes. The generated GraphQL mutations and their
+The definition mutations `defineQuestionAsked`, `defineResearched`, `defineRevised`
+and `definePublished` will also have been created to allow you to define an instance
+of each subtype and their attributes. The generated GraphQL mutations and their
 associated types will look like this:
 
 ```graphql
@@ -439,7 +439,7 @@ type ProvEntity {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -468,7 +468,7 @@ type PublishedGuidance {
   namespace: Namespace!
   external_id: String!
   type: DomaintypeID
-  evidence: ChronicleEvidence
+  evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -508,20 +508,20 @@ input RevisedAttributes {
 }
 
 mutation {
-  activity(external_id: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
-  published(external_id: String!, namespace: String, attributes: PublishedAttributes!): Submission!
-  questionAsked(external_id: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
-  researched(external_id: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
-  revised(external_id: String!, namespace: String, attributes: RevisedAttributes!): Submission!
+  defineActivity(external_id: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
+  definePublished(external_id: String!, namespace: String, attributes: PublishedAttributes!): Submission!
+  defineQuestionAsked(external_id: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
+  defineResearched(external_id: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
+  defineRevised(external_id: String!, namespace: String, attributes: RevisedAttributes!): Submission!
 }
 ```
 
-The following example mutation `revised` will define an `Activity` of subtype
+The following example mutation `defineRevised` will define an `Activity` of subtype
 `Revised`:
 
 ```graphql title="Define a revised activity with graphql"
 mutation {
-    revised(external_id: "september-2018-review", attributes: {
+    defineRevised(external_id: "september-2018-review", attributes: {
         versionAttribute: 14,
     })
 }
@@ -546,13 +546,13 @@ untyped activity `ProvAgent`. The untyped agent can be potentially returned
 where the domain definition has evolved, see [evolving your
 domain](domain_modelling#evolution).
 
-The definition mutations `person` and `organization` will also have been
-created. See [domain modelling](domain_modelling#graphql_generation) for
+The definition mutations `definePerson` and `defineOrganization` will also have
+been created. See [domain modelling](domain_modelling#graphql_generation) for
 details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
-    organization(external_id: "health-trust", attributes: {})
+    defineOrganization(external_id: "health-trust", attributes: {})
 }
 ```
 
