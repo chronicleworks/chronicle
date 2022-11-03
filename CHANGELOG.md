@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v0.3.0
+
+* docs(docs): fix documentation [view commit](https://github.com/catenasys/chronicle/commit/765ada19ba1f285788eb405ef323d2f505abcdf6)
+* docs(docs): update formatting domain terms docs section [view commit](https://github.com/catenasys/chronicle/commit/7cad62c0535eb6756109c0d6a4f33526a8ada395)
+* feat: prefix definition operations with define [view commit](https://github.com/catenasys/chronicle/commit/53b71b3c62b129963a7b2016c137905419587254)
+* docs(docs): use long form iri in docs [view commit](https://github.com/catenasys/chronicle/commit/5faed4e31f8d4cf5c78b00b87daff303c0155a4b)
+* test(common): add vocab proptest seeds for failure cases [view commit](https://github.com/catenasys/chronicle/commit/97276eb9f686a6b5c0f296041906cdbc3b06407c)
+* feat: accept short or long form iris and emit short form [view commit](https://github.com/catenasys/chronicle/commit/4c90ad85de99bc622c53eecfa4980574a79e06a1)
+* docs(docs): add formatting domain terms documentation section [view commit](https://github.com/catenasys/chronicle/commit/7bb2d1c7789df486c59dcaf97b210079a8bd0235)
+* feat(codegen): preserve acronyms in domain inflections [view commit](https://github.com/catenasys/chronicle/commit/3b51971918b43b6f25d041bb1340a0a528123239)
+* feat: Openworld, Contradiction and Submission [view commit](https://github.com/catenasys/chronicle/commit/9efe71e1fe43b226d81bd62c8a19a9841e7b3095)
+* feat(chronicle): add inverse of wasgeneratedby generated relation [view commit](https://github.com/catenasys/chronicle/commit/a8218bd7c22b44eef5415b8d4a8af4d150bbecda)
+* refactor(chronicle): change name to externalid [view commit](https://github.com/catenasys/chronicle/commit/c8241b7e276fedd911af196c893ddf13ef85d8c9)
+* fix(docker): forego chef or release build in favor of simple fetch [view commit](https://github.com/catenasys/chronicle/commit/ea3571e2b9590f30fc0130d8b236e827c95468eb)
+* build(makefile): add prefix to buildx builder [view commit](https://github.com/catenasys/chronicle/commit/fac8352bb16c930a1e56af10f5f870218e07b8e2)
+* build: build platform specific chronicle builder [view commit](https://github.com/catenasys/chronicle/commit/3212f89d11af03d45bc1bb4604984666d4728c3f)
+* fix: add multi-arch building for chronicle and chronicle-tp [view commit](https://github.com/catenasys/chronicle/commit/6fdd9964b849d95470d3f2b90f2b6208c903873c)
+
 ## v0.2.1
 
 * fix: Create a root key if none exists [view commit](https://github.com/catenasys/chronicle/commit/15057420819e360eb1bdff6ebfc1bb4104e49d20)
@@ -293,3 +311,4 @@
 * feat: Abstract API, LD serialisation for derivation [view commit](https://github.com/catenasys/chronicle/commit/6f7a3473bc9fd0aa8da8aab6cb88534606ae7cda)
 * feat: Rework model + persistence to something closer to PROV-DM [view commit](https://github.com/catenasys/chronicle/commit/d018617f0301f27be2854c9a407a8515f1d12be3)
 * feat: Move schema towards PROV-DM, predicting further relations [view commit](https://github.com/catenasys/chronicle/commit/c8949232481475b6843d1d21d3fc68568cdae51d)
+
