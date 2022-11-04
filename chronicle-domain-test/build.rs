@@ -14,12 +14,15 @@ fn main() {
         type: "String"
       Location:
         type: "String"
+      Manifest:
+        type: JSON
     agents:
       Contractor:
         attributes:
           - Location
       NCB:
-        attributes: []
+        attributes:
+          - Manifest
     entities:
       Certificate:
         attributes:

@@ -320,6 +320,9 @@ impl ChronicleIri {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct ChronicleJSON(pub serde_json::Value);
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct EvidenceId {
     external_id: ExternalId,

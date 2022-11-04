@@ -20,12 +20,15 @@ pub async fn main() {
         type: "String"
       Location:
         type: "String"
+      Manifest:
+        type: JSON
     agents:
       Contractor:
         attributes:
           - Location
       NCB:
-        attributes: []
+        attributes:
+          - Manifest
     entities:
       Certificate:
         attributes:
@@ -126,6 +129,73 @@ mod test {
             .data(Store::new(pool))
             .data(dispatch)
             .finish()
+    }
+
+    #[tokio::test]
+    async fn generic_json_object_attribute() {
+        let schema = test_schema().await;
+
+        // We doctor the test JSON input data as done in the `async_graphql` library JSON tests
+        // https://docs.rs/async-graphql/latest/src/async_graphql/types/json.rs.html#20.
+        // In fact, if you make the JSON input more complex, nesting data further, etc, it will cause
+        // "expected Name" errors. However, complex JSON inputs have been tested with success in the GraphQL
+        // Playground, as documented here: https://blockchaintp.atlassian.net/l/cp/0aocArV4
+        let res = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+              defineNCBAgent(
+                  externalId: "testagent2"
+                  attributes: { manifestAttribute: {
+                    username: "test",
+                    email: "test@test.cz",
+                    phone: "479332973",
+                    firstName: "David",
+                    lastName: "Test",
+                  } }
+                ) {
+                  context
+                }
+              }
+        "#,
+            ))
+            .await;
+
+        assert_eq!(res.errors, vec![]);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            r#"
+            query agent {
+              agentById(id: "chronicle:agent:testagent2") {
+                __typename
+                ... on NCBAgent {
+                  id
+                  manifestAttribute
+                }
+              }
+            }
+            "#,
+          ))
+          .await, @r###"
+        {
+          "data": {
+            "agentById": {
+              "__typename": "NCBAgent",
+              "id": "chronicle:agent:testagent2",
+              "manifestAttribute": {
+                "email": "test@test.cz",
+                "firstName": "David",
+                "lastName": "Test",
+                "phone": "479332973",
+                "username": "test"
+              }
+            }
+          }
+        }
+        "###);
     }
 
     // Note that this test demonstrates Chronicle accepting
@@ -804,10 +874,16 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-              defineNCBAgent(externalId:"testagent2") {
-                    context
+              defineNCBAgent(
+                  externalId: "testagent2"
+                  attributes: { manifestAttribute: {
+                    username: "test",
+                    email: "test@test.cz",
+                  } }
+                ) {
+                  context
                 }
-            }
+              }
         "#,
             ))
             .await;
@@ -1006,6 +1082,7 @@ mod test {
                                         ... on NCBAgent {
                                           id
                                           externalId
+                                          manifestAttribute
                                         }
                                     }
                                         role
@@ -1037,6 +1114,7 @@ mod test {
                                             ... on NCBAgent {
                                               id
                                               externalId
+                                              manifestAttribute
                                             }
                                         }
                                         role
@@ -1083,7 +1161,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1137,7 +1219,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1191,7 +1277,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1245,7 +1335,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1299,7 +1393,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1355,6 +1453,7 @@ mod test {
                                             ... on NCBAgent {
                                               id
                                               externalId
+                                              manifestAttribute
                                             }
                                         }
                                         role
@@ -1386,6 +1485,7 @@ mod test {
                                           ... on NCBAgent {
                                               id
                                               externalId
+                                              manifestAttribute
                                             }
                                       }
                                       role
@@ -1432,7 +1532,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1486,7 +1590,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1540,7 +1648,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1594,7 +1706,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
@@ -1648,7 +1764,11 @@ mod test {
                         "responsible": {
                           "agent": {
                             "id": "chronicle:agent:testagent2",
-                            "externalId": "testagent2"
+                            "externalId": "testagent2",
+                            "manifestAttribute": {
+                              "email": "test@test.cz",
+                              "username": "test"
+                            }
                           },
                           "role": "CERTIFIER"
                         }
