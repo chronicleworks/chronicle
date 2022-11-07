@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="262.5px" preserveAspectRatio="none" style="width:816px;height:262px;background:#00000000;" version="1.1" viewBox="0 0 816 262" width="816.6667px" zoomAndPan="magnify"><defs><linearGradient id="gbxz2dki5ufpi0" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#FEFEFE"/></linearGradient></defs><g><!--MD5=[c8fe9e80e04a61477b5c2420d1990b39]
+entity authTp--><g id="elem_authTp"><rect fill="url(#gbxz2dki5ufpi0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="91.6667" x="295.8333" y="198.9583"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="314.5833" y="229.7933">Authz TP</text></g><!--MD5=[e88c382bc74d11132d2ffb7ee514ec51]
+entity chronicleTp--><g id="elem_chronicleTp"><rect fill="url(#gbxz2dki5ufpi0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="112.5" x="678.125" y="17.7083"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="75" x="696.875" y="48.5433">Chronicle TP</text></g><!--MD5=[9f2bf60e45e025d2ae1dbe65b24f51d0]
+entity chroniclePublicKey--><g id="elem_chroniclePublicKey"><rect fill="url(#gbxz2dki5ufpi0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="141.6667" x="663.5417" y="139.5833"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="104.1667" x="682.2917" y="170.4183">Chronicle PubKey</text></g><!--MD5=[35e255cf5f32bcab938d7ba2e271f666]
+entity chronicle--><g id="elem_chronicle"><rect fill="url(#gbxz2dki5ufpi0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="92.7083" x="17.7083" y="150"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="55.2083" x="36.4583" y="180.835">Chronicle</text></g><!--MD5=[9f3578060d598da754813625b0d3dcfd]
+link chronicle to authTp--><g id="link_chronicle_authTp"><path d="M110.6042,184.125 C160.1042,192.9271 239.0208,206.9479 290.3333,216.0625 " fill="none" id="chronicle-to-authTp" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="295.5208,216.9896,287.0173,211.25,290.3925,216.0802,285.5623,219.4554,295.5208,216.9896" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="92.7083" x="151.0417" y="177.71">init / rotate key</text></g><!--MD5=[1a7232b7d7440de771ecad514702c0b7]
+link authTp to chroniclePublicKey--><g id="link_authTp_chroniclePublicKey"><path d="M387.5,220.0417 C444.5417,213.4896 546.0313,201.0729 632.2917,186.4583 C640.625,185.0417 649.3229,183.4479 657.9688,181.7813 " fill="none" id="authTp-to-chroniclePublicKey" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="663.3333,180.7292,653.3334,178.4371,658.2216,181.7277,654.931,186.6158,663.3333,180.7292" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="183.3333" x="439.5833" y="174.585">publishes to sawtooth address</text></g><!--MD5=[9973c016a7332737d8dfea3aac96bd94]
+reverse link chronicleTp to chroniclePublicKey--><g id="link_chronicleTp_chroniclePublicKey"><path d="M734.375,75.3125 C734.375,95.25 734.375,120.6875 734.375,139.4792 " fill="none" id="chronicleTp-backto-chroniclePublicKey" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="734.375,69.8542,730.2083,79.2292,734.375,75.0625,738.5417,79.2292,734.375,69.8542" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="95.8333" x="666.6667" y="109.4808">reads + verifies</text></g><!--MD5=[2e974ee2c8fdb930a11e879648a5452a]
+reverse link chronicle to chroniclePublicKey--><g id="link_chronicle_chroniclePublicKey"><path d="M115.8229,155.4063 C124.3229,152.7292 133.1458,150.4167 141.6667,148.9583 C356.5833,112.0625 414.9688,131.1563 632.2917,148.9583 C642.3958,149.7813 653,151.0729 663.3958,152.5729 " fill="none" id="chronicle-backto-chroniclePublicKey" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="110.5833,157.1146,120.7865,158.1858,115.5376,155.5078,118.2156,150.2589,110.5833,157.1146" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="95.8333" x="293.75" y="116.2516">reads + verifies</text></g><!--MD5=[5aaeb35e2f526b1297b088ddacf4242f]
+@startuml
+
+!include ../include/default.iuml
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chroniclePublicKey as "Chronicle PubKey"
+rectangle chronicle as "Chronicle"
+
+[chronicle] - -> [authTp] : init / rotate key
+[authTp] - -> [chroniclePublicKey] : publishes to sawtooth address
+[chronicleTp] <- [chroniclePublicKey] : reads + verifies
+[chronicle] <- [chroniclePublicKey] : reads + verifies
+
+@enduml
+
+@startuml
+
+
+
+
+skinparam backgroundColor transparent
+skinparam useBetaStyle false
+
+
+
+
+
+
+
+
+<style>
+  root {
+    BackgroundColor transparent
+    FontColor #fff
+    HyperLinkColor $ORANGE
+    LineColor #007faf
+    LineThickness 1
+    Margin 10
+    Padding 6
+    Shadowing 0.0
+  }
+  node {
+   Padding 15
+   roundcorner 20
+   BackgroundColor #009fdb-#007faf
+  }
+  caption {
+    LineThickness 0
+  }
+  footer {
+    LineThickness 0
+  }
+  groupHeader {
+    BackgroundColor #f2f2f2
+    FontColor #0568ae
+    FontStyle bold
+  }
+  header {
+    LineThickness 0
+  }
+  referenceHeader {
+    BackgroundColor transparent
+    FontColor #5a5a5a
+    FontStyle bold
+  }
+  separator {
+    BackgroundColor #5a5a5a
+    FontColor transparent
+    FontStyle bold
+  }
+  title {
+	FontSize 20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor  #f5f5f5-#f2f2f2
+	FontColor #009fdb
+	BorderColor #f2f2f2
+  }
+  nwdiagDiagram {
+	network {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+    
+		LineColor #009fdb
+		LineThickness 1.0
+		FontColor #007faf
+	}
+	server {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	}
+	arrow {
+		FontColor #007faf
+		LineColor #007faf
+	}
+	group {
+		BackGroundColor #d2d2d2
+		LineColor $LIGHT_DARK
+		LineThickness 2.0
+		Margin 5
+		Padding 5
+	}
+  }
+  ganttDiagram {
+	task {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		Margin 10
+		Padding 6
+	}
+	note {
+		FontColor #fff
+		LineColor #04538b
+		BackGroundColor #0568ae
+	}
+	separator {
+		LineColor #f2f2f2
+		BackGroundColor #f2f2f2-#c2c2c2
+		FontColor #5a5a5a
+	}
+	milestone {
+		FontColor #0568ae
+		FontSize 16
+		FontStyle italic
+		BackGroundColor #f2f2f2
+		LineColor #c2c2c2
+	}
+	timeline {
+		BackgroundColor #f2f2f2
+		FontColor #5a5a5a
+	}
+	closed {
+		BackgroundColor #bb5d00
+		FontColor #fff
+	}
+  }
+</style>
+skinparam defaultFontName        "Verdana"
+skinparam defaultFontSize        12
+skinparam dpi                    100
+skinparam shadowing              false
+skinparam roundcorner            20
+skinparam ParticipantPadding     30
+skinparam BoxPadding             40
+skinparam Padding                8
+skinparam ArrowColor             #959595
+skinparam stereotype {
+    CBackgroundColor #f5f5f5
+    CBorderColor #c2c2c2
+    ABackgroundColor #c4ca33
+    ABorderColor #919700
+    IBackgroundColor #d95555
+    IBorderColor #a62222
+    EBackgroundColor #ee9033
+    EBorderColor #bb5d00
+    NBackgroundColor #3786be
+    NBorderColor #04538b
+}
+skinparam title {
+	FontColor	                 #009fdb
+	BorderColor	                 #c2c2c2
+	FontSize	    	         20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor              #f5f5f5-#f2f2f2
+}
+
+
+skinparam legend {
+	BackgroundColor #f2f2f2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+skinparam swimlane {
+	BorderColor #0568ae
+	BorderThickness 2
+	TitleBackgroundColor  #f5f5f5-#f2f2f2
+	TitleFontColor #009fdb
+}
+
+
+skinparam activity {
+	FontColor #fff
+	BorderColor #009fdb
+	BackgroundColor #33b2e2-#009fdb
+	BarColor #b5bd00
+	StartColor #0568ae
+	EndColor #0568ae
+	DiamondBackgroundColor #f5f5f5-#c2c2c2
+  	DiamondBorderColor #c2c2c2
+	DiamondFontColor #5a5a5a
+}
+
+
+skinparam participant {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	ParticipantBorderThickness 2
+}
+
+
+skinparam actor {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam arrow {
+	Thickness 3
+	Color #009fdb
+	FontColor #5a5a5a
+}
+
+
+skinparam sequence {
+	BorderColor #009fdb
+	TitleFontColor #009fdb
+	BackgroundColor transparent
+	StartColor #009fdb
+	EndColor #009fdb
+	BoxBackgroundColor #d2d2d2
+	BoxBorderColor #959595
+	BoxFontColor #5a5a5a
+	DelayFontColor #5a5a5a
+	LifeLineBorderColor #c2c2c2
+	LifeLineBorderThickness 2
+	LifeLineBackgroundColor #f5f5f5
+	GroupBorderColor #959595
+	GroupFontColor #5a5a5a
+	GroupHeaderFontColor #0568ae
+	DividerBackgroundColor #fff-#d2d2d2
+    DividerBorderColor #959595
+    DividerBorderThickness 2
+    DividerFontColor #5a5a5a
+	ReferenceBackgroundColor transparent
+	ReferenceBorderColor #959595
+	ReferenceFontColor #5a5a5a
+	ReferenceHeaderFontColor #0568ae
+	StereotypeFontColor #fff
+}
+
+
+skinparam partition {
+	BorderColor #009fdb
+	FontColor #009fdb
+	BackgroundColor transparent
+}
+
+
+skinparam collections {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam control {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam entity {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam boundary {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam agent {
+	BackgroundColor #orange
+	BorderColor #999999
+	FontColor #333333
+}
+
+
+skinparam note {
+	BorderThickness 1
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam artifact {
+	BackgroundColor #fff-#d2d2d2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+
+skinparam component {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam interface {
+	BackgroundColor  #d95555
+	BorderColor  #cf2a2a
+	FontColor #5a5a5a
+}
+
+
+skinparam storage {
+	BackgroundColor #ee9033-#ea7400
+  	BorderColor #ea7400
+	FontColor #fff
+}
+
+
+skinparam node {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #c2c2c2
+	FontColor #009fdb
+}
+
+
+skinparam cloud {
+	BackgroundColor #F2FCFE-#eeeeee
+	BorderColor #F2FCFE
+	FontColor #009fdb
+}
+
+
+skinparam database {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+}
+
+
+skinparam class {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	HeaderBackgroundColor #33b2e2-#009fdb
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam object {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam usecase {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam rectangle {
+		FontColor #5a5a5a
+	BorderColor #c2c2c2
+	BackgroundColor #fff-#fefefe
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam package {
+	FontColor #009fdb
+	BorderColor #33b2e2
+	BackgroundColor transparent
+	BorderThickness 2
+}
+
+
+skinparam folder {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #ea7400
+	FontColor #ea7400
+	BorderThickness 2
+}
+
+
+skinparam frame {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #0568ae
+	FontColor #0568ae
+	BorderThickness 2
+}
+
+
+skinparam state {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+	StartColor #0568ae
+	EndColor #0568ae
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam queue {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam card {
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam file {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #0568ae
+	FontColor #5a5a5a
+
+}
+
+
+skinparam stack {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chroniclePublicKey as "Chronicle PubKey"
+rectangle chronicle as "Chronicle"
+
+[chronicle] - -> [authTp] : init / rotate key
+[authTp] - -> [chroniclePublicKey] : publishes to sawtooth address
+[chronicleTp] <- [chroniclePublicKey] : reads + verifies
+[chronicle] <- [chroniclePublicKey] : reads + verifies
+
+@enduml
+
+PlantUML version 1.2022.7(Mon Aug 22 18:01:30 BST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: GB
+--></g></svg>

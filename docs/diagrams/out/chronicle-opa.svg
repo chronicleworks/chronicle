@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="285.4167px" preserveAspectRatio="none" style="width:1325px;height:285px;background:#00000000;" version="1.1" viewBox="0 0 1325 285" width="1325px" zoomAndPan="magnify"><defs><linearGradient id="gjt7xsbu0vc0m0" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#FEFEFE"/></linearGradient></defs><g><!--MD5=[c8fe9e80e04a61477b5c2420d1990b39]
+entity authTp--><g id="elem_authTp"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="91.6667" x="303.125" y="221.875"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="54.1667" x="321.875" y="252.71">Authz TP</text></g><!--MD5=[99e75f669711614804ada1136f16dc59]
+entity sawtooth--><g id="elem_sawtooth"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="90.625" x="1222.9167" y="130.2083"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="53.125" x="1241.6667" y="161.0433">Sawtooth</text></g><!--MD5=[6c4f8bc09d03c11cd906579a5c1cf0a8]
+entity opaCachedExecutor--><g id="elem_opaCachedExecutor"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="167.7083" x="827.0833" y="32.2917"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="130.2083" x="845.8333" y="63.1266">OPA Cached Executor</text></g><!--MD5=[34f5d8b30e4cf2ade78f8206dd0c9988]
+entity opaExecutor--><g id="elem_opaExecutor"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="118.75" x="851.5625" y="130.2083"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="81.25" x="870.3125" y="161.0433">OPA Executor</text></g><!--MD5=[e88c382bc74d11132d2ffb7ee514ec51]
+entity chronicleTp--><g id="elem_chronicleTp"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="112.5" x="292.7083" y="110.4167"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="75" x="311.4583" y="141.2516">Chronicle TP</text></g><!--MD5=[35e255cf5f32bcab938d7ba2e271f666]
+entity chronicle--><g id="elem_chronicle"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="92.7083" x="17.7083" y="221.875"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="55.2083" x="36.4583" y="252.71">Chronicle</text></g><!--MD5=[ce9b54f40f2e046c335e3f9d3fd1d0d4]
+entity chronicleGQL--><g id="elem_chronicleGQL"><rect fill="url(#gjt7xsbu0vc0m0)" height="52.2217" rx="10.4167" ry="10.4167" style="stroke:#C2C2C2;stroke-width:2.0833333333333335;" width="150" x="273.9583" y="21.875"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="112.5" x="292.7083" y="52.71">Chronicle GraphQL</text></g><!--MD5=[9f3578060d598da754813625b0d3dcfd]
+link chronicle to authTp--><g id="link_chronicle_authTp"><path d="M110.5417,247.9167 C161.7188,247.9167 244.6458,247.9167 297.6979,247.9167 " fill="none" id="chronicle-to-authTp" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="303.0625,247.9167,293.6875,243.75,297.8542,247.9167,293.6875,252.0833,303.0625,247.9167" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="82.2917" x="151.0417" y="236.0433">OPA rule CUD</text></g><!--MD5=[ec4aea80aa42235e18b2879fca95e7cd]
+link authTp to sawtooth--><g id="link_authTp_sawtooth"><path d="M395.0313,251.6146 C500.75,259.2917 772.6979,273.0729 994.7917,233.3333 C1074,219.1563 1163.3021,191.5833 1217.3958,173.5521 " fill="none" id="authTp-to-sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="1222.5208,171.8333,1212.3084,170.8543,1217.5813,173.4848,1214.9508,178.7577,1222.5208,171.8333" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="69.7917" x="876.0417" y="221.46">Publish rule</text></g><!--MD5=[28c2b7a4e0cca09bb488b9f7dc39c958]
+reverse link opaCachedExecutor to sawtooth--><g id="link_opaCachedExecutor_sawtooth"><path d="M1000.4583,69.6979 C1056.3958,78.5312 1129.5938,93.125 1191.6667,115.625 C1202.4479,119.5313 1213.5729,124.7604 1223.8646,130.1667 " fill="none" id="opaCachedExecutor-backto-sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="995.0938,68.8646,1003.7141,74.4271,1000.2398,69.6677,1004.9991,66.1934,995.0938,68.8646" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="107.2917" x="1055.2083" y="63.1266">Read / cache rule</text></g><!--MD5=[bc1be2369c1556022f9ea49ccfd04fc8]
+reverse link opaExecutor to sawtooth--><g id="link_opaExecutor_sawtooth"><path d="M976.1146,156.25 C1047.4063,156.25 1160.6563,156.25 1222.7917,156.25 " fill="none" id="opaExecutor-backto-sawtooth" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="970.6354,156.25,980.0104,160.4167,975.8438,156.25,980.0104,152.0833,970.6354,156.25" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="146.875" x="1035.4167" y="144.3766">Load rules in transaction</text></g><!--MD5=[e2a8dace799ec3c42dc1361655d76f57]
+link chronicleGQL to opaCachedExecutor--><g id="link_chronicleGQL_opaCachedExecutor"><path d="M429.3229,49.3958 C532.9063,51.3229 713.6771,54.6875 821.5313,56.6875 " fill="none" id="chronicleGQL-opaCachedExecutor" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="826.9375,56.7917,817.6355,52.4645,821.7299,56.7021,817.4923,60.7966,826.9375,56.7917" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="424.0625,49.2917,433.3523,53.645,429.2698,49.3958,433.5189,45.3133,424.0625,49.2917" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="321.875" x="464.5833" y="38.1266">Run subtype read, namespace and subscription rules</text></g><!--MD5=[b733b6c29084258dc7f2c6a11663a983]
+link authTp to opaExecutor--><g id="link_authTp_opaExecutor"><path d="M400.4583,245.0313 C483.6667,239.5417 654.5313,225.2396 795.8333,193.75 C812.4271,190.0521 830.0313,184.9063 846.3021,179.6042 " fill="none" id="authTp-opaExecutor" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="851.3125,177.9583,841.1028,176.9517,846.3685,179.5964,843.7237,184.8621,851.3125,177.9583" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="395.1042,245.375,404.7329,248.9161,400.3012,245.0325,404.1849,240.6009,395.1042,245.375" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="85.4167" x="582.8125" y="181.8766">Run OPA rules</text></g><!--MD5=[1824619a1d02115c59e654a45b8552b2]
+link chronicleTp to opaExecutor--><g id="link_chronicleTp_opaExecutor"><path d="M410.6042,138.6042 C517.1458,142.3646 737.0208,150.1354 845.9063,153.9896 " fill="none" id="chronicleTp-opaExecutor" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="851.3229,154.1771,842.0966,149.6907,846.1177,153.9981,841.8103,158.0191,851.3229,154.1771" style="stroke:#009FDB;stroke-width:3.125;"/><polygon fill="#009FDB" points="405.2188,138.4063,414.4326,142.918,410.4235,138.5996,414.7419,134.5904,405.2188,138.4063" style="stroke:#009FDB;stroke-width:3.125;"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="212.5" x="519.2708" y="128.7516">Run subtype rules with read / write</text></g><!--MD5=[58a3936cab9e8a9fa37c217d960e2ebb]
+@startuml
+
+!include ../include/default.iuml
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle sawtooth as "Sawtooth"
+rectangle opaCachedExecutor as "OPA Cached Executor"
+rectangle opaExecutor as "OPA Executor"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chronicle as "Chronicle"
+
+rectangle chronicleGQL as "Chronicle GraphQL"
+
+[chronicle] - -> [authTp] : OPA rule CUD
+[authTp] -> [sawtooth] : Publish rule
+[opaCachedExecutor] <- - [sawtooth] : Read / cache rule
+[opaExecutor] <- - [sawtooth] : Load rules in transaction
+[chronicleGQL] <- -> [opaCachedExecutor]: Run subtype read, namespace and subscription rules
+[authTp] <- -> [opaExecutor]: Run OPA rules
+[chronicleTp] <- -> [opaExecutor]: Run subtype rules with read / write
+
+@enduml
+
+@startuml
+
+
+
+
+skinparam backgroundColor transparent
+skinparam useBetaStyle false
+
+
+
+
+
+
+
+
+<style>
+  root {
+    BackgroundColor transparent
+    FontColor #fff
+    HyperLinkColor $ORANGE
+    LineColor #007faf
+    LineThickness 1
+    Margin 10
+    Padding 6
+    Shadowing 0.0
+  }
+  node {
+   Padding 15
+   roundcorner 20
+   BackgroundColor #009fdb-#007faf
+  }
+  caption {
+    LineThickness 0
+  }
+  footer {
+    LineThickness 0
+  }
+  groupHeader {
+    BackgroundColor #f2f2f2
+    FontColor #0568ae
+    FontStyle bold
+  }
+  header {
+    LineThickness 0
+  }
+  referenceHeader {
+    BackgroundColor transparent
+    FontColor #5a5a5a
+    FontStyle bold
+  }
+  separator {
+    BackgroundColor #5a5a5a
+    FontColor transparent
+    FontStyle bold
+  }
+  title {
+	FontSize 20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor  #f5f5f5-#f2f2f2
+	FontColor #009fdb
+	BorderColor #f2f2f2
+  }
+  nwdiagDiagram {
+	network {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+    
+		LineColor #009fdb
+		LineThickness 1.0
+		FontColor #007faf
+	}
+	server {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	}
+	arrow {
+		FontColor #007faf
+		LineColor #007faf
+	}
+	group {
+		BackGroundColor #d2d2d2
+		LineColor $LIGHT_DARK
+		LineThickness 2.0
+		Margin 5
+		Padding 5
+	}
+  }
+  ganttDiagram {
+	task {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		Margin 10
+		Padding 6
+	}
+	note {
+		FontColor #fff
+		LineColor #04538b
+		BackGroundColor #0568ae
+	}
+	separator {
+		LineColor #f2f2f2
+		BackGroundColor #f2f2f2-#c2c2c2
+		FontColor #5a5a5a
+	}
+	milestone {
+		FontColor #0568ae
+		FontSize 16
+		FontStyle italic
+		BackGroundColor #f2f2f2
+		LineColor #c2c2c2
+	}
+	timeline {
+		BackgroundColor #f2f2f2
+		FontColor #5a5a5a
+	}
+	closed {
+		BackgroundColor #bb5d00
+		FontColor #fff
+	}
+  }
+</style>
+skinparam defaultFontName        "Verdana"
+skinparam defaultFontSize        12
+skinparam dpi                    100
+skinparam shadowing              false
+skinparam roundcorner            20
+skinparam ParticipantPadding     30
+skinparam BoxPadding             40
+skinparam Padding                8
+skinparam ArrowColor             #959595
+skinparam stereotype {
+    CBackgroundColor #f5f5f5
+    CBorderColor #c2c2c2
+    ABackgroundColor #c4ca33
+    ABorderColor #919700
+    IBackgroundColor #d95555
+    IBorderColor #a62222
+    EBackgroundColor #ee9033
+    EBorderColor #bb5d00
+    NBackgroundColor #3786be
+    NBorderColor #04538b
+}
+skinparam title {
+	FontColor	                 #009fdb
+	BorderColor	                 #c2c2c2
+	FontSize	    	         20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor              #f5f5f5-#f2f2f2
+}
+
+
+skinparam legend {
+	BackgroundColor #f2f2f2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+skinparam swimlane {
+	BorderColor #0568ae
+	BorderThickness 2
+	TitleBackgroundColor  #f5f5f5-#f2f2f2
+	TitleFontColor #009fdb
+}
+
+
+skinparam activity {
+	FontColor #fff
+	BorderColor #009fdb
+	BackgroundColor #33b2e2-#009fdb
+	BarColor #b5bd00
+	StartColor #0568ae
+	EndColor #0568ae
+	DiamondBackgroundColor #f5f5f5-#c2c2c2
+  	DiamondBorderColor #c2c2c2
+	DiamondFontColor #5a5a5a
+}
+
+
+skinparam participant {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	ParticipantBorderThickness 2
+}
+
+
+skinparam actor {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam arrow {
+	Thickness 3
+	Color #009fdb
+	FontColor #5a5a5a
+}
+
+
+skinparam sequence {
+	BorderColor #009fdb
+	TitleFontColor #009fdb
+	BackgroundColor transparent
+	StartColor #009fdb
+	EndColor #009fdb
+	BoxBackgroundColor #d2d2d2
+	BoxBorderColor #959595
+	BoxFontColor #5a5a5a
+	DelayFontColor #5a5a5a
+	LifeLineBorderColor #c2c2c2
+	LifeLineBorderThickness 2
+	LifeLineBackgroundColor #f5f5f5
+	GroupBorderColor #959595
+	GroupFontColor #5a5a5a
+	GroupHeaderFontColor #0568ae
+	DividerBackgroundColor #fff-#d2d2d2
+    DividerBorderColor #959595
+    DividerBorderThickness 2
+    DividerFontColor #5a5a5a
+	ReferenceBackgroundColor transparent
+	ReferenceBorderColor #959595
+	ReferenceFontColor #5a5a5a
+	ReferenceHeaderFontColor #0568ae
+	StereotypeFontColor #fff
+}
+
+
+skinparam partition {
+	BorderColor #009fdb
+	FontColor #009fdb
+	BackgroundColor transparent
+}
+
+
+skinparam collections {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam control {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam entity {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam boundary {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam agent {
+	BackgroundColor #orange
+	BorderColor #999999
+	FontColor #333333
+}
+
+
+skinparam note {
+	BorderThickness 1
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam artifact {
+	BackgroundColor #fff-#d2d2d2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+
+skinparam component {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam interface {
+	BackgroundColor  #d95555
+	BorderColor  #cf2a2a
+	FontColor #5a5a5a
+}
+
+
+skinparam storage {
+	BackgroundColor #ee9033-#ea7400
+  	BorderColor #ea7400
+	FontColor #fff
+}
+
+
+skinparam node {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #c2c2c2
+	FontColor #009fdb
+}
+
+
+skinparam cloud {
+	BackgroundColor #F2FCFE-#eeeeee
+	BorderColor #F2FCFE
+	FontColor #009fdb
+}
+
+
+skinparam database {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+}
+
+
+skinparam class {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	HeaderBackgroundColor #33b2e2-#009fdb
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam object {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam usecase {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam rectangle {
+		FontColor #5a5a5a
+	BorderColor #c2c2c2
+	BackgroundColor #fff-#fefefe
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam package {
+	FontColor #009fdb
+	BorderColor #33b2e2
+	BackgroundColor transparent
+	BorderThickness 2
+}
+
+
+skinparam folder {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #ea7400
+	FontColor #ea7400
+	BorderThickness 2
+}
+
+
+skinparam frame {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #0568ae
+	FontColor #0568ae
+	BorderThickness 2
+}
+
+
+skinparam state {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+	StartColor #0568ae
+	EndColor #0568ae
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam queue {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam card {
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam file {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #0568ae
+	FontColor #5a5a5a
+
+}
+
+
+skinparam stack {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle sawtooth as "Sawtooth"
+rectangle opaCachedExecutor as "OPA Cached Executor"
+rectangle opaExecutor as "OPA Executor"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chronicle as "Chronicle"
+
+rectangle chronicleGQL as "Chronicle GraphQL"
+
+[chronicle] - -> [authTp] : OPA rule CUD
+[authTp] -> [sawtooth] : Publish rule
+[opaCachedExecutor] <- - [sawtooth] : Read / cache rule
+[opaExecutor] <- - [sawtooth] : Load rules in transaction
+[chronicleGQL] <- -> [opaCachedExecutor]: Run subtype read, namespace and subscription rules
+[authTp] <- -> [opaExecutor]: Run OPA rules
+[chronicleTp] <- -> [opaExecutor]: Run subtype rules with read / write
+
+@enduml
+
+PlantUML version 1.2022.7(Mon Aug 22 18:01:30 BST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: GB
+--></g></svg>

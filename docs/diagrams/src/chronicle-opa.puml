@@ -1,0 +1,23 @@
+@startuml
+
+!include ../include/default.iuml
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle sawtooth as "Sawtooth"
+rectangle opaCachedExecutor as "OPA Cached Executor"
+rectangle opaExecutor as "OPA Executor"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chronicle as "Chronicle"
+rectangle chronicleGQL as "Chronicle GraphQL"
+
+[chronicle] --> [authTp] : OPA rule CUD
+[authTp] -> [sawtooth] : Publish rule
+[opaCachedExecutor] <-- [sawtooth] : Read / cache rule
+[opaExecutor] <-- [sawtooth] : Load rules in transaction
+[chronicleGQL] <--> [opaCachedExecutor]: Run subtype read, namespace and subscription rules
+[authTp] <--> [opaExecutor]: Run OPA rules
+[chronicleTp] <--> [opaExecutor]: Run subtype rules with read / write
+
+@enduml

@@ -1,0 +1,497 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="180.2083px" preserveAspectRatio="none" style="width:346px;height:180px;background:#00000000;" version="1.1" viewBox="0 0 346 180" width="346.875px" zoomAndPan="magnify"><defs><linearGradient id="gu1soguy7o5pg0" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#33B2E2"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs><g><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="83.3333" x2="83.3333" y1="57.43" y2="124.235"/><line style="stroke:#C2C2C2;stroke-width:1.0416666666666667;stroke-dasharray:5.0,5.0;" x1="264.5833" x2="264.5833" y1="57.43" y2="124.235"/><rect fill="url(#gu1soguy7o5pg0)" height="45.9717" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="73.9583" x="46.875" y="10.4167"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="42.7083" x="62.5" y="38.1266">authTp</text><rect fill="url(#gu1soguy7o5pg0)" height="45.9717" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="73.9583" x="46.875" y="123.1934"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="42.7083" x="62.5" y="150.9033">authTp</text><rect fill="url(#gu1soguy7o5pg0)" height="45.9717" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="141.6667" x="193.75" y="10.4167"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="110.4167" x="209.375" y="38.1266">chroniclePublicKey</text><rect fill="url(#gu1soguy7o5pg0)" height="45.9717" rx="10.4167" ry="10.4167" style="stroke:#33B2E2;stroke-width:1.0416666666666667;" width="141.6667" x="193.75" y="123.1934"/><text fill="#FFFFFF" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="110.4167" x="209.375" y="150.9033">chroniclePublicKey</text><polygon fill="#009FDB" points="252.0833,101.3184,262.5,105.485,252.0833,109.6517,256.25,105.485" style="stroke:#009FDB;stroke-width:1.0416666666666667;"/><line style="stroke:#009FDB;stroke-width:3.125;" x1="83.8542" x2="258.3333" y1="105.485" y2="105.485"/><text fill="#5A5A5A" font-family="&quot;Verdana&quot;" font-size="12.5" lengthAdjust="spacing" textLength="57.2917" x="99.4792" y="92.4316">publishes</text><!--MD5=[23cc663b2beabc591924f21b57ce372c]
+@startuml
+
+!include ../include/default.iuml
+
+authTp -> chroniclePublicKey : publishes
+
+@enduml
+
+@startuml
+
+
+
+
+skinparam backgroundColor transparent
+skinparam useBetaStyle false
+
+
+
+
+
+
+
+
+<style>
+  root {
+    BackgroundColor transparent
+    FontColor #fff
+    HyperLinkColor $ORANGE
+    LineColor #007faf
+    LineThickness 1
+    Margin 10
+    Padding 6
+    Shadowing 0.0
+  }
+  node {
+   Padding 15
+   roundcorner 20
+   BackgroundColor #009fdb-#007faf
+  }
+  caption {
+    LineThickness 0
+  }
+  footer {
+    LineThickness 0
+  }
+  groupHeader {
+    BackgroundColor #f2f2f2
+    FontColor #0568ae
+    FontStyle bold
+  }
+  header {
+    LineThickness 0
+  }
+  referenceHeader {
+    BackgroundColor transparent
+    FontColor #5a5a5a
+    FontStyle bold
+  }
+  separator {
+    BackgroundColor #5a5a5a
+    FontColor transparent
+    FontStyle bold
+  }
+  title {
+	FontSize 20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor  #f5f5f5-#f2f2f2
+	FontColor #009fdb
+	BorderColor #f2f2f2
+  }
+  nwdiagDiagram {
+	network {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+    
+		LineColor #009fdb
+		LineThickness 1.0
+		FontColor #007faf
+	}
+	server {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	}
+	arrow {
+		FontColor #007faf
+		LineColor #007faf
+	}
+	group {
+		BackGroundColor #d2d2d2
+		LineColor $LIGHT_DARK
+		LineThickness 2.0
+		Margin 5
+		Padding 5
+	}
+  }
+  ganttDiagram {
+	task {
+		
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+		LineColor #009fdb
+		Margin 10
+		Padding 6
+	}
+	note {
+		FontColor #fff
+		LineColor #04538b
+		BackGroundColor #0568ae
+	}
+	separator {
+		LineColor #f2f2f2
+		BackGroundColor #f2f2f2-#c2c2c2
+		FontColor #5a5a5a
+	}
+	milestone {
+		FontColor #0568ae
+		FontSize 16
+		FontStyle italic
+		BackGroundColor #f2f2f2
+		LineColor #c2c2c2
+	}
+	timeline {
+		BackgroundColor #f2f2f2
+		FontColor #5a5a5a
+	}
+	closed {
+		BackgroundColor #bb5d00
+		FontColor #fff
+	}
+  }
+</style>
+skinparam defaultFontName        "Verdana"
+skinparam defaultFontSize        12
+skinparam dpi                    100
+skinparam shadowing              false
+skinparam roundcorner            20
+skinparam ParticipantPadding     30
+skinparam BoxPadding             40
+skinparam Padding                8
+skinparam ArrowColor             #959595
+skinparam stereotype {
+    CBackgroundColor #f5f5f5
+    CBorderColor #c2c2c2
+    ABackgroundColor #c4ca33
+    ABorderColor #919700
+    IBackgroundColor #d95555
+    IBorderColor #a62222
+    EBackgroundColor #ee9033
+    EBorderColor #bb5d00
+    NBackgroundColor #3786be
+    NBorderColor #04538b
+}
+skinparam title {
+	FontColor	                 #009fdb
+	BorderColor	                 #c2c2c2
+	FontSize	    	         20
+	BorderRoundCorner            8
+	BorderThickness 	         1
+	BackgroundColor              #f5f5f5-#f2f2f2
+}
+
+
+skinparam legend {
+	BackgroundColor #f2f2f2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+skinparam swimlane {
+	BorderColor #0568ae
+	BorderThickness 2
+	TitleBackgroundColor  #f5f5f5-#f2f2f2
+	TitleFontColor #009fdb
+}
+
+
+skinparam activity {
+	FontColor #fff
+	BorderColor #009fdb
+	BackgroundColor #33b2e2-#009fdb
+	BarColor #b5bd00
+	StartColor #0568ae
+	EndColor #0568ae
+	DiamondBackgroundColor #f5f5f5-#c2c2c2
+  	DiamondBorderColor #c2c2c2
+	DiamondFontColor #5a5a5a
+}
+
+
+skinparam participant {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	ParticipantBorderThickness 2
+}
+
+
+skinparam actor {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam arrow {
+	Thickness 3
+	Color #009fdb
+	FontColor #5a5a5a
+}
+
+
+skinparam sequence {
+	BorderColor #009fdb
+	TitleFontColor #009fdb
+	BackgroundColor transparent
+	StartColor #009fdb
+	EndColor #009fdb
+	BoxBackgroundColor #d2d2d2
+	BoxBorderColor #959595
+	BoxFontColor #5a5a5a
+	DelayFontColor #5a5a5a
+	LifeLineBorderColor #c2c2c2
+	LifeLineBorderThickness 2
+	LifeLineBackgroundColor #f5f5f5
+	GroupBorderColor #959595
+	GroupFontColor #5a5a5a
+	GroupHeaderFontColor #0568ae
+	DividerBackgroundColor #fff-#d2d2d2
+    DividerBorderColor #959595
+    DividerBorderThickness 2
+    DividerFontColor #5a5a5a
+	ReferenceBackgroundColor transparent
+	ReferenceBorderColor #959595
+	ReferenceFontColor #5a5a5a
+	ReferenceHeaderFontColor #0568ae
+	StereotypeFontColor #fff
+}
+
+
+skinparam partition {
+	BorderColor #009fdb
+	FontColor #009fdb
+	BackgroundColor transparent
+}
+
+
+skinparam collections {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam control {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam entity {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam boundary {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	FontColor #009fdb
+}
+
+
+skinparam agent {
+	BackgroundColor #orange
+	BorderColor #999999
+	FontColor #333333
+}
+
+
+skinparam note {
+	BorderThickness 1
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam artifact {
+	BackgroundColor #fff-#d2d2d2
+	BorderColor #c2c2c2
+	FontColor #5a5a5a
+}
+
+
+skinparam component {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam interface {
+	BackgroundColor  #d95555
+	BorderColor  #cf2a2a
+	FontColor #5a5a5a
+}
+
+
+skinparam storage {
+	BackgroundColor #ee9033-#ea7400
+  	BorderColor #ea7400
+	FontColor #fff
+}
+
+
+skinparam node {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #c2c2c2
+	FontColor #009fdb
+}
+
+
+skinparam cloud {
+	BackgroundColor #F2FCFE-#eeeeee
+	BorderColor #F2FCFE
+	FontColor #009fdb
+}
+
+
+skinparam database {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+}
+
+
+skinparam class {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	HeaderBackgroundColor #33b2e2-#009fdb
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam object {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	StereotypeFontColor #5a5a5a
+	BorderThickness 1
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam usecase {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam rectangle {
+		FontColor #5a5a5a
+	BorderColor #c2c2c2
+	BackgroundColor #fff-#fefefe
+	BorderThickness 2
+	StereotypeFontColor #009fdb
+}
+
+
+skinparam package {
+	FontColor #009fdb
+	BorderColor #33b2e2
+	BackgroundColor transparent
+	BorderThickness 2
+}
+
+
+skinparam folder {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #ea7400
+	FontColor #ea7400
+	BorderThickness 2
+}
+
+
+skinparam frame {
+	BackgroundColor #fff-#f5f5f5
+  	BorderColor #0568ae
+	FontColor #0568ae
+	BorderThickness 2
+}
+
+
+skinparam state {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+	BorderColor #007faf
+	StartColor #0568ae
+	EndColor #0568ae
+	AttributeFontColor #d2d2d2
+	AttributeFontSize 11
+}
+
+
+skinparam queue {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+
+skinparam card {
+	BackgroundColor #3786be-#0568ae
+	BorderColor #0568ae
+	FontColor #fff
+}
+
+
+skinparam file {
+	BackgroundColor #f5f5f5-#f2f2f2
+	BorderColor #0568ae
+	FontColor #5a5a5a
+
+}
+
+
+skinparam stack {
+	
+	FontColor #fff
+	BorderColor #33b2e2
+	BackgroundColor #33b2e2-#009fdb
+
+}
+
+authTp -> chroniclePublicKey : publishes
+
+@enduml
+
+PlantUML version 1.2022.7(Mon Aug 22 18:01:30 BST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: GB
+--></g></svg>
