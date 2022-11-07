@@ -17,7 +17,7 @@ plugins:
   - search
   - build_plantuml:
       theme_enabled: false
-      render: "server"
+      render: "local"
       bin_path: "/opt/homebrew/bin/plantuml"
       server: "https://www.plantuml.com/plantuml"
       disable_ssl_certificate_validation: false
@@ -42,3 +42,4 @@ nav:
   - "Operating":
       - "CLI": ./cli.md
       - "Configuration options": ./config.md
+      - "Authentication and authorization": ./authz.md

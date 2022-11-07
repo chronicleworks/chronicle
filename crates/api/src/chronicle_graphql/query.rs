@@ -43,8 +43,8 @@ pub async fn activity_timeline<'a>(
     let from = from.or_else(|| {
         Some(DateTime::<Utc>::from_utc(
             NaiveDateTime::new(
-                NaiveDate::from_ymd(1582, 10, 16),
-                NaiveTime::from_hms(0, 0, 0),
+                NaiveDate::from_ymd_opt(1582, 10, 16).unwrap(),
+                NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
             ),
             Utc,
         ))
