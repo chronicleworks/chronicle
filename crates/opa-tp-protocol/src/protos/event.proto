@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+message OPAEvent {
+  string version = 1;
+  uint64 span_id = 2;
+  oneof payload {
+    string operation = 3;
+    string error = 4;
+  }
+}

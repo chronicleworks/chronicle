@@ -1297,8 +1297,7 @@ mod test {
         },
         database::{get_embedded_db_connection, Database},
         k256::{
-            ecdsa::SigningKey,
-            pkcs8::{self, spki, DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
+            pkcs8::{EncodePrivateKey, LineEnding},
             SecretKey,
         },
         ledger::InMemLedger,
