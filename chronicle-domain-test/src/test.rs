@@ -1,10 +1,10 @@
 use chronicle::{
     api::chronicle_graphql::ChronicleGraphQl, bootstrap, codegen::ChronicleDomainDef, tokio,
 };
-use main::{Mutation, Query};
+use generated::{Mutation, Query};
 
 #[allow(dead_code)]
-mod main;
+mod generated;
 
 ///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
 #[tokio::main]
