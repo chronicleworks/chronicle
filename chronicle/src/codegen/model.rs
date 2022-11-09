@@ -134,14 +134,13 @@ pub struct AgentDef {
 
 impl TypeName for &AgentDef {
     fn as_type_name(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
-            _ => to_pascal_case(&self.external_id),
+        match &self.external_id {
+            ex_id if ex_id == "ProvAgent" => ex_id.to_owned(),
+            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
+                (_, Some(c), _) if c.is_uppercase() => format!("{}Agent", self.external_id.clone()),
+                (Some(first), _, body) => format!("{}{}Agent", first.to_uppercase(), body),
+                _ => format!("{}Agent", to_pascal_case(&self.external_id)),
+            },
         }
     }
 
@@ -202,14 +201,15 @@ pub struct EntityDef {
 
 impl TypeName for &EntityDef {
     fn as_type_name(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
-            _ => to_pascal_case(&self.external_id),
+        match &self.external_id {
+            ex_id if ex_id == "ProvEntity" => ex_id.to_owned(),
+            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
+                (_, Some(c), _) if c.is_uppercase() => {
+                    format!("{}Entity", self.external_id.clone())
+                }
+                (Some(first), _, body) => format!("{}{}Entity", first.to_uppercase(), body),
+                _ => format!("{}Entity", to_pascal_case(&self.external_id)),
+            },
         }
     }
 
@@ -270,14 +270,15 @@ pub struct ActivityDef {
 
 impl TypeName for &ActivityDef {
     fn as_type_name(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_uppercase(), body),
-            _ => to_pascal_case(&self.external_id),
+        match &self.external_id {
+            ex_id if ex_id == "ProvActivity" => ex_id.to_owned(),
+            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
+                (_, Some(c), _) if c.is_uppercase() => {
+                    format!("{}Activity", self.external_id.clone())
+                }
+                (Some(first), _, body) => format!("{}{}Activity", first.to_uppercase(), body),
+                _ => format!("{}Activity", to_pascal_case(&self.external_id)),
+            },
         }
     }
 
@@ -1077,15 +1078,15 @@ pub mod test {
           String:
             type: String
         agents:
-          Friend:
+          FriendAgent:
             attributes:
               - String
         entities:
-          Octopi:
+          OctopiEntity:
             attributes:
               - String
         activities:
-          Gardening:
+          GardeningActivity:
             attributes:
               - String
         roles:

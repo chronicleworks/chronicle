@@ -458,14 +458,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation one {
-                    defineItemCertified(externalId:"testactivityid1", attributes: { certIdAttribute: "testcertid" }) {
+                    defineItemCertifiedActivity(externalId:"testactivityid1", attributes: { certIdAttribute: "testcertid" }) {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.defineItemCertified]
+        [data.defineItemCertifiedActivity]
         context = 'chronicle:activity:testactivityid1'
         "###);
 
@@ -474,7 +474,7 @@ mod test {
           .execute(Request::new(
               r#"
           mutation two {
-            defineItemManufactured(externalId:"testactivityid2", attributes: { batchIdAttribute: "testbatchid" }) {
+            defineItemManufacturedActivity(externalId:"testactivityid2", attributes: { batchIdAttribute: "testbatchid" }) {
                   context
               }
           }
@@ -482,7 +482,7 @@ mod test {
               ),
           )
           .await, @r###"
-        [data.defineItemManufactured]
+        [data.defineItemManufacturedActivity]
         context = 'chronicle:activity:testactivityid2'
         "###);
 
@@ -512,11 +512,11 @@ mod test {
                 r#"
             query test {
                 activityById(id: "chronicle:activity:testactivityid1") {
-                    ... on ItemCertified {
+                    ... on ItemCertifiedActivity {
                         id
                         externalId
                         wasInformedBy {
-                            ... on ItemManufactured {
+                            ... on ItemManufacturedActivity {
                                 batchIdAttribute
                                 id
                                 externalId
@@ -545,14 +545,14 @@ mod test {
           .execute(Request::new(
               r#"
                     mutation three {
-                      defineItemCodified(externalId:"testactivityid3") {
+                      defineItemCodifiedActivity(externalId:"testactivityid3") {
                             context
                         }
                     }
                 "#,
           ))
           .await, @r###"
-        [data.defineItemCodified]
+        [data.defineItemCodifiedActivity]
         context = 'chronicle:activity:testactivityid3'
         "###);
 
@@ -584,15 +584,15 @@ mod test {
                 r#"
                 query test {
                   activityById(id: "chronicle:activity:testactivityid1") {
-                      ... on ItemCertified {
+                      ... on ItemCertifiedActivity {
                           id
                           externalId
                           wasInformedBy {
-                              ... on ItemManufactured {
+                              ... on ItemManufacturedActivity {
                                   id
                                   externalId
                               }
-                              ... on ItemCodified {
+                              ... on ItemCodifiedActivity {
                                   id
                                   externalId
                               }
@@ -626,14 +626,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation activity {
-                    defineItemCertified(externalId:"testactivity1", attributes: { certIdAttribute: "testcertid" }) {
+                    defineItemCertifiedActivity(externalId:"testactivity1", attributes: { certIdAttribute: "testcertid" }) {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.defineItemCertified]
+        [data.defineItemCertifiedActivity]
         context = 'chronicle:activity:testactivity1'
         "###);
 
@@ -642,14 +642,14 @@ mod test {
           .execute(Request::new(
               r#"
                   mutation entity {
-                    defineNCBRecord(externalId:"testentity1") {
+                    defineNCBRecordEntity(externalId:"testentity1") {
                           context
                       }
                   }
               "#,
           ))
           .await, @r###"
-        [data.defineNCBRecord]
+        [data.defineNCBRecordEntity]
         context = 'chronicle:entity:testentity1'
         "###);
 
@@ -679,12 +679,12 @@ mod test {
                 r#"
             query test {
                 activityById(id: "chronicle:activity:testactivity1") {
-                  ... on ItemCertified {
+                  ... on ItemCertifiedActivity {
                         id
                         externalId
                         certIdAttribute
                         generated {
-                            ... on NCBRecord {
+                            ... on NCBRecordEntity {
                               id
                               externalId
                             }
@@ -713,7 +713,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation second {
-              defineItem(externalId:"testitem", attributes: { partIdAttribute: "testpartid" }) {
+              defineItemEntity(externalId:"testitem", attributes: { partIdAttribute: "testpartid" }) {
                     context
                 }
             }
@@ -721,7 +721,7 @@ mod test {
                 ),
             )
             .await, @r###"
-        [data.defineItem]
+        [data.defineItemEntity]
         context = 'chronicle:entity:testitem'
         "###);
 
@@ -749,16 +749,16 @@ mod test {
               r#"
               query testagain {
                 activityById(id: "chronicle:activity:testactivity1") {
-                  ... on ItemCertified {
+                  ... on ItemCertifiedActivity {
                         id
                         externalId
                         certIdAttribute
                         generated {
-                            ... on Item {
+                            ... on ItemEntity {
                                 id
                                 externalId
                             }
-                            ... on NCBRecord {
+                            ... on NCBRecordEntity {
                               id
                               externalId
                             }
@@ -788,7 +788,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-                defineContractor(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
+                defineContractorAgent(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
                     context
                 }
             }
@@ -804,7 +804,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-              defineNCB(externalId:"testagent2") {
+              defineNCBAgent(externalId:"testagent2") {
                     context
                 }
             }
@@ -820,7 +820,7 @@ mod test {
                 .execute(Request::new(
                     r#"
             mutation {
-              defineCertificate(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
+              defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
                     context
                 }
             }
@@ -836,7 +836,7 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-              defineNCBRecord(externalId:"testentity2") {
+              defineNCBRecordEntity(externalId:"testentity2") {
                     context
                 }
             }
@@ -863,7 +863,7 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                      defineItemCertified(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
+                      defineItemCertifiedActivity(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
                             context
                         }}
                     }}
@@ -879,7 +879,7 @@ mod test {
                     .execute(Request::new(&format!(
                         r#"
                     mutation {{
-                      defineItemCodified(externalId:"{}") {{
+                      defineItemCodifiedActivity(externalId:"{}") {{
                             context
                         }}
                     }}
@@ -991,7 +991,7 @@ mod test {
                   edges {
                       node {
                           __typename
-                          ... on ItemCertified {
+                          ... on ItemCertifiedActivity {
                             id
                             externalId
                             started
@@ -999,11 +999,11 @@ mod test {
                             wasAssociatedWith {
                                     responsible {
                                       agent {
-                                        ... on Contractor {
+                                        ... on ContractorAgent {
                                             id
                                             externalId
                                         }
-                                        ... on NCB {
+                                        ... on NCBAgent {
                                           id
                                           externalId
                                         }
@@ -1012,17 +1012,17 @@ mod test {
                                     }
                             }
                             used {
-                                ... on Certificate {
+                                ... on CertificateEntity {
                                   id
                                   externalId
                                 }
-                                ... on NCBRecord {
+                                ... on NCBRecordEntity {
                                   id
                                   externalId
                                 }
                             }
                         }
-                          ... on ItemCodified {
+                          ... on ItemCodifiedActivity {
                             id
                             externalId
                             started
@@ -1030,11 +1030,11 @@ mod test {
                             wasAssociatedWith {
                                     responsible {
                                         agent {
-                                            ... on Contractor {
+                                            ... on ContractorAgent {
                                                 id
                                                 externalId
                                             }
-                                            ... on NCB {
+                                            ... on NCBAgent {
                                               id
                                               externalId
                                             }
@@ -1043,11 +1043,11 @@ mod test {
                                     }
                             }
                             used {
-                                ... on Certificate {
+                                ... on CertificateEntity {
                                   id
                                   externalId
                                 }
-                                ... on NCBRecord {
+                                ... on NCBRecordEntity {
                                   id
                                   externalId
                                 }
@@ -1073,7 +1073,7 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity1",
                     "externalId": "anothertestactivity1",
                     "started": "1968-09-02T00:00:00+00:00",
@@ -1100,7 +1100,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity2",
                     "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
@@ -1127,7 +1127,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity3",
                     "externalId": "anothertestactivity3",
                     "started": "1968-09-04T00:00:00+00:00",
@@ -1154,7 +1154,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity4",
                     "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
@@ -1181,7 +1181,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity5",
                     "externalId": "anothertestactivity5",
                     "started": "1968-09-06T00:00:00+00:00",
@@ -1208,7 +1208,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity6",
                     "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
@@ -1235,7 +1235,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity7",
                     "externalId": "anothertestactivity7",
                     "started": "1968-09-08T00:00:00+00:00",
@@ -1262,7 +1262,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity8",
                     "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
@@ -1289,7 +1289,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity9",
                     "externalId": "anothertestactivity9",
                     "started": "1968-09-10T00:00:00+00:00",
@@ -1340,7 +1340,7 @@ mod test {
                   edges {
                       node {
                           __typename
-                          ... on ItemCertified {
+                          ... on ItemCertifiedActivity {
                             id
                             externalId
                             started
@@ -1348,11 +1348,11 @@ mod test {
                             wasAssociatedWith {
                                     responsible {
                                         agent {
-                                            ... on Contractor {
+                                            ... on ContractorAgent {
                                                 id
                                                 externalId
                                             }
-                                            ... on NCB {
+                                            ... on NCBAgent {
                                               id
                                               externalId
                                             }
@@ -1361,17 +1361,17 @@ mod test {
                                     }
                             }
                             used {
-                                ... on Certificate {
+                                ... on CertificateEntity {
                                   id
                                   externalId
                                 }
-                                ... on NCBRecord {
+                                ... on NCBRecordEntity {
                                   id
                                   externalId
                                 }
                             }
                         }
-                        ... on ItemCodified {
+                        ... on ItemCodifiedActivity {
                           id
                           externalId
                           started
@@ -1379,11 +1379,11 @@ mod test {
                           wasAssociatedWith {
                                   responsible {
                                       agent {
-                                          ... on Contractor {
+                                          ... on ContractorAgent {
                                                 id
                                                 externalId
                                             }
-                                          ... on NCB {
+                                          ... on NCBAgent {
                                               id
                                               externalId
                                             }
@@ -1392,11 +1392,11 @@ mod test {
                                   }
                           }
                           used {
-                          ... on Certificate {
+                          ... on CertificateEntity {
                             id
                             externalId
                           }
-                          ... on NCBRecord {
+                          ... on NCBRecordEntity {
                             id
                             externalId
                           }
@@ -1422,7 +1422,7 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity9",
                     "externalId": "anothertestactivity9",
                     "started": "1968-09-10T00:00:00+00:00",
@@ -1449,7 +1449,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity8",
                     "externalId": "testactivity8",
                     "started": "1968-09-09T00:00:00+00:00",
@@ -1476,7 +1476,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity7",
                     "externalId": "anothertestactivity7",
                     "started": "1968-09-08T00:00:00+00:00",
@@ -1503,7 +1503,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity6",
                     "externalId": "testactivity6",
                     "started": "1968-09-07T00:00:00+00:00",
@@ -1530,7 +1530,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity5",
                     "externalId": "anothertestactivity5",
                     "started": "1968-09-06T00:00:00+00:00",
@@ -1557,7 +1557,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity4",
                     "externalId": "testactivity4",
                     "started": "1968-09-05T00:00:00+00:00",
@@ -1584,7 +1584,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity3",
                     "externalId": "anothertestactivity3",
                     "started": "1968-09-04T00:00:00+00:00",
@@ -1611,7 +1611,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified",
+                    "__typename": "ItemCertifiedActivity",
                     "id": "chronicle:activity:testactivity2",
                     "externalId": "testactivity2",
                     "started": "1968-09-03T00:00:00+00:00",
@@ -1638,7 +1638,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified",
+                    "__typename": "ItemCodifiedActivity",
                     "id": "chronicle:activity:anothertestactivity1",
                     "externalId": "anothertestactivity1",
                     "started": "1968-09-02T00:00:00+00:00",
@@ -1682,7 +1682,7 @@ mod test {
                 forEntity: [],
                 forAgent: [],
                 order: NEWEST_FIRST,
-                activityTypes: [ItemCertified, ItemCodified],
+                activityTypes: [ItemCertifiedActivity, ItemCodifiedActivity],
                               ) {
                   pageInfo {
                       hasPreviousPage
@@ -1713,55 +1713,55 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified"
+                    "__typename": "ItemCertifiedActivity"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified"
+                    "__typename": "ItemCertifiedActivity"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "4"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified"
+                    "__typename": "ItemCertifiedActivity"
                   },
                   "cursor": "5"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "6"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCertified"
+                    "__typename": "ItemCertifiedActivity"
                   },
                   "cursor": "7"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "8"
                 }
@@ -1811,31 +1811,31 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "0"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "1"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "2"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "3"
                 },
                 {
                   "node": {
-                    "__typename": "ItemCodified"
+                    "__typename": "ItemCodifiedActivity"
                   },
                   "cursor": "4"
                 }
@@ -1855,7 +1855,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                defineContractor(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
+                defineContractorAgent(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
                     context
                 }}
             }}
@@ -1876,7 +1876,7 @@ mod test {
           .execute(Request::new(
               r#"
               query {
-              agentsByType(agentType: Contractor) {
+              agentsByType(agentType: ContractorAgent) {
                   pageInfo {
                       hasPreviousPage
                       hasNextPage
@@ -1886,7 +1886,7 @@ mod test {
                   edges {
                       node {
                           __typename
-                          ... on Contractor {
+                          ... on ContractorAgent {
                               id
                               externalId
                               locationAttribute
@@ -1911,7 +1911,7 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent0",
                     "externalId": "testagent0",
                     "locationAttribute": "testattribute"
@@ -1920,7 +1920,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent1",
                     "externalId": "testagent1",
                     "locationAttribute": "testattribute"
@@ -1929,7 +1929,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent10",
                     "externalId": "testagent10",
                     "locationAttribute": "testattribute"
@@ -1938,7 +1938,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent11",
                     "externalId": "testagent11",
                     "locationAttribute": "testattribute"
@@ -1947,7 +1947,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent12",
                     "externalId": "testagent12",
                     "locationAttribute": "testattribute"
@@ -1956,7 +1956,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent13",
                     "externalId": "testagent13",
                     "locationAttribute": "testattribute"
@@ -1965,7 +1965,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent14",
                     "externalId": "testagent14",
                     "locationAttribute": "testattribute"
@@ -1974,7 +1974,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent15",
                     "externalId": "testagent15",
                     "locationAttribute": "testattribute"
@@ -1983,7 +1983,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent16",
                     "externalId": "testagent16",
                     "locationAttribute": "testattribute"
@@ -1992,7 +1992,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent17",
                     "externalId": "testagent17",
                     "locationAttribute": "testattribute"
@@ -2014,7 +2014,7 @@ mod test {
           .execute(Request::new(
               r#"
               query {
-              agentsByType(agentType: Contractor, first: 20, after: "3") {
+              agentsByType(agentType: ContractorAgent, first: 20, after: "3") {
                   pageInfo {
                       hasPreviousPage
                       hasNextPage
@@ -2024,7 +2024,7 @@ mod test {
                   edges {
                       node {
                           __typename
-                          ... on Contractor {
+                          ... on ContractorAgent {
                               id
                               externalId
                               locationAttribute
@@ -2049,7 +2049,7 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent12",
                     "externalId": "testagent12",
                     "locationAttribute": "testattribute"
@@ -2058,7 +2058,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent13",
                     "externalId": "testagent13",
                     "locationAttribute": "testattribute"
@@ -2067,7 +2067,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent14",
                     "externalId": "testagent14",
                     "locationAttribute": "testattribute"
@@ -2076,7 +2076,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent15",
                     "externalId": "testagent15",
                     "locationAttribute": "testattribute"
@@ -2085,7 +2085,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent16",
                     "externalId": "testagent16",
                     "locationAttribute": "testattribute"
@@ -2094,7 +2094,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent17",
                     "externalId": "testagent17",
                     "locationAttribute": "testattribute"
@@ -2103,7 +2103,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent18",
                     "externalId": "testagent18",
                     "locationAttribute": "testattribute"
@@ -2112,7 +2112,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent19",
                     "externalId": "testagent19",
                     "locationAttribute": "testattribute"
@@ -2121,7 +2121,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent2",
                     "externalId": "testagent2",
                     "locationAttribute": "testattribute"
@@ -2130,7 +2130,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent20",
                     "externalId": "testagent20",
                     "locationAttribute": "testattribute"
@@ -2139,7 +2139,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent21",
                     "externalId": "testagent21",
                     "locationAttribute": "testattribute"
@@ -2148,7 +2148,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent22",
                     "externalId": "testagent22",
                     "locationAttribute": "testattribute"
@@ -2157,7 +2157,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent23",
                     "externalId": "testagent23",
                     "locationAttribute": "testattribute"
@@ -2166,7 +2166,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent24",
                     "externalId": "testagent24",
                     "locationAttribute": "testattribute"
@@ -2175,7 +2175,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent25",
                     "externalId": "testagent25",
                     "locationAttribute": "testattribute"
@@ -2184,7 +2184,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent26",
                     "externalId": "testagent26",
                     "locationAttribute": "testattribute"
@@ -2193,7 +2193,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent27",
                     "externalId": "testagent27",
                     "locationAttribute": "testattribute"
@@ -2202,7 +2202,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent28",
                     "externalId": "testagent28",
                     "locationAttribute": "testattribute"
@@ -2211,7 +2211,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent29",
                     "externalId": "testagent29",
                     "locationAttribute": "testattribute"
@@ -2220,7 +2220,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent3",
                     "externalId": "testagent3",
                     "locationAttribute": "testattribute"
@@ -2242,7 +2242,7 @@ mod test {
           .execute(Request::new(
               r#"
               query {
-              agentsByType(agentType: Contractor, first: 20, after: "90") {
+              agentsByType(agentType: ContractorAgent, first: 20, after: "90") {
                   pageInfo {
                       hasPreviousPage
                       hasNextPage
@@ -2252,7 +2252,7 @@ mod test {
                   edges {
                       node {
                           __typename
-                          ... on Contractor {
+                          ... on ContractorAgent {
                               id
                               externalId
                               locationAttribute
@@ -2277,7 +2277,7 @@ mod test {
               "edges": [
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent91",
                     "externalId": "testagent91",
                     "locationAttribute": "testattribute"
@@ -2286,7 +2286,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent92",
                     "externalId": "testagent92",
                     "locationAttribute": "testattribute"
@@ -2295,7 +2295,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent93",
                     "externalId": "testagent93",
                     "locationAttribute": "testattribute"
@@ -2304,7 +2304,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent94",
                     "externalId": "testagent94",
                     "locationAttribute": "testattribute"
@@ -2313,7 +2313,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent95",
                     "externalId": "testagent95",
                     "locationAttribute": "testattribute"
@@ -2322,7 +2322,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent96",
                     "externalId": "testagent96",
                     "locationAttribute": "testattribute"
@@ -2331,7 +2331,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent97",
                     "externalId": "testagent97",
                     "locationAttribute": "testattribute"
@@ -2340,7 +2340,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent98",
                     "externalId": "testagent98",
                     "locationAttribute": "testattribute"
@@ -2349,7 +2349,7 @@ mod test {
                 },
                 {
                   "node": {
-                    "__typename": "Contractor",
+                    "__typename": "ContractorAgent",
                     "id": "chronicle:agent:testagent99",
                     "externalId": "testagent99",
                     "locationAttribute": "testattribute"
