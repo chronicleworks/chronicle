@@ -18,6 +18,7 @@ pub enum PrimitiveType {
     String,
     Bool,
     Int,
+    JSON,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

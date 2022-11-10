@@ -444,6 +444,8 @@ pub mod test {
                 .unwrap()
                 .with_attribute_type("testInt", crate::PrimitiveType::Int)
                 .unwrap()
+                .with_attribute_type("testJSON", crate::PrimitiveType::JSON)
+                .unwrap()
                 .with_activity("testActivity", |b| {
                     b.with_attribute("testString")
                         .unwrap()

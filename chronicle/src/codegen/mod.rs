@@ -22,6 +22,7 @@ fn activity_union_type_name() -> String {
 
 fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     let graphql_new_type = &rust::import("chronicle::async_graphql", "NewType");
+    let chronicle_json = &rust::import("chronicle::common::prov", "ChronicleJSON");
     quote! {
         #(for attribute in attributes.iter() =>
         #[derive(Clone, #graphql_new_type)]
@@ -30,6 +31,7 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
                 PrimitiveType::String => String,
                 PrimitiveType::Bool => bool,
                 PrimitiveType::Int => i32,
+                PrimitiveType::JSON => #chronicle_json,
             }
         ));
        )
@@ -231,6 +233,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
     let date_time = &rust::import("chronicle::chrono", "DateTime");
     let utc = &rust::import("chronicle::chrono", "Utc");
+    let chronicle_json = &rust::import("chronicle::common::prov", "ChronicleJSON");
     quote! {
     #(register(activity_impl))
 
@@ -330,6 +333,12 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
                     .map(#(attribute.as_scalar_type())),
+              PrimitiveType::JSON =>
+                #activity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                    .map(#chronicle_json)
+                    .map(#(attribute.as_scalar_type()))
         }))
         })
     }
@@ -347,7 +356,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
-
+    let chronicle_json = &rust::import("chronicle::common::prov", "ChronicleJSON");
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
@@ -454,9 +463,15 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
                     .map(#(attribute.as_scalar_type())),
-        }))
-        })
-    }
+            PrimitiveType::JSON =>
+                #entity_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                    .map(#chronicle_json)
+                    .map(#(attribute.as_scalar_type()))
+                }))
+            })
+        }
     }
 }
 
@@ -471,7 +486,7 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
     let agent_id = &rust::import("chronicle::common::prov", "AgentId");
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
-
+    let chronicle_json = &rust::import("chronicle::common::prov", "ChronicleJSON");
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
@@ -532,7 +547,13 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .and_then(|attr| attr.as_i64().map(|attr| attr as _))
                     .map(#(attribute.as_scalar_type())),
-        }))
+              PrimitiveType::JSON =>
+                #agent_impl::load_attribute(self.0.id, #_(#(attribute.preserve_inflection())), ctx)
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                    .map(#chronicle_json)
+                    .map(#(attribute.as_scalar_type()))
+            }))
         })
 
         #[graphql(name = "type")]
@@ -614,7 +635,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
     quote! {
         #[derive(#input_object)]
         #[graphql(name = #_(#(typ.attributes_type_name_preserve_inflection())))]
-        pub struct #(typ.attributes_type_name()) {
+        pub struct #(typ.attributes_type_name_preserve_inflection()) {
             #(for attribute in attributes =>
                 #[graphql(name = #_(#(attribute.preserve_inflection())))]
                 pub #(&attribute.as_property()): #(
@@ -622,14 +643,16 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
                         PrimitiveType::String => String,
                         PrimitiveType::Bool => bool,
                         PrimitiveType::Int => i32,
+                        PrimitiveType::JSON => Value,
                     }),
             )
         }
 
 
         #[allow(clippy::from_over_into)]
-        impl From<#(typ.attributes_type_name())> for #abstract_attributes{
-            fn from(attributes: #(typ.attributes_type_name())) -> Self {
+        #[allow(clippy::useless_conversion)]
+        impl From<#(typ.attributes_type_name_preserve_inflection())> for #abstract_attributes{
+            fn from(attributes: #(typ.attributes_type_name_preserve_inflection())) -> Self {
                 #abstract_attributes {
                     typ: Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
                     attributes: vec![
@@ -927,7 +950,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 external_id: String,
                 namespace: Option<String>,
-                attributes: #(agent.attributes_type_name()),
+                attributes: #(agent.attributes_type_name_preserve_inflection()),
             ) -> async_graphql::#graphql_result<#submission> {
                 #impls::agent(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
@@ -967,7 +990,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 external_id: String,
                 namespace: Option<String>,
-                attributes: #(activity.attributes_type_name()),
+                attributes: #(activity.attributes_type_name_preserve_inflection()),
             ) -> async_graphql::#graphql_result<#submission> {
                 #impls::activity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }
@@ -1007,7 +1030,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 ctx: &#graphql_context<'a>,
                 external_id: String,
                 namespace: Option<String>,
-                attributes: #(entity.attributes_type_name()),
+                attributes: #(entity.attributes_type_name_preserve_inflection()),
             ) -> async_graphql::#graphql_result<#submission> {
                 #impls::entity(ctx, external_id, namespace, attributes.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
             }

@@ -216,6 +216,19 @@ fn attribute_value_from_param(
                 Ok(value)
             }
         }
+        PrimitiveType::JSON => {
+            if let Some(coerced) =
+                valico::json_dsl::object()
+                    .coerce(&mut value, ".")
+                    .map_err(|_e| CliError::InvalidCoercion {
+                        arg: arg.to_owned(),
+                    })?
+            {
+                Ok(coerced)
+            } else {
+                Ok(value)
+            }
+        }
     }
 }
 

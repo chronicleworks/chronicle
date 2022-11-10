@@ -1,7 +1,9 @@
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use iref::Iri;
 
-use super::{ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, IdentityId};
+use super::{ActivityId, AgentId, ChronicleJSON, DomaintypeId, EntityId, EvidenceId, IdentityId};
+
+async_graphql::scalar!(ChronicleJSON);
 
 #[Scalar(name = "AttachmentID")]
 impl ScalarType for EvidenceId {
