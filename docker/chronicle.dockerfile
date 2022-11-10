@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:latest as builder
+FROM --platform=$BUILDPLATFORM rust:1.64.0 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM

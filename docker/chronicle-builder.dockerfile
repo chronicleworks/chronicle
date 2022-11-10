@@ -1,4 +1,4 @@
-FROM --platform=$TARGETPLATFORM rust:latest as chef
+FROM --platform=$TARGETPLATFORM rust:1.64.0 as chef
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
