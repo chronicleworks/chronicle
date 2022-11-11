@@ -540,6 +540,7 @@ mod test {
         context = 'chronicle:agent:testagent1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let agent = schema
             .execute(Request::new(
                 r#"
@@ -582,6 +583,7 @@ mod test {
         context = 'chronicle:activity:testactivity1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let agent = schema
             .execute(Request::new(
                 r#"
@@ -624,6 +626,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let agent = schema
             .execute(Request::new(
                 r#"
