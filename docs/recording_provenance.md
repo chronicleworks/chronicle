@@ -9,7 +9,7 @@ record additional provenance.
 
 Chronicle does not use relational constraints in the way you may expect a
 relational database to, or allow free-form data in the manner of a document
-store. It is useful to think of Chronicle as recording facts, and it will make
+store. It is useful to think of Chronicle as recording facts; it will make
 simple inferences to keep your provenance data consistent.
 
 For example:
@@ -18,7 +18,7 @@ For example:
 mutation {
     wasAssociatedWith(
         activity: "chronicle:activity:writing-the-iliad",
-        agent: "chronicle:agent:homer",
+        responsible: "chronicle:agent:homer",
         role: writer
     )
 }
@@ -26,10 +26,10 @@ mutation {
 
 ```graphql title="An activity 'writing-the-iliad' that took place in Ionia"
 mutation {
-    writing(
-        external_id: "writing-the-iliad",
+    defineWritingActivity(
+        externalId: "writing-the-iliad",
         attributes: {
-            location: "ionia"
+            locationAttribute: "ionia"
         }
     )
 }
@@ -37,10 +37,10 @@ mutation {
 
 ```graphql title="An agent 'homer' exists and was a person"
 mutation {
-    person(
-        external_id: "homer",
+    definePersonAgent(
+        externalId: "homer",
         attributes: {
-            email: "homer@ionia.gr"
+            emailAttribute: "homer@ionia.gr"
         }
     )
 }
@@ -48,7 +48,7 @@ mutation {
 
 These three Chronicle mutations can be executed in *any* order - Chronicle will
 assume the existence of the Agent and Activities referred to even if they have
-not yet been recorded by their `person` and `writing` mutation.
+not yet been recorded by their `definePersonAgent` and `defineWritingActivity` mutation.
 
 ## Contradiction
 
@@ -82,14 +82,14 @@ will fail.
 
 ```graphql
     mutation {
-        writer(id: "chronicle:agent:poet", attributes: {
-            external_id: "Tennyson"
+        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+            externalIdAttribute: "Tennyson"
         })
     }
 
     mutation {
-        writer(id: "chronicle:agent:poet", attributes: {
-            external_id: "Kipling"
+        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+            externalIdAttribute: "Kipling"
         })
     }
 ```
@@ -103,15 +103,15 @@ as long as the values of the already recorded ones are unchanged.
 ```graphql
 
     mutation {
-        writer(id: "chronicle:agent:poet", attributes: {
-            external_id: "Tennyson"
+        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+            externalIdAttribute: "Tennyson"
         })
     }
 
     mutation {
-        writer(id: "chronicle:agent:poet", attributes: {
-            external_id: "Tennyson",
-            heightInCentimeters: "185"
+        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+            externalIdAttribute: "Tennyson",
+            heightInCentimetersAttribute: "185"
         })
     }
 ```
@@ -122,20 +122,20 @@ as long as the values of the already recorded ones are unchanged.
 
 For this section we will use our simplified [domain model for recording the
 provenance of medical guidance](domain_modelling). We have a number of
-people who may be any combination of authors, editors or researchers
+people who may be any combination of authors, editors, or researchers
 collaborating to produce documents from evidence produced by a search process.
 An external CMS is being used that has identifiers for documents and users.
 
-### The `external_id` parameter
+### The `externalId` parameter
 
 The definition mutations for prov terms -  Entity, Activity and Agent - are all
-supplied with a `external_id` parameter. This should be something meaningful to the
+supplied with a `externalId` parameter. This should be something meaningful to the
 domain you are recording provenance for - a unique identifier from an external
 system or a natural key. This will form part of the identity of the term.
 
 ### A note on identities
 
-Chronicle identities will contain an encoded form of the external_id parameter, but
+Chronicle identities will contain an encoded form of the externalId parameter, but
 should be treated as opaque. Under no circumstances should you attempt to
 synthesize an identity from Chronicle in client code as the scheme may be
 subject to change.
@@ -167,17 +167,14 @@ notify clients when a Chronicle operation has been sent to a backend ledger and
 when that operation has been applied to both the ledger and Chronicle.
 
 ```graphql
-
 enum Stage {
  SUBMITTED
  COMMITTED
 }
 
 type Submission {
-  stage: Stage!
+  context: Stage!
   tx_id: String!
-  error: String
-  delta: Delta
 }
 
 subscription {
@@ -188,7 +185,6 @@ subscription {
         delta
     }
 }
-
 ```
 
 The `txId` on this subscription will match the txId from the
@@ -201,46 +197,44 @@ the result of an operation should await the
  notification like:
 
  ```graphql
-{
-  stage: "SUBMIT"
-  error: null
-  delta: null
-  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-}
-
+  {
+    stage: "SUBMIT"
+    error: null
+    delta: null
+    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+  }
  ```
 
  And the second, when the Chronicle transaction has been committed to the
  ledger:
 
  ```graphql
-{
-  stage: "COMMIT"
-  error: null
-  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-  delta:  {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:publication1",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:Published"
-              ],
-              "externalId": "publication1",
-              "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-              }
-            },
-            {
-              "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "default"
+  {
+    stage: "COMMIT"
+    error: null
+    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+    delta:  {
+        "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+        "@graph": [
+          {
+            "@id": "chronicle:activity:publication1",
+            "@type": [
+              "prov:Activity",
+              "chronicle:domaintype:Published"
+            ],
+            "externalId": "publication1",
+            "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+            "value": {
             }
-          ]
-        }
-}
-
+          },
+          {
+            "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+            "@type": "chronicle:Namespace",
+            "externalId": "default"
+          }
+        ]
+      }
+  }
 ```
 
 Once this message has been received, clients can assume that provenance has been
@@ -270,7 +264,7 @@ assumed to be non-resumable, as it will be a [contradiction](#contradiction).
 See [provenance concepts](provenance_concepts#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for
-us, `Question`, `Guidance`, `PublishedGuidance` and `EvidenceReference`, as a GraphQL
+us, `Question`, `Guidance`, `PublishedGuidance`, and `EvidenceReference`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
 evolved, see [evolving your domain](domain_modelling#evolution).
@@ -284,30 +278,30 @@ The generated GraphQL mutations and their associated types will look like this:
 
 scalar EntityID
 scalar DomaintypeID
-type EvidenceReference {
+type EvidenceEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
-  evidence: EvidenceReference
+  evidence: Evidence
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
   wasRevisionOf: [Entity!]!
   wasQuotedFrom: [Entity!]!
-  searchParametersAttribute: SearchParameterAttribute
+  searchParameterAttribute: SearchParameterAttribute
   referenceAttribute: ReferenceAttribute
 }
-input EvidenceReferenceAttributes {
-  searchParametersAttribute: String!
+input EvidenceEntityAttributes {
+  searchParameterAttribute: String!
   referenceAttribute: String!
 }
-type Guidance {
+type GuidanceEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
-  evidence: EvidenceReference
+  evidence: Evidence
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -316,7 +310,7 @@ type Guidance {
   titleAttribute: TitleAttribute
   versionAttribute: VersionAttribute
 }
-input GuidanceAttributes {
+input GuidanceEntityAttributes {
   titleAttribute: String!
   versionAttribute: Int!
 }
@@ -327,7 +321,7 @@ input PublishedAttributes {
 type PublishedGuidance {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
   evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
@@ -340,7 +334,7 @@ type PublishedGuidance {
 type Question {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
   evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
@@ -348,19 +342,19 @@ type Question {
   hadPrimarySource: [Entity!]!
   wasRevisionOf: [Entity!]!
   wasQuotedFrom: [Entity!]!
-  cmsIdAttribute: CmsIdAttribute
+  CMSIdAttribute: CMSIdAttribute
   contentAttribute: ContentAttribute
 }
 
 input QuestionAttributes {
-  cmsIdAttribute: String!
+  CMSIdAttribute: String!
   contentAttribute: String!
 }
 
 type ProvEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
   evidence: EvidenceReference
   wasGeneratedBy: [Activity!]!
@@ -377,22 +371,21 @@ input ProvEntityAttributes {
 union Entity = | ProvEntity | EvidenceReference | Guidance | PublishedGuidance | Question
 
 mutation {
-  defineEntity(external_id: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
-  defineEvidenceReference(external_id: String!, namespace: String, attributes: EvidenceReferenceAttributes!): Submission!
-  defineGuidance(external_id: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
-  definePublishedGuidance(external_id: String!, namespace: String): Submission!
-  defineQuestion(external_id: String!, namespace: String, attributes: QuestionAttributes!): Submission!
+  defineEntity(externalId: String!, namespace: String, attributes: ProvEntityAttributes!): Submission!
+  defineEvidenceReference(externalId: String!, namespace: String, attributes: EvidenceReferenceAttributes!): Submission!
+  defineGuidance(externalId: String!, namespace: String, attributes: GuidanceAttributes!): Submission!
+  definePublishedGuidance(externalId: String!, namespace: String): Submission!
+  defineQuestion(externalId: String!, namespace: String, attributes: QuestionAttributes!): Submission!
 }
-
 ```
 
-Executing the following example mutation `defineQuestion` will define an `Entity`
+Executing the following example mutation `defineQuestionEntity` will define an `Entity`
 of subtype `Question`, along with its attributes.
 
 ```graphql
 mutation {
-    defineQuestion(external_id: "anaphylaxis-referral", attributes: {
-        cmsIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
+    defineQuestionEntity(externalId: "anaphylaxis-referral", attributes: {
+        CMSIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
         contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
     })
 }
@@ -401,8 +394,8 @@ mutation {
 And the equivalent operation using the command line interface is:
 
 ```bash
-chronicle question define anaphylaxis-referral --cms-id-attribute \
-  "How to assess and refer patients needing emergency treatment for Anaphylaxis" --cms-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
+chronicle question-entity define anaphylaxis-referral --CMS-id-attribute \
+  "How to assess and refer patients needing emergency treatment for Anaphylaxis" --CMS-id-attr "0c6fa8c5-69da-43d1-95d6-726f5f671b30"
 
 ```
 
@@ -421,15 +414,15 @@ Either operation will return the ID of the newly defined question.
 See [provenance concepts](provenance_concepts#activity)
 
 Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
-`Researched`, `Revised` and `Published`, as a GraphQL union called `Activity`.
+`Researched`, `Revised`, and `Published`, as a GraphQL union called `Activity`.
 The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
 [evolving your domain](domain_modelling#evolution).
 
-The definition mutations `defineQuestionAsked`, `defineResearched`, `defineRevised`
-and `definePublished` will also have been created to allow you to define an instance
-of each subtype and their attributes. The generated GraphQL mutations and their
-associated types will look like this:
+The definition mutations `defineQuestionAskedActivity`, `defineResearchedActivity`,
+`defineRevisedActivity`, and `definePublished` will also have been created to
+allow you to define an instance of each subtype and their attributes. The
+generated GraphQL mutations and their associated types will look like this:
 
 ```graphql
 union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revised
@@ -437,38 +430,44 @@ union Activity = | ProvActivity | Published | QuestionAsked | Researched | Revis
 type ProvEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
-  evidence: EvidenceReference
+  evidence: Evidence
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
   wasRevisionOf: [Entity!]!
   wasQuotedFrom: [Entity!]!
 }
+
 input ProvEntityAttributes {
   type: String
 }
-type Published {
+
+type PublishedActivity {
   id: ActivityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
   wasAssociatedWith: [Association!]!
   used: [Entity!]!
+  wasInformedBy: [Activity!]!
+  generated: [Entity!]!
   versionAttribute: VersionAttribute
 }
-input PublishedAttributes {
+
+input PublishedActivityAttributes {
   versionAttribute: Int!
 }
-type PublishedGuidance {
+
+type PublishedGuidanceEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
-  evidence: EvidenceReference
+  evidence: Evidence
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -476,52 +475,70 @@ type PublishedGuidance {
   wasQuotedFrom: [Entity!]!
 }
 
-type Researched {
+type ResearchedActivity {
   id: ActivityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
   wasAssociatedWith: [Association!]!
   used: [Entity!]!
-  searchParametersAttribute: SearchParameterAttribute
+  wasInformedBy: [Activity!]!
+  generated: [Entity!]!
 }
-input ResearchedAttributes {
-  searchParametersAttribute: String!
-}
-type Revised {
+
+type RevisedActivity {
   id: ActivityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
   wasAssociatedWith: [Association!]!
   used: [Entity!]!
-  cmsIdAttribute: CmsIdAttribute
+  wasInformedBy: [Activity!]!
+  generated: [Entity!]!
+  CMSIdAttribute: CMSIdAttribute
   versionAttribute: VersionAttribute
 }
-input RevisedAttributes {
-  cmsIdAttribute: String!
+
+input RevisedActivityAttributes {
+  CMSIdAttribute: String!
   versionAttribute: Int!
 }
 
 mutation {
-  defineActivity(external_id: String!, namespace: String, attributes: ProvActivityAttributes!): Submission!
-  definePublished(external_id: String!, namespace: String, attributes: PublishedAttributes!): Submission!
-  defineQuestionAsked(external_id: String!, namespace: String, attributes: QuestionAskedAttributes!): Submission!
-  defineResearched(external_id: String!, namespace: String, attributes: ResearchedAttributes!): Submission!
-  defineRevised(external_id: String!, namespace: String, attributes: RevisedAttributes!): Submission!
+  defineActivity(
+    externalId: String!
+    namespace: String
+    attributes: ProvActivityAttributes!
+  ): Submission!
+  definePublishedActivity(
+    externalId: String!
+    namespace: String
+    attributes: PublishedActivityAttributes!
+  ): Submission!
+  defineQuestionAskedActivity(
+    externalId: String!
+    namespace: String
+    attributes: QuestionAskedActivityAttributes!
+  ): Submission!
+  defineResearchedActivity(externalId: String!, namespace: String): Submission!
+  defineRevisedActivity(
+    externalId: String!
+    namespace: String
+    attributes: RevisedActivityAttributes!
+  ): Submission!
 }
 ```
 
-The following example mutation `defineRevised` will define an `Activity` of subtype
-`Revised`:
+The following example mutation `defineRevisedActivity` will define an `Activity`
+of subtype `RevisedActivity`:
 
 ```graphql title="Define a revised activity with graphql"
 mutation {
-    defineRevised(external_id: "september-2018-review", attributes: {
+    defineRevisedActivity(externalId: "september-2018-review", attributes: {
         versionAttribute: 14,
     })
 }
@@ -530,7 +547,7 @@ mutation {
 And the equivalent operation using the command line interface is:
 
 ```bash title="Define a document entity with the CLI"
-chronicle revised define september-2018-review --version-attr 14
+chronicle revised-activity define september-2018-review --version-attr 14
 ```
 
 ### Define an Agent
@@ -540,26 +557,26 @@ chronicle revised define september-2018-review --version-attr 14
 
 See [provenance concepts](provenance_concepts#agent)
 
-Chronicle will have generated two `Agent` subtypes for us, `Person` and
-`Organization` as a GraphQL union called `Agent`. The union also contains an
+Chronicle will have generated two `Agent` subtypes for us, `PersonAgent` and
+`OrganizationAgent` as a GraphQL union called `Agent`. The union also contains an
 untyped activity `ProvAgent`. The untyped agent can be potentially returned
 where the domain definition has evolved, see [evolving your
 domain](domain_modelling#evolution).
 
-The definition mutations `definePerson` and `defineOrganization` will also have
-been created. See [domain modelling](domain_modelling#graphql_generation) for
-details on the generated GraphQL SDL.
+The definition mutations `definePersonAgent` and `defineOrganizationAgent` will
+also have been created. See [domain modelling](domain_modelling#graphql_generation)
+for details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
-    defineOrganization(external_id: "health-trust", attributes: {})
+    defineOrganizationAgent(externalId: "health-trust", attributes: {})
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
 ```bash title="Define an organization entity with the CLI"
-chronicle organization define health-trust
+chronicle organization-agent define health-trust
 ```
 
 ### Used
@@ -577,14 +594,14 @@ To apply using GraphQL:
 
 ```graphql
 mutation {
-  used(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-evidence-12114")
+  used(activity: "chronicle:activity:september-2018-review", id: "chronicle:entity:anaphylaxis-evidence-12114")
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
 ```bash
-chronicle revised use "chronicle:entity:anaphylaxis-evidence-12114" "chronicle:activity:september-2018-review"
+chronicle revised-activity use "chronicle:entity:anaphylaxis-evidence-12114" "chronicle:activity:september-2018-review"
 ```
 
 ### Generation
@@ -602,14 +619,14 @@ To apply using GraphQL:
 
 ```graphql
 mutation {
-  wasGeneratedBy(activity: "chronicle:activity:september-2018-review", entity: "chronicle:entity:anaphylaxis-guidance-9-2018")
+  wasGeneratedBy(activity: "chronicle:activity:september-2018-review", id: "chronicle:entity:anaphylaxis-guidance-9-2018")
 }
 ```
 
 And the equivalent operation using the command line interface is:
 
 ```bash
-chronicle revised generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
+chronicle revised-activity generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
 ```
 
 ### Started at time
@@ -640,7 +657,7 @@ mutation {
 ```
 
 ```bash
-chronicle revision start "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+chronicle revision-activity start "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
 
@@ -673,7 +690,7 @@ mutation {
 And the equivalent command line operation:
 
 ```bash
-chronicle revision end "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+chronicle revision-activity end "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
 
@@ -691,7 +708,7 @@ mutation {
 And the equivalent command line operation:
 
 ```bash
-chronicle revision instant "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
+chronicle revision-activity instant "chronicle:activity:september-2018-review" --time "2002-10-02T15:00:00Z"
 
 ```
 
@@ -717,7 +734,7 @@ enum RoleType {
 ```
 
 To record the asking of a question, we relate an Organization to a
-`QuestionAsked` activity, using the `Role` `STAKEHOLDER`.
+`QuestionAskedActivity`, using the `Role` `STAKEHOLDER`.
 
 ```graphql
 mutation {
@@ -820,7 +837,7 @@ takes two entities - the generatedEntity being a revision of the usedEntity.
 
 ```graphql
 mutation {
-  revision {
+  wasRevisionOf {
     usedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
     generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
   }
@@ -841,7 +858,7 @@ usedEntity.
 
 ```graphql
 mutation {
-  revision {
+  wasRevisionOf {
     usedEntity: "chronicle:entity:evidence-2321231",
     generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
   }

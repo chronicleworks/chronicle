@@ -11,7 +11,7 @@ processor, responsible for ensuring provenance recorded by Chronicle does not
 contradict itself, and Chronicle running as a domain-specific GraphQL API.
 Multiple Chronicle domains can share the same Sawtooth ledger and transaction
 processor, and other Sawtooth applications can also make use of the same ledger
-being used for provenance. Chronicle, Sawtooth and the Chronicle transaction
+being used for provenance. Chronicle, Sawtooth, and the Chronicle transaction
 processor can all scale independently within a Kubernetes cluster.
 
 ![file](diagrams/out/deployment.svg)
@@ -21,7 +21,7 @@ processor can all scale independently within a Kubernetes cluster.
 Chronicle is supplied as a [docker build image](building) and requires the
 creation of a [domain model](domain_modelling) and CI / CD to build a
 domain-specific API. This build image is completely self-contained, requires no
-network access for dependencies and can be used in secure environments.
+network access for dependencies, and can be used in secure environments.
 
 ![file](diagrams/out/domain_specific.svg)
 

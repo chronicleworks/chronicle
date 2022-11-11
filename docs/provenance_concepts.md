@@ -30,9 +30,8 @@ can be left
 > or printing a book.
 
 Activities in Chronicle can be subtyped and contain attributes, specified [by
-the domain model section](domain_modelling#activity). Agents can be
-recorded using [the typed activity
-mutations](recording_provenance#activity) or can be left
+the domain model](domain_modelling#activity). Agents can be recorded using
+[the typed activity mutations](recording_provenance#activity) or can be left
 [untyped](untyped_chronicle#creating-an-activity-in-untyped-chronicle).
 
 ## Entity
@@ -42,14 +41,14 @@ mutations](recording_provenance#activity) or can be left
 > In PROV, things we want to describe the provenance of are called entities and
 > have some fixed aspects. The term "things" encompasses a broad diversity of
 > notions, including digital objects such as a file or web page, physical things
-> such as a mountain, a building, a printed book, or a car as well as abstract
+> such as a mountain, a building, a printed book, or a car, as well as abstract
 > concepts and ideas. An entity is a physical, digital, conceptual, or other
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
-Entities in Chronicle can be subtyped and contain attributes, specified [by the
-domain model section](domain_modelling#entity). Agents can be recorded
-using [the typed activity mutations](recording_provenance#entity) or can be
-left [untyped](untyped_chronicle#creating-an-entity-in-untyped-chronicle).
+Entities in Chronicle can be subtyped and contain attributes, specified
+[by the domain model](domain_modelling#entity). Agents can be recorded using
+[the typed activity mutations](recording_provenance#entity) or can be left
+[untyped](untyped_chronicle#creating-an-entity-in-untyped-chronicle).
 
 ## Association
 
@@ -105,13 +104,13 @@ Chronicle allows the three standard prov subtypes of derivation:
 > A primary source for a topic refers to something produced by some agent with
 > direct experience and knowledge about the topic, at the time of the topic's
 > study, without benefit from hindsight. Because of the directness of primary
-> sources, they 'speak for themselves' in ways that cannot be captured through
+> sources, they "speak for themselves" in ways that cannot be captured through
 > the filter of secondary sources. As such, it is important for secondary
 > sources to reference those primary sources from which they were derived, so
 > that their reliability can be investigated. A primary source relation is a
 > particular case of derivation of secondary materials from their primary
 > sources. It is recognized that the determination of primary sources can be up
-> to interpretation, and should be done according to conventions accepted within
+> to interpretation and should be done according to conventions accepted within
 > the application's domain.
 
 ### Generation
