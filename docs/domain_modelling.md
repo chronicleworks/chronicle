@@ -382,10 +382,10 @@ agents:
     attributes:
       - Title
 roles:
-  - Stakeholder
-  - Author
-  - Researcher
-  - Editor
+  - STAKEHOLDER
+  - AUTHOR
+  - RESEARCHER
+  - EDITOR
 ```
 
 ### ExternalId
@@ -501,10 +501,10 @@ Corresponding to actors in the example domain we specify the following roles:
 
 ```yaml
 roles:
-  - Stakeholder
-  - Author
-  - Researcher
-  - Editor
+  - STAKEHOLDER
+  - AUTHOR
+  - RESEARCHER
+  - EDITOR
 ```
 
 Supplying this as a YAML file to the Chronicle build image as documented in
