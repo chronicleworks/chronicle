@@ -51,10 +51,10 @@ fn main() {
 
     let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
-    generate_chronicle_domain_schema(model, "src/main.rs");
+    generate_chronicle_domain_schema(model, "src/generated.rs");
 
     Command::new("cargo")
-        .args(["fmt", "--", "src/main.rs"])
+        .args(["fmt", "--", "src/generated.rs"])
         .output()
         .expect("formatting");
 }

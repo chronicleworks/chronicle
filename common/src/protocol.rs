@@ -46,6 +46,8 @@ static PROTOCOL_VERSION: &str = "1";
 // Include the `submission` module, which is
 // generated from ./protos/submission.proto.
 pub mod messages {
+    #![allow(clippy::derive_partial_eq_without_eq)]
+
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
 

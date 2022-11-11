@@ -104,6 +104,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
         #[allow(clippy::upper_case_acronyms)]
+        #[allow(clippy::enum_variant_names)]
         pub enum AgentType {
             #[graphql(name = "ProvAgent", visible=true)]
             ProvAgent,
@@ -127,6 +128,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
         #[allow(clippy::upper_case_acronyms)]
+        #[allow(clippy::enum_variant_names)]
         pub enum EntityType {
             #[graphql(name = "ProvEntity", visible=true)]
             ProvEntity,
@@ -150,6 +152,7 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
         #[allow(clippy::upper_case_acronyms)]
+        #[allow(clippy::enum_variant_names)]
         pub enum ActivityType {
             #[graphql(name = "ProvActivity", visible=true)]
             ProvActivity,
@@ -675,6 +678,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
     let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
 
     quote! {
+    #[allow(clippy::match_single_binding)]
     fn map_agent_to_domain_type(agent: #agent_impl) -> #(agent_union_type_name()) {
         match agent.domaintype.as_deref() {
             #(for agent in domain.agents.iter() =>
@@ -717,7 +721,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
             }
         }
     }
-
+    #[allow(clippy::match_single_binding)]
     fn map_activity_to_domain_type(activity: #activity_impl) -> #(activity_union_type_name()) {
         match activity.domaintype.as_deref() {
             #(for activity in domain.activities.iter() =>
@@ -728,7 +732,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
             _ => #(activity_union_type_name())::ProvActivity(ProvActivity(activity))
         }
     }
-
+    #[allow(clippy::match_single_binding)]
     fn map_entity_to_domain_type(entity: #entity_impl) -> #(entity_union_type_name()) {
         match entity.domaintype.as_deref() {
             #(for entity in domain.entities.iter() =>
