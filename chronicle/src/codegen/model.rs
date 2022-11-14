@@ -536,7 +536,7 @@ impl From<&AttributeDef> for AttributeFileInput {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 
-pub struct AttributeRef(String);
+pub struct AttributeRef(pub String);
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ResourceDef {
