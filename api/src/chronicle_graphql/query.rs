@@ -147,6 +147,112 @@ pub async fn activity_timeline<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
+
+pub async fn entities_by_type<'a>(
+    ctx: &Context<'a>,
+    typ: Option<DomaintypeId>,
+    namespace: Option<ID>,
+    after: Option<String>,
+    before: Option<String>,
+    first: Option<i32>,
+    last: Option<i32>,
+) -> async_graphql::Result<Connection<i32, Entity, EmptyFields, EmptyFields>> {
+    use crate::persistence::schema::{
+        entity::{self},
+        namespace::dsl as nsdsl,
+    };
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+    let ns = namespace.unwrap_or_else(|| "default".into());
+
+    let sql_query = entity::table
+        .inner_join(nsdsl::namespace)
+        .filter(
+            nsdsl::external_id
+                .eq(&**ns)
+                .and(entity::domaintype.eq(typ.as_ref().map(|x| x.external_id_part().to_owned()))),
+        )
+        .select(Entity::as_select())
+        .order_by(entity::external_id.asc());
+
+    query(
+        after,
+        before,
+        first,
+        last,
+        |after, before, first, last| async move {
+            debug!(
+                "Cursor query {}",
+                debug_query::<Sqlite, _>(&sql_query).to_string()
+            );
+            let rx = sql_query.cursor(after, before, first, last);
+
+            let start = rx.start;
+            let limit = rx.limit;
+
+            let rx = rx.load::<(Entity, i64)>(&mut connection)?;
+
+            Ok::<_, GraphQlError>(project_to_nodes(rx, start, limit))
+        },
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn activities_by_type<'a>(
+    ctx: &Context<'a>,
+    typ: Option<DomaintypeId>,
+    namespace: Option<ID>,
+    after: Option<String>,
+    before: Option<String>,
+    first: Option<i32>,
+    last: Option<i32>,
+) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
+    use crate::persistence::schema::{
+        activity::{self},
+        namespace::dsl as nsdsl,
+    };
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+    let ns = namespace.unwrap_or_else(|| "default".into());
+
+    let sql_query =
+        activity::table
+            .inner_join(nsdsl::namespace)
+            .filter(nsdsl::external_id.eq(&**ns).and(
+                activity::domaintype.eq(typ.as_ref().map(|x| x.external_id_part().to_owned())),
+            ))
+            .select(Activity::as_select())
+            .order_by(activity::external_id.asc());
+
+    query(
+        after,
+        before,
+        first,
+        last,
+        |after, before, first, last| async move {
+            debug!(
+                "Cursor query {}",
+                debug_query::<Sqlite, _>(&sql_query).to_string()
+            );
+            let rx = sql_query.cursor(after, before, first, last);
+
+            let start = rx.start;
+            let limit = rx.limit;
+
+            let rx = rx.load::<(Activity, i64)>(&mut connection)?;
+
+            Ok::<_, GraphQlError>(project_to_nodes(rx, start, limit))
+        },
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn agents_by_type<'a>(
     ctx: &Context<'a>,
     typ: Option<DomaintypeId>,

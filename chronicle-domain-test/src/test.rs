@@ -520,6 +520,135 @@ mod test {
     }
 
     #[tokio::test]
+    async fn agent_by_type() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                defineContractorAgent(externalId:"testagent1", attributes: { locationAttribute: "somewhere" }) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create, @r###"
+        [data.defineContractorAgent]
+        context = 'chronicle:agent:testagent1'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let agent = schema
+            .execute(Request::new(
+                r#"
+            query {
+                agentsByType(agentType: ContractorAgent) {
+                  nodes {
+                    ...on ContractorAgent {
+                      id
+                    }
+                  }
+                }
+            }"#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(agent, @r###"
+        [[data.agentsByType.nodes]]
+        id = 'chronicle:agent:testagent1'
+        "###);
+    }
+
+    #[tokio::test]
+    async fn activity_by_type() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                defineItemCertifiedActivity(externalId:"testactivity1", attributes: { certIdAttribute: "something" }) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create, @r###"
+        [data.defineItemCertifiedActivity]
+        context = 'chronicle:activity:testactivity1'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let agent = schema
+            .execute(Request::new(
+                r#"
+            query {
+                activitiesByType(activityType: ItemCertifiedActivity) {
+                  nodes {
+                    ...on ItemCertifiedActivity {
+                      id
+                    }
+                  }
+                }
+            }"#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(agent, @r###"
+        [[data.activitiesByType.nodes]]
+        id = 'chronicle:activity:testactivity1'
+        "###);
+    }
+
+    #[tokio::test]
+    async fn entity_by_type() {
+        let schema = test_schema().await;
+
+        let create = schema
+            .execute(Request::new(
+                r#"
+            mutation {
+                defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "something" }) {
+                    context
+                }
+            }
+        "#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(create, @r###"
+        [data.defineCertificateEntity]
+        context = 'chronicle:entity:testentity1'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let agent = schema
+            .execute(Request::new(
+                r#"
+            query {
+                entitiesByType(entityType: CertificateEntity) {
+                  nodes {
+                    ...on CertificateEntity {
+                      id
+                    }
+                  }
+                }
+            }"#,
+            ))
+            .await;
+
+        insta::assert_toml_snapshot!(agent, @r###"
+        [[data.entitiesByType.nodes]]
+        id = 'chronicle:entity:testentity1'
+        "###);
+    }
+
+    #[tokio::test]
     async fn was_informed_by() {
         let schema = test_schema().await;
 
