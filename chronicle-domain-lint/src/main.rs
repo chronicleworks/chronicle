@@ -116,9 +116,10 @@ fn check_domain(domain: model::DomainFileInput) {
 }
 
 fn main() {
+    let help = HashSet::from(["-h", "--help"]);
     let filenames = env::args().collect::<Vec<String>>();
-    if filenames.len() < 2 {
-        println!("command argument(s) should be filename(s) of domain definitions");
+    if filenames.len() < 2 || filenames.iter().any(|name| help.contains(name.as_str())) {
+        println!("usage: command argument(s) should be filename(s) of domain definitions");
         exit(1);
     }
     let json_validator = build_json_validator(include_str!("../schema/domain.json"));
