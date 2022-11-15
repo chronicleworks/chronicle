@@ -851,6 +851,9 @@ impl SubCommand for CliModel {
     fn as_cmd(&self) -> Command {
         let mut app = Command::new("chronicle")
             .version("1.0")
+            .long_version(
+                if cfg!(feature = "inmem") { "1.0 (in memory)" } else { "1.0 (blockchain)" }
+            )
             .author("Blockchain technology partners")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
