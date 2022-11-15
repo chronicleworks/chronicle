@@ -472,6 +472,7 @@ name = "chronicle-domain-lint"
 version = "0.1.0"
 dependencies = [
  "chronicle",
+ "clap 3.2.14",
  "jsonschema",
  "serde_json",
  "serde_yaml 0.9.14",

@@ -1,6 +1,7 @@
 use chronicle::codegen::model;
+use clap::{Arg, Command, ValueHint};
 use jsonschema::JSONSchema;
-use std::{collections::HashSet, env, path::Path, process::exit};
+use std::{collections::HashSet, path::Path, process::exit};
 
 fn bad_filename(filename: &str) {
     println!("JSON or YAML filename extension required for {}", filename);
@@ -119,14 +120,22 @@ fn check_domain(domain: model::DomainFileInput) {
 }
 
 fn main() {
-    let help = HashSet::from(["-h", "--help"]);
-    let filenames = env::args().collect::<Vec<String>>();
-    if filenames.len() < 2 || filenames.iter().any(|name| help.contains(name.as_str())) {
-        println!("usage: command argument(s) should be filename(s) of domain definitions");
-        exit(1);
-    }
+    let cli = Command::new("chronicle-domain-lint")
+        .version("0.1")
+        .author("Blockchain Technology Partners")
+        .arg(
+            Arg::new("filenames")
+                .value_hint(ValueHint::FilePath)
+                .required(true)
+                .multiple_values(true)
+                .min_values(1)
+                .help("domain definition files for linting"),
+        );
+
+    let matches = cli.get_matches();
+    let filenames = matches.values_of("filenames").unwrap();
     let json_validator = build_json_validator(include_str!("../schema/domain.json"));
-    for filename in filenames.get(1..).unwrap() {
+    for filename in filenames {
         let filepath = Path::new(filename);
         let data = match std::fs::read_to_string(filepath) {
             Ok(data) => data,
