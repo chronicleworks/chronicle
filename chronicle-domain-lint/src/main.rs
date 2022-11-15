@@ -36,14 +36,13 @@ fn check_json_valid(json_validator: &JSONSchema, json_data: &str) {
         }
     };
     let validation = json_validator.validate(&json);
-    if let Err(mut errors) = validation {
-        match errors.next() {
-            Some(error) => println!(
+    if let Err(errors) = validation {
+        for error in errors {
+            println!(
                 "path {} contains invalid data: {}",
                 error.instance_path, error
-            ),
-            None => println!("failed to validate against schema"),
-        };
+            );
+        }
         exit(2);
     }
 }
@@ -91,6 +90,7 @@ fn check_domain_attributes(
     attributes: &HashSet<String>,
     named_resources: Vec<(&String, &model::ResourceDef)>,
 ) {
+    let mut is_error = false;
     for (name, resource) in named_resources {
         for attribute in resource.attributes.iter() {
             if !(attributes.contains(&attribute.0)) {
@@ -98,9 +98,12 @@ fn check_domain_attributes(
                     "{} named {} has unknown attribute {}",
                     element, name, attribute.0
                 );
-                exit(2);
+                is_error = true;
             }
         }
+    }
+    if is_error {
+        exit(2);
     }
 }
 
