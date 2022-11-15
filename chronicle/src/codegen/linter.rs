@@ -1,5 +1,5 @@
 use crate::codegen::model;
-use jsonschema::JSONSchema;
+use jsonschema::{error::ValidationErrorKind, JSONSchema};
 use std::{collections::HashSet, path::Path, process::exit};
 
 fn bad_filename(filename: &str) {
@@ -42,6 +42,17 @@ fn check_json_valid(json_validator: &JSONSchema, json_data: &str) {
                 "path {} contains invalid data: {}",
                 error.instance_path, error
             );
+            if let ValidationErrorKind::Pattern { pattern } = error.kind {
+                match pattern.as_str() {
+                    "^[A-Z][A-Z0-9_]*$" => {
+                        println!("hint: start with capital letter, use only CAPITALS_UNDERSCORES_NUM8ER5");
+                    }
+                    "[A-Z][A-Za-z0-9]*$" => {
+                        println!("hint: start with capital letter, use only LettersAndNum8er5");
+                    }
+                    _ => {}
+                }
+            }
         }
         exit(2);
     }
