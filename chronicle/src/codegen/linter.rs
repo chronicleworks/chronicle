@@ -1,5 +1,4 @@
-use chronicle::codegen::model;
-use clap::{Arg, Command, ValueHint};
+use crate::codegen::model;
 use jsonschema::JSONSchema;
 use std::{collections::HashSet, path::Path, process::exit};
 
@@ -119,22 +118,8 @@ fn check_domain(domain: model::DomainFileInput) {
     check_domain_attributes("activity", &attributes, domain.activities.iter().collect());
 }
 
-fn main() {
-    let cli = Command::new("chronicle-domain-lint")
-        .version("0.1")
-        .author("Blockchain Technology Partners")
-        .arg(
-            Arg::new("filenames")
-                .value_hint(ValueHint::FilePath)
-                .required(true)
-                .multiple_values(true)
-                .min_values(1)
-                .help("domain definition files for linting"),
-        );
-
-    let matches = cli.get_matches();
-    let filenames = matches.values_of("filenames").unwrap();
-    let json_validator = build_json_validator(include_str!("../schema/domain.json"));
+pub fn check_files(filenames: Vec<&str>) {
+    let json_validator = build_json_validator(include_str!("../../schema/domain.json"));
     for filename in filenames {
         let filepath = Path::new(filename);
         let data = match std::fs::read_to_string(filepath) {
@@ -164,9 +149,5 @@ fn main() {
                 bad_filename(filename);
             }
         };
-        println!(
-            "successful: {} appears to contain a valid domain definition",
-            filename
-        );
     }
 }

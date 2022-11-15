@@ -434,6 +434,7 @@ dependencies = [
  "hex",
  "insta",
  "iref",
+ "jsonschema",
  "open",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -465,17 +466,6 @@ dependencies = [
  "chronicle",
  "insta",
  "tempfile",
-]
-
-[[package]]
-name = "chronicle-domain-lint"
-version = "0.1.0"
-dependencies = [
- "chronicle",
- "clap 3.2.14",
- "jsonschema",
- "serde_json",
- "serde_yaml 0.9.14",
 ]
 
 [[package]]
@@ -525,9 +515,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.24"
+version = "4.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60494cedb60cb47462c0ff7be53de32c0e42a6fc2c772184554fa12bd9489c03"
+checksum = "389ca505fd2c00136e0d0cd34bcd8b6bd0b59d5779aab396054b716334230c1c"
 dependencies = [
  "atty",
  "bitflags",
@@ -1671,7 +1661,7 @@ dependencies = [
  "anyhow",
  "base64 0.13.0",
  "bytecount",
- "clap 4.0.24",
+ "clap 4.0.25",
  "fancy-regex",
  "fraction",
  "iso8601",
