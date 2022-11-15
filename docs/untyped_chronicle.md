@@ -9,14 +9,14 @@ types when using `chronicle-untyped` as they are not checked.
 
 ## Creating an agent in untyped chronicle
 
-The untyped creation mutations `agent`, `activity` and `entity` can be used to
-create provenance terms. Mutations that produce provenance relations work in the
-same way as typed Chronicle.
+The untyped creation mutations `defineAgent`, `defineActivity`, and `defineEntity`
+can be used to create provenance terms. Mutations that produce provenance
+relations work in the same way as typed Chronicle.
 
 ```graphql
 mutation {
-    agent(external_id: "agent",
-          attributes: {type:"artist"}) {
+    defineAgent(externalId: "agent",
+          attributes: {ProvAgentAttribute:"artist"}) {
             context
     }
 }
@@ -41,14 +41,14 @@ query {
             node {
                 ... on ProvActivity {
                     id
-                    external_id
+                    externalId
                     type
                     wasAssociatedWith {
                             responsible {
                                 agent {
                                     ... on ProvAgent {
                                         id
-                                        external_id
+                                        externalId
                                         type
                                     }
                                 }
@@ -58,7 +58,7 @@ query {
                     used {
                         ... on ProvEntity {
                             id
-                            external_id
+                            externalId
                             type
                         }
                     }

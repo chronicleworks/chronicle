@@ -1,13 +1,49 @@
 # Querying Provenance
 
-Currently Chronicle has 4 root queries.
+Currently Chronicle has 7 root queries.
 
 ```graphql
 type Query {
-    activityTimeline(activityTypes: [ActivityType!]!, forEntity: [EntityID!]!, from: DateTime, to: DateTime, namespace: ID, after: String, before: String, first: Int, last: Int): ActivityConnection!
-    agentsByType(agentType: AgentType!, namespace: String, after: String, before: String, first: Int, last: Int): AgentConnection!
-    agentById(id: AgentID!, namespace: String): Agent
-    entityById(id: EntityID!, namespace: String): Entity
+  activityTimeline(
+    activityTypes: [ActivityType!]!
+    forEntity: [EntityID!]!
+    forAgent: [AgentID!]!
+    from: DateTime
+    to: DateTime
+    order: TimelineOrder
+    namespace: ID
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): ActivityConnection!
+  agentsByType(
+    agentType: AgentType!
+    namespace: ID
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): AgentConnection!
+  activitiesByType(
+    activityType: ActivityType!
+    namespace: ID
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): ActivityConnection!
+  entitiesByType(
+    entityType: EntityType!
+    namespace: ID
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): EntityConnection!
+  agentById(id: AgentID!, namespace: String): Agent
+  activityById(id: ActivityID!, namespace: String): Activity
+  entityById(id: EntityID!, namespace: String): Entity
 }
 ```
 
@@ -25,16 +61,16 @@ Chronicle makes extensive use of
 #### activityTypes
 
 A list of ActivityTypes to filter the returned timeline by, leaving this empty
-will return all activity types. The `PROV_ACTIVITY` activity type can be used to
+will return all activity types. The `ProvActivity` activity type can be used to
 return activities that are not currently specified in the Chronicle domain.
 
 ```graphql
 enum ActivityType {
-  PROV_ACTIVITY
-  PUBLISHED
-  QUESTION_ASKED
-  RESEARCHED
-  REVISED
+  ProvActivity
+  PublishedActivity
+  QuestionAskedActivity
+  ResearchedActivity
+  RevisedActivity
 }
 
 ```
@@ -74,6 +110,12 @@ An integer controlling page size for reverse pagination. Defaults to 20
 
 ## agentsByType
 
+## activitiesByType
+
+## entitiesByType
+
+## activityById
+
 ## agentById
 
 ## entityById
@@ -86,12 +128,12 @@ All Chronicle Entity subtypes follow a similar pattern, we will use the Guidance
 entity from our example domain as a sample.
 
 ```graphql
-type Guidance {
+type GuidanceEntity {
   id: EntityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   type: DomaintypeID
-  evidence: EvidenceReference
+  evidence: Evidence
   wasGeneratedBy: [Activity!]!
   wasDerivedFrom: [Entity!]!
   hadPrimarySource: [Entity!]!
@@ -105,7 +147,7 @@ type Guidance {
 
 #### Entity: id
 
-The EntityID of the entity. This is derived from external_id, but clients should
+The EntityID of the entity. This is derived from externalId, but clients should
 not attempt to synthesize it themselves.
 
 #### Entity: namespace
@@ -113,9 +155,9 @@ not attempt to synthesize it themselves.
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-#### Entity: external_id
+#### Entity: externalId
 
-The external_id of the entity, determined when defined.
+The externalId of the entity, determined when defined.
 
 #### Entity: type
 
@@ -160,22 +202,24 @@ determined by the [domain model](domain_modelling).
 ### Activity subtypes
 
 ```graphql
-type Published {
+type PublishedActivity {
   id: ActivityID!
   namespace: Namespace!
-  external_id: String!
+  externalId: String!
   started: DateTime
   ended: DateTime
   type: DomaintypeID
   wasAssociatedWith: [Association!]!
   used: [Entity!]!
+  wasInformedBy: [Activity!]!
+  generated: [Entity!]!
   versionAttribute: VersionAttribute
 }
 ```
 
 #### Activity: id
 
-The EntityID of the entity. This is derived from external_id, but clients
+The EntityID of the entity. This is derived from externalId, but clients
 should not attempt to synthesize it themselves.
 
 #### Activity: namespace
@@ -183,9 +227,9 @@ should not attempt to synthesize it themselves.
 The Namespace of the entity, only of interest for Chronicle domains that span
 multiple namespaces.
 
-#### Activity: external_id
+#### Activity: externalId
 
-The external_id of the entity, determined when defined.
+The externalId of the entity, determined when defined.
 
 #### Activity: type
 

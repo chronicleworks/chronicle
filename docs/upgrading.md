@@ -26,7 +26,7 @@ See: [subscriptions](recording_provenance.md#commit-notification-subscriptions)
 ### External ID
 
 `name` is now `externalId` and will no longer be disambiguated by Chronicle when
-creating entities, activities or agents. Previously, re-using a name in these operations
+creating entities, activities, or agents. Previously, re-using a name in these operations
 would result in it being postfixed with an index. We discovered that stable
 external identifiers are far more useful in practice and will enable batching
 operations and convenience methods for revision in future releases.
@@ -36,3 +36,9 @@ operations and convenience methods for revision in future releases.
 Chronicle ids will now be written in their short form with a prefix of
 'chronicle:' vs 'http//blockchaintp.com/chronicle#ns', operations will continue
 to accept the long form for backwards compatibility.
+
+### JSON attribute
+
+In addition to `String`, `Int`, and `Bool`, Chronicle users can now
+[add generic JSON data](domain_modelling.md#inputting-a-json-attribute)
+to activities, agents, and entities.
