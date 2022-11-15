@@ -834,15 +834,29 @@ pub struct CliModel {
     pub agents: Vec<AgentCliModel>,
     pub entities: Vec<EntityCliModel>,
     pub activities: Vec<ActivityCliModel>,
+    short_version: String,
+    long_version: String,
 }
 
 impl From<ChronicleDomainDef> for CliModel {
     fn from(val: ChronicleDomainDef) -> Self {
+        let short_version = format!("v{}", env!("CARGO_PKG_VERSION"));
+        let long_version = format!(
+            "{} ({})",
+            short_version,
+            if cfg!(feature = "inmem") {
+                "in memory"
+            } else {
+                "sawtooth"
+            }
+        );
         CliModel {
             agents: val.agents.iter().map(AgentCliModel::new).collect(),
             entities: val.entities.iter().map(EntityCliModel::new).collect(),
             activities: val.activities.iter().map(ActivityCliModel::new).collect(),
             domain: val,
+            short_version,
+            long_version,
         }
     }
 }
@@ -850,10 +864,8 @@ impl From<ChronicleDomainDef> for CliModel {
 impl SubCommand for CliModel {
     fn as_cmd(&self) -> Command {
         let mut app = Command::new("chronicle")
-            .version("1.0")
-            .long_version(
-                if cfg!(feature = "inmem") { "1.0 (in memory)" } else { "1.0 (blockchain)" }
-            )
+            .version(self.short_version.as_str())
+            .long_version(self.long_version.as_str())
             .author("Blockchain technology partners")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
