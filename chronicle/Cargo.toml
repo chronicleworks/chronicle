@@ -27,6 +27,7 @@ futures = "0.3.21"
 genco = "0.16.1"
 hex = "0.4.3"
 iref = "2.1.2"
+jsonschema = "0.16"
 open = "2.1.1"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.16.0", features = [
@@ -41,7 +42,7 @@ rand_core = "0.6.3"
 serde = "1.0.136"
 serde_derive = "1.0.136"
 serde_json = "1.0.81"
-serde_yaml = "0.8.24"
+serde_yaml = "0.9.14"
 shellexpand = "2.1.0"
 telemetry = { path = "../telemetry" }
 tokio = { version = "1.18.2", features = ["time", "macros", "rt-multi-thread"] }

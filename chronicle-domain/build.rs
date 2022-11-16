@@ -1,8 +1,12 @@
 use std::process::Command;
 
-use chronicle::{codegen::ChronicleDomainDef, generate_chronicle_domain_schema};
+use chronicle::{
+    codegen::{linter, ChronicleDomainDef},
+    generate_chronicle_domain_schema,
+};
 
 fn main() {
+    linter::check_files(vec!["domain.yaml"]);
     let model = ChronicleDomainDef::from_file("domain.yaml").unwrap();
 
     generate_chronicle_domain_schema(model, "src/main.rs");

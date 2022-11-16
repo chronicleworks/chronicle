@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+pub mod linter;
 pub mod model;
 use std::{io::Write, path::Path};
 
