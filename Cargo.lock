@@ -469,6 +469,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "chronicle-domain-lint"
+version = "0.1.0"
+dependencies = [
+ "chronicle",
+ "clap 3.2.14",
+]
+
+[[package]]
 name = "chronicle-example"
 version = "0.1.0"
 dependencies = [
