@@ -1,16 +1,6 @@
 [workspace]
 
-members = [
-  "common",
-  "api",
-  "chronicle",
-  "chronicle-domain-lint",
-  "chronicle-domain-test",
-  "chronicle-domain",
-  "sawtooth-protocol",
-  "sawtooth-tp",
-  "telemetry",
-]
+members = ["crates/*"]
 
 [profile.release]
 codegen-units = 1
