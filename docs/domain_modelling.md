@@ -483,7 +483,7 @@ The Agent's id and JSON attribute data can then be queried like so:
 
 ```graphql
 query agentQuery {
-  agentById(id: "chronicle:agent:testagent") {
+  agentById(id: { id: "chronicle:agent:testagent" }) {
     __typename
     ... on TestAgent {
       id

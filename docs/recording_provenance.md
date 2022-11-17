@@ -17,8 +17,8 @@ For example:
 ```graphql title="'homer' in the activity 'writing-the-iliad' as a writer"
 mutation {
     wasAssociatedWith(
-        activity: "chronicle:activity:writing-the-iliad",
-        responsible: "chronicle:agent:homer",
+        activity: { id: "chronicle:activity:writing-the-iliad" },
+        responsible: { id: "chronicle:agent:homer" },
         role: writer
     )
 }
@@ -65,11 +65,11 @@ recorded - one of these mutations will fail.
 
 ```graphql
     mutation {
-        endActivity(id:"chronicle:activity:birthday",
+        endActivity(id: {id: "chronicle:activity:birthday" },
             time: "2022-07-29T12:41:52.433Z"
         )
 
-        endActivity(id:"chronicle:activity:birthday",
+        endActivity(id: {id: "chronicle:activity:birthday" },
             time: "2020-07-29T12:41:52.433Z"
         )
     }
@@ -129,7 +129,7 @@ An external CMS is being used that has identifiers for documents and users.
 ### The `externalId` parameter
 
 The definition mutations for prov terms -  Entity, Activity and Agent - are all
-supplied with a `externalId` parameter. This should be something meaningful to the
+supplied with an `externalId` parameter. This should be something meaningful to the
 domain you are recording provenance for - a unique identifier from an external
 system or a natural key. This will form part of the identity of the term.
 
@@ -152,8 +152,8 @@ type Submission {
 ```
 
 The `context` property here will be the identity of the Chronicle term you have
-changed in the mutation, i.e calling `agent(..)` will return the identity of the
-agent, calling `startActivity(..)` the identity of the started activity.
+changed in the mutation, i.e calling `defineAgent(..)` will return the identity of
+the agent, calling `startActivity(..)` the identity of the started activity.
 
 The `txId` property corresponds to the transaction id when running
 Chronicle with a backend ledger, or a randomly generated uuid when used in
@@ -594,7 +594,7 @@ To apply using GraphQL:
 
 ```graphql
 mutation {
-  used(activity: "chronicle:activity:september-2018-review", id: "chronicle:entity:anaphylaxis-evidence-12114")
+  used(activity: { id: "chronicle:activity:september-2018-review" }, id: {id: "chronicle:entity:anaphylaxis-evidence-12114" })
 }
 ```
 
@@ -619,7 +619,10 @@ To apply using GraphQL:
 
 ```graphql
 mutation {
-  wasGeneratedBy(activity: "chronicle:activity:september-2018-review", id: "chronicle:entity:anaphylaxis-guidance-9-2018")
+  wasGeneratedBy(
+    activity: {id: "chronicle:activity:september-2018-review" },
+    id: {id: "chronicle:entity:anaphylaxis-guidance-9-2018" }
+  )
 }
 ```
 
@@ -652,7 +655,10 @@ modelling.
 
 ```graphql
 mutation {
-  startActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+  startActivity(
+    id: {id: "chronicle:activity:september-2018-review" },
+    time:"2002-10-02T15:00:00Z"
+  )
 }
 ```
 
@@ -683,7 +689,10 @@ modelling.
 
 ```graphql
 mutation {
-  endActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+  endActivity(
+    id: {id: "chronicle:activity:september-2018-review" },
+    time:"2002-10-02T15:00:00Z"
+  )
 }
 ```
 
@@ -701,7 +710,10 @@ same operation.
 
 ```graphql
 mutation {
-  instantActivity(id: "chronicle:activity:september-2018-review",time:"2002-10-02T15:00:00Z")
+  instantActivity(
+    id: { id: "chronicle:activity:september-2018-review" },
+    time:"2002-10-02T15:00:00Z"
+  )
 }
 ```
 
@@ -739,8 +751,8 @@ To record the asking of a question, we relate an Organization to a
 ```graphql
 mutation {
   wasAssociatedWith(
-    responsible: "chronicle:agent:ncsa",
-    activity: "chronicle:activity:anaphylaxis-assessment",
+    responsible: {id: "chronicle:agent:ncsa" },
+    activity: {id: "chronicle:activity:anaphylaxis-assessment" },
     role: STAKEHOLDER
   )
 }
@@ -783,9 +795,9 @@ required parameter - generic delegation between agents can be recorded.
 ```graphql
 mutation {
   actedOnBehalfOf(
-    responsible: "chronicle:agent:john-roberts",
-    delegate: "chronicle:agent:janet-flynn",
-    activity: "chronicle:activity:september-2018-review",
+    responsible: {id: "chronicle:agent:john-roberts" },
+    delegate: {id: "chronicle:agent:janet-flynn" },
+    activity: {id: "chronicle:activity:september-2018-review" },
     role: EDITOR
   )
 }
@@ -817,8 +829,8 @@ of the useEntity.
 ```graphql
 mutation {
   hadPrimarySource {
-    usedEntity: "chronicle:entity:anaphylaxis-assessment-question",
-    generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
+    usedEntity: {id: "chronicle:entity:anaphylaxis-assessment-question" },
+    generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
   }
 }
 ```
@@ -838,8 +850,8 @@ takes two entities - the generatedEntity being a revision of the usedEntity.
 ```graphql
 mutation {
   wasRevisionOf {
-    usedEntity: "chronicle:entity:anaphylaxis-guidance-revision-1",
-    generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
+    usedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
+    generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-2" },
   }
 }
 ```
@@ -859,8 +871,8 @@ usedEntity.
 ```graphql
 mutation {
   wasRevisionOf {
-    usedEntity: "chronicle:entity:evidence-2321231",
-    generatedEntity: "chronicle:entity:anaphylaxis-guidance-revision-2",
+    usedEntity: {id: "chronicle:entity:evidence-2321231" },
+    generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-2" },
   }
 }
 ```

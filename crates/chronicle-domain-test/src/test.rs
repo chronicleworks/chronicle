@@ -132,6 +132,228 @@ mod test {
     }
 
     #[tokio::test]
+    async fn one_of_id_or_external() {
+        let schema = test_schema().await;
+
+        let external_id_input = chronicle::async_graphql::Name::new("withexternalid");
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+            r#"
+          mutation {{
+            defineContractorAgent(
+              externalId: "{external_id_input}",
+              attributes: {{ locationAttribute: "location" }}
+            ) {{
+              context
+            }}
+            defineAgent(
+              externalId: "{external_id_input}",
+              attributes: {{ type: "attribute" }}
+            ) {{
+              context
+            }}
+            actedOnBehalfOf(
+              delegate: {{ externalId: "{external_id_input}", }}
+              responsible: {{ externalId: "{external_id_input}" }}
+              role: UNSPECIFIED
+            ) {{
+              context
+            }}
+            defineItemEntity(
+              externalId: "{external_id_input}",
+              attributes: {{ partIdAttribute: "part"}}
+            ) {{
+              context
+            }}
+            defineCertificateEntity(
+              externalId: "{external_id_input}",
+              attributes: {{ certIdAttribute: "cert" }}
+            ) {{
+              context
+            }}
+            wasDerivedFrom(
+              generatedEntity: {{ externalId: "{external_id_input}" }}
+              usedEntity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            wasRevisionOf(
+              generatedEntity: {{ externalId: "{external_id_input}" }}
+              usedEntity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            hadPrimarySource(
+              generatedEntity: {{ externalId: "{external_id_input}" }}
+              usedEntity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            wasQuotedFrom(
+              generatedEntity: {{ externalId: "{external_id_input}" }}
+              usedEntity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            generateKey(
+              id: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            defineItemCertifiedActivity(
+              externalId: "{external_id_input}"
+              attributes: {{ certIdAttribute: "cert" }}
+            ) {{
+              context
+            }}
+            defineActivity(
+              externalId: "{external_id_input}"
+              attributes: {{ type: "attr" }}
+            ) {{
+              context
+            }}
+            instantActivity(
+              id: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            wasAssociatedWith(
+              responsible: {{ externalId: "{external_id_input}" }}
+              activity: {{ externalId: "{external_id_input}" }}
+              role: UNSPECIFIED
+            ) {{
+              context
+            }}
+            used(
+              activity: {{ externalId: "{external_id_input}" }}
+              id: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            wasInformedBy(
+              informingActivity: {{ externalId: "anotherexternalid" }}
+              activity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+            wasGeneratedBy(
+              id: {{ externalId: "{external_id_input}" }}
+              activity: {{ externalId: "{external_id_input}" }}
+            ) {{
+              context
+            }}
+          }}
+            "#
+                ),
+              ))
+                .await, @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:withexternalid"
+            },
+            "defineAgent": {
+              "context": "chronicle:agent:withexternalid"
+            },
+            "actedOnBehalfOf": {
+              "context": "chronicle:agent:withexternalid"
+            },
+            "defineItemEntity": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "defineCertificateEntity": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "wasDerivedFrom": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "wasRevisionOf": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "hadPrimarySource": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "wasQuotedFrom": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "generateKey": {
+              "context": "chronicle:agent:withexternalid"
+            },
+            "defineItemCertifiedActivity": {
+              "context": "chronicle:activity:withexternalid"
+            },
+            "defineActivity": {
+              "context": "chronicle:activity:withexternalid"
+            },
+            "instantActivity": {
+              "context": "chronicle:activity:withexternalid"
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:withexternalid"
+            },
+            "used": {
+              "context": "chronicle:entity:withexternalid"
+            },
+            "wasInformedBy": {
+              "context": "chronicle:activity:withexternalid"
+            },
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:withexternalid"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+            r#"
+          query multipleQueries {{
+            activityById(id: {{externalId: "{external_id_input}" }}) {{
+              ... on ProvActivity {{
+                id
+                externalId
+              }}
+            }}
+            agentById(id: {{externalId: "{external_id_input}" }}) {{
+              ... on ProvAgent {{
+                id
+                externalId
+              }}
+            }}
+            entityById(id: {{externalId: "{external_id_input}" }}) {{
+              ... on CertificateEntity {{
+                id
+                externalId
+              }}
+            }}
+          }}
+          "#
+        ),
+      ))
+        .await, @r###"
+        {
+          "data": {
+            "activityById": {
+              "id": "chronicle:activity:withexternalid",
+              "externalId": "withexternalid"
+            },
+            "agentById": {
+              "id": "chronicle:agent:withexternalid",
+              "externalId": "withexternalid"
+            },
+            "entityById": {
+              "id": "chronicle:entity:withexternalid",
+              "externalId": "withexternalid"
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn generic_json_object_attribute() {
         let schema = test_schema().await;
 
@@ -169,7 +391,7 @@ mod test {
           .execute(Request::new(
             r#"
             query agent {
-              agentById(id: "chronicle:agent:testagent2") {
+              agentById(id: {id: "chronicle:agent:testagent2" }) {
                 __typename
                 ... on NCBAgent {
                   id
@@ -209,8 +431,8 @@ mod test {
               r#"
           mutation {
               actedOnBehalfOf(
-                  responsible: "chronicle:agent:testagent",
-                  delegate: "http://blockchaintp.com/chronicle/ns#agent:testdelegate",
+                  responsible: { id: "chronicle:agent:testagent" },
+                  delegate: { id: "http://blockchaintp.com/chronicle/ns#agent:testdelegate" },
                   role: MANUFACTURER
                   ) {
                   context
@@ -229,7 +451,7 @@ mod test {
           .execute(Request::new(
               r#"
           query {
-              agentById(id: "chronicle:agent:testagent") {
+              agentById(id: { id: "chronicle:agent:testagent" }) {
                   ... on ProvAgent {
                       id
                       externalId
@@ -272,8 +494,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasDerivedFrom(generatedEntity: "chronicle:entity:testentity1",
-                               usedEntity: "chronicle:entity:testentity2") {
+                wasDerivedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
+                               usedEntity: {id: "chronicle:entity:testentity2" }) {
                     context
                 }
             }
@@ -291,7 +513,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "chronicle:entity:testentity1") {
+                entityById(id: {id: "chronicle:entity:testentity1" }) {
                     ... on ProvEntity {
                         id
                         externalId
@@ -324,8 +546,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                hadPrimarySource(generatedEntity: "chronicle:entity:testentity1",
-                               usedEntity: "chronicle:entity:testentity2") {
+                hadPrimarySource(generatedEntity: {id: "chronicle:entity:testentity1" },
+                               usedEntity: {id: "chronicle:entity:testentity2" }) {
                     context
                 }
             }
@@ -343,7 +565,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "chronicle:entity:testentity1") {
+                entityById(id: {id: "chronicle:entity:testentity1" }) {
 
                     ... on ProvEntity {
                         id
@@ -385,8 +607,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasRevisionOf(generatedEntity: "chronicle:entity:testentity1",
-                            usedEntity: "chronicle:entity:testentity2") {
+                wasRevisionOf(generatedEntity: {id: "chronicle:entity:testentity1" },
+                            usedEntity: {id: "chronicle:entity:testentity2" }) {
                     context
                 }
             }
@@ -404,7 +626,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "chronicle:entity:testentity1") {
+                entityById(id: {id: "chronicle:entity:testentity1" }) {
                     ... on ProvEntity {
                         id
                         externalId
@@ -445,8 +667,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation {
-                wasQuotedFrom(generatedEntity: "chronicle:entity:testentity1",
-                            usedEntity: "chronicle:entity:testentity2") {
+                wasQuotedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
+                            usedEntity: {id: "chronicle:entity:testentity2" }) {
                     context
                 }
             }
@@ -464,7 +686,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query {
-                entityById(id: "chronicle:entity:testentity1") {
+                entityById(id: {id: "chronicle:entity:testentity1" }) {
                     ... on ProvEntity {
                         id
                         externalId
@@ -690,8 +912,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation exec {
-              wasInformedBy(activity: "chronicle:activity:testactivityid1",
-              informingActivity: "chronicle:activity:testactivityid2",)
+              wasInformedBy(activity: {id: "chronicle:activity:testactivityid1" },
+              informingActivity: {id: "chronicle:activity:testactivityid2" },)
               {
                   context
               }
@@ -710,7 +932,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "chronicle:activity:testactivityid1") {
+                activityById(id: {id: "chronicle:activity:testactivityid1" }) {
                     ... on ItemCertifiedActivity {
                         id
                         externalId
@@ -762,8 +984,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation execagain {
-              wasInformedBy(activity: "chronicle:activity:testactivityid1",
-              informingActivity: "chronicle:activity:testactivityid3",)
+              wasInformedBy(activity: {id: "chronicle:activity:testactivityid1" },
+              informingActivity: {id: "chronicle:activity:testactivityid3" },)
               {
                   context
               }
@@ -782,7 +1004,7 @@ mod test {
             .execute(Request::new(
                 r#"
                 query test {
-                  activityById(id: "chronicle:activity:testactivityid1") {
+                  activityById(id: {id: "chronicle:activity:testactivityid1" }) {
                       ... on ItemCertifiedActivity {
                           id
                           externalId
@@ -857,8 +1079,8 @@ mod test {
           .execute(Request::new(
               r#"
           mutation generated {
-              wasGeneratedBy(activity: "chronicle:activity:testactivity1",
-              id: "chronicle:entity:testentity1",)
+              wasGeneratedBy(activity: { id: "chronicle:activity:testactivity1" },
+              id: { id: "chronicle:entity:testentity1" },)
               {
                   context
               }
@@ -877,7 +1099,7 @@ mod test {
             .execute(Request::new(
                 r#"
             query test {
-                activityById(id: "chronicle:activity:testactivity1") {
+                activityById(id: {id: "chronicle:activity:testactivity1" }) {
                   ... on ItemCertifiedActivity {
                         id
                         externalId
@@ -929,8 +1151,8 @@ mod test {
             .execute(Request::new(
                 r#"
             mutation again {
-                wasGeneratedBy(id: "chronicle:entity:testitem",
-                activity: "chronicle:activity:testactivityid1",)
+                wasGeneratedBy(id: { id: "chronicle:entity:testitem" },
+                activity: { id: "chronicle:activity:testactivityid1" },)
                 {
                     context
                 }
@@ -947,7 +1169,7 @@ mod test {
           .execute(Request::new(
               r#"
               query testagain {
-                activityById(id: "chronicle:activity:testactivity1") {
+                activityById(id: {id: "chronicle:activity:testactivity1" }) {
                   ... on ItemCertifiedActivity {
                         id
                         externalId
@@ -1101,7 +1323,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: "chronicle:entity:testentity1", activity: "chronicle:activity:{}") {{
+                used(id: {{ id: "chronicle:entity:testentity1" }}, activity: {{id: "chronicle:activity:{}" }}) {{
                     context
                 }}
             }}
@@ -1117,7 +1339,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
                   mutation {{
-                      startActivity( time: "{}", id: "chronicle:activity:{}") {{
+                      startActivity( time: "{}", id: {{id: "chronicle:activity:{}" }}) {{
                           context
                       }}
                   }}
@@ -1135,7 +1357,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                endActivity( time: "{}", id: "chronicle:activity:{}") {{
+                endActivity( time: "{}", id: {{ id: "chronicle:activity:{}" }}) {{
                     context
                 }}
             }}
@@ -1161,7 +1383,7 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: CERTIFIER, responsible: "chronicle:agent:{}", activity: "chronicle:activity:{}") {{
+                wasAssociatedWith( role: CERTIFIER, responsible: {{ id: "chronicle:agent:{}" }}, activity: {{id: "chronicle:activity:{}" }}) {{
                     context
                 }}
             }}
