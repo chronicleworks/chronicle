@@ -41,9 +41,9 @@ type Query {
     first: Int
     last: Int
   ): EntityConnection!
-  agentById(id: AgentID!, namespace: String): Agent
-  activityById(id: ActivityID!, namespace: String): Activity
-  entityById(id: EntityID!, namespace: String): Entity
+  agentById(id: AgentIdOrExternal!, namespace: String): Agent
+  activityById(id: ActivityIdOrExternal!, namespace: String): Activity
+  entityById(id: EntityIdOrExternal!, namespace: String): Entity
 }
 ```
 

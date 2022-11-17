@@ -1,4 +1,5 @@
 mod graphlql_scalars;
+use async_graphql::OneofObject;
 pub use graphlql_scalars::*;
 use tracing::trace;
 
@@ -758,6 +759,21 @@ impl From<&EntityId> for IriRefBuf {
     }
 }
 
+#[derive(OneofObject)]
+pub enum EntityIdOrExternal {
+    ExternalId(String),
+    Id(EntityId),
+}
+
+impl From<EntityIdOrExternal> for EntityId {
+    fn from(input: EntityIdOrExternal) -> Self {
+        match input {
+            EntityIdOrExternal::ExternalId(external_id) => Self::from_external_id(external_id),
+            EntityIdOrExternal::Id(id) => id,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub struct AgentId(ExternalId);
 
@@ -797,6 +813,21 @@ impl<'a> TryFrom<Iri<'a>> for AgentId {
 impl From<&AgentId> for IriRefBuf {
     fn from(val: &AgentId) -> Self {
         Chronicle::agent(&val.0).into()
+    }
+}
+
+#[derive(OneofObject)]
+pub enum AgentIdOrExternal {
+    ExternalId(String),
+    Id(AgentId),
+}
+
+impl From<AgentIdOrExternal> for AgentId {
+    fn from(input: AgentIdOrExternal) -> Self {
+        match input {
+            AgentIdOrExternal::ExternalId(external_id) => Self::from_external_id(external_id),
+            AgentIdOrExternal::Id(id) => id,
+        }
     }
 }
 
@@ -840,5 +871,20 @@ impl<'a> TryFrom<Iri<'a>> for ActivityId {
 impl From<&ActivityId> for IriRefBuf {
     fn from(val: &ActivityId) -> Self {
         Chronicle::activity(&val.0).into()
+    }
+}
+
+#[derive(OneofObject)]
+pub enum ActivityIdOrExternal {
+    ExternalId(String),
+    Id(ActivityId),
+}
+
+impl From<ActivityIdOrExternal> for ActivityId {
+    fn from(input: ActivityIdOrExternal) -> Self {
+        match input {
+            ActivityIdOrExternal::ExternalId(external_id) => Self::from_external_id(external_id),
+            ActivityIdOrExternal::Id(id) => id,
+        }
     }
 }
