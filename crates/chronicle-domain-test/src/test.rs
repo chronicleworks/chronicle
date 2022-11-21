@@ -76,7 +76,7 @@ mod test {
     };
     use diesel::{
         r2d2::{ConnectionManager, Pool},
-        SqliteConnection,
+        PgConnection,
     };
     use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
@@ -108,7 +108,7 @@ mod test {
                 enable_foreign_keys: true,
                 busy_timeout: Some(Duration::from_secs(2)),
             }))
-            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+            .build(ConnectionManager::<PgConnection>::new(&*format!(
                 "./sqlite_test/db{}.sqlite",
                 dbid
             )))

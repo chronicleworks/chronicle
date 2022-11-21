@@ -15,7 +15,7 @@ use derivative::*;
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, Pool},
-    Queryable, SqliteConnection,
+    Queryable, PgConnection,
 };
 use futures::Stream;
 use poem::{
@@ -196,11 +196,11 @@ impl ErrorExtensions for GraphQlError {
 #[derivative(Debug)]
 pub struct Store {
     #[derivative(Debug = "ignore")]
-    pub pool: Pool<ConnectionManager<SqliteConnection>>,
+    pub pool: Pool<ConnectionManager<PgConnection>>,
 }
 
 impl Store {
-    pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Self {
+    pub fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Self {
         Store { pool }
     }
 }
@@ -332,7 +332,7 @@ where
 pub trait ChronicleGraphQlServer {
     async fn serve_graphql(
         &self,
-        pool: Pool<ConnectionManager<SqliteConnection>>,
+        pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
         open: bool,
@@ -374,7 +374,7 @@ where
 {
     async fn serve_graphql(
         &self,
-        pool: Pool<ConnectionManager<SqliteConnection>>,
+        pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
         open: bool,

@@ -3,7 +3,8 @@ use async_graphql::{
     Context, ID,
 };
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use diesel::{debug_query, prelude::*, sqlite::Sqlite};
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
+use diesel::{debug_query, prelude::*, pg::Pg};
 use tracing::{debug, instrument};
 
 use super::{
@@ -11,7 +12,6 @@ use super::{
     Activity, Agent, Entity, GraphQlError, Store, TimelineOrder,
 };
 use crate::persistence::schema::generation;
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(ctx))]
@@ -128,7 +128,7 @@ pub async fn activity_timeline<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -179,7 +179,7 @@ pub async fn entities_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -228,7 +228,7 @@ pub async fn activities_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -278,7 +278,7 @@ pub async fn agents_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 

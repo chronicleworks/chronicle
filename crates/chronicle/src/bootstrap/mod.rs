@@ -18,7 +18,7 @@ use common::signing::SignerError;
 use config::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
-    SqliteConnection,
+    PgConnection,
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
@@ -67,7 +67,7 @@ struct UniqueUuid;
 
 impl UuidGen for UniqueUuid {}
 
-type ConnectionPool = Pool<ConnectionManager<SqliteConnection>>;
+type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
     Ok(Pool::builder()
         .connection_customizer(Box::new(ConnectionOptions {
@@ -75,7 +75,7 @@ fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
             enable_foreign_keys: true,
             busy_timeout: Some(Duration::from_secs(2)),
         }))
-        .build(ConnectionManager::<SqliteConnection>::new(
+        .build(ConnectionManager::<PgConnection>::new(
             &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
         ))?)
 }
@@ -334,7 +334,7 @@ pub mod test {
 
     use diesel::{
         r2d2::{ConnectionManager, Pool},
-        SqliteConnection,
+        PgConnection,
     };
 
     use tempfile::TempDir;
@@ -395,7 +395,7 @@ pub mod test {
                 enable_foreign_keys: true,
                 busy_timeout: Some(std::time::Duration::from_secs(2)),
             }))
-            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
+            .build(ConnectionManager::<PgConnection>::new(&*format!(
                 "./sqlite_test/db{}.sqlite",
                 dbid
             )))
