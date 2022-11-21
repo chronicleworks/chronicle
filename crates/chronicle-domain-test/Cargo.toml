@@ -1,8 +1,8 @@
 [package]
-build = "build.rs"
+build   = "build.rs"
 edition = "2021"
-name = "chronicle-example"
-version = "0.1.0"
+name    = "chronicle-example"
+version = "0.4.0"
 
 [[bin]]
 name = "chronicle-example"
@@ -32,5 +32,5 @@ strict = []
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-insta = { version = "1.14.0", features = ["redactions", "toml"] }
+insta    = { version = "1.14.0", features = ["redactions", "toml"] }
 tempfile = "3.3.0"
