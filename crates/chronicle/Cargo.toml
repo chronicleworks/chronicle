@@ -17,7 +17,7 @@ colored_json = "2.1.0"
 common = { path = "../common" }
 custom_error = "1.9.2"
 diesel = { version = "2.0.0-rc.0", features = [
-  "sqlite",
+  "postgres",
   "uuid",
   "chrono",
   "r2d2",

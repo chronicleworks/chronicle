@@ -13,7 +13,7 @@ path = "src/test.rs"
 [dependencies]
 chronicle = { path = "../chronicle" }
 diesel = { version = "2.0.0-rc.0", features = [
-  "sqlite",
+  "postgres",
   "uuid",
   "chrono",
   "r2d2",
