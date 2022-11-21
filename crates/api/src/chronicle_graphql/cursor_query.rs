@@ -2,9 +2,7 @@ use async_graphql::{
     connection::{Edge, EmptyFields},
     OutputType,
 };
-use diesel::{
-    prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt, pg::Pg,
-};
+use diesel::{pg::Pg, prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt};
 use r2d2::PooledConnection;
 
 type Conn = PooledConnection<ConnectionManager<PgConnection>>;

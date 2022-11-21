@@ -4,7 +4,7 @@ use async_graphql::{
 };
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
-use diesel::{debug_query, prelude::*, pg::Pg};
+use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
 use super::{

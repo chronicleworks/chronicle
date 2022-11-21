@@ -62,9 +62,7 @@ fn sleeper(attempts: i32) -> bool {
     true
 }
 
-impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error>
-    for ConnectionOptions
-{
+impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionOptions {
     fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
         (|| {
             if self.enable_wal {
@@ -677,7 +675,8 @@ impl Store {
 
     pub(crate) fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
         self.connection()?
-            .build_transaction().run(|connection| self.apply_model(connection, prov))?;
+            .build_transaction()
+            .run(|connection| self.apply_model(connection, prov))?;
 
         Ok(())
     }

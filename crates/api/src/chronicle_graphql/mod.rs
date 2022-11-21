@@ -15,7 +15,7 @@ use derivative::*;
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, Pool},
-    Queryable, PgConnection,
+    PgConnection, Queryable,
 };
 use futures::Stream;
 use poem::{

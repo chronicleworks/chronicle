@@ -225,9 +225,8 @@ where
         let store = Store::new(pool.clone())?;
 
         pool.get()?
-            .build_transaction().run(|connection| {
-                connection.run_pending_migrations(MIGRATIONS).map(|_| ())
-            })
+            .build_transaction()
+            .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
             .map_err(|migration| StoreError::DbMigration { migration })?;
 
         for (ns, uuid) in namespace_bindings {
