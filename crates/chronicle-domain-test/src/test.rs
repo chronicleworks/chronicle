@@ -132,7 +132,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn generation_activity_timeline_bug() {
+    async fn activity_timeline_no_duplicates() {
         let schema = test_schema().await;
 
         insta::assert_json_snapshot!(schema
@@ -347,70 +347,6 @@ mod test {
           "data": {
             "activityTimeline": {
               "nodes": [
-                {
-                  "__typename": "ItemManufacturedActivity",
-                  "id": "chronicle:activity:testactivity",
-                  "generated": [
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity1",
-                      "partIdAttribute": "partattr"
-                    },
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity2",
-                      "partIdAttribute": "partattr"
-                    },
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity3",
-                      "partIdAttribute": "partattr"
-                    }
-                  ],
-                  "wasAssociatedWith": [
-                    {
-                      "responsible": {
-                        "agent": {
-                          "__typename": "ContractorAgent",
-                          "id": "chronicle:agent:testagent",
-                          "locationAttribute": "location"
-                        }
-                      }
-                    }
-                  ]
-                },
-                {
-                  "__typename": "ItemManufacturedActivity",
-                  "id": "chronicle:activity:testactivity",
-                  "generated": [
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity1",
-                      "partIdAttribute": "partattr"
-                    },
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity2",
-                      "partIdAttribute": "partattr"
-                    },
-                    {
-                      "__typename": "ItemEntity",
-                      "id": "chronicle:entity:entity3",
-                      "partIdAttribute": "partattr"
-                    }
-                  ],
-                  "wasAssociatedWith": [
-                    {
-                      "responsible": {
-                        "agent": {
-                          "__typename": "ContractorAgent",
-                          "id": "chronicle:agent:testagent",
-                          "locationAttribute": "location"
-                        }
-                      }
-                    }
-                  ]
-                },
                 {
                   "__typename": "ItemManufacturedActivity",
                   "id": "chronicle:activity:testactivity",
