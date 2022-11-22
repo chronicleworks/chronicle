@@ -840,7 +840,7 @@ pub struct CliModel {
 
 impl From<ChronicleDomainDef> for CliModel {
     fn from(val: ChronicleDomainDef) -> Self {
-        let short_version = format!("v{}", env!("CARGO_PKG_VERSION"));
+        let short_version = env!("CARGO_PKG_VERSION").to_string();
         let long_version = format!(
             "{} ({})",
             short_version,

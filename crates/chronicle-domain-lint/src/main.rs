@@ -2,8 +2,9 @@ use chronicle::codegen::linter::check_files;
 use clap::{Arg, Command, ValueHint};
 
 fn main() {
+    let version = env!("CARGO_PKG_VERSION");
     let cli = Command::new("chronicle-domain-lint")
-        .version("0.1")
+        .version(version)
         .author("Blockchain Technology Partners")
         .arg(
             Arg::new("filenames")
