@@ -303,6 +303,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -561,6 +563,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
@@ -745,45 +749,43 @@ mod test {
     async fn untyped_derivation() {
         let schema = test_schema().await;
 
-        let created = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                wasDerivedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
-                               usedEntity: {id: "chronicle:entity:testentity2" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(created, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              wasDerivedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
+                             usedEntity: {id: "chronicle:entity:testentity2" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.wasDerivedFrom]
         context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let derived = schema
-            .execute(Request::new(
-                r#"
-            query {
-                entityById(id: {id: "chronicle:entity:testentity1" }) {
-                    ... on ProvEntity {
-                        id
-                        externalId
-                        wasDerivedFrom {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                    }
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(derived, @r###"
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              entityById(id: {id: "chronicle:entity:testentity1" }) {
+                  ... on ProvEntity {
+                      id
+                      externalId
+                      wasDerivedFrom {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.entityById]
         id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
@@ -797,51 +799,49 @@ mod test {
     async fn primary_source() {
         let schema = test_schema().await;
 
-        let created = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                hadPrimarySource(generatedEntity: {id: "chronicle:entity:testentity1" },
-                               usedEntity: {id: "chronicle:entity:testentity2" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(created, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              hadPrimarySource(generatedEntity: {id: "chronicle:entity:testentity1" },
+                             usedEntity: {id: "chronicle:entity:testentity2" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.hadPrimarySource]
         context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let derived = schema
-            .execute(Request::new(
-                r#"
-            query {
-                entityById(id: {id: "chronicle:entity:testentity1" }) {
 
-                    ... on ProvEntity {
-                        id
-                        externalId
-                        wasDerivedFrom {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                        hadPrimarySource{
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                    }
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(derived, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              entityById(id: {id: "chronicle:entity:testentity1" }) {
+
+                  ... on ProvEntity {
+                      id
+                      externalId
+                      wasDerivedFrom {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                      hadPrimarySource{
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.entityById]
         id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
@@ -858,50 +858,48 @@ mod test {
     async fn revision() {
         let schema = test_schema().await;
 
-        let created = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                wasRevisionOf(generatedEntity: {id: "chronicle:entity:testentity1" },
-                            usedEntity: {id: "chronicle:entity:testentity2" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(created, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              wasRevisionOf(generatedEntity: {id: "chronicle:entity:testentity1" },
+                          usedEntity: {id: "chronicle:entity:testentity2" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.wasRevisionOf]
         context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let derived = schema
-            .execute(Request::new(
-                r#"
-            query {
-                entityById(id: {id: "chronicle:entity:testentity1" }) {
-                    ... on ProvEntity {
-                        id
-                        externalId
-                        wasDerivedFrom {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                        wasRevisionOf {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                    }
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(derived, @r###"
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              entityById(id: {id: "chronicle:entity:testentity1" }) {
+                  ... on ProvEntity {
+                      id
+                      externalId
+                      wasDerivedFrom {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                      wasRevisionOf {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.entityById]
         id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
@@ -918,50 +916,48 @@ mod test {
     async fn quotation() {
         let schema = test_schema().await;
 
-        let created = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                wasQuotedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
-                            usedEntity: {id: "chronicle:entity:testentity2" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(created, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              wasQuotedFrom(generatedEntity: {id: "chronicle:entity:testentity1" },
+                          usedEntity: {id: "chronicle:entity:testentity2" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.wasQuotedFrom]
         context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let derived = schema
-            .execute(Request::new(
-                r#"
-            query {
-                entityById(id: {id: "chronicle:entity:testentity1" }) {
-                    ... on ProvEntity {
-                        id
-                        externalId
-                        wasDerivedFrom {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                        wasQuotedFrom {
-                            ... on ProvEntity {
-                                id
-                            }
-                        }
-                    }
-                }
-            }
-        "#,
-            ))
-            .await;
-        insta::assert_toml_snapshot!(derived, @r###"
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              entityById(id: {id: "chronicle:entity:testentity1" }) {
+                  ... on ProvEntity {
+                      id
+                      externalId
+                      wasDerivedFrom {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                      wasQuotedFrom {
+                          ... on ProvEntity {
+                              id
+                          }
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.entityById]
         id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
@@ -978,19 +974,17 @@ mod test {
     async fn agent_can_be_created() {
         let schema = test_schema().await;
 
-        let create = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                defineAgent(externalId:"testentity1", attributes: { type: "type" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(create, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              defineAgent(externalId:"testentity1", attributes: { type: "type" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.defineAgent]
         context = 'chronicle:agent:testentity1'
         "###);
@@ -1000,40 +994,37 @@ mod test {
     async fn agent_by_type() {
         let schema = test_schema().await;
 
-        let create = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                defineContractorAgent(externalId:"testagent1", attributes: { locationAttribute: "somewhere" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(create, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              defineContractorAgent(externalId:"testagent1", attributes: { locationAttribute: "somewhere" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.defineContractorAgent]
         context = 'chronicle:agent:testagent1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let agent = schema
-            .execute(Request::new(
-                r#"
-            query {
-                agentsByType(agentType: ContractorAgent) {
-                  nodes {
-                    ...on ContractorAgent {
-                      id
-                    }
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              agentsByType(agentType: ContractorAgent) {
+                nodes {
+                  ...on ContractorAgent {
+                    id
                   }
                 }
-            }"#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(agent, @r###"
+              }
+          }"#,
+          ))
+          .await, @r###"
         [[data.agentsByType.nodes]]
         id = 'chronicle:agent:testagent1'
         "###);
@@ -1043,40 +1034,37 @@ mod test {
     async fn activity_by_type() {
         let schema = test_schema().await;
 
-        let create = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                defineItemCertifiedActivity(externalId:"testactivity1", attributes: { certIdAttribute: "something" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(create, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              defineItemCertifiedActivity(externalId:"testactivity1", attributes: { certIdAttribute: "something" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.defineItemCertifiedActivity]
         context = 'chronicle:activity:testactivity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let agent = schema
-            .execute(Request::new(
-                r#"
-            query {
-                activitiesByType(activityType: ItemCertifiedActivity) {
-                  nodes {
-                    ...on ItemCertifiedActivity {
-                      id
-                    }
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              activitiesByType(activityType: ItemCertifiedActivity) {
+                nodes {
+                  ...on ItemCertifiedActivity {
+                    id
                   }
                 }
-            }"#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(agent, @r###"
+              }
+          }"#,
+          ))
+          .await, @r###"
         [[data.activitiesByType.nodes]]
         id = 'chronicle:activity:testactivity1'
         "###);
@@ -1086,24 +1074,23 @@ mod test {
     async fn entity_by_type() {
         let schema = test_schema().await;
 
-        let create = schema
-            .execute(Request::new(
-                r#"
-            mutation {
-                defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "something" }) {
-                    context
-                }
-            }
-        "#,
-            ))
-            .await;
-
-        insta::assert_toml_snapshot!(create, @r###"
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "something" }) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
         [data.defineCertificateEntity]
         context = 'chronicle:entity:testentity1'
         "###);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
+
         let agent = schema
             .execute(Request::new(
                 r#"
@@ -1418,6 +1405,8 @@ mod test {
         [data.wasGeneratedBy]
         context = 'chronicle:entity:testitem'
         "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // query Generated relationship
         insta::assert_toml_snapshot!(schema
@@ -2592,6 +2581,8 @@ mod test {
 
             assert_eq!(res.errors, vec![]);
         }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Default cursor
 
