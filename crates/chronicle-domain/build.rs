@@ -6,6 +6,7 @@ use chronicle::{
 };
 
 fn main() {
+    println!("cargo:rerun-if-changed=domain.yaml");
     linter::check_files(vec!["domain.yaml"]);
     let model = ChronicleDomainDef::from_file("domain.yaml").unwrap();
 
