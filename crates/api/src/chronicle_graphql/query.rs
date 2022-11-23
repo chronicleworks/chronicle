@@ -81,6 +81,7 @@ pub async fn activity_timeline<'a>(
         .filter(nsdsl::external_id.eq(&**ns))
         .filter(activity::started.ge(from.map(|x| x.naive_utc())))
         .filter(activity::ended.le(to.map(|x| x.naive_utc())))
+        .distinct()
         .select(Activity::as_select())
         .into_boxed();
 

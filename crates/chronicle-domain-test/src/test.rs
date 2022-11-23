@@ -132,6 +132,261 @@ mod test {
     }
 
     #[tokio::test]
+    async fn activity_timeline_no_duplicates() {
+        let schema = test_schema().await;
+
+        insta::assert_json_snapshot!(schema
+        .execute(Request::new(
+            r#"
+            mutation defineContractorAndManufactureAndAssociate {
+              defineContractorAgent(
+                externalId: "testagent"
+                attributes: { locationAttribute: "location" }
+              ) {
+                context
+              }
+              defineItemManufacturedActivity(
+                externalId: "testactivity"
+                attributes: { batchIdAttribute: "batchid" }
+              ) {
+                context
+              }
+              instantActivity(id: {externalId: "testactivity"}) {
+                context
+              }
+              wasAssociatedWith(
+                responsible: { externalId: "testagent" }
+                activity: { externalId: "testactivity" }
+                role: MANUFACTURER
+              ) {
+                context
+              }
+            }
+            "#,
+          ))
+          .await, @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:testagent"
+            },
+            "defineItemManufacturedActivity": {
+              "context": "chronicle:activity:testactivity"
+            },
+            "instantActivity": {
+              "context": "chronicle:activity:testactivity"
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:testagent"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation d1 {
+                defineItemEntity(externalId: "entity1", attributes: {partIdAttribute: "partattr"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "defineItemEntity": {
+              "context": "chronicle:entity:entity1"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation d2 {
+                defineItemEntity(externalId: "entity2", attributes: {partIdAttribute: "partattr"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "defineItemEntity": {
+              "context": "chronicle:entity:entity2"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation d3 {
+                defineItemEntity(externalId: "entity3", attributes: {partIdAttribute: "partattr"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "defineItemEntity": {
+              "context": "chronicle:entity:entity3"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation g1 {
+                wasGeneratedBy(activity: {externalId: "testactivity"}, id: {externalId: "entity1"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:entity1"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation g2 {
+                wasGeneratedBy(activity: {externalId: "testactivity"}, id: {externalId: "entity2"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:entity2"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              mutation g3 {
+                wasGeneratedBy(activity: {externalId: "testactivity"}, id: {externalId: "entity3"}) {
+                  context
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:entity3"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query a {
+                activityTimeline(
+                  activityTypes: [ItemManufacturedActivity]
+                  forEntity: []
+                  forAgent: ["chronicle:agent:testagent"]
+                )
+                {
+                  nodes {
+                    __typename
+                    ... on ItemManufacturedActivity {
+                      id
+                      generated {
+                        __typename
+                        ... on ItemEntity {
+                          id
+                          partIdAttribute
+
+                        }
+                      }
+                      wasAssociatedWith {
+                        responsible {
+                          agent {
+                            __typename
+                            ... on ContractorAgent {
+                              id
+                              locationAttribute
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              "#,
+            ))
+            .await, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "nodes": [
+                {
+                  "__typename": "ItemManufacturedActivity",
+                  "id": "chronicle:activity:testactivity",
+                  "generated": [
+                    {
+                      "__typename": "ItemEntity",
+                      "id": "chronicle:entity:entity1",
+                      "partIdAttribute": "partattr"
+                    },
+                    {
+                      "__typename": "ItemEntity",
+                      "id": "chronicle:entity:entity2",
+                      "partIdAttribute": "partattr"
+                    },
+                    {
+                      "__typename": "ItemEntity",
+                      "id": "chronicle:entity:entity3",
+                      "partIdAttribute": "partattr"
+                    }
+                  ],
+                  "wasAssociatedWith": [
+                    {
+                      "responsible": {
+                        "agent": {
+                          "__typename": "ContractorAgent",
+                          "id": "chronicle:agent:testagent",
+                          "locationAttribute": "location"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn one_of_id_or_external() {
         let schema = test_schema().await;
 
