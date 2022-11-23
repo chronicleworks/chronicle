@@ -183,6 +183,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -202,6 +204,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -223,6 +227,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -242,6 +248,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -263,6 +271,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -283,6 +293,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -302,6 +314,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
