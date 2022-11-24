@@ -56,9 +56,11 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 		--bootstrap || true
 	docker buildx use ctx-$(ISOLATION_ID)
 
+.PHONY: $(1)-$(2)-build
 $(1)-$(2)-build: $(1)-$(2)-ensure-context
-	docker buildx build $(DOCKER_PROGRESS) $() -f ./docker/unified-builder -t $(1)-$(2):$(ISOLATION_ID) . \
-		--build-arg TARGETPLATFORM=$(2) \
+	docker buildx build $(DOCKER_PROGRESS)  \
+		-f./docker/unified-builder \
+		-t $(1)-$(2):$(ISOLATION_ID) . \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
 
@@ -69,6 +71,8 @@ $(1)-manifest: $(1)-$(2)-build
 $(1): $(1)-$(2)-build
 
 build: $(1)
+
+build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
@@ -79,20 +83,11 @@ chronicle-builder-ensure-context:
 		--bootstrap || true
 	docker buildx use ctx-$(ISOLATION_ID)
 
-chronicle-builder-build: chronicle-builder-ensure-context
-	docker buildx build -f ./docker/unified-builder\
-		-t chronicle-builder:$(ISOLATION_ID) . \
-		--load
-
-build: chronicle-builder-build
-
 clean_containers:
 	docker-compose -f docker/chronicle.yaml rm -f || true
-	docker-compose -f docker/docker-compose.yaml rm -f || true
 
 clean_docker: stop
 	docker-compose -f docker/chronicle.yaml down -v --rmi all || true
-	docker-compose -f docker/docker-compose.yaml down -v --rmi all || true
 
 clean_target:
 	$(RM) -r target
