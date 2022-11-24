@@ -26,3 +26,4 @@ COPY . .
 RUN cargo fetch --locked
 RUN cargo build --release --locked --bin chronicle-domain-lint
 RUN cp target/release/chronicle-domain-lint /usr/local/bin
+RUN cargo clean
