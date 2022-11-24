@@ -26,11 +26,7 @@ use telemetry::{self, ConsoleLogging};
 use url::Url;
 
 use common::prov::to_json_ld::ToJson;
-use std::{
-    io,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
+use std::{io, net::SocketAddr};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -70,7 +66,7 @@ type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
     Ok(
         Pool::builder().build(ConnectionManager::<PgConnection>::new(
-            &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
+            config.store.address.as_str(),
         ))?,
     )
 }
@@ -416,7 +412,6 @@ pub mod test {
         let reader = ledger.reader();
 
         let (database, pool) = get_test_db_connection().await.unwrap();
-
         let dispatch = Api::new(
             pool,
             ledger,

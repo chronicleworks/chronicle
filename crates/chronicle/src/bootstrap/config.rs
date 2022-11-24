@@ -17,7 +17,7 @@ pub struct SecretConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StoreConfig {
-    pub path: PathBuf,
+    pub address: Url,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -66,19 +66,14 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
         std::process::exit(0);
     }
 
-    let dbpath = Question::new("Where should chronicle store state?")
+    let dburl = Question::new("What is the address of the PostgreSQL database?")
         .default(Answer::RESPONSE(
-            Path::join(
-                path.parent().ok_or(CliError::InvalidPath)?,
-                PathBuf::from("store"),
-            )
-            .to_string_lossy()
-            .to_string(),
+            "postgresql://localhost:5432/chronicle".to_owned(),
         ))
         .show_defaults()
         .confirm();
 
-    let secretpath = Question::new("Where should chronicle store secrets?")
+    let secretpath = Question::new("Where should Chronicle store secrets?")
         .default(Answer::RESPONSE(
             Path::join(
                 path.parent().ok_or(CliError::InvalidPath)?,
@@ -101,19 +96,16 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
         .show_defaults()
         .confirm();
 
-    match (dbpath, secretpath, validatorurl) {
+    match (dburl, secretpath, validatorurl) {
         (
             Answer::RESPONSE(dbpath),
             Answer::RESPONSE(secretpath),
             Answer::RESPONSE(validatorurl),
         ) => {
-            let dbpath = Path::new(&dbpath);
             let secretpath = Path::new(&secretpath);
 
             println!("Creating config dir {} if needed", path.to_string_lossy());
             std::fs::create_dir_all(path.parent().unwrap())?;
-            println!("Creating db dir {} if needed", &dbpath.to_string_lossy());
-            std::fs::create_dir_all(dbpath)?;
             println!(
                 "Creating secret dir {} if needed",
                 &secretpath.to_string_lossy()
@@ -121,17 +113,16 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
             std::fs::create_dir_all(secretpath)?;
 
             let config = format!(
-                r#"
-[secrets]
+                r#"[secrets]
 path = "{}"
 [store]
-path = "{}"
+address = "{}"
 [validator]
 address = "{}"
 [namespace_bindings]
-            "#,
+"#,
                 &*secretpath.to_string_lossy(),
-                &*dbpath.to_string_lossy(),
+                dbpath,
                 validatorurl
             );
 
