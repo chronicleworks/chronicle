@@ -61,6 +61,8 @@ $(1)-$(2)-build: $(1)-$(2)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
+		--build-arg TARGETPLATFORM=linux/$(2) \
+		--target $(1) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
 
@@ -76,12 +78,6 @@ build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
-
-chronicle-builder-ensure-context:
-	docker buildx create --name ctx-$(ISOLATION_ID) \
-		--driver docker-container \
-		--bootstrap || true
-	docker buildx use ctx-$(ISOLATION_ID)
 
 clean_containers:
 	docker-compose -f docker/chronicle.yaml rm -f || true
