@@ -9,3 +9,5 @@ target
 .tool-versions
 Makefile
 standard_defs.mk
+sqlite_test
+

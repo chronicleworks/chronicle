@@ -7,6 +7,8 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 
 IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
+HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
@@ -18,7 +20,8 @@ analyze: analyze_fossa
 
 publish: gh-create-draft-release
 	container_id=$$(docker create chronicle-tp:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/;  \
+		docker c
+		p $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/; \
@@ -32,7 +35,7 @@ run:
 
 .PHONY: stop
 stop:
-	docker-compose -f docker/chronicle.yaml down || true
+	$(COMPOSE) -f docker/chronicle.yaml down || true
 
 $(MARKERS)/binfmt:
 	mkdir -p $(MARKERS)
@@ -51,14 +54,14 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 	docker buildx use ctx-$(ISOLATION_ID)
 
 $(1)-$(2)-build: $(1)-$(2)-ensure-context
-	docker buildx build -f ./docker/$(1).dockerfile -t $(1)-$(2):$(ISOLATION_ID) . \
-		--platform linux/$(2) \
+	docker buildx build -f ./docker/unified-builder -t $(1)-$(2):$(ISOLATION_ID) . \
+		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
 
 $(1)-$(2)-build-native: $(1)-$(2)-ensure-context
 	if [ "$(2)" = "amd64" ]; then \
-		docker buildx build -f ./docker/$(1).dockerfile -t $(1):$(ISOLATION_ID) . \
-			--platform linux/$(2) \
+		docker buildx build -f ./docker/unified-builder -t $(1):$(ISOLATION_ID) . \
+			--platform linux/$(HOST_ARCHITECTURE) \
 			--load ; \
 	fi
 
@@ -80,7 +83,7 @@ chronicle-builder-ensure-context:
 	docker buildx use ctx-$(ISOLATION_ID)
 
 chronicle-builder-build: chronicle-builder-ensure-context
-	docker buildx build -f ./docker/chronicle-builder.dockerfile \
+	docker buildx build -f ./docker/unified-builder\
 		-t chronicle-builder:$(ISOLATION_ID) . \
 		--load
 
