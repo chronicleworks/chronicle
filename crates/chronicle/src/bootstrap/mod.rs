@@ -3,7 +3,7 @@ mod config;
 
 use api::{
     chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer},
-    Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen,
+    Api, ApiDispatch, ApiError, UuidGen,
 };
 use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
@@ -30,7 +30,6 @@ use std::{
     io,
     net::SocketAddr,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 use crate::codegen::ChronicleDomainDef;
@@ -69,15 +68,11 @@ impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
-    Ok(Pool::builder()
-        .connection_customizer(Box::new(ConnectionOptions {
-            enable_wal: true,
-            enable_foreign_keys: true,
-            busy_timeout: Some(Duration::from_secs(2)),
-        }))
-        .build(ConnectionManager::<PgConnection>::new(
+    Ok(
+        Pool::builder().build(ConnectionManager::<PgConnection>::new(
             &*Path::join(&config.store.path, &PathBuf::from("db.sqlite")).to_string_lossy(),
-        ))?)
+        ))?,
+    )
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
@@ -320,9 +315,9 @@ pub async fn bootstrap<Query, Mutation>(
 /// configuration + server execution would get a little tricky in the context of a unit test.
 #[cfg(test)]
 pub mod test {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, time::Duration};
 
-    use api::{Api, ApiDispatch, ApiError, ConnectionOptions, UuidGen};
+    use api::{Api, ApiDispatch, ApiError, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
         ledger::{InMemLedger, SubmissionStage},
@@ -337,14 +332,24 @@ pub mod test {
         PgConnection,
     };
 
+    use pg_embed::{
+        self,
+        pg_enums::PgAuthMethod,
+        pg_fetch::PgFetchSettings,
+        pg_types::PgResult,
+        postgres::{self, PgEmbed},
+    };
+
     use tempfile::TempDir;
     use uuid::Uuid;
 
     use super::{CliModel, SubCommand};
     use crate::codegen::ChronicleDomainDef;
 
-    #[derive(Clone)]
-    struct TestDispatch(ApiDispatch);
+    struct TestDispatch {
+        api: ApiDispatch,
+        _db: PgEmbed, // share lifetime
+    }
 
     impl TestDispatch {
         pub async fn dispatch(
@@ -352,9 +357,9 @@ pub mod test {
             command: ApiCommand,
         ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.0.dispatch(command).await? {
+            if let ApiResponse::Submission { .. } = self.api.dispatch(command).await? {
                 loop {
-                    let submission = self.0.notify_commit.subscribe().recv().await.unwrap();
+                    let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
 
                     if let SubmissionStage::Committed(Ok(commit)) = submission {
                         break Ok(Some((commit.delta, commit.tx_id)));
@@ -378,28 +383,39 @@ pub mod test {
         }
     }
 
+    async fn get_test_db_connection() -> PgResult<(PgEmbed, Pool<ConnectionManager<PgConnection>>)>
+    {
+        let settings = postgres::PgSettings {
+            database_dir: TempDir::new().unwrap().into_path(),
+            port: portpicker::pick_unused_port().unwrap() as i16,
+            user: "testuser".to_string(),
+            password: "please".to_string(),
+            auth_method: PgAuthMethod::MD5,
+            persistent: false,
+            timeout: Some(Duration::from_secs(50)),
+            migration_dir: None,
+        };
+        let mut database = PgEmbed::new(settings, PgFetchSettings::default()).await?;
+        database.setup().await?;
+        database.start_db().await?;
+        let db_name = format!("chronicle-test-{}", Uuid::new_v4());
+        database.create_database(db_name.as_str()).await?;
+        let db_uri = database.full_db_uri(&db_name);
+        let pool = Pool::builder()
+            .build(ConnectionManager::<PgConnection>::new(db_uri))
+            .unwrap();
+        Ok((database, pool))
+    }
+
     async fn test_api() -> TestDispatch {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
-        // We need to use a real file for sqlite, as in mem either re-creates between
-        // macos temp dir permissions don't work with sqlite
-        std::fs::create_dir("./sqlite_test").ok();
-        let dbid = Uuid::new_v4();
+
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(std::time::Duration::from_secs(2)),
-            }))
-            .build(ConnectionManager::<PgConnection>::new(&*format!(
-                "./sqlite_test/db{}.sqlite",
-                dbid
-            )))
-            .unwrap();
+        let (database, pool) = get_test_db_connection().await.unwrap();
 
         let dispatch = Api::new(
             pool,
@@ -412,7 +428,10 @@ pub mod test {
         .await
         .unwrap();
 
-        TestDispatch(dispatch)
+        TestDispatch {
+            api: dispatch,
+            _db: database, // share the lifetime
+        }
     }
 
     fn get_api_cmd(command_line: &str) -> ApiCommand {
