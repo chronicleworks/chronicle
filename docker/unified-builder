@@ -12,11 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM --platform=$TARGETPLATFORM rust:latest as base
+FROM --platform=$BUILDPLATFORM rust:latest as base
 
 ARG BUILDPLATFORM
-ARG TARGETPLATFORM
 ARG TARGETARCH
+ARG TARGETPLATFORM
 ARG BUILD_ARGS
 
 
@@ -87,10 +87,29 @@ RUN --mount=type=cache,target=/var/cache/buildkit/sccache  \
 RUN --mount=type=cache,target=/var/cache/buildkit/sccache \
   sccache -s
 
-# Copy linter to image and clean up
-FROM tested as chronicle-builder
-RUN cp target/release/chronicle-domain-lint /usr/local/bin
-RUN cargo clean
+# Copy linter to a rustc image for the build platform
+FROM --platform=$TARGETPLATFORM rust:latest as chronicle-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV OPENSSL_STATIC=true
+
+RUN apt-get update && \
+  apt-get install -y \
+  build-essential \
+  cmake \
+  libzmq3-dev \
+  libssl-dev \
+  protobuf-compiler \
+  && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/root/.cargo/bin
+
+COPY --from=tested /app/target/${TARGETARCH}/release/chronicle-domain-lint /usr/local/bin
+WORKDIR /app
+COPY . .
+RUN cargo fetch --locked
 
 # Copy untyped chronicle to image
 FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle

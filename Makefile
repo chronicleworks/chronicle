@@ -57,22 +57,16 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 	docker buildx use ctx-$(ISOLATION_ID)
 
 $(1)-$(2)-build: $(1)-$(2)-ensure-context
-	docker buildx build $(DOCKER_PROGRESS) -f ./docker/unified-builder -t $(1)-$(2):$(ISOLATION_ID) . \
+	docker buildx build $(DOCKER_PROGRESS) $() -f ./docker/unified-builder -t $(1)-$(2):$(ISOLATION_ID) . \
+		--build-arg TARGETPLATFORM=$(2) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
-
-$(1)-$(2)-build-native: $(1)-$(2)-ensure-context
-	if [ "$(2)" = "amd64" ]; then \
-		docker buildx build $(DOCKER_PROGRESS) -f ./docker/unified-builder -t $(1):$(ISOLATION_ID) . \
-			--platform linux/$(HOST_ARCHITECTURE) \
-			--load ; \
-	fi
 
 $(1)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
-$(1): $(1)-$(2)-build $(1)-$(2)-build-native
+$(1): $(1)-$(2)-build
 
 build: $(1)
 endef
