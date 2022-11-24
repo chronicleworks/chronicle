@@ -10,7 +10,7 @@ pub struct Namespace {
 
 #[derive(Queryable)]
 pub struct LedgerSync {
-    pub offset: String,
+    pub bc_offset: String,
     pub sync_time: Option<NaiveDateTime>,
 }
 
@@ -24,7 +24,7 @@ pub struct NewNamespace<'a> {
 #[derive(Insertable)]
 #[diesel(table_name = ledgersync)]
 pub struct NewOffset<'a> {
-    pub offset: &'a str,
+    pub bc_offset: &'a str,
     pub sync_time: Option<NaiveDateTime>,
 }
 

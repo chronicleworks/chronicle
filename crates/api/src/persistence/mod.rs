@@ -21,7 +21,6 @@ use custom_error::custom_error;
 use derivative::*;
 
 use diesel::{
-    connection::SimpleConnection,
     prelude::*,
     r2d2::{ConnectionManager, Pool, PooledConnection},
     PgConnection,
@@ -60,30 +59,6 @@ fn sleeper(attempts: i32) -> bool {
     warn!(attempts, "SQLITE_BUSY, retrying");
     std::thread::sleep(std::time::Duration::from_millis(250));
     true
-}
-
-impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionOptions {
-    fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
-        (|| {
-            if self.enable_wal {
-                conn.batch_execute(
-                    r#"PRAGMA journal_mode = WAL2;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA wal_autocheckpoint = 1000;
-                PRAGMA wal_checkpoint(TRUNCATE);"#,
-                )?;
-            }
-            if self.enable_foreign_keys {
-                conn.batch_execute("PRAGMA foreign_keys = ON;")?;
-            }
-            if let Some(d) = self.busy_timeout {
-                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
-            }
-
-            Ok(())
-        })()
-        .map_err(diesel::r2d2::Error::QueryError)
-    }
 }
 
 #[derive(Derivative)]
@@ -924,7 +899,7 @@ impl Store {
         self.connection()?.build_transaction().run(|connection| {
             schema::ledgersync::table
                 .order_by(dsl::sync_time)
-                .select((dsl::offset, dsl::tx_id))
+                .select((dsl::bc_offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)
                 .map(|(offset, tx_id)| offset.map(|offset| (Offset::from(&*offset), tx_id)))
@@ -1185,7 +1160,7 @@ impl Store {
             Ok(self.connection()?.build_transaction().run(|connection| {
                 diesel::insert_into(dsl::table)
                     .values((
-                        dsl::offset.eq(offset),
+                        dsl::bc_offset.eq(offset),
                         dsl::tx_id.eq(&*tx_id.to_string()),
                         (dsl::sync_time.eq(Utc::now().naive_utc())),
                     ))

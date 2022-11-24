@@ -1,13 +1,10 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     activity (id) {
-        id -> Integer,
+        id -> Int4,
         external_id -> Text,
-        namespace_id -> Integer,
+        namespace_id -> Int4,
         domaintype -> Nullable<Text>,
         started -> Nullable<Timestamp>,
         ended -> Nullable<Timestamp>,
@@ -15,195 +12,144 @@ diesel::table! {
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     activity_attribute (activity_id, typename) {
-        activity_id -> Integer,
+        activity_id -> Int4,
         typename -> Text,
         value -> Text,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     agent (id) {
-        id -> Integer,
+        id -> Int4,
         external_id -> Text,
-        namespace_id -> Integer,
+        namespace_id -> Int4,
         domaintype -> Nullable<Text>,
-        current -> Integer,
-        identity_id -> Nullable<Integer>,
+        current -> Int4,
+        identity_id -> Nullable<Int4>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     agent_attribute (agent_id, typename) {
-        agent_id -> Integer,
+        agent_id -> Int4,
         typename -> Text,
         value -> Text,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     association (agent_id, activity_id, role) {
-        agent_id -> Integer,
-        activity_id -> Integer,
+        agent_id -> Int4,
+        activity_id -> Int4,
         role -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     attachment (id) {
-        id -> Integer,
-        namespace_id -> Integer,
+        id -> Int4,
+        namespace_id -> Int4,
         signature_time -> Timestamp,
         signature -> Text,
-        signer_id -> Integer,
+        signer_id -> Int4,
         locator -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
-    delegation (delegate_id, responsible_id, activity_id, role) {
-        delegate_id -> Integer,
-        responsible_id -> Integer,
-        activity_id -> Nullable<Integer>,
+    delegation (responsible_id, delegate_id, activity_id, role) {
+        delegate_id -> Int4,
+        responsible_id -> Int4,
+        activity_id -> Nullable<Int4>,
         role -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
-    derivation (activity_id, generated_entity_id, used_entity_id, typ) {
-        activity_id -> Nullable<Integer>,
-        generated_entity_id -> Integer,
-        used_entity_id -> Integer,
-        typ -> Nullable<Integer>,
+    derivation (activity_id, used_entity_id, generated_entity_id, typ) {
+        activity_id -> Nullable<Int4>,
+        generated_entity_id -> Int4,
+        used_entity_id -> Int4,
+        typ -> Nullable<Int4>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     entity (id) {
-        id -> Integer,
+        id -> Int4,
         external_id -> Text,
-        namespace_id -> Integer,
+        namespace_id -> Int4,
         domaintype -> Nullable<Text>,
-        attachment_id -> Nullable<Integer>,
+        attachment_id -> Nullable<Int4>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     entity_attribute (entity_id, typename) {
-        entity_id -> Integer,
+        entity_id -> Int4,
         typename -> Text,
         value -> Text,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     generation (activity_id, generated_entity_id) {
-        activity_id -> Integer,
-        generated_entity_id -> Integer,
+        activity_id -> Int4,
+        generated_entity_id -> Int4,
         typ -> Nullable<Text>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     hadattachment (entity_id, attachment_id) {
-        entity_id -> Integer,
-        attachment_id -> Integer,
+        entity_id -> Int4,
+        attachment_id -> Int4,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     hadidentity (agent_id, identity_id) {
-        agent_id -> Integer,
-        identity_id -> Integer,
+        agent_id -> Int4,
+        identity_id -> Int4,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     identity (id) {
-        id -> Integer,
-        namespace_id -> Integer,
+        id -> Int4,
+        namespace_id -> Int4,
         public_key -> Text,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     ledgersync (tx_id) {
         tx_id -> Text,
-        offset -> Nullable<Text>,
+        bc_offset -> Nullable<Text>,
         sync_time -> Nullable<Timestamp>,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     namespace (id) {
-        id -> Integer,
+        id -> Int4,
         external_id -> Text,
         uuid -> Text,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     usage (activity_id, entity_id) {
-        activity_id -> Integer,
-        entity_id -> Integer,
+        activity_id -> Int4,
+        entity_id -> Int4,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use common::prov::*;
-
     wasinformedby (activity_id, informing_activity_id) {
-        activity_id -> Integer,
-        informing_activity_id -> Integer,
+        activity_id -> Int4,
+        informing_activity_id -> Int4,
     }
 }
 
