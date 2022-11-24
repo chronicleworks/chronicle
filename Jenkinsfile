@@ -34,15 +34,6 @@ pipeline {
       }
     }
 
-    stage('Test') {
-      steps {
-        sh '''
-          make test
-        '''
-        step([$class: "TapPublisher", testResults: "build/results.tap"])
-      }
-    }
-
     stage('Package') {
       steps {
         sh '''
