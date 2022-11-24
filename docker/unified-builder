@@ -12,11 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM --platform=$BUILDPLATFORM rust:latest as base
 
-ARG BUILDPLATFORM
+
+# A cross compilation image, use default (host) pltform
+FROM rust:latest as base
+
 ARG TARGETARCH
-ARG TARGETPLATFORM
+ARG HOSTARCH
 ARG BUILD_ARGS
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,6 +32,10 @@ RUN apt-get update && \
   cmake \
   libzmq3-dev \
   libssl-dev \
+  gcc-x86-64-linux-gnu \
+  gcc-aarch64-linux-gnu \
+  g++-x86-64-linux-gnu \
+  g++-aarch64-linux-gnu \
   protobuf-compiler \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -62,13 +68,15 @@ WORKDIR /app
 
 # Layer with cargo cache
 FROM base AS index
+COPY .cargo /app/.cargo
 COPY Cargo.lock /app
 COPY Cargo.toml /app
 COPY crates /app/crates
 RUN cargo fetch
 
 FROM index AS tested
-# Test if host == target and build for target architecture
+# Test if host == target and test on host architecture, but compile for both
+# target and host
 RUN --mount=type=cache,target=/var/cache/buildkit/sccache  \
   if [ "$TARGETARCH" = "amd64" ]; then \
   TARGET=x86_64-unknown-linux-gnu; \
@@ -78,20 +86,28 @@ RUN --mount=type=cache,target=/var/cache/buildkit/sccache  \
   echo "Unsupported architecture: $TARGETARCH"; \
   exit 1; \
   fi \
+  && if [ "$HOSTARCH" = "amd64" ]; then \
+  HOST=x86_64-unknown-linux-gnu; \
+  elif [ "$HOSTARCH" = "arm64" ]; then \
+  HOST=aarch64-unknown-linux-gnu; \
+  else \
+  echo "Unsupported architecture: $HOSTARCH"; \
+  exit 1; \
+  fi \
   && cargo clean \
-  && if [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+  && if [ "$TARGETARCH" = "$HOSTARCH" ]; then \
   cargo test --release --target "${TARGET}"; \
   fi \
   && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
-  && mv -f "target/${TARGET}" "target/${TARGETARCH}"
+  && mv -f "target/${TARGET}" "target/${TARGETARCH}" \
+  && cargo build --target "${TARGET}" --release ${BUILD_ARGS} \
+  && mv -f "target/${HOST}" "target/${HOSTARCH}"
 # Dump sccache hits
 RUN --mount=type=cache,target=/var/cache/buildkit/sccache \
   sccache -s
 
-
-
 # Copy linter to a rustc image for the build platform
-FROM --platform=$TARGETPLATFORM rust:latest as chronicle-builder
+FROM --platform=linux/$TARGETARCH rust:latest as chronicle-builder
 ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PKG_CONFIG_ALLOW_CROSS=1
@@ -109,22 +125,22 @@ RUN apt-get update && \
 
 ENV PATH=$PATH:/root/.cargo/bin
 
-COPY --from=tested /app/target/$(TARGETARCH)/release/chronicle-domain-lint /usr/local/bin
+COPY --from=tested /app/target/${TARGETARCH}/release/chronicle-domain-lint /usr/local/bin
 WORKDIR /app
+COPY .cargo /app/.cargo
 COPY Cargo.lock /app
 COPY Cargo.toml /app
 COPY crates /app/crates
 RUN cargo fetch --locked
 
-
 # Copy untyped chronicle to image
-FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle
+FROM --platform=linux/$TARGETARCH ubuntu:focal AS chronicle
 ARG TARGETARCH
 WORKDIR /
-COPY --from=tested /app/target/$(TARGETARCH)/release/chronicle /usr/local/bin
+COPY --from=tested /app/target/${TARGETARCH}/release/chronicle /usr/local/bin
 
 # Copy tp to image
-FROM --platform=$TARGETPLATFORM ubuntu:focal AS chronicle-tp
+FROM --platform=linux/$TARGETARCH ubuntu:focal AS chronicle-tp
 ARG TARGETARCH
 WORKDIR /
-COPY --from=tested /app/target/$(TARGETARCH)/release/chronicle_sawtooth_tp /usr/local/bin
+COPY --from=tested /app/target/${TARGETARCH}/release/chronicle_sawtooth_tp /usr/local/bin

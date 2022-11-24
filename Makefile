@@ -61,7 +61,8 @@ $(1)-$(2)-build: $(1)-$(2)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
-		--build-arg TARGETPLATFORM=linux/$(2) \
+		--build-arg HOSTARCH=$(HOST_ARCHITECTURE) \
+		--build-arg TARGETARCH=$(2) \
 		--target $(1) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
