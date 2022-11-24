@@ -33,4 +33,6 @@ inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
 insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+pg-embed = "0.6.5"
+portpicker = "0.1.1"
 tempfile = "3.3.0"
