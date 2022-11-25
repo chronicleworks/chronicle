@@ -3,6 +3,8 @@ target
 markers
 build
 site
+.buildx-cache
+.artifacts
 
 # some plugin
 .scannerwork

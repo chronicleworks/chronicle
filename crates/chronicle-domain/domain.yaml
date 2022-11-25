@@ -1,6 +1,6 @@
-name: "chronicle"
+name: "untyped"
 attributes: {}
-agents: {}
 entities: {}
 activities: {}
+agents: {}
 roles: []

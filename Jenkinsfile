@@ -26,6 +26,7 @@ pipeline {
       }
     }
 
+
     stage('Build') {
       steps {
         sh '''
@@ -42,6 +43,8 @@ pipeline {
         step([$class: "TapPublisher", testResults: "build/results.tap"])
       }
     }
+
+
 
     stage('Package') {
       steps {

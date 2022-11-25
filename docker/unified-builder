@@ -1,0 +1,112 @@
+# syntax = docker/dockerfile:1.4
+# Copyright 2022 Blockchain Technology Partners, LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+FROM --platform=$TARGETPLATFORM rust:1.65 as base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV OPENSSL_STATIC=true
+
+RUN --mount=type=cache,target=/var/cache/apt \
+  apt-get update && \
+  apt-get install -y \
+  build-essential \
+  gcc-x86-64-linux-gnu \
+  g++-x86-64-linux-gnu \
+  gcc-aarch64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  cmake \
+  libzmq3-dev \
+  libssl-dev \
+  protobuf-compiler \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV VERSION=AUTO_STRICT
+
+ENV PATH=$PATH:/root/.cargo/bin
+
+RUN rustup target add x86_64-unknown-linux-gnu && rustup target add aarch64-unknown-linux-gnu
+
+WORKDIR /app
+
+FROM --platform=$TARGETPLATFORM base AS test
+
+ARG BUILD_ARGS
+COPY Cargo.lock /app
+COPY .cargo /app/.cargo
+COPY Cargo.toml /app
+COPY crates /app/crates
+
+# Build for both target and host, but only test on host
+RUN cargo test --release
+
+
+FROM --platform=$TARGETPLATFORM test AS tested
+
+ARG BUILD_ARGS
+
+# Build for both target and host, but only test on host
+RUN  mkdir -p /artifacts/amd64 && \
+  mkdir -p /artifacts/arm64 && \
+  cargo build --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
+  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle /artifacts/arm64 \
+  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/arm64 \
+  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/arm64 \
+  && cargo build --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
+  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle /artifacts/amd64 \
+  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/amd64 \
+  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/amd64
+
+FROM  alpine:3.16.3 as tested-artifacts
+COPY --from=tested --link /artifacts /artifacts
+
+# Copy linter to a rustc image for the build platform
+FROM rust:1.65 as chronicle-builder
+
+ARG TARGETARCH
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV OPENSSL_STATIC=true
+
+RUN apt-get update && \
+  apt-get install -y \
+  build-essential \
+  cmake \
+  libzmq3-dev \
+  libssl-dev \
+  protobuf-compiler \
+  && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY .artifacts/artifacts/${TARGETARCH}/chronicle-domain-lint /usr/local/bin
+
+WORKDIR /app
+COPY .cargo /app/.cargo
+COPY Cargo.lock /app
+COPY Cargo.toml /app
+COPY crates /app/crates
+RUN cargo fetch --locked
+
+
+# Copy untyped chronicle to image
+FROM debian:bullseye-slim AS chronicle
+ARG TARGETARCH
+WORKDIR /
+COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
+
+# Copy tp to image
+FROM debian:bullseye-slim AS chronicle-tp
+ARG TARGETARCH
+WORKDIR /
+COPY .artifacts/artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
