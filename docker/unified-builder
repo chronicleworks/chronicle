@@ -50,7 +50,6 @@ COPY crates /app/crates
 
 # Build for both target and host, but only test on host
 RUN cargo test --release
-# Dump sccache hits
 
 
 FROM --platform=$TARGETPLATFORM test AS tested
