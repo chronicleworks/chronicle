@@ -10,11 +10,6 @@ IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
-# Don't use fancy output if we are running in Jenkins
-ifneq ($(JENKINS_URL),)
-DOCKER_PROGRESS := --progress=plain
-endif
-
 CLEAN_DIRS := $(CLEAN_DIRS)
 
 clean: clean_containers clean_target
@@ -49,8 +44,8 @@ $(MARKERS)/binfmt:
 	touch $@
 
 # Run the compiler for host and target, then extract the binaries
-.PHONY: tested
-tested-$(ISOLATION_ID):
+.PHONY: tested-$(ISOLATION_ID)
+tested-$(ISOLATION_ID): ensure-context-chronicle
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
@@ -67,6 +62,9 @@ tested-$(ISOLATION_ID):
 	container_id=$$(docker create tested-artifacts:${ISOLATION_ID}); \
 		docker cp $$container_id:/artifacts `pwd`/.artifacts/;  \
 		docker rm $$container_id;
+
+.PHONY: test
+test: tested-$(ISOLATION_ID)
 
 define multi-arch-docker =
 
