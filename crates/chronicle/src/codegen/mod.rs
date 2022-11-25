@@ -758,8 +758,7 @@ fn gen_query() -> rust::Tokens {
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
     let agent_id = &rust::import("chronicle::common::prov", "AgentIdOrExternal");
-    let entity_id = &rust::import("chronicle::common::prov", "EntityId");
-    let entity_id_or_external = &rust::import("chronicle::common::prov", "EntityIdOrExternal");
+    let entity_id = &rust::import("chronicle::common::prov", "EntityIdOrExternal");
     let activity_id = &rust::import("chronicle::common::prov", "ActivityIdOrExternal");
     let empty_fields =
         &rust::import("chronicle::async_graphql::connection", "EmptyFields").qualified();
@@ -780,7 +779,7 @@ fn gen_query() -> rust::Tokens {
         ctx: &#graphql_context<'a>,
         activity_types: Vec<ActivityType>,
         for_entity: Vec<#entity_id>,
-        for_agent: Vec<AgentId>,
+        for_agent: Vec<#agent_id>,
         from: Option<DateTime<Utc>>,
         to: Option<DateTime<Utc>>,
         order: Option<#timeline_order>,
@@ -796,8 +795,14 @@ fn gen_query() -> rust::Tokens {
                     .into_iter()
                     .filter_map(|x| x.into())
                     .collect(),
-                for_agent,
-                for_entity,
+                for_agent
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect(),
+                for_entity
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect(),
                 from,
                 to,
                 order,
@@ -961,7 +966,7 @@ fn gen_query() -> rust::Tokens {
     pub async fn entity_by_id<'a>(
         &self,
         ctx: &#graphql_context<'a>,
-        id: #entity_id_or_external,
+        id: #entity_id,
         namespace: Option<String>,
     ) -> #graphql_result<Option<#(entity_union_type_name())>> {
         Ok(#query_impl::entity_by_id(ctx, id.into(), namespace)

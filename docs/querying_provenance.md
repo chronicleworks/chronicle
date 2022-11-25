@@ -6,8 +6,8 @@ Currently Chronicle has 7 root queries.
 type Query {
   activityTimeline(
     activityTypes: [ActivityType!]!
-    forEntity: [EntityID!]!
-    forAgent: [AgentID!]!
+    forEntity: [EntityIdOrExternal!]!
+    forAgent: [AgentIdOrExternal!]!
     from: DateTime
     to: DateTime
     order: TimelineOrder
@@ -75,10 +75,10 @@ enum ActivityType {
 
 ```
 
-#### forEntity
+#### EntityIdOrExternal
 
-A list of EntityIDs to filter activities by - leaving this empty will return all
-activity types.
+A list of EntityIDs or externalIds to filter activities by - leaving this empty
+will return all activity types.
 
 #### from
 
@@ -219,7 +219,7 @@ type PublishedActivity {
 
 #### Activity: id
 
-The EntityID of the entity. This is derived from externalId, but clients
+The ActivityID of the activity. This is derived from externalId, but clients
 should not attempt to synthesize it themselves.
 
 #### Activity: namespace
