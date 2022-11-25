@@ -32,7 +32,7 @@ they will appear on the corresponding type field.
 
 ```graphql
 query {
-    activityTimeline(forEntity: ["chronicle:entity:example"],
+    activityTimeline(forEntity: [{id: "chronicle:entity:example"}],
                     from: "1968-01-01T00:00:00Z",
                     to: "2030-01-01T00:00:00Z",
                     activityTypes: [],

@@ -312,7 +312,7 @@ mod test {
                 activityTimeline(
                   activityTypes: [ItemManufacturedActivity]
                   forEntity: []
-                  forAgent: ["chronicle:agent:testagent"]
+                  forAgent: [{externalId: "testagent"}]
                 )
                 {
                   nodes {
@@ -2493,7 +2493,7 @@ mod test {
               query {
               activityTimeline(
                 forEntity: [],
-                forAgent: ["chronicle:agent:testagent2"],
+                forAgent: [{id: "chronicle:agent:testagent2"}],
                 order: NEWEST_FIRST,
                 activityTypes: [],
                               ) {
