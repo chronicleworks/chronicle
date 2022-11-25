@@ -8,6 +8,7 @@ out
 docs
 bin
 .git
+.buildx-cache
 
 # some plugin
 .scannerwork
@@ -239,4 +240,3 @@ typings/
 **/sqlite_test
 **/*.env
 **/*.sqlite
-

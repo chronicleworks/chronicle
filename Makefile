@@ -5,6 +5,7 @@ export OPENSSL_STATIC=1
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
+
 IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
@@ -47,6 +48,26 @@ $(MARKERS)/binfmt:
 	fi
 	touch $@
 
+# Run the compiler for host and target, then extract the binaries
+.PHONY: tested
+tested-$(ISOLATION_ID):
+	docker buildx build $(DOCKER_PROGRESS)  \
+		-f./docker/unified-builder \
+		-t tested-artifacts:$(ISOLATION_ID) . \
+		--builder ctx-$(ISOLATION_ID) \
+		--platform linux/$(HOST_ARCHITECTURE) \
+		--target tested-artifacts \
+	  --cache-to type=local,dest=.buildx-cache \
+    --cache-from type=local,src=.buildx-cache \
+		--load
+
+	rm -rf .artifacts
+	mkdir -p .artifacts
+
+	container_id=$$(docker create tested-artifacts:${ISOLATION_ID}); \
+		docker cp $$container_id:/artifacts `pwd`/.artifacts/;  \
+		docker rm $$container_id;
+
 define multi-arch-docker =
 
 .PHONY: ensure-context-$(1)
@@ -57,14 +78,14 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 	docker buildx use ctx-$(ISOLATION_ID)
 
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(1)-$(2)-ensure-context
+$(1)-$(2)-build: $(1)-$(2)-ensure-context tested-$(ISOLATION_ID)
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
-		--build-arg HOSTARCH=$(HOST_ARCHITECTURE) \
+		--builder ctx-$(ISOLATION_ID) \
 		--build-arg TARGETARCH=$(2) \
+		--platform linux/$(2) \
 		--target $(1) \
-		--platform linux/$(HOST_ARCHITECTURE) \
 		--load
 
 $(1)-manifest: $(1)-$(2)-build
