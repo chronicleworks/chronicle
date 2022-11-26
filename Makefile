@@ -19,11 +19,19 @@ distclean: clean_docker clean_markers
 analyze: analyze_fossa
 
 publish: gh-create-draft-release
-	container_id=$$(docker create chronicle-tp:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/;  \
+	mkdir -p target/arm64
+	mkdir -p target/amd64
+	container_id=$$(docker create chronicle-tp-amd64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/amd64/;  \
 		docker rm $$container_id;
-	container_id=$$(docker create chronicle:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/; \
+	container_id=$$(docker create chronicle-amd64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/amd64/; \
+		docker rm $$container_id;
+	container_id=$$(docker create chronicle-tp-arm64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/arm64;  \
+		docker rm $$container_id;
+	container_id=$$(docker create chronicle-arm64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/arm64; \
 		docker rm $$container_id;
 	if [ "$(RELEASABLE)" = "yes" ]; then \
 		$(GH_RELEASE) upload $(VERSION) target/* ; \
