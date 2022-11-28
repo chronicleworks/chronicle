@@ -58,6 +58,7 @@ tested-$(ISOLATION_ID): ensure-context-chronicle
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID) \
+		--build-arg HOSTARCH=$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--target tested-artifacts \
 	  --cache-to type=local,dest=.buildx-cache \
