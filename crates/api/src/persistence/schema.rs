@@ -42,7 +42,7 @@ diesel::table! {
     association (agent_id, activity_id, role) {
         agent_id -> Int4,
         activity_id -> Int4,
-        role -> Nullable<Text>,
+        role -> Text,
     }
 }
 
@@ -61,17 +61,17 @@ diesel::table! {
     delegation (responsible_id, delegate_id, activity_id, role) {
         delegate_id -> Int4,
         responsible_id -> Int4,
-        activity_id -> Nullable<Int4>,
-        role -> Nullable<Text>,
+        activity_id -> Int4,
+        role -> Text,
     }
 }
 
 diesel::table! {
     derivation (activity_id, used_entity_id, generated_entity_id, typ) {
-        activity_id -> Nullable<Int4>,
+        activity_id -> Int4,
         generated_entity_id -> Int4,
         used_entity_id -> Int4,
-        typ -> Nullable<Int4>,
+        typ -> Int4,
     }
 }
 

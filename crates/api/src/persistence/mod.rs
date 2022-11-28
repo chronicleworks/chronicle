@@ -739,11 +739,12 @@ impl Store {
         )?;
 
         use schema::association::dsl as asoc;
+        let no_role = common::prov::Role("".to_string());
         diesel::insert_into(schema::association::table)
             .values((
                 &asoc::activity_id.eq(storedactivity.id),
                 &asoc::agent_id.eq(storedagent.id),
-                &asoc::role.eq(association.role.as_ref()),
+                &asoc::role.eq(association.role.as_ref().unwrap_or(&no_role)),
             ))
             .on_conflict_do_nothing()
             .execute(connection)?;
@@ -786,12 +787,13 @@ impl Store {
         };
 
         use schema::delegation::dsl as link;
+        let no_role = common::prov::Role("".to_string());
         diesel::insert_into(schema::delegation::table)
             .values((
                 &link::responsible_id.eq(responsible.id),
                 &link::delegate_id.eq(delegate.id),
-                &link::activity_id.eq(activity),
-                &link::role.eq(delegation.role.as_ref()),
+                &link::activity_id.eq(activity.unwrap_or(-1)),
+                &link::role.eq(delegation.role.as_ref().unwrap_or(&no_role)),
             ))
             .on_conflict_do_nothing()
             .execute(connection)?;
@@ -830,13 +832,14 @@ impl Store {
             })
             .transpose()?;
 
+        use common::prov::operations::DerivationType;
         use schema::derivation::dsl as link;
         diesel::insert_into(schema::derivation::table)
             .values((
                 &link::used_entity_id.eq(stored_used.id),
                 &link::generated_entity_id.eq(stored_generated.id),
-                &link::typ.eq(derivation.typ),
-                &link::activity_id.eq(stored_activity.map(|activity| activity.id)),
+                &link::typ.eq(derivation.typ.unwrap_or(DerivationType::None)),
+                &link::activity_id.eq(stored_activity.map_or(-1, |activity| activity.id)),
             ))
             .on_conflict_do_nothing()
             .execute(connection)?;

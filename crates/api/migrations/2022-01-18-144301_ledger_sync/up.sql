@@ -76,23 +76,23 @@ create table entity (
 create table delegation (
     delegate_id integer not null,
     responsible_id integer not null,
-    activity_id integer,
-    role text,
+    activity_id integer not null default -1,
+    role text not null default '',
     foreign key(delegate_id) references agent(id),
     foreign key(responsible_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    unique(responsible_id,delegate_id,activity_id,role)
+    primary key(responsible_id,delegate_id,activity_id,role)
 );
 
 create table derivation (
     activity_id integer,
     generated_entity_id integer not null,
     used_entity_id integer not null,
-    typ integer,
+    typ integer not null default -1,
     foreign key(activity_id) references activity(id),
     foreign key(generated_entity_id) references entity(id),
     foreign key(used_entity_id) references entity(id),
-    unique(activity_id,used_entity_id,generated_entity_id,typ)
+    primary key(activity_id,used_entity_id,generated_entity_id,typ)
 );
 
 create table generation (
@@ -107,10 +107,10 @@ create table generation (
 create table association (
     agent_id integer not null,
     activity_id integer not null,
-    role text,
+    role text not null default '',
     foreign key(agent_id) references agent(id),
     foreign key(activity_id) references activity(id),
-    unique(agent_id, activity_id, role)
+    primary key(agent_id, activity_id, role)
 );
 
 create table usage (
@@ -168,3 +168,9 @@ create table activity_attribute (
     foreign key(activity_id) references activity(id),
     primary key(activity_id,typename)
 );
+
+insert into namespace(id, external_id, uuid)
+    values (-1, 'hidden entry for Option None', '00000000-0000-0000-0000-000000000000');
+
+insert into activity(id, external_id, namespace_id)
+    values (-1, 'hidden entry for Option None', -1);

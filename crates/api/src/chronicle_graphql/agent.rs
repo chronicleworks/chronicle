@@ -54,7 +54,10 @@ pub async fn acted_on_behalf_of<'a>(
         .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
         .order(agentdsl::external_id)
         .select((Agent::as_select(), dsl::role))
-        .load::<(Agent, Option<Role>)>(&mut connection)?)
+        .load::<(Agent, Role)>(&mut connection)?
+        .into_iter()
+        .map(|(a, r)| (a, if r.0.is_empty() { None } else { Some(r) }))
+        .collect())
 }
 
 pub async fn load_attribute<'a>(

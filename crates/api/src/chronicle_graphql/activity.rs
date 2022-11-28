@@ -32,7 +32,10 @@ pub async fn was_associated_with<'a>(
         .inner_join(crate::persistence::schema::agent::table)
         .order(crate::persistence::schema::agent::external_id)
         .select((Agent::as_select(), association::role))
-        .load::<(Agent, Option<Role>)>(&mut connection)?;
+        .load::<(Agent, Role)>(&mut connection)?
+        .into_iter()
+        .map(|(a, r)| (a, if r.0.is_empty() { None } else { Some(r) }))
+        .collect();
 
     Ok(res)
 }
