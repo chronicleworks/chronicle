@@ -45,7 +45,6 @@ WORKDIR /app
 FROM base AS test
 
 ARG BUILD_ARGS
-ARG HOSTARCH
 COPY Cargo.lock /app
 COPY .cargo /app/.cargo
 COPY Cargo.toml /app
