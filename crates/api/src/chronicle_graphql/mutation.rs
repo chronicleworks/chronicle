@@ -16,7 +16,7 @@ use common::{
 use crate::ApiDispatch;
 
 use super::Submission;
-pub async fn transaction_context<'a>(
+async fn transaction_context<'a>(
     res: ApiResponse,
     _ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {

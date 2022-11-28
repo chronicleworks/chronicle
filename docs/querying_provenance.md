@@ -108,17 +108,154 @@ An integer controlling page size for forward pagination. Defaults to 20
 
 An integer controlling page size for reverse pagination. Defaults to 20
 
+## activitiesByType
+
+An activity could be defined like so:
+
+```graphql
+  mutation {
+    defineItemCertifiedActivity(externalId:"certification1", attributes: { certIdAttribute: "123" }) {
+        context
+    }
+  }
+```
+
+A user could query all activities of that type as in the following example:
+
+```graphql
+  query {
+    activitiesByType(activityType: ItemCertifiedActivity) {
+      nodes {
+        ...on ItemCertifiedActivity {
+          id
+          certIdAttribute
+        }
+      }
+    }
+  }
+```
+
 ## agentsByType
 
-## activitiesByType
+An agent could be defined like so:
+
+```graphql
+  mutation {
+    defineContractorAgent(externalId:"contractor1", attributes: { locationAttribute: "Shenzhen" }) {
+        context
+    }
+  }
+```
+
+A user could query all agents of that type as in the following example:
+
+```graphql
+  query {
+    agentsByType(agentType: ContractorAgent) {
+      nodes {
+        ...on ContractorAgent {
+          id
+          location
+        }
+      }
+    }
+  }
+```
 
 ## entitiesByType
 
+An entity could be defined like so:
+
+```graphql
+mutation {
+    defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "something" }) {
+        context
+    }
+  }
+```
+
+A user could query all entities of that type as in the following example:
+
+```graphql
+query {
+    entitiesByType(entityType: CertificateEntity) {
+      nodes {
+        ...on CertificateEntity {
+          id
+        }
+      }
+    }
+}
+```
+
 ## activityById
+
+An activity could be defined like so:
+
+```graphql
+defineItemCertifiedActivity(externalId: "externalid", attributes: { certIdAttribute: "234" }
+  ) {
+    context
+  }
+```
+
+A user could query that activity in the following way:
+
+```graphql
+activityById(id: {externalId: "externalid" }) {
+    ... on ItemCertifiedActivity {
+      id
+      externalId
+      certIdAttribute
+    }
+  }
+```
 
 ## agentById
 
+An agent could be defined like so:
+
+```graphql
+defineContractorAgent(externalId: "externalid", attributes: { locationAttribute: "location" }
+  ) {
+    context
+  }
+```
+
+A user could query that agent in the following way:
+
+```graphql
+agentById(id: {externalId: "externalid" }) {
+    ... on ContractorAgent {
+      id
+      externalId
+      locationAttribute
+    }
+  }
+```
+
 ## entityById
+
+An entity could be defined like so:
+
+```graphql
+defineItemEntity(externalId: "externalid", attributes: { partIdAttribute: "432" }
+  ) {
+    context
+  }
+```
+
+A user could query that entity in the following way:
+
+```graphql
+entityById(id: {externalId: "externalid" }) {
+    ... on ItemEntity {
+      id
+      externalId
+      partIdAttribute
+    }
+  }
+```
 
 ## Returned objects
 

@@ -1,18 +1,16 @@
-use crate::chronicle_graphql::{Activity, Entity, Evidence, Store};
+use super::{Activity, Entity, Evidence, Namespace, Store};
 use async_graphql::Context;
 use common::prov::operations::DerivationType;
 use diesel::prelude::*;
 
-use super::Namespace;
-
-pub async fn typed_derivation<'a>(
+async fn typed_derivation<'a>(
     id: i32,
     ctx: &Context<'a>,
     typ: Option<DerivationType>,
 ) -> async_graphql::Result<Vec<Entity>> {
     use crate::persistence::schema::{
         derivation::{self, dsl},
-        entity::{self as entitydsl},
+        entity as entitydsl,
     };
 
     let store = ctx.data_unchecked::<Store>();
@@ -33,6 +31,7 @@ pub async fn namespace<'a>(
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
     use crate::persistence::schema::namespace::{self, dsl};
+
     let store = ctx.data_unchecked::<Store>();
 
     let mut connection = store.pool.get()?;
@@ -47,6 +46,7 @@ pub async fn evidence<'a>(
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<Evidence>> {
     use crate::persistence::schema::attachment::{self, dsl};
+
     let store = ctx.data_unchecked::<Store>();
 
     let mut connection = store.pool.get()?;
@@ -85,7 +85,7 @@ pub async fn was_derived_from<'a>(
 ) -> async_graphql::Result<Vec<Entity>> {
     use crate::persistence::schema::{
         derivation::{self, dsl},
-        entity::{self as entitydsl},
+        entity as entitydsl,
     };
 
     let store = ctx.data_unchecked::<Store>();
