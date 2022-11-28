@@ -97,7 +97,11 @@ pub struct Store {
 
 impl Store {
     #[instrument(name = "Bind namespace", skip(self))]
-    pub fn namespace_binding(&self, external_id: &str, uuid: Uuid) -> Result<(), StoreError> {
+    pub(crate) fn namespace_binding(
+        &self,
+        external_id: &str,
+        uuid: Uuid,
+    ) -> Result<(), StoreError> {
         use schema::namespace::dsl;
 
         let uuid = uuid.to_string();
@@ -114,7 +118,7 @@ impl Store {
     }
 
     /// Fetch the activity record for the IRI
-    pub fn activity_by_activity_external_id_and_namespace(
+    fn activity_by_activity_external_id_and_namespace(
         &self,
         connection: &mut SqliteConnection,
         external_id: &ExternalId,
@@ -134,7 +138,7 @@ impl Store {
     }
 
     /// Fetch the entity record for the IRI
-    pub fn entity_by_entity_external_id_and_namespace(
+    fn entity_by_entity_external_id_and_namespace(
         &self,
         connection: &mut SqliteConnection,
         external_id: &ExternalId,
@@ -189,7 +193,7 @@ impl Store {
         }: &Activity,
         ns: &HashMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
-        use schema::activity::{self as dsl};
+        use schema::activity as dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) =
             self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
@@ -663,7 +667,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
+    pub(crate) fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
         self.connection()?
             .immediate_transaction(|connection| self.apply_model(connection, prov))?;
 
@@ -883,7 +887,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn connection(
+    pub(crate) fn connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
         Ok(self.pool.get()?)
@@ -902,7 +906,7 @@ impl Store {
 
     /// Get the last fully synchronized offset
     #[instrument]
-    pub fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
+    pub(crate) fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
         use schema::ledgersync::dsl;
         self.connection()?.immediate_transaction(|connection| {
             schema::ledgersync::table
@@ -978,12 +982,12 @@ impl Store {
     }
 
     #[instrument]
-    pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
+    pub(crate) fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
         Ok(Store { pool })
     }
 
     #[instrument(skip(connection))]
-    pub fn prov_model_for_namespace(
+    pub(crate) fn prov_model_for_namespace(
         &self,
         connection: &mut SqliteConnection,
         query: QueryCommand,
@@ -1157,12 +1161,12 @@ impl Store {
 
     /// Set the last fully synchronized offset
     #[instrument]
-    pub fn set_last_offset(
+    pub(crate) fn set_last_offset(
         &self,
         offset: Offset,
         tx_id: ChronicleTransactionId,
     ) -> Result<(), StoreError> {
-        use schema::ledgersync::{self as dsl};
+        use schema::ledgersync as dsl;
 
         if let Offset::Identity(offset) = offset {
             Ok(self.connection()?.immediate_transaction(|connection| {

@@ -10,14 +10,26 @@ use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
 use common::{
+    attributes::Attributes,
+    commands::*,
     k256::ecdsa::{signature::Signer, Signature},
-    ledger::SubmissionStage,
-    prov::{
-        operations::{WasAssociatedWith, WasInformedBy},
-        to_json_ld::ToJson,
-        Contradiction, ProcessorError, Role,
+    ledger::{
+        LedgerReader, LedgerWriter, Offset, SubmissionError, SubmissionStage, SubscriptionError,
     },
+    prov::{
+        operations::{
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
+            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
+            WasGeneratedBy, WasInformedBy,
+        },
+        to_json_ld::ToJson,
+        ActivityId, AgentId, ChronicleTransactionId, Contradiction, EntityId, ExternalId,
+        ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel, Role,
+    },
+    signing::{DirectoryStoredKeys, SignerError},
 };
+
 use persistence::{Store, StoreError, MIGRATIONS};
 use r2d2::Pool;
 use std::{
@@ -27,22 +39,6 @@ use std::{
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
-};
-
-use common::{
-    attributes::Attributes,
-    commands::*,
-    ledger::{LedgerReader, LedgerWriter, Offset, SubmissionError, SubscriptionError},
-    prov::{
-        operations::{
-            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasGeneratedBy,
-        },
-        ActivityId, AgentId, ChronicleTransactionId, EntityId, ExternalId, ExternalIdPart,
-        IdentityId, NamespaceId, ProvModel,
-    },
-    signing::{DirectoryStoredKeys, SignerError},
 };
 
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
@@ -277,10 +273,10 @@ where
                                   }
                                   // Ledger contradicted or error, so nothing to
                                   // apply, but forward notification
-                                  Some(commit@ Err(_)) => {
+                                  Some(commit @ Err(_)) => {
                                     commit_notify_tx.send(SubmissionStage::committed(commit)).ok();
                                   },
-                                  Some(ref stage@ Ok(ref commit)) => {
+                                  Some(ref stage @ Ok(ref commit)) => {
                                         let offset = commit.offset.clone();
                                         let tx_id = commit.tx_id.clone();
                                         let delta = commit.delta.clone();

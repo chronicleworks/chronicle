@@ -2,20 +2,16 @@ use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, ID,
 };
-
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 use diesel::{debug_query, prelude::*, sqlite::Sqlite};
 use tracing::{debug, instrument};
 
-use crate::chronicle_graphql::cursor_query::{project_to_nodes, Cursorize};
-
-use crate::{
-    chronicle_graphql::{Activity, GraphQlError, Store},
-    persistence::schema::generation,
+use super::{
+    cursor_query::{project_to_nodes, Cursorize},
+    Activity, Agent, Entity, GraphQlError, Store, TimelineOrder,
 };
-
-use super::{Agent, Entity, TimelineOrder};
+use crate::persistence::schema::generation;
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(ctx))]
@@ -158,10 +154,7 @@ pub async fn entities_by_type<'a>(
     first: Option<i32>,
     last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Entity, EmptyFields, EmptyFields>> {
-    use crate::persistence::schema::{
-        entity::{self},
-        namespace::dsl as nsdsl,
-    };
+    use crate::persistence::schema::{entity, namespace::dsl as nsdsl};
 
     let store = ctx.data_unchecked::<Store>();
 
@@ -211,10 +204,7 @@ pub async fn activities_by_type<'a>(
     first: Option<i32>,
     last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
-    use crate::persistence::schema::{
-        activity::{self},
-        namespace::dsl as nsdsl,
-    };
+    use crate::persistence::schema::{activity, namespace::dsl as nsdsl};
 
     let store = ctx.data_unchecked::<Store>();
 
@@ -263,10 +253,7 @@ pub async fn agents_by_type<'a>(
     first: Option<i32>,
     last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
-    use crate::persistence::schema::{
-        agent::{self},
-        namespace::dsl as nsdsl,
-    };
+    use crate::persistence::schema::{agent, namespace::dsl as nsdsl};
 
     let store = ctx.data_unchecked::<Store>();
 

@@ -395,7 +395,7 @@ where
             let app = Route::new()
                 .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
                 .at("/ws", get(GraphQLSubscription::new(schema.clone())))
-                .data(schema.clone());
+                .data(schema);
 
             Server::new(TcpListener::bind(address)).run(app).await.ok();
         } else {

@@ -1,10 +1,7 @@
+use super::{Agent, Identity, Namespace, Store};
 use async_graphql::Context;
 use common::prov::Role;
 use diesel::prelude::*;
-
-use crate::chronicle_graphql::{Identity, Namespace, Store};
-
-use super::Agent;
 
 pub async fn namespace<'a>(
     namespace_id: i32,

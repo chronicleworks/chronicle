@@ -1,9 +1,7 @@
-use crate::chronicle_graphql::{Agent, Store};
+use super::{Activity, Agent, Entity, Namespace, Store};
 use async_graphql::Context;
 use common::prov::Role;
 use diesel::prelude::*;
-
-use super::{Activity, Entity, Namespace};
 
 pub async fn namespace<'a>(
     namespaceid: i32,
