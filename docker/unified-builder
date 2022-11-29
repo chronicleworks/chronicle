@@ -50,7 +50,11 @@ COPY .cargo /app/.cargo
 COPY Cargo.toml /app
 COPY crates /app/crates
 
-# Build for both target and host, but only test on host
+# Test on the host only
+# PostgreSQL will not run as root
+RUN useradd -m tester
+RUN chown -R tester .
+USER tester
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
   TARGET=aarch64-unknown-linux-gnu; \
   elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
@@ -60,19 +64,28 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
   exit 1; \
   fi &&\
   cargo test --release --target $TARGET
+USER root
 
 
 FROM test AS tested
 
 ARG BUILD_ARGS
 
-# Build for both target and host, but only test on host
-RUN  mkdir -p /artifacts/amd64 && \
+# Build for both target and host
+RUN dpkg --add-architecture amd64
+RUN dpkg --add-architecture arm64
+RUN --mount=type=cache,target=/var/cache/apt \
+  apt-get update && \
+  mkdir -p /artifacts/amd64 && \
   mkdir -p /artifacts/arm64 && \
+  apt-get remove -y libpq-dev && \
+  apt-get install -y libpq-dev:arm64 && \
   cargo build --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/arm64 \
+  && apt-get remove -y libpq-dev \
+  && apt-get install -y libpq-dev:amd64 \
   && cargo build --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/x86_64-unknown-linux-gnu/release/chronicle /artifacts/amd64 \
   && mv -f target/x86_64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/amd64 \
