@@ -18,7 +18,7 @@ use common::signing::SignerError;
 use config::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
-    PgConnection,
+    Connection, PgConnection,
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
@@ -64,11 +64,10 @@ impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
-    Ok(
-        Pool::builder().build(ConnectionManager::<PgConnection>::new(
-            config.store.address.as_str(),
-        ))?,
-    )
+    let dburl = config.store.address.as_str();
+    // before pooling, first establish a test connection to get a clearer error if it fails
+    PgConnection::establish(dburl).map_err(|source| api::StoreError::DbConnection { source })?;
+    Ok(Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?)
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {

@@ -30,7 +30,8 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use persistence::{Store, StoreError, MIGRATIONS};
+pub use persistence::StoreError;
+use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,

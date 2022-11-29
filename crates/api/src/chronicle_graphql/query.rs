@@ -3,7 +3,6 @@ use async_graphql::{
     Context, ID,
 };
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
@@ -12,6 +11,7 @@ use super::{
     Activity, Agent, Entity, GraphQlError, Store, TimelineOrder,
 };
 use crate::persistence::schema::generation;
+use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(ctx))]
