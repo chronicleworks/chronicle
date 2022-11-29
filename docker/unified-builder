@@ -12,8 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM --platform=$TARGETPLATFORM rust:1.65 as base
+FROM rust:1.65 as base
 
+ARG TARGETPLATFORM
+ENV TARGETPLATFORM=${TARGETPLATFORM}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV OPENSSL_STATIC=true
@@ -40,7 +42,7 @@ RUN rustup target add x86_64-unknown-linux-gnu && rustup target add aarch64-unkn
 
 WORKDIR /app
 
-FROM --platform=$TARGETPLATFORM base AS test
+FROM base AS test
 
 ARG BUILD_ARGS
 COPY Cargo.lock /app
@@ -49,10 +51,18 @@ COPY Cargo.toml /app
 COPY crates /app/crates
 
 # Build for both target and host, but only test on host
-RUN cargo test --release
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+  TARGET=aarch64-unknown-linux-gnu; \
+  elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+  TARGET=x86_64-unknown-linux-gnu; \
+  else \
+  echo "Unsupported architecture: $(TARGETPLATFORM)"; \
+  exit 1; \
+  fi &&\
+  cargo test --release --target $TARGET
 
 
-FROM --platform=$TARGETPLATFORM test AS tested
+FROM test AS tested
 
 ARG BUILD_ARGS
 
