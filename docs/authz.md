@@ -7,9 +7,11 @@ Goals:
 * Verifiable identity as first class concept in Chronicle
 * Identity used for chronicle operations emitted as an event field
 * Key rotation, recorded on backend ledger
-* Sawtooth keys become transport only, not identity
+* Sawtooth keys can become ephemeral transport, not identity
 * OPA rules maintained by a dedicated TP
-* OPA rules used to secure changes to OPA rules within Chronicle Authz TP
+* Minimise OPA entrypoints, no implementation or domain knowledge required to
+  discover rule addresses
+* OPA rule alteration secured by cryptographic id
 * OPA used to secure graphql queries within Chronicle, using an async_graphql extension
 * OPA used to secure chronicle operations, within the Chronicle TP
 * Efficient execution of current OPA rules in multiple Chronicle components
@@ -48,7 +50,7 @@ process to be able to verify the identities used in the transaction.
 {
   "identity" : {
     "typ" : "key",
-    "id" : "Chronicle",
+    "id" : "chronicle",
     "key": "{current chronicle public key}",
     "sig": "{signature of this identity message}"
   }
@@ -56,33 +58,14 @@ process to be able to verify the identities used in the transaction.
 ```
 
 ```json
-{
   "identity" : {
     "typ" : "JWT",
-    "jwt" : {
-      "name": "John Doe",
-      "email": "john@johndoe.com",
-      "admin": true
-    },
-    "jwt_original": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-    "jkms_endpoint": "http://jkms.cluster.local",
-    "jkms_verifying" : {
-    "alg": "RS256",
-    "kty": "RSA",
-    "use": "sig",
-    "x5c": [
-      "MIIC+DCCAeCgAwIBAgIJBIGjYW6hFpn2MA0GCSqGSIb3DQEBBQUAMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTAeFw0xNjExMjIyMjIyMDVaFw0zMDA4MDEyMjIyMDVaMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMnjZc5bm/eGIHq09N9HKHahM7Y31P0ul+A2wwP4lSpIwFrWHzxw88/7Dwk9QMc+orGXX95R6av4GF+Es/nG3uK45ooMVMa/hYCh0Mtx3gnSuoTavQEkLzCvSwTqVwzZ+5noukWVqJuMKNwjL77GNcPLY7Xy2/skMCT5bR8UoWaufooQvYq6SyPcRAU4BtdquZRiBT4U5f+4pwNTxSvey7ki50yc1tG49Per/0zA4O6Tlpv8x7Red6m1bCNHt7+Z5nSl3RX/QYyAEUX1a28VcYmR41Osy+o2OUCXYdUAphDaHo4/8rbKTJhlu8jEcc1KoMXAKjgaVZtG/v5ltx6AXY0CAwEAAaMvMC0wDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQUQxFG602h1cG+pnyvJoy9pGJJoCswDQYJKoZIhvcNAQEFBQADggEBAGvtCbzGNBUJPLICth3mLsX0Z4z8T8iu4tyoiuAshP/Ry/ZBnFnXmhD8vwgMZ2lTgUWwlrvlgN+fAtYKnwFO2G3BOCFw96Nm8So9sjTda9CCZ3dhoH57F/hVMBB0K6xhklAc0b5ZxUpCIN92v/w+xZoz1XQBHe8ZbRHaP1HpRM4M7DJk2G5cgUCyu3UBvYS41sHvzrxQ3z7vIePRA4WF4bEkfX12gvny0RsPkrbVMXX1Rj9t6V7QXrbPYBAO+43JvDGYawxYVvLhz+BJ45x50GFQmHszfY3BR9TPK8xmMmQwtIvLu1PMttNCs7niCYkSiUv2sc2mlq1i3IashGkkgmo="
-    ],
-    "n": "yeNlzlub94YgerT030codqEztjfU_S6X4DbDA_iVKkjAWtYfPHDzz_sPCT1Axz6isZdf3lHpq_gYX4Sz-cbe4rjmigxUxr-FgKHQy3HeCdK6hNq9ASQvMK9LBOpXDNn7mei6RZWom4wo3CMvvsY1w8tjtfLb-yQwJPltHxShZq5-ihC9irpLI9xEBTgG12q5lGIFPhTl_7inA1PFK97LuSLnTJzW0bj096v_TMDg7pOWm_zHtF53qbVsI0e3v5nmdKXdFf9BjIARRfVrbxVxiZHjU6zL6jY5QJdh1QCmENoejj_ytspMmGW7yMRxzUqgxcAqOBpVm0b-_mW3HoBdjQ",
-    "e": "AQAB",
-    "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg",
-    "x5t": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
-  }
+    "identity" "john@johndoe.com",
+    "key": "{current chronicle public key}",
+    "sig": "{signature of this identity message}"
   }
 }
 ```
-
-COMMENT: We can probably trim down the JKMS block for our purposes?
 
 ### Chronicle key generation
 
