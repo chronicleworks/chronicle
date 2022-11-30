@@ -21,10 +21,9 @@ use custom_error::custom_error;
 use derivative::*;
 
 use diesel::{
-    connection::SimpleConnection,
     prelude::*,
     r2d2::{ConnectionManager, Pool, PooledConnection},
-    sqlite::SqliteConnection,
+    PgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use tracing::{debug, instrument, warn};
@@ -62,37 +61,11 @@ fn sleeper(attempts: i32) -> bool {
     true
 }
 
-impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
-    for ConnectionOptions
-{
-    fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-        (|| {
-            if self.enable_wal {
-                conn.batch_execute(
-                    r#"PRAGMA journal_mode = WAL2;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA wal_autocheckpoint = 1000;
-                PRAGMA wal_checkpoint(TRUNCATE);"#,
-                )?;
-            }
-            if self.enable_foreign_keys {
-                conn.batch_execute("PRAGMA foreign_keys = ON;")?;
-            }
-            if let Some(d) = self.busy_timeout {
-                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
-            }
-
-            Ok(())
-        })()
-        .map_err(diesel::r2d2::Error::QueryError)
-    }
-}
-
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
 pub struct Store {
     #[derivative(Debug = "ignore")]
-    pool: Pool<ConnectionManager<SqliteConnection>>,
+    pool: Pool<ConnectionManager<PgConnection>>,
 }
 
 impl Store {
@@ -105,7 +78,7 @@ impl Store {
         use schema::namespace::dsl;
 
         let uuid = uuid.to_string();
-        self.connection()?.immediate_transaction(|conn| {
+        self.connection()?.build_transaction().run(|conn| {
             diesel::insert_into(dsl::namespace)
                 .values((dsl::external_id.eq(external_id), dsl::uuid.eq(&uuid)))
                 .on_conflict(dsl::external_id)
@@ -120,7 +93,7 @@ impl Store {
     /// Fetch the activity record for the IRI
     fn activity_by_activity_external_id_and_namespace(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         external_id: &ExternalId,
         namespaceid: &NamespaceId,
     ) -> Result<query::Activity, StoreError> {
@@ -140,7 +113,7 @@ impl Store {
     /// Fetch the entity record for the IRI
     fn entity_by_entity_external_id_and_namespace(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         external_id: &ExternalId,
         namespace_id: &NamespaceId,
     ) -> Result<query::Entity, StoreError> {
@@ -160,7 +133,7 @@ impl Store {
     /// Fetch the agent record for the IRI
     pub(crate) fn agent_by_agent_external_id_and_namespace(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         external_id: &ExternalId,
         namespaceid: &NamespaceId,
     ) -> Result<query::Agent, StoreError> {
@@ -181,7 +154,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_activity(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Activity {
             ref external_id,
             namespaceid,
@@ -242,7 +215,7 @@ impl Store {
             namespaceid,
         )?;
 
-        diesel::insert_or_ignore_into(schema::activity_attribute::table)
+        diesel::insert_into(schema::activity_attribute::table)
             .values(
                 attributes
                     .iter()
@@ -255,6 +228,7 @@ impl Store {
                     )
                     .collect::<Vec<_>>(),
             )
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -265,7 +239,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_agent(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Agent {
             ref external_id,
             namespaceid,
@@ -308,7 +282,7 @@ impl Store {
         let query::Agent { id, .. } =
             self.agent_by_agent_external_id_and_namespace(connection, external_id, namespaceid)?;
 
-        diesel::insert_or_ignore_into(schema::agent_attribute::table)
+        diesel::insert_into(schema::agent_attribute::table)
             .values(
                 attributes
                     .iter()
@@ -319,6 +293,7 @@ impl Store {
                     })
                     .collect::<Vec<_>>(),
             )
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -327,7 +302,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_attachment(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Attachment {
             namespaceid,
             signature,
@@ -357,7 +332,7 @@ impl Store {
 
         use schema::attachment::dsl;
 
-        diesel::insert_or_ignore_into(schema::attachment::table)
+        diesel::insert_into(schema::attachment::table)
             .values((
                 dsl::namespace_id.eq(nsid),
                 dsl::signature.eq(signature),
@@ -365,6 +340,7 @@ impl Store {
                 dsl::locator.eq(locator),
                 dsl::signature_time.eq(Utc::now().naive_utc()),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -373,7 +349,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_entity(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Entity {
             namespaceid,
             id,
@@ -415,7 +391,7 @@ impl Store {
         let query::Entity { id, .. } =
             self.entity_by_entity_external_id_and_namespace(connection, external_id, namespaceid)?;
 
-        diesel::insert_or_ignore_into(schema::entity_attribute::table)
+        diesel::insert_into(schema::entity_attribute::table)
             .values(
                 attributes
                     .iter()
@@ -426,6 +402,7 @@ impl Store {
                     })
                     .collect::<Vec<_>>(),
             )
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -434,7 +411,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_has_evidence(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         entity: &EntityId,
@@ -460,7 +437,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_had_evidence(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         entity: &EntityId,
@@ -474,11 +451,12 @@ impl Store {
         )?;
         use schema::hadattachment::dsl;
 
-        diesel::insert_or_ignore_into(schema::hadattachment::table)
+        diesel::insert_into(schema::hadattachment::table)
             .values((
                 dsl::entity_id.eq(entity.id),
                 dsl::attachment_id.eq(attachment.id),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -487,7 +465,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_has_identity(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         agent: &AgentId,
@@ -513,7 +491,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_had_identity(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         model: &ProvModel,
         namespaceid: &NamespaceId,
         agent: &AgentId,
@@ -527,8 +505,9 @@ impl Store {
         )?;
         use schema::hadidentity::dsl;
 
-        diesel::insert_or_ignore_into(schema::hadidentity::table)
+        diesel::insert_into(schema::hadidentity::table)
             .values((dsl::agent_id.eq(agent.id), dsl::identity_id.eq(identity.id)))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -537,7 +516,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_identity(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Identity {
             id,
             namespaceid,
@@ -551,8 +530,9 @@ impl Store {
         let (_, nsid) =
             self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
 
-        diesel::insert_or_ignore_into(schema::identity::table)
+        diesel::insert_into(schema::identity::table)
             .values((dsl::namespace_id.eq(nsid), dsl::public_key.eq(public_key)))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -560,7 +540,7 @@ impl Store {
 
     fn apply_model(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         model: &ProvModel,
     ) -> Result<(), StoreError> {
         for (_, ns) in model.namespaces.iter() {
@@ -649,7 +629,7 @@ impl Store {
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_namespace(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         Namespace {
             ref external_id,
             ref uuid,
@@ -657,11 +637,12 @@ impl Store {
         }: &Namespace,
     ) -> Result<(), StoreError> {
         use schema::namespace::dsl;
-        diesel::insert_or_ignore_into(schema::namespace::table)
+        diesel::insert_into(schema::namespace::table)
             .values((
                 dsl::external_id.eq(external_id),
                 dsl::uuid.eq(uuid.to_string()),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -669,7 +650,8 @@ impl Store {
 
     pub(crate) fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
         self.connection()?
-            .immediate_transaction(|connection| self.apply_model(connection, prov))?;
+            .build_transaction()
+            .run(|connection| self.apply_model(connection, prov))?;
 
         Ok(())
     }
@@ -677,7 +659,7 @@ impl Store {
     #[instrument(skip(connection))]
     fn apply_used(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &NamespaceId,
         usage: &Usage,
     ) -> Result<(), StoreError> {
@@ -694,11 +676,12 @@ impl Store {
         )?;
 
         use schema::usage::dsl as link;
-        diesel::insert_or_ignore_into(schema::usage::table)
+        diesel::insert_into(schema::usage::table)
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::entity_id.eq(storedentity.id),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -707,7 +690,7 @@ impl Store {
     #[instrument(skip(connection))]
     fn apply_was_informed_by(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &NamespaceId,
         activity_id: &ActivityId,
         informing_activity_id: &ActivityId,
@@ -725,11 +708,12 @@ impl Store {
         )?;
 
         use schema::wasinformedby::dsl as link;
-        diesel::insert_or_ignore_into(schema::wasinformedby::table)
+        diesel::insert_into(schema::wasinformedby::table)
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::informing_activity_id.eq(storedinformingactivity.id),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -738,7 +722,7 @@ impl Store {
     #[instrument(skip(self, connection))]
     fn apply_was_associated_with(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespaceid: &common::prov::NamespaceId,
         association: &Association,
     ) -> Result<(), StoreError> {
@@ -755,12 +739,14 @@ impl Store {
         )?;
 
         use schema::association::dsl as asoc;
-        diesel::insert_or_ignore_into(schema::association::table)
+        let no_role = common::prov::Role("".to_string());
+        diesel::insert_into(schema::association::table)
             .values((
                 &asoc::activity_id.eq(storedactivity.id),
                 &asoc::agent_id.eq(storedagent.id),
-                &asoc::role.eq(association.role.as_ref()),
+                &asoc::role.eq(association.role.as_ref().unwrap_or(&no_role)),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -769,7 +755,7 @@ impl Store {
     #[instrument(skip(self, connection, namespace))]
     fn apply_delegation(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &common::prov::NamespaceId,
         delegation: &Delegation,
     ) -> Result<(), StoreError> {
@@ -801,13 +787,15 @@ impl Store {
         };
 
         use schema::delegation::dsl as link;
-        diesel::insert_or_ignore_into(schema::delegation::table)
+        let no_role = common::prov::Role("".to_string());
+        diesel::insert_into(schema::delegation::table)
             .values((
                 &link::responsible_id.eq(responsible.id),
                 &link::delegate_id.eq(delegate.id),
-                &link::activity_id.eq(activity),
-                &link::role.eq(delegation.role.as_ref()),
+                &link::activity_id.eq(activity.unwrap_or(-1)),
+                &link::role.eq(delegation.role.as_ref().unwrap_or(&no_role)),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -816,7 +804,7 @@ impl Store {
     #[instrument(skip(self, connection, namespace))]
     fn apply_derivation(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &common::prov::NamespaceId,
         derivation: &Derivation,
     ) -> Result<(), StoreError> {
@@ -844,14 +832,16 @@ impl Store {
             })
             .transpose()?;
 
+        use common::prov::operations::DerivationType;
         use schema::derivation::dsl as link;
-        diesel::insert_or_ignore_into(schema::derivation::table)
+        diesel::insert_into(schema::derivation::table)
             .values((
                 &link::used_entity_id.eq(stored_used.id),
                 &link::generated_entity_id.eq(stored_generated.id),
-                &link::typ.eq(derivation.typ),
-                &link::activity_id.eq(stored_activity.map(|activity| activity.id)),
+                &link::typ.eq(derivation.typ.unwrap_or(DerivationType::None)),
+                &link::activity_id.eq(stored_activity.map_or(-1, |activity| activity.id)),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -860,7 +850,7 @@ impl Store {
     #[instrument(skip(connection))]
     fn apply_was_generated_by(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &common::prov::NamespaceId,
         generation: &Generation,
     ) -> Result<(), StoreError> {
@@ -877,11 +867,12 @@ impl Store {
         )?;
 
         use schema::generation::dsl as link;
-        diesel::insert_or_ignore_into(schema::generation::table)
+        diesel::insert_into(schema::generation::table)
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::generated_entity_id.eq(storedentity.id),
             ))
+            .on_conflict_do_nothing()
             .execute(connection)?;
 
         Ok(())
@@ -889,14 +880,14 @@ impl Store {
 
     pub(crate) fn connection(
         &self,
-    ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, StoreError> {
+    ) -> Result<PooledConnection<ConnectionManager<PgConnection>>, StoreError> {
         Ok(self.pool.get()?)
     }
 
     #[instrument(skip(connection))]
     pub(crate) fn get_current_agent(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
     ) -> Result<query::Agent, StoreError> {
         use schema::agent::dsl;
         Ok(schema::agent::table
@@ -908,10 +899,10 @@ impl Store {
     #[instrument]
     pub(crate) fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
         use schema::ledgersync::dsl;
-        self.connection()?.immediate_transaction(|connection| {
+        self.connection()?.build_transaction().run(|connection| {
             schema::ledgersync::table
                 .order_by(dsl::sync_time)
-                .select((dsl::offset, dsl::tx_id))
+                .select((dsl::bc_offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)
                 .map(|(offset, tx_id)| offset.map(|offset| (Offset::from(&*offset), tx_id)))
@@ -921,7 +912,7 @@ impl Store {
     #[instrument(skip(connection))]
     pub(crate) fn namespace_by_external_id(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespace: &ExternalId,
     ) -> Result<(NamespaceId, i32), StoreError> {
         use self::schema::namespace::dsl;
@@ -942,7 +933,7 @@ impl Store {
     #[instrument(skip(connection))]
     pub(crate) fn attachment_by(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespaceid: &NamespaceId,
         attachment: &EvidenceId,
     ) -> Result<query::Attachment, StoreError> {
@@ -963,7 +954,7 @@ impl Store {
     #[instrument(skip(connection))]
     pub(crate) fn identity_by(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         namespaceid: &NamespaceId,
         identity: &IdentityId,
     ) -> Result<query::Identity, StoreError> {
@@ -982,14 +973,14 @@ impl Store {
     }
 
     #[instrument]
-    pub(crate) fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Result<Self, StoreError> {
+    pub(crate) fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Result<Self, StoreError> {
         Ok(Store { pool })
     }
 
     #[instrument(skip(connection))]
     pub(crate) fn prov_model_for_namespace(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         query: QueryCommand,
     ) -> Result<ProvModel, StoreError> {
         let mut model = ProvModel::default();
@@ -1169,10 +1160,10 @@ impl Store {
         use schema::ledgersync as dsl;
 
         if let Offset::Identity(offset) = offset {
-            Ok(self.connection()?.immediate_transaction(|connection| {
+            Ok(self.connection()?.build_transaction().run(|connection| {
                 diesel::insert_into(dsl::table)
                     .values((
-                        dsl::offset.eq(offset),
+                        dsl::bc_offset.eq(offset),
                         dsl::tx_id.eq(&*tx_id.to_string()),
                         (dsl::sync_time.eq(Utc::now().naive_utc())),
                     ))
@@ -1190,7 +1181,7 @@ impl Store {
     #[instrument(skip(connection))]
     pub(crate) fn use_agent(
         &self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         external_id: &ExternalId,
         namespace: &ExternalId,
     ) -> Result<(), StoreError> {

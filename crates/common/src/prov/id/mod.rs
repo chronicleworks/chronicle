@@ -40,7 +40,7 @@ custom_error::custom_error! {pub ParseIriError
     FromSqlRow,
 )]
 #[diesel(sql_type = diesel::sql_types::Text)]
-pub struct Role(String);
+pub struct Role(pub String);
 
 impl Display for Role {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -2,12 +2,10 @@ use async_graphql::{
     connection::{Edge, EmptyFields},
     OutputType,
 };
-use diesel::{
-    prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt, sqlite::Sqlite,
-};
+use diesel::{pg::Pg, prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt};
 use r2d2::PooledConnection;
 
-type Conn = PooledConnection<ConnectionManager<SqliteConnection>>;
+type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 
 const DEFAULT_PAGE_SIZE: i32 = 10;
 
@@ -81,11 +79,11 @@ impl<T> Cursorize for T {
     }
 }
 
-impl<T> QueryFragment<Sqlite> for CursorPosition<T>
+impl<T> QueryFragment<Pg> for CursorPosition<T>
 where
-    T: QueryFragment<Sqlite>,
+    T: QueryFragment<Pg>,
 {
-    fn walk_ast<'a, 'b>(&'b self, mut out: AstPass<'a, 'b, Sqlite>) -> QueryResult<()> {
+    fn walk_ast<'a, 'b>(&'b self, mut out: AstPass<'a, 'b, Pg>) -> QueryResult<()> {
         out.push_sql("SELECT *, COUNT(*) OVER () FROM (");
         self.query.walk_ast(out.reborrow())?;
         out.push_sql(") t LIMIT ");

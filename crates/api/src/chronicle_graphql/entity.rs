@@ -6,7 +6,7 @@ use diesel::prelude::*;
 async fn typed_derivation<'a>(
     id: i32,
     ctx: &Context<'a>,
-    typ: Option<DerivationType>,
+    typ: DerivationType,
 ) -> async_graphql::Result<Vec<Entity>> {
     use crate::persistence::schema::{
         derivation::{self, dsl},
@@ -105,14 +105,14 @@ pub async fn had_primary_source<'a>(
     id: i32,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Entity>> {
-    typed_derivation(id, ctx, Some(DerivationType::PrimarySource)).await
+    typed_derivation(id, ctx, DerivationType::PrimarySource).await
 }
 
 pub async fn was_revision_of<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-    typed_derivation(id, ctx, Some(DerivationType::Revision)).await
+    typed_derivation(id, ctx, DerivationType::Revision).await
 }
 pub async fn was_quoted_from<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-    typed_derivation(id, ctx, Some(DerivationType::Quotation)).await
+    typed_derivation(id, ctx, DerivationType::Quotation).await
 }
 
 pub async fn load_attribute<'a>(

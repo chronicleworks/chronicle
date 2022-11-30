@@ -3,7 +3,7 @@ use async_graphql::{
     Context, ID,
 };
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
-use diesel::{debug_query, prelude::*, sqlite::Sqlite};
+use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
 use super::{
@@ -128,7 +128,7 @@ pub async fn activity_timeline<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -179,7 +179,7 @@ pub async fn entities_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -228,7 +228,7 @@ pub async fn activities_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 
@@ -278,7 +278,7 @@ pub async fn agents_by_type<'a>(
         |after, before, first, last| async move {
             debug!(
                 "Cursor query {}",
-                debug_query::<Sqlite, _>(&sql_query).to_string()
+                debug_query::<Pg, _>(&sql_query).to_string()
             );
             let rx = sql_query.cursor(after, before, first, last);
 

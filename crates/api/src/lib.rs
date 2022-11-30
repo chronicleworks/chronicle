@@ -5,7 +5,7 @@ mod persistence;
 use chrono::{DateTime, Utc};
 use custom_error::*;
 use derivative::*;
-use diesel::{r2d2::ConnectionManager, SqliteConnection};
+use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 
@@ -30,7 +30,8 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use persistence::{Store, StoreError, MIGRATIONS};
+pub use persistence::StoreError;
+use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
@@ -201,7 +202,7 @@ where
 {
     #[instrument(skip(ledger_writer, ledger_reader,))]
     pub async fn new<R, W>(
-        pool: Pool<ConnectionManager<SqliteConnection>>,
+        pool: Pool<ConnectionManager<PgConnection>>,
         ledger_writer: W,
         ledger_reader: R,
         secret_path: &Path,
@@ -225,9 +226,8 @@ where
         let store = Store::new(pool.clone())?;
 
         pool.get()?
-            .immediate_transaction(|connection| {
-                connection.run_pending_migrations(MIGRATIONS).map(|_| ())
-            })
+            .build_transaction()
+            .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
             .map_err(|migration| StoreError::DbMigration { migration })?;
 
         for (ns, uuid) in namespace_bindings {
@@ -354,7 +354,7 @@ where
     #[instrument(skip(connection))]
     fn ensure_namespace(
         &mut self,
-        connection: &mut SqliteConnection,
+        connection: &mut PgConnection,
         external_id: &ExternalId,
     ) -> Result<(NamespaceId, Vec<ChronicleOperation>), ApiError> {
         let ns = self.store.namespace_by_external_id(connection, external_id);
@@ -391,7 +391,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
@@ -424,7 +424,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
@@ -461,7 +461,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let (id, to_apply) = {
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
@@ -498,7 +498,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let id = EntityId::from_external_id(&external_id);
@@ -541,7 +541,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let create = ChronicleOperation::ActivityExists(ActivityExists {
@@ -583,7 +583,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let create = ChronicleOperation::AgentExists(AgentExists {
@@ -617,7 +617,7 @@ where
         let external_id = external_id.to_owned();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
                 let model = ProvModel::from_tx(&to_apply)?;
@@ -748,7 +748,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
@@ -782,7 +782,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
@@ -815,7 +815,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let tx = ChronicleOperation::EntityDerive(EntityDerive {
@@ -870,7 +870,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let mut connection = api.store.connection()?;
@@ -958,7 +958,7 @@ where
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 match registration {
@@ -1006,7 +1006,7 @@ where
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
                 let agent_id = {
                     if let Some(agent) = agent {
@@ -1058,7 +1058,7 @@ where
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let agent_id = {
@@ -1105,7 +1105,7 @@ where
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
                 let agent_id = {
@@ -1150,7 +1150,7 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.immediate_transaction(|connection| {
+            connection.build_transaction().run(|connection| {
                 api.store
                     .use_agent(connection, id.external_id_part(), &namespace)
             })?;
@@ -1164,7 +1164,7 @@ where
 #[cfg(test)]
 mod test {
 
-    use std::collections::HashMap;
+    use std::{collections::HashMap, time::Duration};
 
     use chrono::{TimeZone, Utc};
     use common::{
@@ -1177,8 +1177,15 @@ mod test {
         },
     };
 
-    use crate::{persistence::ConnectionOptions, Api, ApiDispatch, ApiError, UuidGen};
-    use diesel::{r2d2::ConnectionManager, SqliteConnection};
+    use crate::{Api, ApiDispatch, ApiError, UuidGen};
+    use diesel::{r2d2::ConnectionManager, PgConnection};
+    use pg_embed::{
+        self,
+        pg_enums::PgAuthMethod,
+        pg_fetch::PgFetchSettings,
+        pg_types::PgResult,
+        postgres::{self, PgEmbed},
+    };
     use r2d2::Pool;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -1187,8 +1194,10 @@ mod test {
         ActivityCommand, AgentCommand, ApiCommand, KeyRegistration, NamespaceCommand,
     };
 
-    #[derive(Clone)]
-    struct TestDispatch(ApiDispatch);
+    struct TestDispatch {
+        api: ApiDispatch,
+        _db: PgEmbed, // share lifetime
+    }
 
     impl TestDispatch {
         pub async fn dispatch(
@@ -1196,10 +1205,10 @@ mod test {
             command: ApiCommand,
         ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.0.dispatch(command).await? {
+            if let ApiResponse::Submission { .. } = self.api.dispatch(command).await? {
                 // Recv until we get a commit notification
                 loop {
-                    let commit = self.0.notify_commit.subscribe().recv().await.unwrap();
+                    let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
                     match commit {
                         common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
                         common::ledger::SubmissionStage::Committed(Ok(commit)) => {
@@ -1224,28 +1233,39 @@ mod test {
         }
     }
 
+    async fn get_test_db_connection() -> PgResult<(PgEmbed, Pool<ConnectionManager<PgConnection>>)>
+    {
+        let settings = postgres::PgSettings {
+            database_dir: TempDir::new().unwrap().into_path(),
+            port: portpicker::pick_unused_port().unwrap() as i16,
+            user: "testuser".to_string(),
+            password: "please".to_string(),
+            auth_method: PgAuthMethod::MD5,
+            persistent: false,
+            timeout: Some(Duration::from_secs(50)),
+            migration_dir: None,
+        };
+        let mut database = PgEmbed::new(settings, PgFetchSettings::default()).await?;
+        database.setup().await?;
+        database.start_db().await?;
+        let db_name = format!("chronicle-test-{}", Uuid::new_v4());
+        database.create_database(db_name.as_str()).await?;
+        let db_uri = database.full_db_uri(&db_name);
+        let pool = Pool::builder()
+            .build(ConnectionManager::<PgConnection>::new(db_uri))
+            .unwrap();
+        Ok((database, pool))
+    }
+
     async fn test_api() -> TestDispatch {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
-        // We need to use a real file for sqlite, as in mem either re-creates between
-        // macos temp dir permissions don't work with sqlite
-        std::fs::create_dir("./sqlite_test").ok();
-        let dbid = Uuid::new_v4();
+
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(std::time::Duration::from_secs(2)),
-            }))
-            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
-                "./sqlite_test/db{}.sqlite",
-                dbid
-            )))
-            .unwrap();
+        let (database, pool) = get_test_db_connection().await.unwrap();
 
         let dispatch = Api::new(
             pool,
@@ -1258,7 +1278,10 @@ mod test {
         .await
         .unwrap();
 
-        TestDispatch(dispatch)
+        TestDispatch {
+            api: dispatch,
+            _db: database, // share the lifetime
+        }
     }
 
     #[tokio::test]

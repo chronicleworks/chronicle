@@ -4,7 +4,7 @@ use diesel::{
     deserialize::FromSql,
     serialize::{Output, ToSql},
     sql_types::Integer,
-    QueryId, SqlType,
+    AsExpression, QueryId, SqlType,
 };
 
 use uuid::Uuid;
@@ -16,10 +16,13 @@ use super::{
     NamespaceId, Role,
 };
 
-#[derive(QueryId, SqlType, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    QueryId, SqlType, AsExpression, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,
+)]
 #[diesel(sql_type = Integer)]
 #[repr(i32)]
 pub enum DerivationType {
+    None,
     Revision,
     Quotation,
     PrimarySource,
@@ -32,6 +35,7 @@ where
 {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> diesel::serialize::Result {
         match self {
+            DerivationType::None => (-1).to_sql(out),
             DerivationType::Revision => 1.to_sql(out),
             DerivationType::Quotation => 2.to_sql(out),
             DerivationType::PrimarySource => 3.to_sql(out),
@@ -46,6 +50,7 @@ where
 {
     fn from_sql(bytes: diesel::backend::RawValue<'_, DB>) -> diesel::deserialize::Result<Self> {
         match i32::from_sql(bytes)? {
+            -1 => Ok(DerivationType::None),
             1 => Ok(DerivationType::Revision),
             2 => Ok(DerivationType::Quotation),
             3 => Ok(DerivationType::PrimarySource),

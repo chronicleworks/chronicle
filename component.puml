@@ -3,7 +3,7 @@ skinparam componentStyle rectangle
 
 
 component "Chronicle" {
-    database sqlite
+    database PostgreSQL
 
     file keystore
 
@@ -13,7 +13,7 @@ component "Chronicle" {
 
     [graphql playground]
 
-    () graphql
+    () GraphQL
 }
 
 
@@ -27,13 +27,13 @@ component "Sawtooth" {
 
 
 
-[Apollo Server] <..> graphql: federates
+[Apollo Server] <..> GraphQL: federates
 [API] ..> [graphql playground]: serves
-[graphql playground] <..> graphql
+[graphql playground] <..> GraphQL
 CLI <..> API: spawns or uses remote
-CLI <..> graphql: uses
-[API] <..> graphql
-[API] <..> sqlite
+CLI <..> GraphQL: uses
+[API] <..> GraphQL
+[API] <..> PostgreSQL
 [API] <..> keystore
 [API] <..> [sawtooth API]
 

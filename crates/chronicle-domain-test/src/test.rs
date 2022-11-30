@@ -66,7 +66,7 @@ mod test {
     use chronicle::{
         api::{
             chronicle_graphql::{Store, Subscription},
-            Api, ConnectionOptions, UuidGen,
+            Api, UuidGen,
         },
         async_graphql::{Request, Schema},
         chrono::{DateTime, NaiveDate, Utc},
@@ -76,7 +76,14 @@ mod test {
     };
     use diesel::{
         r2d2::{ConnectionManager, Pool},
-        SqliteConnection,
+        PgConnection,
+    };
+    use pg_embed::{
+        self,
+        pg_enums::PgAuthMethod,
+        pg_fetch::PgFetchSettings,
+        pg_types::PgResult,
+        postgres::{self, PgEmbed},
     };
     use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
@@ -90,29 +97,39 @@ mod test {
         }
     }
 
+    async fn get_test_db_connection() -> PgResult<(PgEmbed, Pool<ConnectionManager<PgConnection>>)>
+    {
+        let settings = postgres::PgSettings {
+            database_dir: TempDir::new().unwrap().into_path(),
+            port: portpicker::pick_unused_port().unwrap() as i16,
+            user: "testuser".to_string(),
+            password: "please".to_string(),
+            auth_method: PgAuthMethod::MD5,
+            persistent: false,
+            timeout: Some(Duration::from_secs(50)),
+            migration_dir: None,
+        };
+        let mut database = PgEmbed::new(settings, PgFetchSettings::default()).await?;
+        database.setup().await?;
+        database.start_db().await?;
+        let db_name = format!("chronicle-test-{}", Uuid::new_v4());
+        database.create_database(db_name.as_str()).await?;
+        let db_uri = database.full_db_uri(&db_name);
+        let pool = Pool::builder()
+            .build(ConnectionManager::<PgConnection>::new(db_uri))
+            .unwrap();
+        Ok((database, pool))
+    }
+
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap();
 
-        // We need to use a real file for sqlite, as in mem either re-creates between
-        // macos temp dir permissions don't work with sqlite
-        std::fs::create_dir("./sqlite_test").ok();
-        let dbid = Uuid::new_v4();
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(Duration::from_secs(2)),
-            }))
-            .build(ConnectionManager::<SqliteConnection>::new(&*format!(
-                "./sqlite_test/db{}.sqlite",
-                dbid
-            )))
-            .unwrap();
+        let (database, pool) = get_test_db_connection().await.unwrap();
 
         let dispatch = Api::new(
             pool.clone(),
@@ -128,6 +145,7 @@ mod test {
         Schema::build(Query, Mutation, Subscription)
             .data(Store::new(pool))
             .data(dispatch)
+            .data(database) // share the lifetime
             .finish()
     }
 

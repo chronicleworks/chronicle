@@ -1110,6 +1110,7 @@ impl Operate for JsonValue {
 
     fn derivation(&mut self, typ: &DerivationType) {
         let typ = match typ {
+            DerivationType::None => panic!("should never handle a None derivation type"),
             DerivationType::Revision => "Revision",
             DerivationType::Quotation => "Quotation",
             DerivationType::PrimarySource => "PrimarySource",

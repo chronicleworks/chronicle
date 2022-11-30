@@ -21,12 +21,12 @@ common = { path = "../common" }
 custom_error = "1.9.2"
 derivative = "2.2.0"
 diesel = { version = "2.0.0-rc.0", features = [
-  "sqlite",
+  "postgres",
   "uuid",
   "chrono",
   "r2d2",
 ] }
-diesel_migrations = { version = "2.0.0-rc.0", features = ["sqlite"] }
+diesel_migrations = { version = "2.0.0-rc.0", features = ["postgres"] }
 futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
@@ -34,7 +34,7 @@ iref = "2.1.2"
 iref-enum = "2.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
-libsqlite3-sys = { version = "*", features = ["bundled"] }
+pg-embed = "0.6.5"
 open = "2.1.1"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
@@ -53,6 +53,7 @@ uuid = { version = "0.8.2", features = ["v4"] }
 
 [dev-dependencies]
 insta    = { version = "1.14.0", features = ["redactions", "toml"] }
+portpicker = "0.1.1"
 tempfile = "3.3.0"
 
 [build-dependencies]
