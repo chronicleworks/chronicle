@@ -1172,21 +1172,20 @@ mod test {
             ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
             KeyRegistration, NamespaceCommand,
         },
-        database::get_embedded_db_connection,
+        database::{get_embedded_db_connection, Database},
         ledger::InMemLedger,
         prov::{
             operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
             ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
         },
     };
-    use pg_embed::{self, postgres::PgEmbed};
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
 
     struct TestDispatch {
         api: ApiDispatch,
-        _db: PgEmbed, // share lifetime
+        _db: Database, // share lifetime
     }
 
     impl TestDispatch {

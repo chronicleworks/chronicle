@@ -11,7 +11,9 @@ use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
 use common::{
     commands::ApiResponse,
+    database::Database,
     ledger::SubmissionStage,
+    prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
 use tracing::{debug, error, info, instrument};
@@ -27,7 +29,6 @@ use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use telemetry::{self, ConsoleLogging};
 use url::Url;
 
-use common::prov::to_json_ld::ToJson;
 use std::{io, net::SocketAddr};
 
 use crate::codegen::ChronicleDomainDef;
@@ -67,22 +68,21 @@ impl UuidGen for UniqueUuid {}
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
 #[cfg(feature = "inmem")]
-async fn pool(_config: &Config) -> Result<(ConnectionPool, Option<impl Drop>), ApiError> {
+async fn pool(_config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
     use common::database::get_embedded_db_connection;
     let (database, pool) = get_embedded_db_connection().await.unwrap();
     Ok((pool, Some(database)))
 }
 
 #[cfg(not(feature = "inmem"))]
-async fn pool(config: &Config) -> Result<(ConnectionPool, Option<impl Drop>), ApiError> {
+async fn pool(config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
     use diesel::Connection;
-    use pg_embed::postgres::PgEmbed;
     let dburl = config.store.address.as_str();
     // before pooling, first establish a test connection to get a clearer error if it fails
     PgConnection::establish(dburl).map_err(|source| api::StoreError::DbConnection { source })?;
     Ok((
         Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?,
-        None::<PgEmbed>,
+        None::<Database>,
     ))
 }
 
@@ -329,14 +329,13 @@ pub mod test {
     use api::{Api, ApiDispatch, ApiError, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
-        database::get_embedded_db_connection,
+        database::{get_embedded_db_connection, Database},
         ledger::{InMemLedger, SubmissionStage},
         prov::{
             to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
         },
     };
-    use pg_embed::postgres::PgEmbed;
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -346,7 +345,7 @@ pub mod test {
 
     struct TestDispatch {
         api: ApiDispatch,
-        _db: PgEmbed, // share lifetime
+        _db: Database, // share lifetime
     }
 
     impl TestDispatch {

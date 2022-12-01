@@ -8,13 +8,19 @@ use pg_embed::{
 };
 use r2d2::Pool;
 use std::time::Duration;
-use tempfile::TempDir;
+use temp_dir::TempDir;
 use uuid::Uuid;
 
+pub struct Database {
+    _embedded: PgEmbed,
+    _location: TempDir,
+}
+
 pub async fn get_embedded_db_connection(
-) -> PgResult<(PgEmbed, Pool<ConnectionManager<PgConnection>>)> {
+) -> PgResult<(Database, Pool<ConnectionManager<PgConnection>>)> {
+    let temp_dir = TempDir::new().unwrap();
     let settings = postgres::PgSettings {
-        database_dir: TempDir::new().unwrap().into_path(),
+        database_dir: temp_dir.path().to_path_buf(),
         port: portpicker::pick_unused_port().unwrap() as i16,
         user: "chronicle".to_string(),
         password: "please".to_string(),
@@ -32,5 +38,11 @@ pub async fn get_embedded_db_connection(
     let pool = Pool::builder()
         .build(ConnectionManager::<PgConnection>::new(db_uri))
         .unwrap();
-    Ok((database, pool))
+    Ok((
+        Database {
+            _embedded: database,
+            _location: temp_dir,
+        },
+        pool,
+    ))
 }
