@@ -32,6 +32,7 @@ pub struct DirectoryStoredKeys {
 }
 
 impl DirectoryStoredKeys {
+    /// Create an object for key storage with a pointer to the provided key store path
     pub fn new<P>(base: P) -> Result<Self, SignerError>
     where
         P: AsRef<Path>,
@@ -42,10 +43,12 @@ impl DirectoryStoredKeys {
         })
     }
 
+    /// Return the signing key associated with the Chronicle user
     pub fn chronicle_signing(&self) -> Result<SigningKey, SignerError> {
         Self::signing_key_at(&self.base)
     }
 
+    /// Return the signing key associated with an AgentId
     pub fn agent_signing(&self, agent: &AgentId) -> Result<SigningKey, SignerError> {
         Self::signing_key_at(&self.agent_path(agent))
     }
@@ -61,6 +64,7 @@ impl DirectoryStoredKeys {
             })
     }
 
+    /// Store a private key and/or public key for an agent, having ensured a directory named after the Agent's external id exists in the local key store
     pub fn store_agent(
         &self,
         agent: &AgentId,
@@ -86,6 +90,7 @@ impl DirectoryStoredKeys {
         Ok(())
     }
 
+    /// Import the private key and/or public key for an agent, having ensured a directory named after the given Agent's external id exists in the local key store
     pub fn import_agent(
         &self,
         agent: &AgentId,
@@ -111,6 +116,7 @@ impl DirectoryStoredKeys {
         Ok(())
     }
 
+    /// Ensure a directory at the locally configured key store path exists, and import an existing signing key and/or verifying key
     pub fn import_chronicle(
         &self,
         signing: Option<&Path>,
@@ -134,6 +140,7 @@ impl DirectoryStoredKeys {
         Ok(())
     }
 
+    /// Ensure a directory named after the external id of an Agent exists in the local key store and write a new signing key to that path
     pub fn generate_agent(&self, agent: &AgentId) -> Result<(), SignerError> {
         info!(generate_agent_key_at = ?self.agent_path(agent));
         let path = self.agent_path(agent);
@@ -141,12 +148,14 @@ impl DirectoryStoredKeys {
         Self::new_signing_key(&path)
     }
 
+    /// Generate and store a Chronicle super user signing key in the local key store
     pub fn generate_chronicle(&self) -> Result<(), SignerError> {
         info!(generate_chronicle_key_at = ?self.base);
         std::fs::create_dir_all(&self.base)?;
         Self::new_signing_key(&self.base)
     }
 
+    /// Write a new signing key to the given path
     fn new_signing_key(secretpath: &Path) -> Result<(), SignerError> {
         debug!(generate_secret_at = ?secretpath);
         let secret = SecretKey::random(StdRng::from_entropy());
@@ -161,10 +170,12 @@ impl DirectoryStoredKeys {
         Ok(())
     }
 
+    /// Return a path to a directory named after the external id of an Agent within the local key store
     fn agent_path(&self, agent: &AgentId) -> PathBuf {
         Path::join(&self.base, Path::new(agent.external_id_part().as_str()))
     }
 
+    /// Derive and return a signing key from the private key stored at the given path
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {
         debug!(load_signing_key_at = ?path);
         Ok(SigningKey::from_pkcs8_pem(&std::fs::read_to_string(
@@ -172,6 +183,7 @@ impl DirectoryStoredKeys {
         )?)?)
     }
 
+    /// Derive and return a verifying key from the public key stored at the given path
     fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
         debug!(load_verifying_key_at = ?path);
         Ok(VerifyingKey::from_public_key_pem(

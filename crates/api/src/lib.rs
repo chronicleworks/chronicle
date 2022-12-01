@@ -836,10 +836,10 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::EntityAttach), reading input files and using the agent's private keys as required
+    /// Creates and submits a `ChronicleTransaction::EntityAttach`, reading input files and using the agent's private keys as required
     ///
     /// # Notes
-    /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
+    /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the [`async_signature`](https://docs.rs/async-signature/latest/async_signature/) crate
     #[instrument]
     async fn entity_attach(
         &self,
