@@ -53,7 +53,6 @@ uuid = { version = "0.8.2", features = ["v4"] }
 
 [dev-dependencies]
 insta    = { version = "1.14.0", features = ["redactions", "toml"] }
-portpicker = "0.1.1"
 tempfile = "3.3.0"
 
 [build-dependencies]
