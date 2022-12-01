@@ -500,7 +500,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "pg-embed",
- "portpicker",
  "proto",
  "question",
  "rand 0.8.5",

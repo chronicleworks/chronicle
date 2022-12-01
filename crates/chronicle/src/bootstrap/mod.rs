@@ -9,16 +9,18 @@ use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
-use common::{commands::ApiResponse, ledger::SubmissionStage, signing::DirectoryStoredKeys};
-
+use common::{
+    commands::ApiResponse,
+    ledger::SubmissionStage,
+    signing::{DirectoryStoredKeys, SignerError},
+};
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
-use common::signing::SignerError;
 use config::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
-    Connection, PgConnection,
+    PgConnection,
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
@@ -63,11 +65,25 @@ struct UniqueUuid;
 impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
-fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
+
+#[cfg(feature = "inmem")]
+async fn pool(_config: &Config) -> Result<(ConnectionPool, Option<impl Drop>), ApiError> {
+    use common::database::get_embedded_db_connection;
+    let (database, pool) = get_embedded_db_connection().await.unwrap();
+    Ok((pool, Some(database)))
+}
+
+#[cfg(not(feature = "inmem"))]
+async fn pool(config: &Config) -> Result<(ConnectionPool, Option<impl Drop>), ApiError> {
+    use diesel::Connection;
+    use pg_embed::postgres::PgEmbed;
     let dburl = config.store.address.as_str();
     // before pooling, first establish a test connection to get a clearer error if it fails
     PgConnection::establish(dburl).map_err(|source| api::StoreError::DbConnection { source })?;
-    Ok(Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?)
+    Ok((
+        Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?,
+        None::<PgEmbed>,
+    ))
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
@@ -150,7 +166,7 @@ where
     dotenv::dotenv().ok();
 
     let matches = cli.as_cmd().get_matches();
-    let pool = pool(&config)?;
+    let (pool, _pool_scope) = pool(&config).await?;
     let api = api(&pool, &matches, &config).await?;
     let ret_api = api.clone();
 
