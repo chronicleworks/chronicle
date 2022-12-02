@@ -549,7 +549,7 @@ impl From<&AgentDef> for ResourceDef {
             attributes: agent
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name()))
+                .map(|attr| AttributeRef(attr.typ.to_owned()))
                 .collect(),
         }
     }
@@ -561,18 +561,19 @@ impl From<&EntityDef> for ResourceDef {
             attributes: entity
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name()))
+                .map(|attr| AttributeRef(attr.typ.to_owned()))
                 .collect(),
         }
     }
 }
+
 impl From<&ActivityDef> for ResourceDef {
     fn from(activity: &ActivityDef) -> Self {
         Self {
             attributes: activity
                 .attributes
                 .iter()
-                .map(|attr| AttributeRef(attr.as_type_name()))
+                .map(|attr| AttributeRef(attr.typ.to_owned()))
                 .collect(),
         }
     }
@@ -1177,6 +1178,138 @@ pub mod test {
           - external_id: drummer
         "###);
 
+        Ok(())
+    }
+
+    fn create_test_yaml_file_with_acronyms(
+    ) -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+          name: "evidence"
+          attributes:
+            Content:
+              type: String
+            CMSId:
+              type: String
+            Title:
+              type: String
+            SearchParameter:
+              type: String
+            Reference:
+              type: String
+            Version:
+              type: Int
+          entities:
+            Question:
+              attributes:
+                - CMSId
+                - Content
+            EvidenceReference:
+              attributes:
+                - SearchParameter
+                - Reference
+            Guidance:
+              attributes:
+                - Title
+                - Version
+            PublishedGuidance:
+              attributes: []
+          activities:
+            QuestionAsked:
+              attributes:
+                - Content
+            Researched:
+              attributes: []
+            Published:
+              attributes:
+                - Version
+            Revised:
+              attributes:
+                - CMSId
+                - Version
+          agents:
+            Person:
+              attributes:
+                - CMSId
+            Organization:
+              attributes:
+                - Title
+          roles:
+            - STAKEHOLDER
+            - AUTHOR
+            - RESEARCHER
+            - EDITOR
+   "#,
+        )?;
+        Ok(file)
+    }
+
+    #[test]
+    fn test_from_domain_for_file_input_with_inflections() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let file = create_test_yaml_file_with_acronyms()?;
+        let s: String = std::fs::read_to_string(file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+        let input = DomainFileInput::from(&domain);
+
+        insta::assert_yaml_snapshot!(input, @r###"
+        ---
+        name: evidence
+        attributes:
+          CMSId:
+            type: String
+          Content:
+            type: String
+          Reference:
+            type: String
+          SearchParameter:
+            type: String
+          Title:
+            type: String
+          Version:
+            type: Int
+        agents:
+          OrganizationAgent:
+            attributes:
+              - Title
+          PersonAgent:
+            attributes:
+              - CMSId
+        entities:
+          EvidenceReferenceEntity:
+            attributes:
+              - SearchParameter
+              - Reference
+          GuidanceEntity:
+            attributes:
+              - Title
+              - Version
+          PublishedGuidanceEntity:
+            attributes: []
+          QuestionEntity:
+            attributes:
+              - CMSId
+              - Content
+        activities:
+          PublishedActivity:
+            attributes:
+              - Version
+          QuestionAskedActivity:
+            attributes:
+              - Content
+          ResearchedActivity:
+            attributes: []
+          RevisedActivity:
+            attributes:
+              - CMSId
+              - Version
+        roles:
+          - Stakeholder
+          - Author
+          - Researcher
+          - Editor
+        "###);
         Ok(())
     }
 }
