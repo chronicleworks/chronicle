@@ -268,7 +268,11 @@ pub async fn bootstrap<Query, Mutation>(
     let matches = cli(domain.clone()).as_cmd().get_matches();
 
     if let Some(generator) = matches.subcommand_matches("completions") {
-        let shell = generator.get_one::<Shell>("shell").unwrap();
+        let shell = generator
+            .get_one::<String>("shell")
+            .unwrap()
+            .parse::<Shell>()
+            .unwrap();
         print_completions(shell.to_owned(), &mut cli(domain.clone()).as_cmd());
         std::process::exit(0);
     }
