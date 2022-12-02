@@ -116,6 +116,9 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
                 r#"[secrets]
 path = "{}"
 [store]
+# https://www.postgresql.org/docs/current/libpq-connect.html
+# describes the format of database connection URIs following
+# postgresql://[userspec@][hostspec][/dbname][?paramspec]
 address = "{}"
 [validator]
 address = "{}"
