@@ -34,7 +34,6 @@ iref = "2.1.2"
 iref-enum = "2.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
-pg-embed = "0.6.5"
 open = "2.1.1"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
@@ -53,7 +52,6 @@ uuid = { version = "0.8.2", features = ["v4"] }
 
 [dev-dependencies]
 insta    = { version = "1.14.0", features = ["redactions", "toml"] }
-portpicker = "0.1.1"
 tempfile = "3.3.0"
 
 [build-dependencies]

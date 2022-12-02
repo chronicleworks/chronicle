@@ -79,13 +79,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
   mkdir -p /artifacts/amd64 && \
   mkdir -p /artifacts/arm64 && \
   apt-get remove -y libpq-dev && \
-  apt-get install -y libpq-dev:arm64 && \
+  apt-get install -y liblzma-dev:arm64 libpq-dev:arm64 && \
   cargo build --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/arm64 \
   && apt-get remove -y libpq-dev \
-  && apt-get install -y libpq-dev:amd64 \
+  && apt-get install -y liblzma-dev:amd64 libpq-dev:amd64 \
   && cargo build --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/x86_64-unknown-linux-gnu/release/chronicle /artifacts/amd64 \
   && mv -f target/x86_64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/amd64 \

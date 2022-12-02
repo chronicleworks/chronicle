@@ -9,23 +9,26 @@ use async_graphql::ObjectType;
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
-use common::{commands::ApiResponse, ledger::SubmissionStage, signing::DirectoryStoredKeys};
-
+use common::{
+    commands::ApiResponse,
+    database::Database,
+    ledger::SubmissionStage,
+    prov::to_json_ld::ToJson,
+    signing::{DirectoryStoredKeys, SignerError},
+};
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
-use common::signing::SignerError;
 use config::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
-    Connection, PgConnection,
+    PgConnection,
 };
 
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use telemetry::{self, ConsoleLogging};
 use url::Url;
 
-use common::prov::to_json_ld::ToJson;
 use std::{io, net::SocketAddr};
 
 use crate::codegen::ChronicleDomainDef;
@@ -63,11 +66,24 @@ struct UniqueUuid;
 impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
-fn pool(config: &Config) -> Result<ConnectionPool, ApiError> {
+
+#[cfg(feature = "inmem")]
+async fn pool(_config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+    use common::database::get_embedded_db_connection;
+    let (database, pool) = get_embedded_db_connection().await.unwrap();
+    Ok((pool, Some(database)))
+}
+
+#[cfg(not(feature = "inmem"))]
+async fn pool(config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+    use diesel::Connection;
     let dburl = config.store.address.as_str();
     // before pooling, first establish a test connection to get a clearer error if it fails
     PgConnection::establish(dburl).map_err(|source| api::StoreError::DbConnection { source })?;
-    Ok(Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?)
+    Ok((
+        Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?,
+        None::<Database>,
+    ))
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
@@ -150,7 +166,7 @@ where
     dotenv::dotenv().ok();
 
     let matches = cli.as_cmd().get_matches();
-    let pool = pool(&config)?;
+    let (pool, _pool_scope) = pool(&config).await?;
     let api = api(&pool, &matches, &config).await?;
     let ret_api = api.clone();
 
@@ -310,31 +326,17 @@ pub async fn bootstrap<Query, Mutation>(
 /// configuration + server execution would get a little tricky in the context of a unit test.
 #[cfg(test)]
 pub mod test {
-    use std::{collections::HashMap, time::Duration};
-
     use api::{Api, ApiDispatch, ApiError, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
+        database::{get_embedded_db_connection, Database},
         ledger::{InMemLedger, SubmissionStage},
         prov::{
             to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
         },
     };
-
-    use diesel::{
-        r2d2::{ConnectionManager, Pool},
-        PgConnection,
-    };
-
-    use pg_embed::{
-        self,
-        pg_enums::PgAuthMethod,
-        pg_fetch::PgFetchSettings,
-        pg_types::PgResult,
-        postgres::{self, PgEmbed},
-    };
-
+    use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
 
@@ -343,7 +345,7 @@ pub mod test {
 
     struct TestDispatch {
         api: ApiDispatch,
-        _db: PgEmbed, // share lifetime
+        _db: Database, // share lifetime
     }
 
     impl TestDispatch {
@@ -378,30 +380,6 @@ pub mod test {
         }
     }
 
-    async fn get_test_db_connection() -> PgResult<(PgEmbed, Pool<ConnectionManager<PgConnection>>)>
-    {
-        let settings = postgres::PgSettings {
-            database_dir: TempDir::new().unwrap().into_path(),
-            port: portpicker::pick_unused_port().unwrap() as i16,
-            user: "testuser".to_string(),
-            password: "please".to_string(),
-            auth_method: PgAuthMethod::MD5,
-            persistent: false,
-            timeout: Some(Duration::from_secs(50)),
-            migration_dir: None,
-        };
-        let mut database = PgEmbed::new(settings, PgFetchSettings::default()).await?;
-        database.setup().await?;
-        database.start_db().await?;
-        let db_name = format!("chronicle-test-{}", Uuid::new_v4());
-        database.create_database(db_name.as_str()).await?;
-        let db_uri = database.full_db_uri(&db_name);
-        let pool = Pool::builder()
-            .build(ConnectionManager::<PgConnection>::new(db_uri))
-            .unwrap();
-        Ok((database, pool))
-    }
-
     async fn test_api() -> TestDispatch {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
@@ -410,7 +388,7 @@ pub mod test {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let (database, pool) = get_test_db_connection().await.unwrap();
+        let (database, pool) = get_embedded_db_connection().await.unwrap();
         let dispatch = Api::new(
             pool,
             ledger,

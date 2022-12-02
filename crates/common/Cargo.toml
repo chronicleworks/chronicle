@@ -42,14 +42,18 @@ k256 = { version = "0.11.3", features = [
 ] }
 lazy_static = "1.4.0"
 percent-encoding = "2.1.0"
+pg-embed = "0.6.5"
 pkcs8 = { version = "*", features = ["std", "alloc"] }
+portpicker = "0.1.1"
 prost = "0.10.0"
+r2d2 = "0.8.9"
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
 serde = "1.0.136"
 serde_derive = "1.0.136"
 serde_json = "1.0.79"
 static-iref = "2.0.0"
+temp-dir = "0.1.11"
 thiserror = "1.0.36"
 tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"

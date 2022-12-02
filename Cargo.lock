@@ -91,9 +91,7 @@ dependencies = [
  "open",
  "opentelemetry",
  "parking_lot 0.12.1",
- "pg-embed",
  "poem",
- "portpicker",
  "r2d2",
  "serde",
  "serde_derive",
@@ -501,7 +499,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "pg-embed",
- "portpicker",
  "proto",
  "question",
  "rand 0.8.5",
@@ -545,10 +542,7 @@ name = "chronicle-example"
 version = "0.4.0"
 dependencies = [
  "chronicle",
- "diesel",
  "insta",
- "pg-embed",
- "portpicker",
  "telemetry",
  "tempfile",
  "tracing",
@@ -709,10 +703,13 @@ dependencies = [
  "k256",
  "lazy_static",
  "percent-encoding",
+ "pg-embed",
  "pkcs8",
+ "portpicker",
  "proptest",
  "prost",
  "prost-build",
+ "r2d2",
  "rand 0.8.5",
  "rand_core 0.6.3",
  "sawtooth-sdk",
@@ -720,6 +717,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "static-iref",
+ "temp-dir",
  "thiserror",
  "tokio",
  "tracing",
@@ -3728,6 +3726,12 @@ dependencies = [
  "tracing-subscriber",
  "url",
 ]
+
+[[package]]
+name = "temp-dir"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af547b166dd1ea4b472165569fc456cfb6818116f854690b0ff205e636523dab"
 
 [[package]]
 name = "tempfile"
