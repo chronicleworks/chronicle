@@ -7,23 +7,33 @@ Except for the lack of attributes and roles, all Chronicle functions are
 available - including domain types. Care must be taken with the use of domain
 types when using `chronicle-untyped` as they are not checked.
 
-## Creating an agent in untyped chronicle
+## Creating an Activity, Agent, and Entity in Untyped Chronicle
 
 The untyped creation mutations `defineAgent`, `defineActivity`, and `defineEntity`
 can be used to create provenance terms. Mutations that produce provenance
 relations work in the same way as typed Chronicle.
 
 ```graphql
-mutation {
-    defineAgent(externalId: "agent",
-          attributes: {ProvAgentAttribute:"artist"}) {
-            context
-    }
+mutation untypedActivity {
+  defineActivity(externalId: "activity", attributes: {type: "attribute"}) {
+    context
+  }
 }
 
+mutation untypedAgent {
+  defineAgent(externalId: "agent", attributes: {type: "attribute"}) {
+    context
+  }
+}
+
+mutation untypedEntity {
+  defineEntity(externalId: "entity", attributes: {type: "attribute"}) {
+    context
+  }
+}
 ```
 
-## Querying untyped chronicle
+## Querying Untyped Chronicle
 
 The activity timeline can be queried in the same manner as typed chronicle, with
 the omission of type filters. Returned prov terms will be of the 'unknown' types
@@ -67,5 +77,4 @@ query {
         }
     }
 }
-
 ```

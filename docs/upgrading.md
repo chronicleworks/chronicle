@@ -13,18 +13,18 @@ Where relational mutations and queries previously required `ActivityId`, `AgentI
 and/or `EntityId` inputs, Chronicle now makes available the `ActivityIdOrExternal`,
 `AgentIdOrExternal`, and `EntityIdOrExternal` input types. In such cases, Chronicle
 users can now use either simply the `ExternalId` or the full `Id`.
-See [Recording Provenance](recording_provenance.md) for examples.
+See [Recording Provenance](./recording_provenance.md) for examples.
 
 ### Query Agents, Entities, and Activities by Type
 
-Chronicle users can now query [agents](querying_provenance.md#agentsbytype),
-[entities](querying_provenance.md#entitiesbytype), and
-[activities](querying_provenance.md#activitiesbytype) by type.
+Chronicle users can now query [agents](./querying_provenance.md#agentsbytype),
+[entities](./querying_provenance.md#entitiesbytype), and
+[activities](./querying_provenance.md#activitiesbytype) by type.
 
 ### JSON Attribute
 
 In addition to `String`, `Int`, and `Bool`, Chronicle users can now
-[add generic JSON data](domain_modelling.md#inputting-a-json-attribute)
+[add generic JSON data](./domain_modelling.md#inputting-a-json-attribute)
 to activities, agents, and entities.
 
 ## To 0.3x
@@ -40,7 +40,7 @@ Before 0.3, contradictions would result in a no-operation, but with no
 notification to clients. 0.3 contains various protocol changes to notify
 Chronicle and connected clients of contradictions.
 
-See: [subscriptions](recording_provenance.md#commit-notification-subscriptions)
+See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions)
 
 ### Submission Notification
 
@@ -48,7 +48,7 @@ Before 0.3, submission was not independently notified from commit, and had no
 ability to carry an error result. There is now
 a 2 stage notification for chronicle operations.
 
-See: [subscriptions](recording_provenance.md#commit-notification-subscriptions)
+See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions)
 
 ### External ID
 

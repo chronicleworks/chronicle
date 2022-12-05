@@ -308,33 +308,33 @@ See [chronicle evidence](#chronicle-evidence)
 #### Entity: wasGeneratedBy
 
 A list of the Activities that generated this entity. See
-[generation](provenance_concepts#generation).
+[generation](./provenance_concepts.md#generation).
 
 #### Entity: wasRevisionOf
 
 A list of the Entities that this entity is a revision of. See
-[revision](provenance_concepts#revision). This currently only returns the
+[revision](./provenance_concepts.md#revision). This currently only returns the
 immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
 #### Entity: wasQuotedFrom
 
 A list of the Entities that this entity was quoted from. See
-[quotation](provenance_concepts#quotation). This currently only returns the
+[quotation](./provenance_concepts.md#quotation). This currently only returns the
 immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
 #### Entity: wasDerivedFrom
 
 A list of the Entities that this entity is derived from. See
-[derivation](provenance_concepts#derivation). This currently only returns
+[derivation](./provenance_concepts.md#derivation). This currently only returns
 the immediate entity that the current entity is derived from and will require
 recursive enumeration to retrieve a deep hierarchy.
 
 ### Attributes
 
 Attribute values for the attributes associated with the entity subtype, as
-determined by the [domain model](domain_modelling).
+determined by the [domain model](./domain_modelling.md).
 
 ### Activity subtypes
 
