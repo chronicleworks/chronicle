@@ -64,15 +64,15 @@ Here we attempt to change the end date of an activity after it has been
 recorded - one of these mutations will fail.
 
 ```graphql
-    mutation {
-        endActivity(id: {id: "chronicle:activity:birthday" },
-            time: "2022-07-29T12:41:52.433Z"
-        )
+mutation {
+    endActivity(id: {id: "chronicle:activity:birthday" },
+        time: "2022-07-29T12:41:52.433Z"
+    )
 
-        endActivity(id: {id: "chronicle:activity:birthday" },
-            time: "2020-07-29T12:41:52.433Z"
-        )
-    }
+    endActivity(id: {id: "chronicle:activity:birthday" },
+        time: "2020-07-29T12:41:52.433Z"
+    )
+}
 ```
 
 ### Contradiction of attribute value
@@ -81,17 +81,17 @@ Here we attempt to change the value of an attribute - one of these operations
 will fail.
 
 ```graphql
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson"
+    })
+}
 
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Kipling"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Kipling"
+    })
+}
 ```
 
 ### Extending attributes is not a contradiction
@@ -101,19 +101,18 @@ been extended to include new attributes, it is valid to append new attributes,
 as long as the values of the already recorded ones are unchanged.
 
 ```graphql
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson"
+    })
+}
 
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson"
-        })
-    }
-
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson",
-            heightInCentimetersAttribute: "185"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson",
+        heightInCentimetersAttribute: "185"
+    })
+}
 ```
 
 ## Operations
@@ -178,12 +177,12 @@ type Submission {
 }
 
 subscription {
-    commitNotifications {
-        stage
-        tx_id
-        error
-        delta
-    }
+  commitNotifications {
+      stage
+      tx_id
+      error
+      delta
+  }
 }
 ```
 
@@ -196,45 +195,45 @@ the result of an operation should await the
  Chronicle will notify commit completion in 2 stages, the first will be a submit
  notification like:
 
- ```graphql
-  {
-    stage: "SUBMIT"
-    error: null
-    delta: null
-    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-  }
+ ```json
+{
+  stage: "SUBMIT"
+  error: null
+  delta: null
+  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+}
  ```
 
  And the second, when the Chronicle transaction has been committed to the
  ledger:
 
- ```graphql
-  {
-    stage: "COMMIT"
-    error: null
-    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-    delta:  {
-        "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
-        "@graph": [
-          {
-            "@id": "chronicle:activity:publication1",
-            "@type": [
-              "prov:Activity",
-              "chronicle:domaintype:Published"
-            ],
-            "externalId": "publication1",
-            "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-            "value": {
-            }
-          },
-          {
-            "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-            "@type": "chronicle:Namespace",
-            "externalId": "default"
+ ```json
+{
+  stage: "COMMIT"
+  error: null
+  txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
+  delta:  {
+      "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+      "@graph": [
+        {
+          "@id": "chronicle:activity:publication1",
+          "@type": [
+            "prov:Activity",
+            "chronicle:domaintype:Published"
+          ],
+          "externalId": "publication1",
+          "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+          "value": {
           }
-        ]
-      }
-  }
+        },
+        {
+          "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+          "@type": "chronicle:Namespace",
+          "externalId": "default"
+        }
+      ]
+    }
+}
 ```
 
 Once this message has been received, clients can assume that provenance has been
@@ -384,10 +383,10 @@ of subtype `Question`, along with its attributes.
 
 ```graphql
 mutation {
-    defineQuestionEntity(externalId: "anaphylaxis-referral", attributes: {
-        CMSIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
-        contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
-    })
+  defineQuestionEntity(externalId: "anaphylaxis-referral", attributes: {
+      CMSIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
+      contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
+  })
 }
 ```
 
@@ -569,7 +568,7 @@ for details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
-    defineOrganizationAgent(externalId: "health-trust", attributes: {})
+  defineOrganizationAgent(externalId: "health-trust", attributes: {})
 }
 ```
 
