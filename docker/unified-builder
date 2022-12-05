@@ -24,13 +24,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
   apt-get update && \
   apt-get install -y \
   build-essential \
+  cmake \
   gcc-x86-64-linux-gnu \
   g++-x86-64-linux-gnu \
   gcc-aarch64-linux-gnu \
   g++-aarch64-linux-gnu \
-  cmake \
-  libzmq3-dev \
   libssl-dev \
+  libzmq3-dev \
   protobuf-compiler \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -106,8 +106,9 @@ RUN apt-get update && \
   apt-get install -y \
   build-essential \
   cmake \
-  libzmq3-dev \
+  libpq-dev \
   libssl-dev \
+  libzmq3-dev \
   protobuf-compiler \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
