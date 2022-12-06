@@ -7,7 +7,7 @@ Except for the lack of attributes and roles, all Chronicle functions are
 available - including domain types. Care must be taken with the use of domain
 types when using `chronicle-untyped` as they are not checked.
 
-## Creating an agent in untyped chronicle
+## Creating an Agent in Untyped Chronicle
 
 The untyped creation mutations `defineAgent`, `defineActivity`, and `defineEntity`
 can be used to create provenance terms. Mutations that produce provenance
@@ -23,7 +23,11 @@ mutation {
 
 ```
 
-## Querying untyped chronicle
+## Creating an Activity in Untyped Chronicle
+
+## Creating an Entity in Untyped Chronicle
+
+## Querying Untyped Chronicle
 
 The activity timeline can be queried in the same manner as typed chronicle, with
 the omission of type filters. Returned prov terms will be of the 'unknown' types

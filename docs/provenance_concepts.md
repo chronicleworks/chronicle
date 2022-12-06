@@ -11,11 +11,9 @@ used and their corresponding mutations and GraphQL query structure.
 > An agent is something that bears some form of responsibility for an activity
 > taking place, for the existence of an entity, or for another agent's activity.
 
-Agents in Chronicle can be subtyped and contain attributes, specified [by the
-domain model agents section](domain_modelling#agent). Agents can be
-recorded using [the typed agent mutations](recording_provenance#agent) or
-can be left
-[untyped](untyped_chronicle#creating-an-agent-in-untyped-chronicle).
+Agents in Chronicle can be subtyped and contain attributes, specified
+[by the domain model agents section](./domain_modelling.md#agent). Agents can be
+recorded using [the typed agent mutations](recording_provenance#agent) or left [untyped](./untyped_chronicle.md#creating-an-agent-in-untyped-chronicle).
 
 ## Activity
 
@@ -30,9 +28,9 @@ can be left
 > or printing a book.
 
 Activities in Chronicle can be subtyped and contain attributes, specified [by
-the domain model](domain_modelling#activity). Agents can be recorded using
-[the typed activity mutations](recording_provenance#activity) or can be left
-[untyped](untyped_chronicle#creating-an-activity-in-untyped-chronicle).
+the domain model](domain_modelling#activity). Activities can be recorded using
+[the typed activity mutations](./recording_provenance.md#define-an-activity) or
+can be left [untyped](./untyped_chronicle.md#creating-an-activity-in-untyped-chronicle).
 
 ## Started
 
@@ -50,9 +48,9 @@ the domain model](domain_modelling#activity). Agents can be recorded using
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
 Entities in Chronicle can be subtyped and contain attributes, specified
-[by the domain model](domain_modelling#entity). Agents can be recorded using
-[the typed activity mutations](recording_provenance#entity) or can be left
-[untyped](untyped_chronicle#creating-an-entity-in-untyped-chronicle).
+[by the domain model](./domain_modelling.md#entity). Entities can be recorded using
+[the typed entity mutations](./recording_provenance.md#define-an-entity) or can be
+left [untyped](./untyped_chronicle.md#creating-an-entity-in-untyped-chronicle).
 
 ## Association
 
