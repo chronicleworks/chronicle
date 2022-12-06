@@ -34,6 +34,10 @@ the domain model](domain_modelling#activity). Agents can be recorded using
 [the typed activity mutations](recording_provenance#activity) or can be left
 [untyped](untyped_chronicle#creating-an-activity-in-untyped-chronicle).
 
+## Started
+
+## Ended
+
 ## Entity
 
 ![file](diagrams/out/entity.svg)
