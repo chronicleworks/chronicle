@@ -17,4 +17,9 @@ jobs:
           toolchain: stable
           override: true
       - run: cargo install cargo-checkmate
-      - run: cargo-checkmate
+      - run: cargo-checkmate check
+      - run: cargo-checkmate format
+      - run: cargo-checkmate clippy
+      - run: cargo-checkmate build
+      - run: cargo-checkmate doc
+      - run: cargo-checkmate audit
