@@ -28,4 +28,4 @@ Installs shell completions for bash, zsh or fish.
 ## Other subcommands
 
 Chronicle will also generate subcommands for recording provenance, derived from
-your [domain configuration](domain_modelling).
+your [domain configuration](./domain_modelling.md).

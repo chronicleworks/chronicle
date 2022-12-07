@@ -64,15 +64,15 @@ Here we attempt to change the end date of an activity after it has been
 recorded - one of these mutations will fail.
 
 ```graphql
-    mutation {
-        endActivity(id: {id: "chronicle:activity:birthday" },
-            time: "2022-07-29T12:41:52.433Z"
-        )
+mutation {
+    endActivity(id: {id: "chronicle:activity:birthday" },
+        time: "2022-07-29T12:41:52.433Z"
+    )
 
-        endActivity(id: {id: "chronicle:activity:birthday" },
-            time: "2020-07-29T12:41:52.433Z"
-        )
-    }
+    endActivity(id: {id: "chronicle:activity:birthday" },
+        time: "2020-07-29T12:41:52.433Z"
+    )
+}
 ```
 
 ### Contradiction of attribute value
@@ -81,17 +81,17 @@ Here we attempt to change the value of an attribute - one of these operations
 will fail.
 
 ```graphql
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson"
+    })
+}
 
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Kipling"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Kipling"
+    })
+}
 ```
 
 ### Extending attributes is not a contradiction
@@ -101,19 +101,18 @@ been extended to include new attributes, it is valid to append new attributes,
 as long as the values of the already recorded ones are unchanged.
 
 ```graphql
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson"
+    })
+}
 
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson"
-        })
-    }
-
-    mutation {
-        defineWriterAgent(id: "chronicle:agent:poet", attributes: {
-            externalIdAttribute: "Tennyson",
-            heightInCentimetersAttribute: "185"
-        })
-    }
+mutation {
+    defineWriterAgent(id: "chronicle:agent:poet", attributes: {
+        externalIdAttribute: "Tennyson",
+        heightInCentimetersAttribute: "185"
+    })
+}
 ```
 
 ## Operations
@@ -157,13 +156,12 @@ the agent, calling `startActivity(..)` the identity of the started activity.
 
 The `txId` property corresponds to the transaction id when running
 Chronicle with a backend ledger, or a randomly generated uuid when used in
-[in-memory](chronicle_architecture#development) mode.
+[in-memory](./building.md#in-memory-version) mode.
 
 ### Commit notification subscriptions
 
-Chronicle provides a [GraphQL
-subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/) to
-notify clients when a Chronicle operation has been sent to a backend ledger and
+Chronicle provides a [GraphQL subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/)
+to notify clients when a Chronicle operation has been sent to a backend ledger and
 when that operation has been applied to both the ledger and Chronicle.
 
 ```graphql
@@ -178,12 +176,12 @@ type Submission {
 }
 
 subscription {
-    commitNotifications {
-        stage
-        tx_id
-        error
-        delta
-    }
+  commitNotifications {
+      stage
+      tx_id
+      error
+      delta
+  }
 }
 ```
 
@@ -196,45 +194,45 @@ the result of an operation should await the
  Chronicle will notify commit completion in 2 stages, the first will be a submit
  notification like:
 
- ```graphql
-  {
-    stage: "SUBMIT"
-    error: null
-    delta: null
-    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-  }
+ ```json
+{
+  "stage": "SUBMIT",
+  "error": null,
+  "delta": null,
+  "txId": "12d3236ae1b227391725d2d9315b7ca53747217c5d..",
+}
  ```
 
  And the second, when the Chronicle transaction has been committed to the
  ledger:
 
- ```graphql
-  {
-    stage: "COMMIT"
-    error: null
-    txId: "12d3236ae1b227391725d2d9315b7ca53747217c5d.."
-    delta:  {
-        "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
-        "@graph": [
-          {
-            "@id": "chronicle:activity:publication1",
-            "@type": [
-              "prov:Activity",
-              "chronicle:domaintype:Published"
-            ],
-            "externalId": "publication1",
-            "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-            "value": {
-            }
-          },
-          {
-            "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-            "@type": "chronicle:Namespace",
-            "externalId": "default"
+ ```json
+{
+  "stage": "COMMIT",
+  "error": null,
+  "txId": "12d3236ae1b227391725d2d9315b7ca53747217c5d..",
+  "delta":  {
+      "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+      "@graph": [
+        {
+          "@id": "chronicle:activity:publication1",
+          "@type": [
+            "prov:Activity",
+            "chronicle:domaintype:Published"
+          ],
+          "externalId": "publication1",
+          "namespace": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+          "value": {
           }
-        ]
-      }
-  }
+        },
+        {
+          "@id": "chronicle:ns:default:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+          "@type": "chronicle:Namespace",
+          "externalId": "default"
+        }
+      ]
+    },
+}
 ```
 
 Once this message has been received, clients can assume that provenance has been
@@ -261,13 +259,13 @@ assumed to be non-resumable, as it will be a [contradiction](#contradiction).
 > concepts and ideas. An entity is a physical, digital, conceptual, or other
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
-See [provenance concepts](provenance_concepts#entity)
+See [provenance concepts](./provenance_concepts.md#entity)
 
 Using our example domain, Chronicle will have generated four entity subtypes for
 us, `Question`, `Guidance`, `PublishedGuidance`, and `EvidenceReference`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
-evolved, see [evolving your domain](domain_modelling#evolution).
+evolved, see [evolving your domain](./domain_modelling.md#evolution).
 
 The definition mutations `defineQuestion`, `defineGuidance`,
 `definePublishedGuidance`, and `defineEvidenceReference` will also have been
@@ -384,10 +382,10 @@ of subtype `Question`, along with its attributes.
 
 ```graphql
 mutation {
-    defineQuestionEntity(externalId: "anaphylaxis-referral", attributes: {
-        CMSIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
-        contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
-    })
+  defineQuestionEntity(externalId: "anaphylaxis-referral", attributes: {
+      CMSIdAttribute: "0c6fa8c5-69da-43d1-95d6-726f5f671b30",
+      contentAttribute: "How to assess and refer patients needing emergency treatment for Anaphylaxis",
+  })
 }
 ```
 
@@ -411,13 +409,13 @@ Either operation will return the ID of the newly defined question.
 > entities; physical activities can include driving a car between two locations
 > or printing a book.
 
-See [provenance concepts](provenance_concepts#activity)
+See [provenance concepts](./provenance_concepts.md#activity)
 
 Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
 `Researched`, `Revised`, and `Published`, as a GraphQL union called `Activity`.
 The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
-[evolving your domain](domain_modelling#evolution).
+[evolving your domain](./domain_modelling.md#evolution).
 
 The definition mutations `defineQuestionAskedActivity`, `defineResearchedActivity`,
 `defineRevisedActivity`, and `definePublished` will also have been created to
@@ -555,21 +553,20 @@ chronicle revised-activity define september-2018-review --version-attr 14
 > An agent is something that bears some form of responsibility for an activity
 > taking place, for the existence of an entity, or for another agent's activity.
 
-See [provenance concepts](provenance_concepts#agent)
+See [provenance concepts](./provenance_concepts.md#agent)
 
 Chronicle will have generated two `Agent` subtypes for us, `PersonAgent` and
 `OrganizationAgent` as a GraphQL union called `Agent`. The union also contains an
 untyped activity `ProvAgent`. The untyped agent can be potentially returned
-where the domain definition has evolved, see [evolving your
-domain](domain_modelling#evolution).
+where the domain definition has evolved, see [evolving your domain](./domain_modelling.md#evolution).
 
 The definition mutations `definePersonAgent` and `defineOrganizationAgent` will
-also have been created. See [domain modelling](domain_modelling#graphql_generation)
+also have been created. See [domain modelling](./domain_modelling.md#modelling-a-provenance-domain-with-chronicle)
 for details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
 mutation {
-    defineOrganizationAgent(externalId: "health-trust", attributes: {})
+  defineOrganizationAgent(externalId: "health-trust", attributes: {})
 }
 ```
 
@@ -585,7 +582,7 @@ chronicle organization-agent define health-trust
 > the activity had not begun to utilize this entity and could not have been
 > affected by the entity.
 
-See [provenance concepts](provenance_concepts#used)
+See [provenance concepts](./provenance_concepts.md#usage)
 
 Usage operations in Chronicle can applied to all subtypes of Entity and
 Activity.
@@ -610,7 +607,7 @@ chronicle revised-activity use "chronicle:entity:anaphylaxis-evidence-12114" "ch
 > This entity did not exist before generation and becomes available for usage
 > after this generation.
 
-See [provenance concepts](provenance_concepts#generation)
+See [provenance concepts](./provenance_concepts.md#generation)
 
 Generation operations in Chronicle can be applied to all subtypes of Entity and
 Activity.
@@ -640,7 +637,7 @@ chronicle revised-activity generate "chronicle:entity:anaphylaxis-guidance-9-201
 > start. A start may refer to a trigger entity that set off the activity, or to
 > an activity, known as starter, that generated the trigger.
 
-See [provenance concepts](provenance_concepts#started-at-time)
+See [provenance concepts](./provenance_concepts.md#started)
 
 Chronicle allows you to specify the start time of an activity when you need to
 model a time range. If you want an instantaneous activity, simply call [ended at
@@ -675,7 +672,7 @@ chronicle revision-activity start "chronicle:activity:september-2018-review" --t
 > refer to a trigger entity that terminated the activity, or to an activity,
 > known as ender that generated the trigger.
 
-See [provenance concepts](provenance_concepts#ended-at-time)
+See [provenance concepts](./provenance_concepts.md#ended)
 
 Chronicle allows you to specify the end time of an activity when you need to
 model a time range. Eliding the time parameter will use the current system time.
@@ -729,7 +726,7 @@ chronicle revision-activity instant "chronicle:activity:september-2018-review" -
 > An activity association is an assignment of responsibility to an agent for an
 > activity, indicating that the agent had a role in the activity.
 
-See [provenance concepts](provenance_concepts#association)
+See [provenance concepts](./provenance_concepts.md#association)
 
 Association and [delegation](#delegation) accept an optional `Role`. These will
 have been generated from the domain model, and using the example domain results
@@ -770,7 +767,7 @@ mutation {
 > in some way for the activity that took place but we do not say explicitly who
 > bears responsibility and to what degree.
 
-See [provenance concepts](provenance_concepts#delegation)
+See [provenance concepts](./provenance_concepts.md#delegation)
 
 Delegation and [association](#association) accept an optional `Role`. These will
 have been generated from the domain model, and using the example domain results
@@ -820,7 +817,7 @@ mutation {
 > to interpretation, and should be done according to conventions accepted within
 > the application's domain.
 
-See [provenance concepts](provenance_concepts#primary-source)
+See [provenance concepts](./provenance_concepts.md#primary-source)
 
 Primary sources can be recorded in Chronicle using the `hadPrimarySource`
 mutation, which takes two entities - the generatedEntity having a primary source
@@ -842,7 +839,7 @@ mutation {
 > substantial content from the original. Revision is a particular case of
 > derivation.
 
-See [provenance concepts](provenance_concepts#revision)
+See [provenance concepts](./provenance_concepts.md#revision)
 
 Revision can be recorded in Chronicle using the `wasRevisionOf` mutation, which
 takes two entities - the generatedEntity being a revision of the usedEntity.
@@ -862,7 +859,7 @@ mutation {
 > image, by someone who may or may not be its original author. Quotation is a
 > particular case of derivation.
 
-See [provenance concepts](provenance_concepts#quotation)
+See [provenance concepts](./provenance_concepts.md#quotation)
 
 Quotation can be recorded bin chronicle using the `wasQuotedFrom` mutation,
 which takes two entities - the generatedEntity having quoted from the
@@ -870,7 +867,7 @@ usedEntity.
 
 ```graphql
 mutation {
-  wasRevisionOf {
+  wasQuotedFrom {
     usedEntity: {id: "chronicle:entity:evidence-2321231" },
     generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-2" },
   }
