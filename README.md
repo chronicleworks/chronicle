@@ -9,13 +9,13 @@ Chronicle implements the
 [PROV-O starting point terms](https://www.w3.org/TR/2013/REC-prov-o-20130430/#description-starting-point-terms)
 , encoding them in
 [JSON-LD compact form](https://json-ld.org/spec/latest/json-ld-api/#compaction)
-onto a backend ledger - currently sawtooth or an in memory stub for testing
+onto a backend ledger - currently Sawtooth or an in-memory stub for testing
 purposes.
 
-## Chronicle vocabulary
+## Chronicle Vocabulary
 
 As well as core prov, we have additional vocabulary to describe cryptographic
-processes, identities and prevent conflict between multiple domains on-chain
+processes, identities, and prevent conflict between multiple domains on-chain
 using namespaces.
 
 ### chronicle:Identity
@@ -26,7 +26,7 @@ chronicle:hadIdentity.
 
 ### chronicle:publicKey
 
-A value containing a hex encoded ecdsa public key.
+A value containing a hex encoded ECDSA public key.
 
 Domain: Identity
 
@@ -46,8 +46,8 @@ Range: chronicle:Identity
 
 ### chronicle:Namespace
 
-An IRI containing an external id and uuid part, used for disambiguation. Discrete
-chronicle instances that with to work on the same namespace must share the uuid
+An IRI containing an external id and uuid part, used for disambiguation. In order
+to work on the same namespace discrete Chronicle instances must share the uuid
 part.
 
 ### chronicle:hasNamespace
@@ -55,11 +55,11 @@ part.
 Allows disambiguation of potentially conflicting IRIs on the same chain, used
 as a component for address generation.
 
-Domain: All prov and chronicle resouces
+Domain: All prov and Chronicle resources
 
 ### chronicle:Attachment
 
-A resource describing an external resource, linked to a prov:Entity and signed
+A resource describing an external resource, linked to a prov:Entity, and signed
 by an agent.
 
 ### chronicle:hasAttachment
@@ -78,25 +78,25 @@ Range: chronicle:Attachment
 
 ### chronicle:entitySignature
 
-A hex encoded ecdsa signature for the resource represented by the attachment.
+A hex encoded ECDSA signature for the resource represented by an attachment.
 
 Domain: Attachment
 
 ### chronicle:entityLocator
 
-An arbitrary value describing the attachment, likely an external IRI
+An arbitrary value describing the attachment, likely an external IRI.
 
 Domain: Attachment
 
 ### chronicle:signedAtTime
 
-The date / time when the attachment was created
+The date / time when an attachment was created.
 
 Domain: chronicle:Attachment
 
 ### chronicle:signedBy
 
-The chronicle:Identity (and by inference, prov:Agent) that signed the attachment
+The chronicle:Identity (and by inference, prov:Agent) that signed an attachment.
 
 Domain: chronicle:Attachment
 Range: chronicle:Identity
@@ -104,16 +104,16 @@ Range: chronicle:Identity
 ## Deployment
 
 Chronicle is a self contained binary executable that can be used as an ephemeral
-command line interface for provenance recording and interrogation or as a graphql
-server to provide an interface for higher level services. It embeds sqlite for
+command line interface for provenance recording and interrogation or as a GraphQL
+server to provide an interface for higher level services. It embeds PostgreSQL for
 local synchronization with a backend ledger and is capable of basic key
 management using a file system.
 
-Chronicle instances do not share state directly as they have individual data
-stores, so synchronize via ledger updates. The abstract transaction processor
-should process an API operation in under a millisecond.
+Chronicle instances have individual data stores, so they do not share state directly
+and synchronize via ledger updates. The abstract transaction processor should process
+an API operation in under a millisecond.
 
-## Transaction processing
+## Transaction Processing
 
 Chronicle records provenance by running an abstract deterministic transaction
 processor both locally and as part of consensus. This transaction model is
