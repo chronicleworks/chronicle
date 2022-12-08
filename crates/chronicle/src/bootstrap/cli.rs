@@ -161,8 +161,9 @@ fn namespace_from(args: &ArgMatches) -> Result<ExternalId, CliError> {
     }
 }
 
-/// Deserialize to a JSON value and ensure that it matches the specified primitive type, we need to force any bare literal text to be quoted
-/// use of coercion afterwards will produce a proper json value type for non strings
+/// Deserialize to a JSON value and ensure that it matches the specified primitive type.
+/// We need to force any bare literal text to be quoted. Use of coercion afterwards will
+/// produce a proper json value type for non strings
 fn attribute_value_from_param(
     arg: &str,
     value: &str,
@@ -346,6 +347,7 @@ impl SubCommand for AgentCliModel {
     )
     }
 
+    /// Iterate our possible Agent subcommands and short circuit with the first one that matches
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
@@ -578,6 +580,7 @@ impl SubCommand for ActivityCliModel {
                     )
     }
 
+    /// Iterate our possible Activity subcommands and short circuit with the first one that matches
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
@@ -789,6 +792,7 @@ impl SubCommand for EntityCliModel {
             )
     }
 
+    /// Iterate our possible Entity subcommands and short circuit with the first one that matches
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
         if let Some(matches) = matches.subcommand_matches("define") {
             return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
