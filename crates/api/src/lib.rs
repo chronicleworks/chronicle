@@ -72,7 +72,7 @@ custom_error! {
     ProcessorError{source: ProcessorError}                      = "Processor {source}",
 }
 
-/// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+/// Ugly but we need this until ! is stable [https://github.com/rust-lang/rust/issues/64715](https://github.com/rust-lang/rust/issues/64715)
 impl From<Infallible> for ApiError {
     fn from(_: Infallible) -> Self {
         unreachable!()
@@ -344,11 +344,11 @@ where
         }
     }
 
-    /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
+    /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a [`ChronicleTransaction`] to create one if not present
     ///
-    /// A namespace uri is of the form chronicle:ns:{external_id}:{uuid}
-    /// Namespaces must be globally unique, so are disambiguated by uuid but are locally referred to by external_id only
-    /// For coordination between chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to a external_id
+    /// A namespace uri is of the form `chronicle:ns:{external_id}:{uuid}`
+    /// Namespaces must be globally unique, so are disambiguated by uuid but are locally referred to by `external_id` only
+    /// For coordination between Chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to an `external_id`
     /// # Arguments
     /// * `external_id` - an arbitrary namespace identifier
     #[instrument(skip(connection))]
@@ -377,9 +377,9 @@ where
         }
     }
 
-    /// Creates and submits a (ChronicleTransaction::GenerateEntity), and possibly (ChronicleTransaction::Domaintype) if specified
+    /// Creates and submits a [`ChronicleTransaction::GenerateEntity`], and possibly [`ChronicleTransaction::Domaintype`] if specified
     ///
-    /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
+    /// We use our local store for a best guess at the activity, either by `external_id` or the last one started as a convenience for command line
     #[instrument]
     async fn activity_generate(
         &self,
@@ -411,7 +411,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
+    /// Creates and submits a [`ChronicleTransaction::ActivityUses`], and possibly [`ChronicleTransaction::Domaintype`] if specified
     /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
     #[instrument]
     async fn activity_use(
@@ -447,7 +447,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::ActivityWasInformedBy)
+    /// Creates and submits a [`ChronicleTransaction::ActivityWasInformedBy`]
     ///
     /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
     #[instrument]
@@ -611,7 +611,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the external_id part does not already exist in local storage
+    /// Creates and submits a [`ChronicleTransaction::CreateNamespace`] if the external_id part does not already exist in local storage
     async fn create_namespace(&self, external_id: &ExternalId) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let external_id = external_id.to_owned();
@@ -836,7 +836,7 @@ where
         .await?
     }
 
-    /// Creates and submits a `ChronicleTransaction::EntityAttach`, reading input files and using the agent's private keys as required
+    /// Creates and submits a [`ChronicleTransaction::EntityAttach`], reading input files and using the agent's private keys as required
     ///
     /// # Notes
     /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the [`async_signature`](https://docs.rs/async-signature/latest/async_signature/) crate
@@ -947,7 +947,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::RegisterKey) implicitly verifying the input keys and saving to the local key store as required
+    /// Creates and submits a [`ChronicleTransaction::RegisterKey`] implicitly verifying the input keys and saving to the local key store as required
     #[instrument]
     async fn register_key(
         &self,
@@ -994,7 +994,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::StartActivity) determining the appropriate agent by external_id, or via [use_agent] context
+    /// Creates and submits a [`ChronicleTransaction::StartActivity`] determining the appropriate agent by external_id, or via [`use_agent`] context
     #[instrument]
     async fn instant(
         &self,
@@ -1046,7 +1046,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
+    /// Creates and submits a [`ChronicleTransaction::StartActivity`], determining the appropriate agent by name, or via [`use_agent`] context
     #[instrument]
     async fn start_activity(
         &self,
@@ -1093,7 +1093,7 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name or via [use_agent] context
+    /// Creates and submits a [`ChronicleTransaction::EndActivity`], determining the appropriate agent by name or via [`use_agent`] context
     #[instrument]
     async fn end_activity(
         &self,
