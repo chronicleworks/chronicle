@@ -40,7 +40,7 @@ Before 0.3, contradictions would result in a no-operation, but with no
 notification to clients. 0.3 contains various protocol changes to notify
 Chronicle and connected clients of contradictions.
 
-See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions)
+See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions).
 
 ### Submission Notification
 
@@ -48,7 +48,7 @@ Before 0.3, submission was not independently notified from commit, and had no
 ability to carry an error result. There is now
 a 2 stage notification for chronicle operations.
 
-See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions)
+See: [subscriptions](./recording_provenance.md#commit-notification-subscriptions).
 
 ### External ID
 

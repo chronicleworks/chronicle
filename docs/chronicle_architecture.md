@@ -16,7 +16,7 @@ processor can all scale independently within a Kubernetes cluster.
 
 ![file](diagrams/out/deployment.svg)
 
-## Chronicle for your domains
+## Chronicle for Your Domains
 
 Chronicle is supplied as a [docker build image](./building.md) and requires the
 creation of a [domain model](./domain_modelling.md) and CI / CD to build a

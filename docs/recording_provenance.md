@@ -5,7 +5,7 @@
 Chronicle provenance is immutable. Once recorded you cannot contradict it - only
 record additional provenance.
 
-## Open-world model
+## Open-World Model
 
 Chronicle does not use relational constraints in the way you may expect a
 relational database to, or allow free-form data in the manner of a document
@@ -58,7 +58,7 @@ activities once set, or alter the value of an attribute. You can however record
 identical provenance any number of times, as this does not cause contradiction,
 or change the state of Chronicle meaningfully.
 
-### Contradiction of attribute time
+### Contradiction of Attribute Time
 
 Here we attempt to change the end date of an activity after it has been
 recorded - one of these mutations will fail.
@@ -75,7 +75,7 @@ mutation {
 }
 ```
 
-### Contradiction of attribute value
+### Contradiction of Attribute Value
 
 Here we attempt to change the value of an attribute - one of these operations
 will fail.
@@ -94,7 +94,7 @@ mutation {
 }
 ```
 
-### Extending attributes is not a contradiction
+### Extending Attributes is Not a Contradiction
 
 Where a provenance term has been recorded with attributes, and the domain has
 been extended to include new attributes, it is valid to append new attributes,
@@ -117,29 +117,29 @@ mutation {
 
 ## Operations
 
-### Example domain
+### Example Domain
 
-For this section we will use our simplified [domain model for recording the
-provenance of medical guidance](domain_modelling). We have a number of
-people who may be any combination of authors, editors, or researchers
-collaborating to produce documents from evidence produced by a search process.
-An external CMS is being used that has identifiers for documents and users.
+For this section we will use our simplified
+[domain model for recording the provenance of medical guidance](./domain_modelling.md).
+We have a number of people who may be any combination of authors, editors, or
+researchers collaborating to produce documents from evidence produced by a search
+process. An external CMS is being used that has identifiers for documents and users.
 
-### The `externalId` parameter
+### The `externalId` Parameter
 
 The definition mutations for prov terms -  Entity, Activity and Agent - are all
 supplied with an `externalId` parameter. This should be something meaningful to the
 domain you are recording provenance for - a unique identifier from an external
 system or a natural key. This will form part of the identity of the term.
 
-### A note on identities
+### A Note on Identities
 
 Chronicle identities will contain an encoded form of the externalId parameter, but
 should be treated as opaque. Under no circumstances should you attempt to
 synthesize an identity from Chronicle in client code as the scheme may be
 subject to change.
 
-### GraphQL mutation result - `Submission`
+### GraphQL Mutation Result - `Submission`
 
 All Chronicle mutations return a `Submission` type defined by:
 
@@ -158,7 +158,7 @@ The `txId` property corresponds to the transaction id when running
 Chronicle with a backend ledger, or a randomly generated uuid when used in
 [in-memory](./building.md#in-memory-version) mode.
 
-### Commit notification subscriptions
+### Commit Notification Subscriptions
 
 Chronicle provides a [GraphQL subscription](https://graphql.org/blog/subscriptions-in-graphql-and-relay/)
 to notify clients when a Chronicle operation has been sent to a backend ledger and
@@ -401,14 +401,6 @@ Either operation will return the ID of the newly defined question.
 
 ### Define an Activity
 
-> An activity is something that occurs over a period of time and acts upon or
-> with entities; it may include consuming, processing, transforming, modifying,
-> relocating, using, or generating entities. Just as entities cover a broad
-> range of notions, activities can cover a broad range of notions: information
-> processing activities may for example move, copy, or duplicate digital
-> entities; physical activities can include driving a car between two locations
-> or printing a book.
-
 See [provenance concepts](./provenance_concepts.md#activity)
 
 Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
@@ -550,9 +542,6 @@ chronicle revised-activity define september-2018-review --version-attr 14
 
 ### Define an Agent
 
-> An agent is something that bears some form of responsibility for an activity
-> taking place, for the existence of an entity, or for another agent's activity.
-
 See [provenance concepts](./provenance_concepts.md#agent)
 
 Chronicle will have generated two `Agent` subtypes for us, `PersonAgent` and
@@ -578,10 +567,6 @@ chronicle organization-agent define health-trust
 
 ### Used
 
-> Usage is the beginning of utilizing an entity by an activity. Before usage,
-> the activity had not begun to utilize this entity and could not have been
-> affected by the entity.
-
 See [provenance concepts](./provenance_concepts.md#usage)
 
 Usage operations in Chronicle can applied to all subtypes of Entity and
@@ -602,10 +587,6 @@ chronicle revised-activity use "chronicle:entity:anaphylaxis-evidence-12114" "ch
 ```
 
 ### Generation
-
-> Generation is the completion of production of a new entity by an activity.
-> This entity did not exist before generation and becomes available for usage
-> after this generation.
 
 See [provenance concepts](./provenance_concepts.md#generation)
 
@@ -629,15 +610,9 @@ And the equivalent operation using the command line interface is:
 chronicle revised-activity generate "chronicle:entity:anaphylaxis-guidance-9-2018" "chronicle:activity:september-2018-review"
 ```
 
-### Started at time
+### Started at Time
 
-> Start is when an activity is deemed to have been started by an entity, known
-> as trigger. The activity did not exist before its start. Any usage,
-> generation, or invalidation involving an activity follows the activity's
-> start. A start may refer to a trigger entity that set off the activity, or to
-> an activity, known as starter, that generated the trigger.
-
-See [provenance concepts](./provenance_concepts.md#started)
+See [provenance concepts](./provenance_concepts.md#start)
 
 Chronicle allows you to specify the start time of an activity when you need to
 model a time range. If you want an instantaneous activity, simply call [ended at
@@ -664,15 +639,9 @@ chronicle revision-activity start "chronicle:activity:september-2018-review" --t
 
 ```
 
-### Ended at time
+### Ended at Time
 
-> End is when an activity is deemed to have been ended by an entity, known as
-> trigger. The activity no longer exists after its end. Any usage, generation,
-> or invalidation involving an activity precedes the activity's end. An end may
-> refer to a trigger entity that terminated the activity, or to an activity,
-> known as ender that generated the trigger.
-
-See [provenance concepts](./provenance_concepts.md#ended)
+See [provenance concepts](./provenance_concepts.md#end)
 
 Chronicle allows you to specify the end time of an activity when you need to
 model a time range. Eliding the time parameter will use the current system time.
@@ -723,9 +692,6 @@ chronicle revision-activity instant "chronicle:activity:september-2018-review" -
 
 ### Association
 
-> An activity association is an assignment of responsibility to an agent for an
-> activity, indicating that the agent had a role in the activity.
-
 See [provenance concepts](./provenance_concepts.md#association)
 
 Association and [delegation](#delegation) accept an optional `Role`. These will
@@ -757,15 +723,6 @@ mutation {
 ```
 
 ### Delegation
-
-> Delegation is the assignment of authority and responsibility to an agent (by
-> itself or by another agent) to carry out a specific activity as a delegate or
-> representative, while the agent it acts on behalf of retains some
-> responsibility for the outcome of the delegated work. For example, a student
-> acted on behalf of his supervisor, who acted on behalf of the department
-> chair, who acted on behalf of the university; all those agents are responsible
-> in some way for the activity that took place but we do not say explicitly who
-> bears responsibility and to what degree.
 
 See [provenance concepts](./provenance_concepts.md#delegation)
 
@@ -805,18 +762,6 @@ mutation {
 
 #### Primary Source
 
-> A primary source for a topic refers to something produced by some agent with
-> direct experience and knowledge about the topic, at the time of the topic's
-> study, without benefit from hindsight. Because of the directness of primary
-> sources, they 'speak for themselves' in ways that cannot be captured through
-> the filter of secondary sources. As such, it is important for secondary
-> sources to reference those primary sources from which they were derived, so
-> that their reliability can be investigated. A primary source relation is a
-> particular case of derivation of secondary materials from their primary
-> sources. It is recognized that the determination of primary sources can be up
-> to interpretation, and should be done according to conventions accepted within
-> the application's domain.
-
 See [provenance concepts](./provenance_concepts.md#primary-source)
 
 Primary sources can be recorded in Chronicle using the `hadPrimarySource`
@@ -834,11 +779,6 @@ mutation {
 
 #### Revision
 
-> A revision is a derivation for which the resulting entity is a revised version
-> of some original. The implication here is that the resulting entity contains
-> substantial content from the original. Revision is a particular case of
-> derivation.
-
 See [provenance concepts](./provenance_concepts.md#revision)
 
 Revision can be recorded in Chronicle using the `wasRevisionOf` mutation, which
@@ -855,10 +795,6 @@ mutation {
 
 #### Quotation
 
-> A quotation is the repeat of (some or all of) an entity, such as text or
-> image, by someone who may or may not be its original author. Quotation is a
-> particular case of derivation.
-
 See [provenance concepts](./provenance_concepts.md#quotation)
 
 Quotation can be recorded bin chronicle using the `wasQuotedFrom` mutation,
@@ -874,11 +810,11 @@ mutation {
 }
 ```
 
-### Chronicle-specific cryptographic operations
+### Chronicle-specific Cryptographic Operations
 
-#### Has identity
+#### Has Identity
 
-#### Had evidence
+#### Had Evidence
 
 Evidence is a Chronicle-specific provenance feature that simplifies the
 association of a cryptographic signature with an Entity. You will need a GraphQL

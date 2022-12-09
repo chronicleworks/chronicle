@@ -2,7 +2,7 @@
 
 ## Subcommands
 
-### serve-graphql
+### `serve-graphql`
 
 Run Chronicle as a GraphQL server.
 
@@ -17,15 +17,15 @@ The GraphQL server socket address - defaults to 127.0.0.1:9982.
 Serve the GraphQL playground IDE on the GraphQL server interface and open a web
 browser to it.
 
-### export-schema
+### `export-schema`
 
 Write the GraphQL SDL for Chronicle to stdout and exit.
 
-### completions
+### `completions`
 
-Installs shell completions for bash, zsh or fish.
+Installs shell completions for bash, zsh, or fish.
 
-## Other subcommands
+## Other Subcommands
 
 Chronicle will also generate subcommands for recording provenance, derived from
 your [domain configuration](./domain_modelling.md).
