@@ -1211,6 +1211,14 @@ mod test {
                 Ok(None)
             }
         }
+
+        pub async fn noop(&self) {
+            let time_1 = std::time::SystemTime::now();
+            let time_2 = std::time::SystemTime::now();
+            if time_1 > time_2 {
+                panic!("argh!");
+            }
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -2263,6 +2271,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
           ]
         }
         "###);
+
+        api.noop().await;
     }
 
     #[tokio::test]
