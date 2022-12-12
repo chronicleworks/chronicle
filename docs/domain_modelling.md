@@ -45,8 +45,9 @@ definition explained here, along with the following operations:
   Activity produced the Question
 - [wasAssociatedWith](./recording_provenance.md#association) specifies the Person
   who authored and the Organizations that asked
-- [endedAtTime](./recording_provenance.md#ended-at-time) specifies the question was
-  asked at a point in time
+- [startedAtTime](./recording_provenance.md#started-at-time) and
+  [endedAtTime](./recording_provenance.md#ended-at-time) specify that the
+  question was asked at a point in time
 
 This process represented as provenance will look like:
 
@@ -105,14 +106,12 @@ definition explained here, along with the following operations:
   of subtype Evidence
 - [defineRevisedActivity](./recording_provenance.md#define-an-activity) defines an
   Activity of subtype Revised
-- [used](./recording_provenance.md#usage) specifies that the Guidance Activity
+- [used](./recording_provenance.md#usage) specifies that the Revised Activity
   used the Question
-- [used](./recording_provenance.md#usage) specifies that the Guidance Activity
+- [used](./recording_provenance.md#usage) specifies that the Revised Activity
   used the Evidence
 - [wasGeneratedBy](./recording_provenance.md#generation) specifies that the
-  Guidance Activity produced the Guidance
-- [wasAssociatedWith](./recording_provenance.md#association) specifies that the
-  research was done by a Person acting as a researcher
+  Revision Activity produced the Guidance
 - [wasRevisionOf](./recording_provenance.md#revision) specifies that the
   Guidance is possibly a Revision of previous Guidance
 - [hadPrimarySource](./recording_provenance.md#primary-source) specifies that
