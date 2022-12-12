@@ -2,7 +2,6 @@
 target
 markers
 build
-site
 .buildx-cache
 .artifacts
 
@@ -236,3 +235,7 @@ typings/
 **/sqlite_test
 **/*.env
 **/*.sqlite
+
+# mkdocs
+site
+docs/diagrams/out
