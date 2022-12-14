@@ -289,7 +289,7 @@ pub mod test {
         pub events: RefCell<TestTxEvents>,
     }
 
-    type PrintableEvent = Vec<(String, Vec<(String, String)>, String)>;
+    type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
 
     impl TestTranasctionContext {
         pub fn new() -> Self {
@@ -320,7 +320,8 @@ pub mod test {
                     (
                         k.clone(),
                         attr.clone(),
-                        messages::Event::decode(&**data).unwrap().delta,
+                        serde_json::from_str(&*messages::Event::decode(&**data).unwrap().delta)
+                            .unwrap(),
                     )
                 })
                 .collect()
@@ -457,6 +458,7 @@ pub mod test {
         let mut request = TpProcessRequest::default();
         request.set_header(header);
         request.set_payload(tx.payload);
+        request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
@@ -468,8 +470,40 @@ pub mod test {
             ---
             - - chronicle/prov-update
               - - - transaction_id
-                  - ""
-              - "{\"@context\":\"https://blockchaintp.com/chr/1.0/c.jsonld\",\"@graph\":[{\"@id\":\"chronicle:activity:test%5Factivity\",\"@type\":\"prov:Activity\",\"externalId\":\"test_activity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"value\":{}},{\"@id\":\"chronicle:agent:test%5Fagent\",\"@type\":\"prov:Agent\",\"actedOnBehalfOf\":[\"chronicle:agent:test%5Fdelegate\"],\"externalId\":\"test_agent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"prov:qualifiedDelegation\":{\"@id\":\"chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity\"},\"value\":{}},{\"@id\":\"chronicle:agent:test%5Fdelegate\",\"@type\":\"prov:Agent\",\"externalId\":\"test_delegate\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"value\":{}},{\"@id\":\"chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity\",\"@type\":\"prov:Delegation\",\"actedOnBehalfOf\":[\"chronicle:agent:test%5Fdelegate\"],\"agent\":\"chronicle:agent:test%5Fagent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"prov:hadActivity\":{\"@id\":\"chronicle:activity:test%5Factivity\"},\"prov:hadRole\":\"test_role\"},{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"externalId\":\"testns\"}]}"
+                  - TRANSACTION_SIGNATURE
+              - "@context": "https://blockchaintp.com/chr/1.0/c.jsonld"
+                "@graph":
+                  - "@id": "chronicle:activity:test%5Factivity"
+                    "@type": "prov:Activity"
+                    externalId: test_activity
+                    namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                    value: {}
+                  - "@id": "chronicle:agent:test%5Fagent"
+                    "@type": "prov:Agent"
+                    actedOnBehalfOf:
+                      - "chronicle:agent:test%5Fdelegate"
+                    externalId: test_agent
+                    namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                    "prov:qualifiedDelegation":
+                      "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity"
+                    value: {}
+                  - "@id": "chronicle:agent:test%5Fdelegate"
+                    "@type": "prov:Agent"
+                    externalId: test_delegate
+                    namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                    value: {}
+                  - "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity"
+                    "@type": "prov:Delegation"
+                    actedOnBehalfOf:
+                      - "chronicle:agent:test%5Fdelegate"
+                    agent: "chronicle:agent:test%5Fagent"
+                    namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                    "prov:hadActivity":
+                      "@id": "chronicle:activity:test%5Factivity"
+                    "prov:hadRole": test_role
+                  - "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                    "@type": "chronicle:Namespace"
+                    externalId: testns
             "###);
             insta::assert_yaml_snapshot!(context.readable_state(), @r###"
             ---
