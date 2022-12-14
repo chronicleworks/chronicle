@@ -52,24 +52,24 @@ pub mod messages {
 }
 
 pub async fn chronicle_committed(
-    span: span::Id,
+    span: u64,
     delta: ProvModel,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
         delta: serde_json::to_string(&delta.to_json().compact_stable_order().await?)?,
-        span_id: span.into_u64(),
+        span_id: span,
         ..Default::default()
     })
 }
 
 pub fn chronicle_contradicted(
-    span: span::Id,
+    span: u64,
     contradiction: &Contradiction,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
-        span_id: span.into_u64(),
+        span_id: span,
         option_contradiction: Some(OptionContradiction::Contradiction(serde_json::to_string(
             &contradiction,
         )?)),

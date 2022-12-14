@@ -1,11 +1,13 @@
+mod abstract_tp;
 mod tp;
-
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
 use ::telemetry::ConsoleLogging;
 use telemetry::telemetry;
+use tokio::runtime::Handle;
 use tp::ChronicleTransactionHandler;
+use tracing::info;
 use url::Url;
 
 #[tokio::main]
@@ -42,6 +44,7 @@ async fn main() {
                 .long("console-logging")
                 .value_name("console-logging")
                 .takes_value(true)
+                .default_value("pretty")
                 .help("Log to console using RUST_LOG environment"),
         )
         .get_matches();
@@ -60,15 +63,23 @@ async fn main() {
         },
     );
 
-    let handler = ChronicleTransactionHandler::new();
-    let mut processor = TransactionProcessor::new({
-        if let Some(connect) = matches.get_one::<String>("connect") {
-            connect
-        } else {
-            "tcp://127.0.0.1:4004"
-        }
-    });
+    info!("lo");
 
-    processor.add_handler(&handler);
-    processor.start();
+    Handle::current().spawn_blocking(move || {
+        info!(
+            "Starting Chronicle Transaction Processor on {:?}",
+            matches.get_one::<String>("connect")
+        );
+        let handler = ChronicleTransactionHandler::new();
+        let mut processor = TransactionProcessor::new({
+            if let Some(connect) = matches.get_one::<String>("connect") {
+                connect
+            } else {
+                "tcp://127.0.0.1:4004"
+            }
+        });
+
+        processor.add_handler(&handler);
+        processor.start();
+    });
 }
