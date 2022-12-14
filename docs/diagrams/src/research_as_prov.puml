@@ -7,16 +7,13 @@
 !include ../include/entity.iuml
 
 Question <|-- Entity
+Evidence <|-- Entity
 Person <|-- Agent
-Organization <|-- Agent
-QuestionAsked <|-- Activity
+Researched <|-- Activity
 
-Person -> QuestionAsked : wasAssociatedWith
-note on link: (role=Stakeholder)
-Organization -> QuestionAsked : wasAssociatedWith
-note on link: (role=Stakeholder)
-Person -> QuestionAsked : wasAssociatedWith
-note on link: (role=Author)
-Question -> QuestionAsked : wasGeneratedBy
+Person -> Researched : wasAssociatedWith
+note on link: (role=Researcher)
+Question -> Researched : used
+Evidence -> Researched : wasGeneratedBy
 
 @enduml

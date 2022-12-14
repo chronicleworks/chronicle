@@ -54,7 +54,7 @@ Familiarizing yourself with GraphQL is necessary to make good use of Chronicle.
 Chronicle makes extensive use of
 [relay cursors](https://relay.dev/graphql/connections.htm) and [union types](https://www.apollographql.com/docs/apollo-server/schema/unions-interfaces/).
 
-## Activity timeline
+## Activity Timeline
 
 ### Parameters
 
@@ -257,9 +257,9 @@ entityById(id: {externalId: "externalid" }) {
   }
 ```
 
-## Returned objects
+## Returned Objects
 
-### Entity subtypes
+### Entity Subtypes
 
 All Chronicle Entity subtypes follow a similar pattern, we will use the Guidance
 entity from our example domain as a sample.
@@ -336,7 +336,7 @@ recursive enumeration to retrieve a deep hierarchy.
 Attribute values for the attributes associated with the entity subtype, as
 determined by the [domain model](./domain_modelling.md).
 
-### Activity subtypes
+### Activity Subtypes
 
 ```graphql
 type PublishedActivity {
@@ -361,14 +361,14 @@ should not attempt to synthesize it themselves.
 
 #### Activity: namespace
 
-The Namespace of the entity, only of interest for Chronicle domains that span
+The Namespace of the activity, only of interest for Chronicle domains that span
 multiple namespaces.
 
 #### Activity: externalId
 
-The externalId of the entity, determined when defined.
+The externalId of the activity, determined when defined.
 
 #### Activity: type
 
-A DomainTypeID derived from the Entity subtype. the built-in GraphQL field
+A DomainTypeID derived from the Activity subtype. The built-in GraphQL field
 `__TypeName` should be used for union queries

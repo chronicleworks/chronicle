@@ -1,4 +1,4 @@
-# Modelling a provenance domain with Chronicle
+# Modelling a Provenance Domain with Chronicle
 
 Here we will present a reference domain that uses all the provenance features
 Chronicle provides and work through the process of representing it using
@@ -8,7 +8,7 @@ Chronicle's capabilities and to translate your own problem domain's provenance.
 Chronicle uses the [W3C Provenance Ontology](https://www.w3.org/TR/prov-o/) as
 the basis for provenance modelling.
 
-## Reference domain - Medical evidence
+## Reference Domain - Medical Evidence
 
 This is a toy model of some aspects of evidence-based medicine, from an initial
 `Question` - the area and scope that the organization wishes to research and
@@ -16,7 +16,7 @@ make guidance on - to revisions of a published `Guidance` document. The system
 is currently handled by a content management system that has identities for
 documents and users, and we will use Chronicle to add provenance capabilities.
 
-### Question creation
+### Question Creation
 
 The question for medical evidence can vary significantly, but for the purposes
 of this example imagine it as something along the lines of, "How best to assess
@@ -45,8 +45,9 @@ definition explained here, along with the following operations:
   Activity produced the Question
 - [wasAssociatedWith](./recording_provenance.md#association) specifies the Person
   who authored and the Organizations that asked
-- [endedAtTime](./recording_provenance.md#ended-at-time) specifies the question was
-  asked at a point in time
+- [startedAtTime](./recording_provenance.md#started-at-time) and
+  [endedAtTime](./recording_provenance.md#ended-at-time) specify that the
+  question was asked at a point in time
 
 This process represented as provenance will look like:
 
@@ -105,14 +106,12 @@ definition explained here, along with the following operations:
   of subtype Evidence
 - [defineRevisedActivity](./recording_provenance.md#define-an-activity) defines an
   Activity of subtype Revised
-- [used](./recording_provenance.md#usage) specifies that the Guidance Activity
+- [used](./recording_provenance.md#usage) specifies that the Revised Activity
   used the Question
-- [used](./recording_provenance.md#usage) specifies that the Guidance Activity
+- [used](./recording_provenance.md#usage) specifies that the Revised Activity
   used the Evidence
 - [wasGeneratedBy](./recording_provenance.md#generation) specifies that the
-  Guidance Activity produced the Guidance
-- [wasAssociatedWith](./recording_provenance.md#association) specifies that the
-  research was done by a Person acting as a researcher
+  Revision Activity produced the Guidance
 - [wasRevisionOf](./recording_provenance.md#revision) specifies that the
   Guidance is possibly a Revision of previous Guidance
 - [hadPrimarySource](./recording_provenance.md#primary-source) specifies that
@@ -161,7 +160,7 @@ This process represented as provenance will look like:
 
 ![file](diagrams/out/publication_as_prov.svg)
 
-## Conceptual design
+## Conceptual Design
 
 Provenance is *immutable*. Once you have recorded it there is no way to
 contradict the provenance you have recorded. When translating your domain to
@@ -169,7 +168,7 @@ provenance, your activities should be things that have either already take
 place, or in progress - so choose the past tense. From the process descriptions
 above we can create the following provenance domain:
 
-### Required attributes
+### Required Attributes
 
 #### Content
 
@@ -197,12 +196,7 @@ A simple incrementing integer representing a version number.
 
 ### Entities
 
-> In PROV, things we want to describe the provenance of are called entities and
-> have some fixed aspects. The term "things" encompasses a broad diversity of
-> notions, including digital objects such as a file or web page, physical things
-> such as a mountain, a building, a printed book, or a car, as well as abstract
-> concepts and ideas. An entity is a physical, digital, conceptual, or other
-> kind of thing with some fixed aspects; entities may be real or imaginary.
+See [provenance concepts](./provenance_concepts.md#entity)
 
 When determining entities, a useful approach from [process
 mapping](https://www.bpmleader.com/2012/07/23/introductory-guide-to-process-mapping-modelling/)
@@ -247,13 +241,7 @@ Has no attributes.
 
 ### Activities
 
-> An activity is something that occurs over a period of time and acts upon or
-> with entities; it may include consuming, processing, transforming, modifying,
-> relocating, using, or generating entities. Just as entities cover a broad
-> range of notions, activities can cover a broad range of notions: information
-> processing activities may for example move, copy, or duplicate digital
-> entities; physical activities can include driving a car between two locations
-> or printing a book.
+See [provenance concepts](./provenance_concepts.md#activity)
 
 When determining activities, a useful approach from [process
 mapping](https://www.bpmleader.com/2012/07/23/introductory-guide-to-process-mapping-modelling/)
@@ -282,8 +270,7 @@ approved by an editor under the advice of stakeholders.
 
 ### Agents
 
-> An agent is something that bears some form of responsibility for an activity
-> taking place, for the existence of an entity, or for another agent's activity.
+See [provenance concepts](./provenance_concepts.md#agent)
 
 For our example domain, actors are best modelled as Roles rather than Agents -
 People and Organizations can participate in multiple ways. So we will specify
@@ -325,7 +312,7 @@ creates Evidence.
 An editor is a Person who approves Publication after consulting one or more
 Stakeholders and supervises Authors creating Guidances of Guidance.
 
-## Domain model format
+## Domain Model Format
 
 We will now translate this conceptual design into Chronicle's domain-modelling
 syntax. Chronicle domain models are specified in YAML, a complete model for the
@@ -428,7 +415,7 @@ attributes:
     type: Int
 ```
 
-#### Inputting a JSON attribute
+#### Inputting a JSON Attribute
 
 To input a JSON attribute, make sure to add an attribute to your domain of type
 `JSON`, for example,
@@ -538,6 +525,8 @@ entities:
 ```
 
 ### Activity
+
+See [provenance concepts](./provenance_concepts.md#activity)
 
 Using Chronicle's domain model definitions an Activity can be subtyped and
 associated with attributes like other provenance terms. In the following example
