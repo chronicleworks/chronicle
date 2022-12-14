@@ -277,7 +277,7 @@ pub mod test {
         processor::handler::{ContextError, TransactionContext, TransactionHandler},
     };
     use serde_json::Value;
-    
+
     use uuid::Uuid;
 
     use crate::tp::ChronicleTransactionHandler;
@@ -464,8 +464,52 @@ pub mod test {
             let handler = ChronicleTransactionHandler::new();
             handler.apply(&request, &mut context).unwrap();
 
-            insta::assert_yaml_snapshot!(context.readable_events());
-            insta::assert_yaml_snapshot!(context.readable_state());
+            insta::assert_yaml_snapshot!(context.readable_events(), @r###"
+            ---
+            - - chronicle/prov-update
+              - - - transaction_id
+                  - ""
+              - "{\"@context\":\"https://blockchaintp.com/chr/1.0/c.jsonld\",\"@graph\":[{\"@id\":\"chronicle:activity:test%5Factivity\",\"@type\":\"prov:Activity\",\"externalId\":\"test_activity\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"value\":{}},{\"@id\":\"chronicle:agent:test%5Fagent\",\"@type\":\"prov:Agent\",\"actedOnBehalfOf\":[\"chronicle:agent:test%5Fdelegate\"],\"externalId\":\"test_agent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"prov:qualifiedDelegation\":{\"@id\":\"chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity\"},\"value\":{}},{\"@id\":\"chronicle:agent:test%5Fdelegate\",\"@type\":\"prov:Agent\",\"externalId\":\"test_delegate\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"value\":{}},{\"@id\":\"chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity\",\"@type\":\"prov:Delegation\",\"actedOnBehalfOf\":[\"chronicle:agent:test%5Fdelegate\"],\"agent\":\"chronicle:agent:test%5Fagent\",\"namespace\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"prov:hadActivity\":{\"@id\":\"chronicle:activity:test%5Factivity\"},\"prov:hadRole\":\"test_role\"},{\"@id\":\"chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea\",\"@type\":\"chronicle:Namespace\",\"externalId\":\"testns\"}]}"
+            "###);
+            insta::assert_yaml_snapshot!(context.readable_state(), @r###"
+            ---
+            - - 43a52b235b2c3e3735c87de6688c5e30596cd12fa3bc9d013c616035292f842fed5077
+              - "@id": "chronicle:agent:test%5Fdelegate"
+                "@type": "prov:Agent"
+                externalId: test_delegate
+                namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                value: {}
+            - - 43a52b23e8079f2f7d6e21587c560d0d3e665c94adcbb3aed368b04eb73fcce3dc15a9
+              - "@id": "chronicle:activity:test%5Factivity"
+                "@type": "prov:Activity"
+                externalId: test_activity
+                namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                value: {}
+            - - 43a52b549abebadfd16401dc74e089fb79d0143453a060dc05453da719d0897097c08f
+              - "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity"
+                "@type": "prov:Delegation"
+                actedOnBehalfOf:
+                  - "chronicle:agent:test%5Fdelegate"
+                agent: "chronicle:agent:test%5Fagent"
+                namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                "prov:hadActivity":
+                  "@id": "chronicle:activity:test%5Factivity"
+                "prov:hadRole": test_role
+            - - 43a52be8b6d53163d3edd7e93e139a5f9adddb39e5481ee73a1b0326f26cf9abe90930
+              - "@id": "chronicle:agent:test%5Fagent"
+                "@type": "prov:Agent"
+                actedOnBehalfOf:
+                  - "chronicle:agent:test%5Fdelegate"
+                externalId: test_agent
+                namespace: "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                "prov:qualifiedDelegation":
+                  "@id": "chronicle:delegation:test%5Fdelegate:test%5Fagent:role=test%5Frole:activity=test%5Factivity"
+                value: {}
+            - - 43a52bfdc37432b62f2f32862673fbbd3b7dbd1574c441fee886c5f80be47854c3a06e
+              - "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea"
+                "@type": "chronicle:Namespace"
+                externalId: testns
+            "###);
         })
         .await
         .unwrap();
