@@ -2,7 +2,7 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use pg_embed::{
     self,
     pg_enums::{Architecture, OperationSystem, PgAuthMethod},
-    pg_fetch::PgFetchSettings,
+    pg_fetch::{PgFetchSettings, PG_V13},
     pg_types::PgResult,
     postgres::{self, PgEmbed},
 };
@@ -16,21 +16,13 @@ pub struct Database {
     _location: TempDir,
 }
 
-#[cfg(target_os = "macos")]
 pub fn pg_fetch_settings() -> PgFetchSettings {
-    use pg_embed::pg_fetch::PG_V13;
-
     PgFetchSettings {
         host: "https://repo1.maven.org".to_string(),
         operating_system: OperationSystem::default(),
         architecture: Architecture::Amd64,
         version: PG_V13,
     }
-}
-
-#[cfg(target_os = "linux")]
-pub fn pg_fetch_settings() -> PgFetchSettings {
-    PgFetchSettings::default()
 }
 
 pub async fn get_embedded_db_connection(

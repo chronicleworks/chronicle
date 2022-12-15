@@ -26,7 +26,6 @@ services:
       /etc/sawtooth/keys/validator.priv -o config-genesis.batch
       && sawset proposal create -k /etc/sawtooth/keys/validator.priv
       sawtooth.consensus.min_wait_time=0
-      sawtooth.consensus.algorithm.external_id=devmode
       sawtooth.consensus.algorithm.name=devmode
       sawtooth.consensus.algorithm.version=1.0
       sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
@@ -84,6 +83,7 @@ services:
     image: &chronicleImage chronicle-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/sh -xc "
+      sleep 10 &&
       /usr/local/bin/chronicle -c /etc/chronicle/config/config.toml
       --console-logging pretty verify-keystore &&
       /usr/local/bin/chronicle
@@ -94,9 +94,9 @@ services:
       --interface 0.0.0.0:9982
       --open"
     volumes:
-     - type: bind
-       source: ./chronicle-config/config.toml
-       target: /etc/chronicle/config/config.toml
+      - type: bind
+        source: ./chronicle-config/config.toml
+        target: /etc/chronicle/config/config.toml
     expose:
       - 9982
     ports:

@@ -37,12 +37,31 @@ publish: gh-create-draft-release
 		$(GH_RELEASE) upload $(VERSION) target/* ; \
 	fi
 
+PHONY: build-end-to-end-test
+build-end-to-end-test:
+	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
+
+.PHONY: test-e2e
+.ONESHELL:
+SHELL = /bin/bash
+.SHELLOPTS = $(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
+test-e2e: build-end-to-end-test
+	docker-compose -f docker/chronicle.yaml up --force-recreate --detach
+	function stopStack {
+		docker logs docker_chronicle-sawtooth-tp_1
+		docker logs docker_chronicle-sawtooth-api_1
+		docker logs docker_validator_1
+		docker-compose -f docker/chronicle.yaml down || true
+	}
+	trap stopStack EXIT
+	docker run --network docker_default --add-host=host.docker.internal:host-gateway chronicle-test:$(ISOLATION_ID)
+
 run:
 	docker-compose -f docker/chronicle.yaml up --force-recreate
 
 .PHONY: stop
 stop:
-	$(COMPOSE) -f docker/chronicle.yaml down || true
+	docker-compose -f docker/chronicle.yaml down || true
 
 $(MARKERS)/binfmt:
 	mkdir -p $(MARKERS)
