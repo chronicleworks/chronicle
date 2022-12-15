@@ -25,7 +25,7 @@ services:
       /etc/sawtooth/keys/validator.priv -o config-genesis.batch
       && sawset proposal create -k /etc/sawtooth/keys/validator.priv
       sawtooth.consensus.min_wait_time=0
-      sawtooth.consensus.algorithm.external_id=devmode
+      sawtooth.consensus.algorithm.name=devmode
       sawtooth.consensus.algorithm.version=1.0
       sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
       && sawadm genesis config-genesis.batch consensus-settings.batch
