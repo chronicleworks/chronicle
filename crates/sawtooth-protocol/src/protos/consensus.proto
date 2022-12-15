@@ -28,7 +28,7 @@ message ConsensusPeerMessageHeader {
   string message_type = 5;
 
   // Used to identify the consensus engine that produced this message
-  string external_id = 3;
+  string name = 3;
   string version = 4;
 }
 
@@ -80,15 +80,15 @@ message ConsensusStateEntry {
 // Sent to connect with the validator
 message ConsensusRegisterRequest {
   message Protocol {
-    string external_id = 1;
+    string name = 1;
     string version = 2;
   }
 
-  // The external_id of this consensus engine
-  string external_id = 1;
+  // The name of this consensus engine
+  string name = 1;
   // The version of this consensus engine
   string version = 2;
-  // Any additional external_id/version pairs the consensus engine supports
+  // Any additional name/version pairs the consensus engine supports
   repeated Protocol additional_protocols = 3;
 }
 

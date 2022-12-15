@@ -27,7 +27,7 @@ message TransactionHeader {
     // must be processed before this transaction can be valid
     repeated string dependencies = 2;
 
-    // The family external_id correlates to the transaction processor's family external_id
+    // The family name correlates to the transaction processor's family name
     // that this transaction can be processed on, for example 'intkey'
     string family_name = 3;
 
@@ -62,7 +62,7 @@ message Transaction {
     string header_signature = 2;
 
     // The payload is the encoded family specific information of the
-    // transaction. Example cbor({'Verb': verb, 'ExternalId': external_id,'Value': value})
+    // transaction. Example cbor({'Verb': verb, 'Name': name,'Value': value})
     bytes payload = 3;
 }
 
