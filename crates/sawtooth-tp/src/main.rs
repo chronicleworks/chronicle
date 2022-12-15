@@ -63,8 +63,6 @@ async fn main() {
         },
     );
 
-    info!("lo");
-
     Handle::current().spawn_blocking(move || {
         info!(
             "Starting Chronicle Transaction Processor on {:?}",

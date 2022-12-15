@@ -1,7 +1,7 @@
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use pg_embed::{
     self,
-    pg_enums::PgAuthMethod,
+    pg_enums::{Architecture, OperationSystem, PgAuthMethod},
     pg_fetch::PgFetchSettings,
     pg_types::PgResult,
     postgres::{self, PgEmbed},
@@ -14,6 +14,23 @@ use uuid::Uuid;
 pub struct Database {
     _embedded: PgEmbed,
     _location: TempDir,
+}
+
+#[cfg(target_os = "macos")]
+pub fn pg_fetch_settings() -> PgFetchSettings {
+    use pg_embed::pg_fetch::PG_V13;
+
+    PgFetchSettings {
+        host: "https://repo1.maven.org".to_string(),
+        operating_system: OperationSystem::default(),
+        architecture: Architecture::Amd64,
+        version: PG_V13,
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn pg_fetch_settings() -> PgFetchSettings {
+    PgFetchSettings::default()
 }
 
 pub async fn get_embedded_db_connection(
@@ -29,7 +46,8 @@ pub async fn get_embedded_db_connection(
         timeout: Some(Duration::from_secs(50)),
         migration_dir: None,
     };
-    let mut database = PgEmbed::new(settings, PgFetchSettings::default()).await?;
+
+    let mut database = PgEmbed::new(settings, pg_fetch_settings()).await?;
     database.setup().await?;
     database.start_db().await?;
     let db_name = format!("chronicle-{}", Uuid::new_v4());
