@@ -198,7 +198,7 @@ mod test {
         } else {
             format!("testns{}", tag.unwrap())
         };
-        NamespaceId::from_external_id(&external_id, SameUuid::uuid())
+        NamespaceId::from_external_id(external_id, SameUuid::uuid())
     }
 
     fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
