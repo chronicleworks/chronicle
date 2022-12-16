@@ -4,7 +4,7 @@ echo "Wait for stack"
 sleep 20
 
 echo "Subscribe to commits"
-gq http://host.docker.internal:9982/ws -q " \
+gq http://chronicle-sawtooth-api:9982/ws -q " \
 subscription { \
   commitNotifications { \
     stage \
@@ -17,7 +17,7 @@ subscription { \
 sleep 5
 
 echo "Issue query"
-gq http://host.docker.internal:9982 -q " \
+gq http://chronicle-sawtooth-api:9982 -q " \
 mutation{ \
         defineAgent( \
     externalId: \"test\",  \

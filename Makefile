@@ -48,13 +48,13 @@ SHELL = /bin/bash
 test-e2e: build-end-to-end-test
 	docker-compose -f docker/chronicle.yaml up --force-recreate --detach
 	function stopStack {
-		docker logs docker_chronicle-sawtooth-tp_1
-		docker logs docker_chronicle-sawtooth-api_1
-		docker logs docker_validator_1
+		docker logs docker-chronicle-sawtooth-tp-1
+		docker logs docker-chronicle-sawtooth-api-1
+		docker logs docker-validator-1
 		docker-compose -f docker/chronicle.yaml down || true
 	}
 	trap stopStack EXIT
-	docker run --network docker_default --add-host=host.docker.internal:host-gateway chronicle-test:$(ISOLATION_ID)
+	docker run --network docker_default chronicle-test:$(ISOLATION_ID)
 
 run:
 	docker-compose -f docker/chronicle.yaml up --force-recreate

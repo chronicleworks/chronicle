@@ -23,6 +23,14 @@ jobs:
     # Steps represent a sequence of tasks that will be executed
     # as part of the job
     steps:
+      - name: Installs shfmt
+        run: >
+          sudo install /dev/stdin /usr/local/bin/shfmt
+          < <(curl -L "$SHFMT_URL")
+        env:
+          SHFMT_URL: >
+           https://github.com/mvdan/sh/releases/download/
+           v3.1.1/shfmt_v3.1.1_linux_amd64
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - id: file_changes
