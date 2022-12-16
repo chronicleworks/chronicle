@@ -1,4 +1,5 @@
 use diesel::{r2d2::ConnectionManager, PgConnection};
+use lazy_static::lazy_static;
 use pg_embed::{
     self,
     pg_enums::{Architecture, OperationSystem, PgAuthMethod},
@@ -9,11 +10,16 @@ use pg_embed::{
 use r2d2::Pool;
 use std::time::Duration;
 use temp_dir::TempDir;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub struct Database {
     _embedded: PgEmbed,
     _location: TempDir,
+}
+
+lazy_static! {
+    static ref TEMP_DIRS: Mutex<Vec<TempDir>> = Mutex::new(Vec::new());
 }
 
 pub fn pg_fetch_settings() -> PgFetchSettings {
@@ -28,6 +34,7 @@ pub fn pg_fetch_settings() -> PgFetchSettings {
 pub async fn get_embedded_db_connection(
 ) -> PgResult<(Database, Pool<ConnectionManager<PgConnection>>)> {
     let temp_dir = TempDir::new().unwrap();
+    TEMP_DIRS.lock().await.push(temp_dir.clone());
     let settings = postgres::PgSettings {
         database_dir: temp_dir.path().to_path_buf(),
         port: portpicker::pick_unused_port().unwrap() as i16,
