@@ -81,7 +81,14 @@ pub async fn deserialize_event(
     buf: &[u8],
 ) -> Result<(span::Id, Result<ProvModel, Contradiction>), ProtocolError> {
     let event = messages::Event::decode(buf)?;
-    let span_id = span::Id::from_u64(event.span_id);
+    // Spans of zero panic, so assign a dummy value until we thread the span correctly
+    let span_id = {
+        if event.span_id == 0 {
+            span::Id::from_u64(0xffffffffffffffff)
+        } else {
+            span::Id::from_u64(event.span_id)
+        }
+    };
     let model = match (event.delta, event.option_contradiction) {
         (_, Some(OptionContradiction::Contradiction(contradiction))) => {
             Err(serde_json::from_str::<Contradiction>(&contradiction)?)

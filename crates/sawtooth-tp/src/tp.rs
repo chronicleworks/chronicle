@@ -320,7 +320,7 @@ pub mod test {
                     (
                         k.clone(),
                         attr.clone(),
-                        serde_json::from_str(&*messages::Event::decode(&**data).unwrap().delta)
+                        serde_json::from_str(&messages::Event::decode(&**data).unwrap().delta)
                             .unwrap(),
                     )
                 })

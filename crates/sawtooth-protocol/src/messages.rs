@@ -82,11 +82,15 @@ impl MessageBuilder {
 
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&encoded_header);
-        s.normalize_s();
+        let s = s.normalize_s().unwrap_or(s);
+        let s = hex::encode(s.as_ref());
+
+        debug!(batch_header=?header, batch_header_signature=?s);
 
         batch.transactions = vec![tx];
         batch.header = encoded_header;
-        batch.header_signature = hex::encode(s.as_ref());
+        batch.header_signature = s;
+        batch.trace = true;
 
         batch
     }
@@ -119,13 +123,13 @@ impl MessageBuilder {
             outputs: output_addresses,
         };
 
-        debug!(?header);
-
         let encoded_header = header.encode_to_vec();
         let s: Signature = self.signer.sign(&encoded_header);
-        s.normalize_s();
+        let s = s.normalize_s().unwrap_or(s);
 
         let s = hex::encode(s.to_vec());
+
+        debug!(transaction_header=?header, transaction_header_signature=?s);
 
         Ok((
             Transaction {

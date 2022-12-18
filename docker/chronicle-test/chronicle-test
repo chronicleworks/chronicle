@@ -31,4 +31,4 @@ sleep 30
 
 cat subscription.out
 
-grep COMITTED subscription.out
+grep COMMIT subscription.out
