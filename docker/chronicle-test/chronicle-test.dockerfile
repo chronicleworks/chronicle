@@ -12,13 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM debian:bullseye-slim AS chronicle-test
-RUN apt-get update && \
-    apt-get install -y \
-    npm \
-    jq \
-    && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+FROM node:18 AS chronicle-test
 
 RUN npm install -g -f graphqurl
 
