@@ -38,7 +38,7 @@ pipeline {
     stage('Test') {
       steps {
         sh '''
-          make test-e2e
+          make test
         '''
         step([$class: "TapPublisher", testResults: "build/results.tap"])
       }

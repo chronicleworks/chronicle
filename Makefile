@@ -81,7 +81,7 @@ tested-$(ISOLATION_ID): ensure-context-chronicle
 		docker rm $$container_id;
 
 .PHONY: test
-test: tested-$(ISOLATION_ID)
+test: test-e2e
 
 define multi-arch-docker =
 
