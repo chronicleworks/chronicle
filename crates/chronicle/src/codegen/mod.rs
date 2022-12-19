@@ -280,7 +280,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                     .await
                     .map_err(|e| #async_graphql_error_extensions::extend(&e))?
                     .into_iter()
-                    .map(|(agent,role)| map_association_to_role(agent, None, role, None))
+                    .map(|(r_agent, r_role, d_agent, d_role)| map_association_to_role(r_agent, d_agent, r_role, d_role))
                     .collect(),
             )
         }
