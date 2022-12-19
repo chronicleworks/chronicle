@@ -1,5 +1,5 @@
 ---
-version: "3.7"
+version: "3.9"
 services:
   settings-tp:
     image: blockchaintp/sawtooth-settings-tp:BTP2.1.0
@@ -129,3 +129,9 @@ services:
       - "16686:16686"
       - "14268:14268"
       - "9411:9411"
+
+  chronicle-test:
+    image: chronicle-test:${ISOLATION_ID}
+    profiles: ["test"]
+    depends_on:
+      - chronicle-sawtooth-api

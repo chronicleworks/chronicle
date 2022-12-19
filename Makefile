@@ -8,6 +8,7 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 
 IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
+COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
 CLEAN_DIRS := $(CLEAN_DIRS)
@@ -42,26 +43,15 @@ build-end-to-end-test:
 	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
 
 .PHONY: test-e2e
-.ONESHELL:
-SHELL = /bin/bash
-.SHELLOPTS = $(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
 test-e2e: build-end-to-end-test
-	docker-compose -f docker/chronicle.yaml up --force-recreate --detach
-	function stopStack {
-		docker logs docker-chronicle-sawtooth-tp-1
-		docker logs docker-chronicle-sawtooth-api-1
-		docker logs docker-validator-1
-		docker-compose -f docker/chronicle.yaml down || true
-	}
-	trap stopStack EXIT
-	docker run --network docker_default chronicle-test:$(ISOLATION_ID)
+	COMPOSE_PROFILES=test $(COMPOSE) -f docker/chronicle.yaml up --exit-code-from chronicle-test
 
 run:
-	docker-compose -f docker/chronicle.yaml up --force-recreate
+	$(COMPOSE) -f docker/chronicle.yaml up -d
 
 .PHONY: stop
 stop:
-	docker-compose -f docker/chronicle.yaml down || true
+	$(COMPOSE) -f docker/chronicle.yaml down || true
 
 $(MARKERS)/binfmt:
 	mkdir -p $(MARKERS)
@@ -127,10 +117,10 @@ endef
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
 
 clean_containers:
-	docker-compose -f docker/chronicle.yaml rm -f || true
+	$(COMPOSE) -f docker/chronicle.yaml rm -f || true
 
 clean_docker: stop
-	docker-compose -f docker/chronicle.yaml down -v --rmi all || true
+	$(COMPOSE) -f docker/chronicle.yaml down -v --rmi all || true
 
 clean_target:
 	$(RM) -r target
