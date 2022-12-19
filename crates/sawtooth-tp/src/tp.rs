@@ -284,14 +284,14 @@ pub mod test {
 
     type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
 
-    pub struct TestTranasctionContext {
+    pub struct TestTransactionContext {
         pub state: RefCell<BTreeMap<String, Vec<u8>>>,
         pub events: RefCell<TestTxEvents>,
     }
 
     type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
 
-    impl TestTranasctionContext {
+    impl TestTransactionContext {
         pub fn new() -> Self {
             Self {
                 state: RefCell::new(BTreeMap::new()),
@@ -328,16 +328,16 @@ pub mod test {
         }
     }
 
-    impl TransactionContext for TestTranasctionContext {
+    impl TransactionContext for TestTransactionContext {
         fn add_receipt_data(
-            self: &TestTranasctionContext,
+            self: &TestTransactionContext,
             _data: &[u8],
         ) -> Result<(), ContextError> {
             unimplemented!()
         }
 
         fn add_event(
-            self: &TestTranasctionContext,
+            self: &TestTransactionContext,
             event_type: String,
             attributes: Vec<(String, String)>,
             data: &[u8],
@@ -349,7 +349,7 @@ pub mod test {
         }
 
         fn delete_state_entries(
-            self: &TestTranasctionContext,
+            self: &TestTransactionContext,
             _addresses: &[std::string::String],
         ) -> Result<Vec<String>, ContextError> {
             unimplemented!()
@@ -369,7 +369,7 @@ pub mod test {
         }
 
         fn set_state_entries(
-            self: &TestTranasctionContext,
+            self: &TestTransactionContext,
             entries: Vec<(String, Vec<u8>)>,
         ) -> std::result::Result<(), sawtooth_sdk::processor::handler::ContextError> {
             for entry in entries {
@@ -462,7 +462,7 @@ pub mod test {
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
-            let mut context = TestTranasctionContext::new();
+            let mut context = TestTransactionContext::new();
             let handler = ChronicleTransactionHandler::new();
             handler.apply(&request, &mut context).unwrap();
 
