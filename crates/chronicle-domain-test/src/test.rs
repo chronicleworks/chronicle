@@ -741,6 +741,373 @@ mod test {
     }
 
     #[tokio::test]
+    async fn agent_delegation_for_activity() {
+        let schema = test_schema().await;
+
+        // create contractors
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              defineContractorAgent(
+                  externalId: "huey"
+                  attributes: { locationAttribute: "location" }
+              ) {
+                  context
+              }
+            }
+              "#,
+            ))
+            .await, @r###"
+            [data.defineContractorAgent]
+            context = 'chronicle:agent:huey'
+          "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_toml_snapshot!(schema
+            .execute(Request::new(
+                r#"
+              mutation {
+                defineContractorAgent(
+                    externalId: "dewey"
+                    attributes: { locationAttribute: "location" }
+                ) {
+                    context
+                }
+              }
+              "#,
+              ))
+              .await, @r###"
+              [data.defineContractorAgent]
+              context = 'chronicle:agent:dewey'
+              "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_toml_snapshot!(schema
+              .execute(Request::new(
+                  r#"
+                mutation {
+                  defineContractorAgent(
+                      externalId: "louie"
+                      attributes: { locationAttribute: "location" }
+                  ) {
+                      context
+                  }
+                }
+                "#,
+                ))
+                .await, @r###"
+                [data.defineContractorAgent]
+                context = 'chronicle:agent:louie'
+                  "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // create activities
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              defineItemManufacturedActivity(
+                externalId: "manufacture",
+                attributes: { batchIdAttribute: "something" }
+              ) {
+                  context
+              }
+            }
+      "#,
+          ))
+          .await, @r###"
+        [data.defineItemManufacturedActivity]
+        context = 'chronicle:activity:manufacture'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              defineItemCertifiedActivity(
+                externalId: "certification",
+                attributes: { certIdAttribute: "something" }
+              ) {
+                  context
+              }
+           }
+      "#,
+          ))
+          .await, @r###"
+        [data.defineItemCertifiedActivity]
+        context = 'chronicle:activity:certification'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // associate contractors with activities
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              wasAssociatedWith(
+                activity: { externalId: "manufacture" }
+                responsible: { externalId: "huey" }
+                role: MANUFACTURER
+              ) {
+                  context
+               }
+            }
+      "#,
+          ))
+          .await, @r###"
+          [data.wasAssociatedWith]
+          context = 'chronicle:agent:huey'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              wasAssociatedWith(
+                activity: { externalId: "certification" }
+                responsible: { externalId: "dewey" }
+                role: CERTIFIER
+              ) {
+                  context
+              }
+            }
+      "#,
+          ))
+          .await, @r###"
+          [data.wasAssociatedWith]
+          context = 'chronicle:agent:dewey'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              actedOnBehalfOf(
+                  activity: { externalId: "manufacture" }
+                  responsible: { externalId: "huey" }
+                  delegate: { externalId: "louie" }
+                  role: SUBMITTER
+                ) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
+        [data.actedOnBehalfOf]
+        context = 'chronicle:agent:huey'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // check responsible and delegate are correct for activities
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+            activityById(id: { externalId: "manufacture" }) {
+              ... on ItemManufacturedActivity {
+                wasAssociatedWith {
+                  responsible {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                  delegate {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                }
+              }
+            }
+          }
+      "#,
+          ))
+          .await.data, @r###"
+          {
+            "activityById": {
+              "wasAssociatedWith": [
+                {
+                  "responsible": {
+                    "agent": {
+                      "externalId": "huey"
+                    },
+                    "role": "MANUFACTURER"
+                  },
+                  "delegate": {
+                    "agent": {
+                      "externalId": "louie"
+                    },
+                    "role": "SUBMITTER"
+                  }
+                }
+              ]
+            }
+          }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+            activityById(id: { externalId: "certification" }) {
+              ... on ItemCertifiedActivity {
+                wasAssociatedWith {
+                  responsible {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                  delegate {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                }
+              }
+            }
+          }
+      "#,
+          ))
+          .await.data, @r###"
+          {
+            "activityById": {
+              "wasAssociatedWith": [
+                {
+                  "responsible": {
+                    "agent": {
+                      "externalId": "dewey"
+                    },
+                    "role": "CERTIFIER"
+                  },
+                  "delegate": null
+                }
+              ]
+            }
+          }
+        "###);
+
+        // use the same delegated contractor for two different roles
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              wasAssociatedWith(
+                activity: { externalId: "manufacture" }
+                responsible: { externalId: "huey" }
+                role: CODIFIER
+              ) {
+                  context
+               }
+            }
+      "#,
+          ))
+          .await, @r###"
+          [data.wasAssociatedWith]
+          context = 'chronicle:agent:huey'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // check that same delegate is returned twice over
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+            activityById(id: { externalId: "manufacture" }) {
+              ... on ItemManufacturedActivity {
+                wasAssociatedWith {
+                  responsible {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                  delegate {
+                    agent {
+                      ... on ContractorAgent {
+                        externalId
+                      }
+                    }
+                    role
+                  }
+                }
+              }
+            }
+          }
+      "#,
+          ))
+          .await.data, @r###"
+          {
+            "activityById": {
+              "wasAssociatedWith": [
+                {
+                  "responsible": {
+                    "agent": {
+                      "externalId": "huey"
+                    },
+                    "role": "CODIFIER"
+                  },
+                  "delegate": {
+                    "agent": {
+                      "externalId": "louie"
+                    },
+                    "role": "SUBMITTER"
+                  }
+                },
+                {
+                  "responsible": {
+                    "agent": {
+                      "externalId": "huey"
+                    },
+                    "role": "MANUFACTURER"
+                  },
+                  "delegate": {
+                    "agent": {
+                      "externalId": "louie"
+                    },
+                    "role": "SUBMITTER"
+                  }
+                }
+              ]
+            }
+          }
+        "###);
+    }
+
+    #[tokio::test]
     async fn untyped_derivation() {
         let schema = test_schema().await;
 
