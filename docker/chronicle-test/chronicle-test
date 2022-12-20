@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+echo "Wait for stack"
+sleep 20
+
+echo "Subscribe to commits"
+gq http://chronicle-sawtooth-api:9982/ws -q " \
+subscription { \
+  commitNotifications { \
+    stage \
+    delta \
+    txId \
+    error \
+  } \
+}" >subscription.out &
+
+sleep 5
+
+echo "Issue query"
+gq http://chronicle-sawtooth-api:9982 -q " \
+mutation{ \
+        defineAgent( \
+    externalId: \"test\",  \
+    attributes: {}) { \
+    txId \
+  } \
+}"
+
+echo "Collecting commits"
+sleep 30
+
+cat subscription.out
+
+grep COMMIT subscription.out

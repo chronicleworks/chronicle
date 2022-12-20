@@ -8,6 +8,7 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 
 IMAGES := chronicle chronicle-tp chronicle-builder
 ARCHS := amd64 arm64
+COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
 CLEAN_DIRS := $(CLEAN_DIRS)
@@ -37,8 +38,16 @@ publish: gh-create-draft-release
 		$(GH_RELEASE) upload $(VERSION) target/* ; \
 	fi
 
+PHONY: build-end-to-end-test
+build-end-to-end-test:
+	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
+
+.PHONY: test-e2e
+test-e2e: build-end-to-end-test
+	COMPOSE_PROFILES=test $(COMPOSE) -f docker/chronicle.yaml up --exit-code-from chronicle-test
+
 run:
-	docker-compose -f docker/chronicle.yaml up --force-recreate
+	$(COMPOSE) -f docker/chronicle.yaml up -d
 
 .PHONY: stop
 stop:
@@ -72,7 +81,7 @@ tested-$(ISOLATION_ID): ensure-context-chronicle
 		docker rm $$container_id;
 
 .PHONY: test
-test: tested-$(ISOLATION_ID)
+test: test-e2e
 
 define multi-arch-docker =
 
@@ -108,10 +117,10 @@ endef
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
 
 clean_containers:
-	docker-compose -f docker/chronicle.yaml rm -f || true
+	$(COMPOSE) -f docker/chronicle.yaml rm -f || true
 
 clean_docker: stop
-	docker-compose -f docker/chronicle.yaml down -v --rmi all || true
+	$(COMPOSE) -f docker/chronicle.yaml down -v --rmi all || true
 
 clean_target:
 	$(RM) -r target

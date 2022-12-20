@@ -3,7 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use crate::{
     address::{SawtoothAddress, FAMILY, VERSION},
     messages::MessageBuilder,
-    sawtooth::{ClientBatchSubmitRequest, ClientBatchSubmitResponse, Transaction},
+    sawtooth::{Batch, ClientBatchSubmitRequest, ClientBatchSubmitResponse, Transaction},
 };
 
 use common::{
@@ -32,28 +32,22 @@ pub struct SawtoothSubmitter {
     #[derivative(Debug = "ignore")]
     tx: ZmqMessageSender,
     rx: MessageReceiver,
+    builder: OperationMessageBuilder,
+}
+
+#[derive(Debug)]
+pub struct OperationMessageBuilder {
     builder: MessageBuilder,
 }
 
-custom_error! {pub SawtoothSubmissionError
-    Send{source: SendError}                                 = "Submission failed to send to validator",
-    Recv{source: ReceiveError}                              = "Submission failed to send to validator",
-    UnexpectedStatus{status: i32}                           = "Validator status unexpected {status}",
-    Join{source: JoinError}                                 = "Submission blocking thread pool",
-    Ld{source: ProcessorError}                              = "Json LD processing",
-    Protocol{source: ProtocolError}                         = "Protocol {source}",
-}
-
-/// The sawtooth futures and their sockets are not controlled by a compatible reactor
-impl SawtoothSubmitter {
-    #[allow(dead_code)]
-    pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
-        let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
-        let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
-        SawtoothSubmitter { tx, rx, builder }
+impl OperationMessageBuilder {
+    pub fn new(signer: &SigningKey, family: &str, version: &str) -> Self {
+        OperationMessageBuilder {
+            builder: MessageBuilder::new(signer.to_owned(), family, version),
+        }
     }
 
-    async fn make_tx(
+    pub async fn make_tx(
         &mut self,
         transactions: &[ChronicleOperation],
     ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
@@ -75,6 +69,41 @@ impl SawtoothSubmitter {
             .await
     }
 
+    pub fn wrap_tx_as_sawtooth_batch(&mut self, tx: Transaction) -> Batch {
+        self.builder.wrap_tx_as_sawtooth_batch(tx)
+    }
+
+    pub async fn make_sawtooth_transaction(
+        &mut self,
+        inputs: Vec<String>,
+        outputs: Vec<String>,
+        dependencies: Vec<String>,
+        payload: &[ChronicleOperation],
+    ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
+        self.builder
+            .make_sawtooth_transaction(inputs, outputs, dependencies, payload)
+            .await
+    }
+}
+
+custom_error! {pub SawtoothSubmissionError
+    Send{source: SendError}                                 = "Submission failed to send to validator",
+    Recv{source: ReceiveError}                              = "Submission failed to send to validator",
+    UnexpectedStatus{status: i32}                           = "Validator status unexpected {status}",
+    Join{source: JoinError}                                 = "Submission blocking thread pool",
+    Ld{source: ProcessorError}                              = "Json LD processing",
+    Protocol{source: ProtocolError}                         = "Protocol {source}",
+}
+
+/// The sawtooth futures and their sockets are not controlled by a compatible reactor
+impl SawtoothSubmitter {
+    #[allow(dead_code)]
+    pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
+        let builder = OperationMessageBuilder::new(signer, FAMILY, VERSION);
+        let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
+        SawtoothSubmitter { tx, rx, builder }
+    }
+
     #[instrument(
         name = "submit_sawtooth_tx",
         level = "info",
@@ -88,6 +117,7 @@ impl SawtoothSubmitter {
         // Practically, a protobuf serialization error here is probably a crash
         // loop level fault, but we will handle it without panic for now
         let (sawtooth_transaction, tx_id) = self
+            .builder
             .make_tx(transactions)
             .await
             .map_err(|e| (ChronicleTransactionId::from(""), e.into()))?;

@@ -52,24 +52,24 @@ pub mod messages {
 }
 
 pub async fn chronicle_committed(
-    span: span::Id,
+    span: u64,
     delta: ProvModel,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
         delta: serde_json::to_string(&delta.to_json().compact_stable_order().await?)?,
-        span_id: span.into_u64(),
+        span_id: span,
         ..Default::default()
     })
 }
 
 pub fn chronicle_contradicted(
-    span: span::Id,
+    span: u64,
     contradiction: &Contradiction,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
-        span_id: span.into_u64(),
+        span_id: span,
         option_contradiction: Some(OptionContradiction::Contradiction(serde_json::to_string(
             &contradiction,
         )?)),
@@ -81,7 +81,14 @@ pub async fn deserialize_event(
     buf: &[u8],
 ) -> Result<(span::Id, Result<ProvModel, Contradiction>), ProtocolError> {
     let event = messages::Event::decode(buf)?;
-    let span_id = span::Id::from_u64(event.span_id);
+    // Spans of zero panic, so assign a dummy value until we thread the span correctly
+    let span_id = {
+        if event.span_id == 0 {
+            span::Id::from_u64(0xffffffffffffffff)
+        } else {
+            span::Id::from_u64(event.span_id)
+        }
+    };
     let model = match (event.delta, event.option_contradiction) {
         (_, Some(OptionContradiction::Contradiction(contradiction))) => {
             Err(serde_json::from_str::<Contradiction>(&contradiction)?)

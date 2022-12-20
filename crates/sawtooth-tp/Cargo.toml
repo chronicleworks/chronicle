@@ -22,6 +22,7 @@ derivative = "2.2.0"
 futures = "0.3.21"
 glob = "0.3.0"
 hex = "0.4.3"
+json = "0.12.4"
 lazy_static = "1.4.0"
 openssl = "0.10.38"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
@@ -38,8 +39,9 @@ sawtooth-sdk = "0.5.2"
 serde = "1.0.136"
 serde_cbor = "0.11.2"
 serde_derive = "1.0.136"
+serde_json = "1.0.89"
 telemetry = { path = "../telemetry" }
-tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.18.2", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = "2.2.2"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
@@ -50,6 +52,7 @@ glob        = "0.3.0"
 prost-build = "0.10.0"
 
 [dev-dependencies]
+insta    = { version = "1.14.0", features = ["redactions", "toml"] }
 protobuf = "2.27.1"
 
 [features]

@@ -1,6 +1,5 @@
 # BTP Local
 target
-docker
 markers
 build
 site

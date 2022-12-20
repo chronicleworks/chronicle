@@ -79,8 +79,9 @@ use crate::{
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
 pub struct StateDelta {
+    address: url::Url,
     #[derivative(Debug = "ignore")]
-    tx: ZmqMessageSender,
+    tx: Arc<Mutex<ZmqMessageSender>>,
     rx: Arc<Mutex<MessageReceiver>>,
     builder: MessageBuilder,
 }
@@ -92,10 +93,17 @@ impl StateDelta {
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         info!(?address, "Subscribing to state updates");
         StateDelta {
-            tx,
+            address: address.clone(),
+            tx: Arc::new(tx.into()),
             rx: Arc::new(rx.into()),
             builder,
         }
+    }
+
+    fn reconnect(&self) {
+        let (tx, rx) = ZmqMessageConnection::new(self.address.as_str()).create();
+        *self.tx.lock().unwrap() = tx;
+        *self.rx.lock().unwrap() = rx;
     }
 
     async fn recv_from_messagefuture(
@@ -141,7 +149,7 @@ impl StateDelta {
 
         let response = {
             loop {
-                let fut = self.tx.send(
+                let fut = self.tx.lock().unwrap().send(
                     Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                     &uuid::Uuid::new_v4().to_string(),
                     &buf,
@@ -306,10 +314,10 @@ impl LedgerReader for StateDelta {
         offset: Offset,
     ) -> Result<Pin<Box<dyn Stream<Item = CommitResult> + Send>>, SubscriptionError> {
         let self_clone = self.clone();
-
         let subscribe = backoff::future::retry(ExponentialBackoff::default(), || {
             self_clone.get_state_from(&offset).map_err(|e| {
                 error!(?e, "Error subscribing");
+                self_clone.reconnect();
                 backoff::Error::transient(e)
             })
         });

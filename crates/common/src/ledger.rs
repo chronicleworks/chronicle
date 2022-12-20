@@ -467,7 +467,7 @@ impl LedgerAddress {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StateInput {
     data: String,
 }
@@ -566,7 +566,7 @@ where
         }
     }
 
-    /// Return the byte vectors of input data held in `OperationState`
+    /// Return the input data held in `OperationState`
     /// as a vector of `StateInput`s
     pub fn input(&self) -> Vec<StateInput> {
         self.state
