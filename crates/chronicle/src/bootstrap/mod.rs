@@ -67,21 +67,18 @@ impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
-#[cfg(feature = "inmem")]
-async fn pool(_config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError> {
     use common::database::get_embedded_db_connection;
     let (database, pool) = get_embedded_db_connection().await.unwrap();
     Ok((pool, Some(database)))
 }
 
-#[cfg(not(feature = "inmem"))]
-async fn pool(config: &Config) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+fn pool_remote(db_uri: &str) -> Result<(ConnectionPool, Option<Database>), ApiError> {
     use diesel::Connection;
-    let dburl = config.store.address.as_str();
     // before pooling, first establish a test connection to get a clearer error if it fails
-    PgConnection::establish(dburl).map_err(|source| api::StoreError::DbConnection { source })?;
+    PgConnection::establish(db_uri).map_err(|source| api::StoreError::DbConnection { source })?;
     Ok((
-        Pool::builder().build(ConnectionManager::<PgConnection>::new(dburl))?,
+        Pool::builder().build(ConnectionManager::<PgConnection>::new(db_uri))?,
         None::<Database>,
     ))
 }
@@ -153,6 +150,53 @@ pub async fn api(
     .await
 }
 
+async fn pool(matches: &ArgMatches) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+    if matches.is_present("embedded-database") {
+        pool_embedded().await
+    } else {
+        fn encode(string: &str) -> String {
+            use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+            utf8_percent_encode(string, NON_ALPHANUMERIC).to_string()
+        }
+
+        let password = match std::env::var("PGPASSWORD") {
+            Ok(password) => {
+                debug!("PGPASSWORD is set, using for DB connection");
+                format!(":{}", encode(password.as_str()))
+            }
+            Err(_) => {
+                debug!("PGPASSWORD is not set, omitting for DB connection");
+                String::new()
+            }
+        };
+        let db_uri = format!(
+            "postgresql://{}{}@{}:{}/{}",
+            encode(
+                matches
+                    .value_of("database-username")
+                    .expect("CLI should always set database user")
+            ),
+            password,
+            encode(
+                matches
+                    .value_of("database-host")
+                    .expect("CLI should always set database host")
+            ),
+            encode(
+                matches
+                    .value_of("database-port")
+                    .expect("CLI should always set database port")
+            ),
+            encode(
+                matches
+                    .value_of("database-name")
+                    .expect("CLI should always set database name")
+            )
+        );
+        pool_remote(&db_uri)
+    }
+}
+
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
@@ -166,7 +210,7 @@ where
     dotenv::dotenv().ok();
 
     let matches = cli.as_cmd().get_matches();
-    let (pool, _pool_scope) = pool(&config).await?;
+    let (pool, _pool_scope) = pool(&matches).await?;
     let api = api(&pool, &matches, &config).await?;
     let ret_api = api.clone();
 

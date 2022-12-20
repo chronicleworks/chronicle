@@ -894,7 +894,46 @@ impl SubCommand for CliModel {
                 .help(
                     "Instrument using RUST_LOG environment, writing in either human readable format or structured json to stdio",
              ))
-            .subcommand(
+             .arg(
+                Arg::new("embedded-database")
+                    .long("embedded-database")
+                    .help("use an embedded PostgreSQL")
+                    // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x
+                    // .conflicts_with_all(&["database-host", "database-port", "database-username", "database-name"])
+            )
+             .arg(
+                Arg::new("database-host")
+                    .long("database-host")
+                    .takes_value(true)
+                    .env("PGHOST")
+                    .help("PostgreSQL hostname")
+                    .default_value("localhost"),
+            )
+            .arg(
+                Arg::new("database-port")
+                    .long("database-port")
+                    .takes_value(true)
+                    .env("PGPORT")
+                    .help("PostgreSQL port")
+                    .default_value("5432"),
+            )
+            .arg(
+                Arg::new("database-username")
+                    .long("database-username")
+                    .takes_value(true)
+                    .env("PGUSER")
+                    .help("PostgreSQL username")
+                    .default_value("chronicle"),
+            )
+            .arg(
+                Arg::new("database-name")
+                    .long("database-name")
+                    .takes_value(true)
+                    .env("PGDATABASE")
+                    .help("name of the database")
+                    .default_value("chronicle"),
+            )
+                .subcommand(
                 Command::new("completions")
                     .about("Generate shell completions and exit")
                     .arg(

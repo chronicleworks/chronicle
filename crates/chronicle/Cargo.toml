@@ -11,7 +11,7 @@ Inflector = "0.11.4"
 api = { path = "../api" }
 async-graphql = "4.0.9"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = { version = "3.2.1", features = ["derive"] }
+clap = { version = "3.2.1", features = ["derive", "env"] }
 clap_complete = "3.1.1"
 colored_json = "2.1.0"
 common = { path = "../common" }
@@ -35,6 +35,7 @@ opentelemetry-jaeger = { version = "0.16.0", features = [
   "collector_client",
   "reqwest_collector_client",
 ] }
+percent-encoding = "2.1.0"
 pg-embed = "0.6.5"
 proto = { path = "../sawtooth-protocol" }
 question = "0.2.2"
