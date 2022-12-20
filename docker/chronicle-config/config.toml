@@ -1,7 +1,5 @@
 [secrets]
 path = "/var/lib/chronicle/secrets"
-[store]
-address = "postgresql://chronicle:chronicle@chronicle-pg:5432/chronicle"
 [validator]
 address = "tcp://validator:4004"
 [namespace_bindings]

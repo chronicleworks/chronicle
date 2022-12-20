@@ -16,11 +16,6 @@ pub struct SecretConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct StoreConfig {
-    pub address: Url,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorConfig {
     pub address: Url,
 }
@@ -28,7 +23,6 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     pub secrets: SecretConfig,
-    pub store: StoreConfig,
     pub validator: ValidatorConfig,
     pub namespace_bindings: HashMap<String, Uuid>,
 }
@@ -66,13 +60,6 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
         std::process::exit(0);
     }
 
-    let dburl = Question::new("What is the address of the PostgreSQL database?")
-        .default(Answer::RESPONSE(
-            "postgresql://localhost:5432/chronicle".to_owned(),
-        ))
-        .show_defaults()
-        .confirm();
-
     let secretpath = Question::new("Where should Chronicle store secrets?")
         .default(Answer::RESPONSE(
             Path::join(
@@ -96,12 +83,8 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
         .show_defaults()
         .confirm();
 
-    match (dburl, secretpath, validatorurl) {
-        (
-            Answer::RESPONSE(dbpath),
-            Answer::RESPONSE(secretpath),
-            Answer::RESPONSE(validatorurl),
-        ) => {
+    match (secretpath, validatorurl) {
+        (Answer::RESPONSE(secretpath), Answer::RESPONSE(validatorurl)) => {
             let secretpath = Path::new(&secretpath);
 
             println!("Creating config dir {} if needed", path.to_string_lossy());
@@ -115,17 +98,11 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
             let config = format!(
                 r#"[secrets]
 path = "{}"
-[store]
-# https://www.postgresql.org/docs/current/libpq-connect.html
-# describes the format of database connection URIs following
-# postgresql://[userspec@][hostspec][/dbname][?paramspec]
-address = "{}"
 [validator]
 address = "{}"
 [namespace_bindings]
 "#,
                 &*secretpath.to_string_lossy(),
-                dbpath,
                 validatorurl
             );
 
