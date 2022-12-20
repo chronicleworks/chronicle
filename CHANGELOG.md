@@ -2,6 +2,7 @@
 
 ## v0.5.0
 
+* docs: update CHANGELOG.md [view commit](https://github.com/catenasys/chronicle/commit/4e6e989daed92d1a90194e5c911bdc97a03ee524)
 * fix(sawtooth-protocol): change externalId back to name [view commit](https://github.com/catenasys/chronicle/commit/baf471cdbb387b0a41bad57c520de31131be0402)
 * fix(activity.rs): in resolving associations, include delegates [view commit](https://github.com/catenasys/chronicle/commit/3729c8a4394bf7c8b0adf17cf96ac59907cafd0d)
 * fix: Make interface, sawtooth defaults [view commit](https://github.com/catenasys/chronicle/commit/80f70f6db00a5a4d3ac9937ef0fe225546244ba9)
@@ -412,3 +413,4 @@
 * feat: Abstract API, LD serialisation for derivation [view commit](https://github.com/catenasys/chronicle/commit/6f7a3473bc9fd0aa8da8aab6cb88534606ae7cda)
 * feat: Rework model + persistence to something closer to PROV-DM [view commit](https://github.com/catenasys/chronicle/commit/d018617f0301f27be2854c9a407a8515f1d12be3)
 * feat: Move schema towards PROV-DM, predicting further relations [view commit](https://github.com/catenasys/chronicle/commit/c8949232481475b6843d1d21d3fc68568cdae51d)
+
