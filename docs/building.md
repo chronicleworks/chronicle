@@ -8,7 +8,7 @@ image to be used in CI/CD.
 
 ## Example Dockerfile
 
-Assuming a valid [Chronicle domain configuration](./domain_modelling.md) located
+Assuming a valid [Chronicle domain configuration](./domain_modeling.md) located
 in the same directory as the Dockerfile, the following will build a
 domain-specific Chronicle. You should only need to source control the Dockerfile
 and domain.config - Chronicle's build image will do the rest.
