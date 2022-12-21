@@ -898,8 +898,14 @@ impl SubCommand for CliModel {
                 Arg::new("embedded-database")
                     .long("embedded-database")
                     .help("use an embedded PostgreSQL")
-                    // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x
-                    // .conflicts_with_all(&["database-host", "database-port", "database-username", "database-name"])
+                    .conflicts_with("remote-database")
+                    // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x - then use ArgGroup or,
+                    // .conflicts_with_all(&["remote-database", "database-host", "database-port", "database-username", "database-name"])
+            )
+            .arg(
+                Arg::new("remote-database")
+                    .long("remote-database")
+                    .help("connect to a provided PostgreSQL")
             )
              .arg(
                 Arg::new("database-host")

@@ -68,8 +68,11 @@ impl UuidGen for UniqueUuid {}
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
 async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    use common::database::get_embedded_db_connection;
-    let (database, pool) = get_embedded_db_connection().await.unwrap();
+    let (database, pool) = common::database::get_embedded_db_connection()
+        .await
+        .map_err(|source| api::StoreError::EmbeddedDb {
+            message: source.to_string(),
+        })?;
     Ok((pool, Some(database)))
 }
 
@@ -150,51 +153,70 @@ pub async fn api(
     .await
 }
 
-async fn pool(matches: &ArgMatches) -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    if matches.is_present("embedded-database") {
-        pool_embedded().await
-    } else {
-        fn encode(string: &str) -> String {
-            use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-            utf8_percent_encode(string, NON_ALPHANUMERIC).to_string()
-        }
-
-        let password = match std::env::var("PGPASSWORD") {
-            Ok(password) => {
-                debug!("PGPASSWORD is set, using for DB connection");
-                format!(":{}", encode(password.as_str()))
-            }
-            Err(_) => {
-                debug!("PGPASSWORD is not set, omitting for DB connection");
-                String::new()
-            }
-        };
-        let db_uri = format!(
-            "postgresql://{}{}@{}:{}/{}",
-            encode(
-                matches
-                    .value_of("database-username")
-                    .expect("CLI should always set database user")
-            ),
-            password,
-            encode(
-                matches
-                    .value_of("database-host")
-                    .expect("CLI should always set database host")
-            ),
-            encode(
-                matches
-                    .value_of("database-port")
-                    .expect("CLI should always set database port")
-            ),
-            encode(
-                matches
-                    .value_of("database-name")
-                    .expect("CLI should always set database name")
-            )
-        );
-        pool_remote(&db_uri)
+fn construct_db_uri(matches: &ArgMatches) -> String {
+    fn encode(string: &str) -> String {
+        use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+        utf8_percent_encode(string, NON_ALPHANUMERIC).to_string()
     }
+
+    let password = match std::env::var("PGPASSWORD") {
+        Ok(password) => {
+            debug!("PGPASSWORD is set, using for DB connection");
+            format!(":{}", encode(password.as_str()))
+        }
+        Err(_) => {
+            debug!("PGPASSWORD is not set, omitting for DB connection");
+            String::new()
+        }
+    };
+
+    format!(
+        "postgresql://{}{}@{}:{}/{}",
+        encode(
+            matches
+                .value_of("database-username")
+                .expect("CLI should always set database user")
+        ),
+        password,
+        encode(
+            matches
+                .value_of("database-host")
+                .expect("CLI should always set database host")
+        ),
+        encode(
+            matches
+                .value_of("database-port")
+                .expect("CLI should always set database port")
+        ),
+        encode(
+            matches
+                .value_of("database-name")
+                .expect("CLI should always set database name")
+        )
+    )
+}
+
+async fn pool(matches: &ArgMatches) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+    let mut relevant_error = None;
+    if !matches.is_present("embedded-database") {
+        debug!("connecting to remote DB");
+        match pool_remote(&construct_db_uri(matches)) {
+            success @ Ok(_) => return success,
+            Err(error) => relevant_error = Some(error),
+        }
+    };
+    if !matches.is_present("remote-database") {
+        debug!("connecting to embedded DB");
+        match pool_embedded().await {
+            success @ Ok(_) => return success,
+            Err(error) => {
+                if relevant_error.is_none() {
+                    relevant_error = Some(error)
+                }
+            }
+        }
+    };
+    Err(relevant_error.unwrap())
 }
 
 #[instrument(skip(gql, cli))]
