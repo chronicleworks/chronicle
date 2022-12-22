@@ -36,6 +36,7 @@ k256 = { version = "0.11.3", features = [
   "arithmetic",
   "ecdsa",
   "pkcs8",
+  "serde",
   "sha256",
   "std",
   "pem",

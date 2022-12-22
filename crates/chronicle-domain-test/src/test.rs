@@ -70,7 +70,10 @@ mod test {
         },
         async_graphql::{Request, Schema},
         chrono::{DateTime, NaiveDate, Utc},
-        common::{database::get_embedded_db_connection, ledger::InMemLedger},
+        common::{
+            database::get_embedded_db_connection, ledger::InMemLedger, prov::AuthId,
+            signing::DirectoryStoredKeys,
+        },
         tokio,
         uuid::Uuid,
     };
@@ -89,7 +92,11 @@ mod test {
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
-        let secretpath = TempDir::new().unwrap();
+        let secretpath = TempDir::new().unwrap().into_path();
+
+        let keystore_path = secretpath.clone();
+        let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
+        keystore.generate_chronicle().unwrap();
 
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
@@ -100,7 +107,7 @@ mod test {
             pool.clone(),
             ledger,
             reader,
-            &secretpath.into_path(),
+            &secretpath,
             SameUuid,
             HashMap::default(),
         )
@@ -111,6 +118,7 @@ mod test {
             .data(Store::new(pool))
             .data(dispatch)
             .data(database) // share the lifetime
+            .data(AuthId::Chronicle)
             .finish()
     }
 

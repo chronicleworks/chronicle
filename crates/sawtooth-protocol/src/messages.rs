@@ -2,7 +2,7 @@ use common::{
     k256::ecdsa::{signature::Signer, Signature, SigningKey},
     ledger::Offset,
     protocol::{create_operation_submission_request, serialize_submission, ProtocolError},
-    prov::{operations::ChronicleOperation, ChronicleTransactionId},
+    prov::{ChronicleTransaction, ChronicleTransactionId},
 };
 use custom_error::custom_error;
 use openssl::sha::Sha512;
@@ -101,7 +101,7 @@ impl MessageBuilder {
         input_addresses: Vec<String>,
         output_addresses: Vec<String>,
         dependencies: Vec<String>,
-        payload: &[ChronicleOperation],
+        payload: &ChronicleTransaction,
     ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
         let submission = create_operation_submission_request(payload).await?;
         let bytes = serialize_submission(&submission);
@@ -145,46 +145,51 @@ impl MessageBuilder {
 #[cfg(test)]
 mod test {
     use common::{
-        k256::{ecdsa::SigningKey, SecretKey},
         prov::{
             operations::{ChronicleOperation, CreateNamespace},
-            NamespaceId,
+            AuthId, ChronicleTransaction, NamespaceId,
         },
+        signing::DirectoryStoredKeys,
     };
     use openssl::sha::Sha512;
     use prost::Message;
     use protobuf::Message as ProtoMessage;
-    use rand::prelude::StdRng;
-    use rand_core::SeedableRng;
     use sawtooth_sdk::messages::{batch::Batch, transaction::TransactionHeader};
+    use tempfile::TempDir;
     use uuid::Uuid;
 
     use super::MessageBuilder;
 
     #[tokio::test]
     async fn sawtooth_batch_roundtrip() {
-        let secret = SecretKey::random(StdRng::from_entropy());
-        let mut builder = MessageBuilder::new(SigningKey::from(secret), "external_id", "version");
+        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
+        keystore.generate_chronicle().unwrap();
+
+        let mut builder = MessageBuilder::new(
+            keystore.chronicle_signing().unwrap(),
+            "external_id",
+            "version",
+        );
 
         let uuid = Uuid::new_v4();
 
-        let batch = vec![ChronicleOperation::CreateNamespace(CreateNamespace {
-            id: NamespaceId::from_external_id("t", uuid),
-            external_id: "t".into(),
-            uuid,
-        })];
+        let signed_identity = AuthId::chronicle().signed_identity(&keystore).unwrap();
+
+        let batch = ChronicleTransaction::new(
+            vec![ChronicleOperation::CreateNamespace(CreateNamespace {
+                id: NamespaceId::from_external_id("t", uuid),
+                external_id: "t".into(),
+                uuid,
+            })],
+            signed_identity,
+        );
 
         let input_addresses = vec!["inone".to_owned(), "intwo".to_owned()];
         let output_addresses = vec!["outtwo".to_owned(), "outtwo".to_owned()];
         let dependencies = vec!["dependency".to_owned()];
 
         let (proto_tx, _id) = builder
-            .make_sawtooth_transaction(
-                input_addresses,
-                output_addresses,
-                dependencies,
-                batch.as_slice(),
-            )
+            .make_sawtooth_transaction(input_addresses, output_addresses, dependencies, &batch)
             .await
             .unwrap();
 

@@ -8,7 +8,7 @@ use async_graphql_poem::{GraphQL, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     ledger::{SubmissionError, SubmissionStage},
-    prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
+    prov::{to_json_ld::ToJson, AuthId, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;
 use derivative::*;
@@ -385,6 +385,7 @@ where
             )))
             .data(Store::new(pool.clone()))
             .data(api)
+            .data(AuthId::chronicle())
             .finish();
 
         if open {

@@ -50,6 +50,11 @@ impl DirectoryStoredKeys {
         Self::signing_key_at(&self.agent_path(agent))
     }
 
+    /// Return the verifying key associated with the Chronicle user
+    pub fn chronicle_verifying(&self) -> Result<VerifyingKey, SignerError> {
+        Self::signing_key_at(&self.base).map(|signing| signing.verifying_key())
+    }
+
     /// If we have a signing key, derive the verifying key from it, else attempt to load an imported verifying key
     pub fn agent_verifying(&self, agent: &AgentId) -> Result<VerifyingKey, SignerError> {
         let path = &self.agent_path(agent);

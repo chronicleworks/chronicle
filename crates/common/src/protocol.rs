@@ -4,8 +4,8 @@ use prost::Message;
 use tracing::span;
 
 use crate::prov::{
-    operations::ChronicleOperation, to_json_ld::ToJson, CompactionError, Contradiction,
-    ExpandedJson, ProcessorError, ProvModel,
+    operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction, CompactionError,
+    Contradiction, ExpandedJson, ProcessorError, ProvModel, SignedIdentity,
 };
 
 use thiserror::Error;
@@ -120,10 +120,10 @@ impl messages::Event {
     }
 }
 
-/// Envelope a payload of `ChronicleOperations` in a `Submission` protocol buffer,
+/// Envelope a payload of `ChronicleOperations` and `SignedIdentity` in a `Submission` protocol buffer,
 /// along with placeholders for protocol version info and a tracing span id.
 pub async fn create_operation_submission_request(
-    payload: &[ChronicleOperation],
+    payload: &ChronicleTransaction,
 ) -> Result<messages::Submission, ProtocolError> {
     let mut submission = messages::Submission {
         version: PROTOCOL_VERSION.to_string(),
@@ -131,8 +131,8 @@ pub async fn create_operation_submission_request(
         ..Default::default()
     };
 
-    let mut ops = Vec::with_capacity(payload.len());
-    for op in payload {
+    let mut ops = Vec::with_capacity(payload.tx.len());
+    for op in &payload.tx {
         let op_json = op.to_json();
         let compact_json_string = op_json.compact().await?.0.to_string();
         // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
@@ -140,6 +140,10 @@ pub async fn create_operation_submission_request(
         ops.push(compact_json_string);
     }
     submission.body = ops;
+
+    let identity = serde_json::to_string(&payload.identity)?;
+    submission.identity = identity;
+
     Ok(submission)
 }
 
@@ -172,15 +176,28 @@ pub async fn chronicle_operations_from_submission(
     Ok(ops)
 }
 
+/// Convert a `Submission` identity from a String
+/// to a `SignedIdentity`
+pub async fn chronicle_identity_from_submission(
+    submission_identity: String,
+) -> Result<SignedIdentity, ProcessorError> {
+    Ok(serde_json::from_str(&submission_identity)?)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::prov::{
-        operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-        ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
+    use crate::{
+        prov::{
+            operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
+            ActivityId, AgentId, AuthId, DelegationId, ExternalId, ExternalIdPart, NamespaceId,
+            Role, SignedIdentity,
+        },
+        signing::DirectoryStoredKeys,
     };
     use api::UuidGen;
     use sawtooth_sdk::processor::handler::ApplyError;
+    use temp_dir::TempDir;
     use uuid::Uuid;
 
     #[derive(Debug, Clone)]
@@ -240,15 +257,24 @@ mod test {
         })
     }
 
+    fn signed_identity_helper() -> SignedIdentity {
+        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().path()).unwrap();
+        keystore.generate_chronicle().unwrap();
+        AuthId::chronicle().signed_identity(&keystore).unwrap()
+    }
+
     #[tokio::test]
     async fn test_submission_serialization_deserialization() -> Result<(), ApplyError> {
         // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
-        let tx = vec![
-            create_namespace_helper(None),
-            agent_exists_helper(),
-            create_agent_acts_on_behalf_of(),
-        ];
+        let tx = ChronicleTransaction::new(
+            vec![
+                create_namespace_helper(None),
+                agent_exists_helper(),
+                create_agent_acts_on_behalf_of(),
+            ],
+            signed_identity_helper(),
+        );
 
         // Serialize operations payload to protocol buffer
         let submission = create_operation_submission_request(&tx).await.unwrap();
@@ -256,7 +282,7 @@ mod test {
 
         // Test that serialisation to and from protocol buffer is symmetric
         assert_eq!(
-            tx,
+            tx.tx,
             chronicle_operations_from_submission(
                 deserialize_submission(&serialized_sub)
                     // handle DecodeError

@@ -13,7 +13,7 @@ use common::{
     commands::ApiResponse,
     database::Database,
     ledger::SubmissionStage,
-    prov::to_json_ld::ToJson,
+    prov::{to_json_ld::ToJson, AuthId},
     signing::{DirectoryStoredKeys, SignerError},
 };
 use tracing::{debug, error, info, instrument};
@@ -243,7 +243,9 @@ where
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
-        Ok((api.dispatch(cmd).await?, ret_api))
+        let identity = AuthId::chronicle();
+
+        Ok((api.dispatch(cmd, identity).await?, ret_api))
     } else {
         Ok((ApiResponse::Unit, ret_api))
     }
@@ -402,9 +404,10 @@ pub mod test {
         database::{get_embedded_db_connection, Database},
         ledger::{InMemLedger, SubmissionStage},
         prov::{
-            to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
+            to_json_ld::ToJson, ActivityId, AgentId, AuthId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
         },
+        signing::DirectoryStoredKeys,
     };
     use std::collections::HashMap;
     use tempfile::TempDir;
@@ -422,9 +425,10 @@ pub mod test {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
+            identity: AuthId,
         ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.api.dispatch(command).await? {
+            if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
                 loop {
                     let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
 
@@ -453,7 +457,11 @@ pub mod test {
     async fn test_api() -> TestDispatch {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
-        let secretpath = TempDir::new().unwrap();
+        let secretpath = TempDir::new().unwrap().into_path();
+
+        let keystore_path = secretpath.clone();
+        let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
+        keystore.generate_chronicle().unwrap();
 
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
@@ -463,7 +471,7 @@ pub mod test {
             pool,
             ledger,
             reader,
-            &secretpath.into_path(),
+            &secretpath,
             SameUuid,
             HashMap::default(),
         )
@@ -493,7 +501,9 @@ pub mod test {
 
         let cmd = cli.matches(&matches).unwrap().unwrap();
 
-        api.dispatch(cmd).await.unwrap().unwrap().0
+        let identity = AuthId::chronicle();
+
+        api.dispatch(cmd, identity).await.unwrap().unwrap().0
     }
 
     fn test_cli_model() -> CliModel {
@@ -615,7 +625,11 @@ pub mod test {
         let command_line =
             format!(r#"chronicle test-agent-agent register-key --namespace testns {id} -g "#);
         let cmd = get_api_cmd(&command_line);
-        let delta = api.dispatch(cmd).await.unwrap().unwrap();
+        let delta = api
+            .dispatch(cmd, AuthId::chronicle())
+            .await
+            .unwrap()
+            .unwrap();
         insta::assert_yaml_snapshot!(delta.0, {
             ".*.*.public_key" => "[public]",
             ".*.*.*.public_key" => "[public]"
@@ -687,7 +701,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -720,7 +734,7 @@ pub mod test {
         let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
 
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ActivityId::from_external_id("testactivity");
         let command_line = format!(
@@ -730,7 +744,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -856,7 +870,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -902,7 +916,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -948,7 +962,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -994,7 +1008,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -1105,12 +1119,13 @@ pub mod test {
 
         let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd).await.unwrap();
+
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
         let command_line = format!(
@@ -1120,7 +1135,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -1164,19 +1179,20 @@ pub mod test {
 
         let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd).await.unwrap();
+
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
         let command_line = format!(
             r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
         );
         let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         // Should end the last opened activity
         let id = ActivityId::from_external_id("testactivity");
@@ -1187,7 +1203,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -1217,7 +1233,8 @@ pub mod test {
 
         let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd).await.unwrap();
+
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let activity_id = ActivityId::from_external_id("testactivity");
         let entity_id = EntityId::from_external_id("testentity");
@@ -1228,7 +1245,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
@@ -1259,16 +1276,17 @@ pub mod test {
 
         let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd).await.unwrap();
+
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
         let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
         let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
         let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd).await.unwrap();
+        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
         let activity_id = ActivityId::from_external_id("testactivity");
         let entity_id = EntityId::from_external_id("testentity");
@@ -1280,7 +1298,7 @@ pub mod test {
 
         insta::assert_snapshot!(
           serde_json::to_string_pretty(
-          &api.dispatch(cmd).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
+          &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
           "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",

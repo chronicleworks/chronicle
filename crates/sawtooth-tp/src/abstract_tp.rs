@@ -1,6 +1,4 @@
-use common::{
-    ledger::OperationState, protocol::messages::Submission, prov::operations::ChronicleOperation,
-};
+use common::{ledger::OperationState, protocol::messages::Submission, prov::ChronicleTransaction};
 use sawtooth_protocol::address::SawtoothAddress;
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
@@ -16,13 +14,13 @@ pub trait TP {
     fn tp_parse(request: &TpProcessRequest) -> Result<Submission, ApplyError>;
     fn tp_state(
         context: &mut dyn TransactionContext,
-        operations: &[ChronicleOperation],
+        operations: &ChronicleTransaction,
     ) -> Result<OperationState<SawtoothAddress>, ApplyError>;
-    async fn tp_operations(request: Submission) -> Result<Vec<ChronicleOperation>, ApplyError>;
+    async fn tp_operations(request: Submission) -> Result<ChronicleTransaction, ApplyError>;
     async fn tp(
         request: &TpProcessRequest,
         submission: Submission,
-        operations: Vec<ChronicleOperation>,
+        operations: ChronicleTransaction,
         state: OperationState<SawtoothAddress>,
     ) -> Result<TPSideEffects, ApplyError>;
 }
