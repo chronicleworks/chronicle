@@ -1004,7 +1004,7 @@ impl Store {
                     id: agentid.clone(),
                     namespaceid: namespaceid.clone(),
                     external_id: ExternalId::from(&agent.external_id),
-                    domaintypeid: agent.domaintype.map(|x| DomaintypeId::from_external_id(&x)),
+                    domaintypeid: agent.domaintype.map(DomaintypeId::from_external_id),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
@@ -1042,9 +1042,7 @@ impl Store {
                     external_id: activity.external_id.into(),
                     started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
                     ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
-                    domaintypeid: activity
-                        .domaintype
-                        .map(|x| DomaintypeId::from_external_id(&x)),
+                    domaintypeid: activity.domaintype.map(DomaintypeId::from_external_id),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {
@@ -1071,7 +1069,7 @@ impl Store {
             {
                 model.was_generated_by(
                     namespaceid.clone(),
-                    &EntityId::from_external_id(&generation),
+                    &EntityId::from_external_id(generation),
                     &id,
                 );
             }
@@ -1084,7 +1082,7 @@ impl Store {
                 .load::<String>(connection)?
             {
                 let used = used;
-                model.used(namespaceid.clone(), &id, &EntityId::from_external_id(&used));
+                model.used(namespaceid.clone(), &id, &EntityId::from_external_id(used));
             }
 
             for wasinformedby in schema::wasinformedby::table
@@ -1128,7 +1126,7 @@ impl Store {
                     id,
                     namespaceid: namespaceid.clone(),
                     external_id: external_id.into(),
-                    domaintypeid: domaintype.map(|x| DomaintypeId::from_external_id(&x)),
+                    domaintypeid: domaintype.map(DomaintypeId::from_external_id),
                     attributes: attributes
                         .into_iter()
                         .map(|attr| {

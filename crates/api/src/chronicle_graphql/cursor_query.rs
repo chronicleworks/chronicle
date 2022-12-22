@@ -38,7 +38,7 @@ where
     let mut gql = async_graphql::connection::Connection::new(
         rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
         rx.first()
-            .map(|(_, total)| ((start as i64) + (limit as i64)) < *total)
+            .map(|(_, total)| start + limit < *total)
             .unwrap_or(false),
     );
 

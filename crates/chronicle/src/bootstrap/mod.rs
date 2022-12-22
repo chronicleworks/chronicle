@@ -303,7 +303,7 @@ pub async fn bootstrap<Query, Mutation>(
 
     if matches.subcommand_matches("verify-keystore").is_some() {
         let config = handle_config_and_init(&domain.into()).unwrap();
-        let store = DirectoryStoredKeys::new(&config.secrets.path).unwrap();
+        let store = DirectoryStoredKeys::new(config.secrets.path).unwrap();
         info!(keystore=?store);
 
         if store.chronicle_signing().is_err() {

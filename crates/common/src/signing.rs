@@ -67,7 +67,7 @@ impl DirectoryStoredKeys {
         signing: Option<&Vec<u8>>,
         verifying: Option<&Vec<u8>>,
     ) -> Result<(), SignerError> {
-        std::fs::create_dir_all(&self.agent_path(agent))?;
+        std::fs::create_dir_all(self.agent_path(agent))?;
 
         if let Some(signing) = signing {
             std::fs::write(
@@ -92,7 +92,7 @@ impl DirectoryStoredKeys {
         signing: Option<&Path>,
         verifying: Option<&Path>,
     ) -> Result<(), SignerError> {
-        std::fs::create_dir_all(&self.agent_path(agent))?;
+        std::fs::create_dir_all(self.agent_path(agent))?;
 
         if let Some(signing) = signing {
             std::fs::copy(

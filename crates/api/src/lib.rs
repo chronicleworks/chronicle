@@ -884,7 +884,7 @@ where
                     })
                     .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
 
-                let agent_id = AgentId::from_external_id(&agent.external_id);
+                let agent_id = AgentId::from_external_id(agent.external_id);
 
                 let signer = api.keystore.agent_signing(&agent_id)?;
 
