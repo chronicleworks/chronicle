@@ -334,7 +334,7 @@ recursive enumeration to retrieve a deep hierarchy.
 ### Attributes
 
 Attribute values for the attributes associated with the entity subtype, as
-determined by the [domain model](./domain_modelling.md).
+determined by the [domain model](./domain_modeling.md).
 
 ### Activity Subtypes
 

@@ -19,7 +19,7 @@ processor can all scale independently within a Kubernetes cluster.
 ## Chronicle for Your Domains
 
 Chronicle is supplied as a [docker build image](./building.md) and requires the
-creation of a [domain model](./domain_modelling.md) and CI / CD to build a
+creation of a [domain model](./domain_modeling.md) and CI / CD to build a
 domain-specific API. This build image is completely self-contained, requires no
 network access for dependencies, and can be used in secure environments.
 

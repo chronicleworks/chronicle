@@ -1,12 +1,12 @@
-# Modelling a Provenance Domain with Chronicle
+# Modeling a Provenance Domain with Chronicle
 
 Here we will present a reference domain that uses all the provenance features
 Chronicle provides and work through the process of representing it using
-Chronicle's domain modelling syntax. This should help you both to understand
+Chronicle's domain modeling syntax. This should help you both to understand
 Chronicle's capabilities and to translate your own problem domain's provenance.
 
 Chronicle uses the [W3C Provenance Ontology](https://www.w3.org/TR/prov-o/) as
-the basis for provenance modelling.
+the basis for provenance modeling.
 
 ## Reference Domain - Medical Evidence
 
@@ -200,7 +200,7 @@ See [provenance concepts](./provenance_concepts.md#entity)
 
 When determining entities, a useful approach from [process
 mapping](https://www.bpmleader.com/2012/07/23/introductory-guide-to-process-mapping-modelling/)
-is to look for nouns in your analysis. Provenance modelling is no different. We
+is to look for nouns in your analysis. Provenance modeling is no different. We
 can identify the following Entities:
 
 #### Question
@@ -245,8 +245,8 @@ See [provenance concepts](./provenance_concepts.md#activity)
 
 When determining activities, a useful approach from [process
 mapping](https://www.bpmleader.com/2012/07/23/introductory-guide-to-process-mapping-modelling/)
-is to look for verbs in your analysis. Provenance modelling is similar, except
-we are modelling things that have taken place or are in progress. It is useful
+is to look for verbs in your analysis. Provenance modeling is similar, except
+we are modeling things that have taken place or are in progress. It is useful
 to use past tense for this reason. We can identify:
 
 #### QuestionAsked
@@ -272,7 +272,7 @@ approved by an editor under the advice of stakeholders.
 
 See [provenance concepts](./provenance_concepts.md#agent)
 
-For our example domain, actors are best modelled as Roles rather than Agents -
+For our example domain, actors are best modeled as Roles rather than Agents -
 People and Organizations can participate in multiple ways. So we will specify
 the following agents:
 
@@ -314,7 +314,7 @@ Stakeholders and supervises Authors creating Guidances of Guidance.
 
 ## Domain Model Format
 
-We will now translate this conceptual design into Chronicle's domain-modelling
+We will now translate this conceptual design into Chronicle's domain-modeling
 syntax. Chronicle domain models are specified in YAML, a complete model for the
 conceptual design can be written like this:
 

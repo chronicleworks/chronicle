@@ -18,7 +18,7 @@ single endpoint. Alternatively, there is a command-line interface (CLI) for
 integration with enterprise legacy systems.
 
 Chronicle is a domain-agnostic offering, however, it is
-[easily configurable](./domain_modelling.md) to enable users to capture
+[easily configurable](./domain_modeling.md) to enable users to capture
 provenance information for a range of applications or use cases such as the
 traceability of artwork, critical infrastructure, food items, medical devices,
 precious metals, or real estate, just to mention a few.

@@ -34,7 +34,7 @@ nav:
       - "Installing with Sextant": ./sextant.md
   - "Development":
       - "Provenance concepts": ./provenance_concepts.md
-      - "Modeling a provenance domain": ./domain_modelling.md
+      - "Modeling a provenance domain": ./domain_modeling.md
       - "Recording provenance": ./recording_provenance.md
       - "Querying provenance": ./querying_provenance.md
       - "Untyped Chronicle": ./untyped_chronicle.md

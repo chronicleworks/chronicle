@@ -24,7 +24,7 @@ Chronicle users can now query [agents](./querying_provenance.md#agentsbytype),
 ### JSON Attribute
 
 In addition to `String`, `Int`, and `Bool`, Chronicle users can now
-[add generic JSON data](./domain_modelling.md#inputting-a-json-attribute)
+[add generic JSON data](./domain_modeling.md#inputting-a-json-attribute)
 to activities, agents, and entities.
 
 ## To 0.3x

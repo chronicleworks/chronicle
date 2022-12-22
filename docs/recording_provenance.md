@@ -120,7 +120,7 @@ mutation {
 ### Example Domain
 
 For this section we will use our simplified
-[domain model for recording the provenance of medical guidance](./domain_modelling.md).
+[domain model for recording the provenance of medical guidance](./domain_modeling.md).
 We have a number of people who may be any combination of authors, editors, or
 researchers collaborating to produce documents from evidence produced by a search
 process. An external CMS is being used that has identifiers for documents and users.
@@ -265,7 +265,7 @@ Using our example domain, Chronicle will have generated four entity subtypes for
 us, `Question`, `Guidance`, `PublishedGuidance`, and `EvidenceReference`, as a GraphQL
 union called `Entity`. The union also contains an untyped entity `ProvEntity`.
 The untyped entity can be potentially returned where the domain definition has
-evolved, see [evolving your domain](./domain_modelling.md#evolution).
+evolved, see [evolving your domain](./domain_modeling.md#evolution).
 
 The definition mutations `defineQuestion`, `defineGuidance`,
 `definePublishedGuidance`, and `defineEvidenceReference` will also have been
@@ -407,7 +407,7 @@ Chronicle will have generated four `Activity` subtypes for us, `QuestionAsked`,
 `Researched`, `Revised`, and `Published`, as a GraphQL union called `Activity`.
 The union also contains an untyped activity `ProvActivity`. The untyped activity
 can be potentially returned where the domain definition has evolved, see
-[evolving your domain](./domain_modelling.md#evolution).
+[evolving your domain](./domain_modeling.md#evolution).
 
 The definition mutations `defineQuestionAskedActivity`, `defineResearchedActivity`,
 `defineRevisedActivity`, and `definePublished` will also have been created to
@@ -547,10 +547,10 @@ See [provenance concepts](./provenance_concepts.md#agent)
 Chronicle will have generated two `Agent` subtypes for us, `PersonAgent` and
 `OrganizationAgent` as a GraphQL union called `Agent`. The union also contains an
 untyped activity `ProvAgent`. The untyped agent can be potentially returned
-where the domain definition has evolved, see [evolving your domain](./domain_modelling.md#evolution).
+where the domain definition has evolved, see [evolving your domain](./domain_modeling.md#evolution).
 
 The definition mutations `definePersonAgent` and `defineOrganizationAgent` will
-also have been created. See [domain modelling](./domain_modelling.md#modelling-a-provenance-domain-with-chronicle)
+also have been created. See [domain modeling](./domain_modeling.md#modeling-a-provenance-domain-with-chronicle)
 for details on the generated GraphQL SDL.
 
 ```graphql title="Define an organization agent with graphql"
@@ -623,7 +623,7 @@ time. Time stamps should be in
 Started at time operations also take an optional `AgentIdOrExternal`, to
 associate the activity with the agent - there is no current way to record a role
 with this however, so prefer [wasAssociatedWith](#association) if you need
-role-based modelling.
+role-based modeling.
 
 ```graphql
 mutation {
@@ -651,7 +651,7 @@ format.
 Ended at time operations also take an optional `AgentIdOrExternal`, to associate
 the activity with the agent - there is no current way to record a role with this
 however, so prefer [wasAssociatedWith](#association) if you need role-based
-modelling.
+modeling.
 
 ```graphql
 mutation {

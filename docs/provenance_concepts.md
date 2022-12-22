@@ -1,7 +1,7 @@
 # Provenance concepts
 
 Chronicle uses the [W3C Provenance Ontology](https://www.w3.org/TR/prov-o/) as
-the basis for provenance modelling. We present here a summary of the concepts
+the basis for provenance modeling. We present here a summary of the concepts
 used and their corresponding mutations and GraphQL query structure.
 
 ## Activity
@@ -17,7 +17,7 @@ used and their corresponding mutations and GraphQL query structure.
 > or printing a book.
 
 Activities in Chronicle can be subtyped and contain attributes, specified by
-[the domain model](./domain_modelling.md#activity). Activities can be recorded
+[the domain model](./domain_modeling.md#activity). Activities can be recorded
 using [the typed activity mutations](./recording_provenance.md#define-an-activity)
 or can be left [untyped](./untyped_chronicle.md#creating-an-activity-in-untyped-chronicle).
 
@@ -29,7 +29,7 @@ or can be left [untyped](./untyped_chronicle.md#creating-an-activity-in-untyped-
 > taking place, for the existence of an entity, or for another agent's activity.
 
 Agents in Chronicle can be subtyped and contain attributes, specified by
-[the domain model agents section](./domain_modelling.md#agent). Agents can be
+[the domain model agents section](./domain_modeling.md#agent). Agents can be
 recorded using [the typed agent mutations](./recording_provenance.md#agent) or
 left [untyped](./untyped_chronicle.md#creating-an-agent-in-untyped-chronicle).
 
@@ -77,7 +77,7 @@ Chronicle allows the three standard prov subtypes of derivation:
 > kind of thing with some fixed aspects; entities may be real or imaginary.
 
 Entities in Chronicle can be subtyped and contain attributes, specified by
-[the domain model](./domain_modelling.md#entity). Entities can be recorded using
+[the domain model](./domain_modeling.md#entity). Entities can be recorded using
 [the typed entity mutations](./recording_provenance.md#define-an-entity) or can be
 left [untyped](./untyped_chronicle.md#creating-an-entity-in-untyped-chronicle).
 
