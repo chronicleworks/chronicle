@@ -61,5 +61,5 @@ operations and convenience methods for revision in future releases.
 ### Short Form IRIs
 
 Chronicle ids will now be written in their short form with a prefix of
-`chronicle:` vs `http://blockchaintp.com/chronicle#ns`, operations will continue
+`chronicle:` vs `http://btp.works/chronicle#ns`, operations will continue
 to accept the long form for backwards compatibility.

@@ -212,7 +212,7 @@ the result of an operation should await the
   "error": null,
   "txId": "12d3236ae1b227391725d2d9315b7ca53747217c5d..",
   "delta":  {
-      "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+      "@context": "https://btp.works/chr/1.0/c.jsonld",
       "@graph": [
         {
           "@id": "chronicle:activity:publication1",
