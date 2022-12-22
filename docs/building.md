@@ -22,8 +22,9 @@ cargo build --release --frozen --bin chronicle
 
 ## In-Memory Version
 
-For rapid development and testing purposes a standalone version of Chronicle
-can be built and distributed as a docker image or binary.
+For rapid development and testing purposes, a standalone version of Chronicle
+can be built and distributed as a docker image or binary. See the
+[configuration guide](./config.md) for more detail.
 
 ```docker
 FROM blockchaintp/builder:{VERSION_NUMBER} as domain

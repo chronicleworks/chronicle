@@ -498,6 +498,7 @@ dependencies = [
  "open",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "percent-encoding",
  "pg-embed",
  "proto",
  "question",

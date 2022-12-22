@@ -36,13 +36,14 @@ pub(crate) mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 custom_error! {pub StoreError
-    Db{source: diesel::result::Error}                           = "Database operation failed {source}",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed {source}",
-    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed {migration}",
-    DbPool{source: r2d2::Error}                                 = "Connection pool error {source}",
-    Uuid{source: uuid::Error}                                   = "Invalid UUID {source}",
-    Json{source: serde_json::Error}                             = "Unreadable Attribute {source}",
-    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction Id {source}",
+    Db{source: diesel::result::Error}                           = "Database operation failed: {source}",
+    EmbeddedDb{message: String}                                 = "Embedded database failed: {message}",
+    DbConnection{source: diesel::ConnectionError}               = "Database connection failed (maybe check PGPASSWORD): {source}",
+    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed: {migration}",
+    DbPool{source: r2d2::Error}                                 = "Connection pool error: {source}",
+    Uuid{source: uuid::Error}                                   = "Invalid UUID: {source}",
+    Json{source: serde_json::Error}                             = "Unreadable Attribute: {source}",
+    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction ID: {source}",
     RecordNotFound{}                                            = "Could not locate record in store",
     InvalidNamespace{}                                          = "Could not find namespace",
 }

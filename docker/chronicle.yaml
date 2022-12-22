@@ -1,5 +1,8 @@
 ---
 version: "3.9"
+networks:
+  default:
+    name: chronicle-${ISOLATION_ID}
 services:
   settings-tp:
     image: blockchaintp/sawtooth-settings-tp:BTP2.1.0
@@ -78,6 +81,8 @@ services:
     environment:
       - RUST_BACKTRACE=full
       - RUST_LOG=trace
+      - PGHOST=chronicle-pg
+      - PGPASSWORD=chronicle
     image: &chronicleImage chronicle-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/sh -xc "
