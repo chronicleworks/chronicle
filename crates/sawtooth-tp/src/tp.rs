@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, HashSet};
 use common::{
     ledger::{OperationState, StateOutput, SubmissionError},
     protocol::{
-        chronicle_committed, chronicle_contradicted, chronicle_operations_from_submission,
-        deserialize_submission, messages::Submission,
+        chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
+        chronicle_operations_from_submission, deserialize_submission, messages::Submission,
     },
-    prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError, ProvModel},
+    prov::{ChronicleTransaction, ChronicleTransactionId, ProcessorError, ProvModel},
 };
 
 use prost::Message;
@@ -37,6 +37,7 @@ impl ChronicleTransactionHandler {
         }
     }
 }
+
 #[async_trait::async_trait]
 impl TP for ChronicleTransactionHandler {
     fn tp_parse(request: &TpProcessRequest) -> Result<Submission, ApplyError> {
@@ -46,9 +47,10 @@ impl TP for ChronicleTransactionHandler {
 
     fn tp_state(
         context: &mut dyn TransactionContext,
-        operations: &[ChronicleOperation],
+        operations: &ChronicleTransaction,
     ) -> Result<OperationState<SawtoothAddress>, ApplyError> {
         let deps = operations
+            .tx
             .iter()
             .flat_map(|tx| tx.dependencies())
             .collect::<HashSet<_>>();
@@ -89,16 +91,20 @@ impl TP for ChronicleTransactionHandler {
 
         Ok(state)
     }
-    async fn tp_operations(submission: Submission) -> Result<Vec<ChronicleOperation>, ApplyError> {
-        Ok(chronicle_operations_from_submission(submission.body)
+    async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
+        let identity = chronicle_identity_from_submission(submission.identity)
             .await
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?)
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        let body = chronicle_operations_from_submission(submission.body)
+            .await
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        Ok(ChronicleTransaction::new(body, identity))
     }
 
     async fn tp(
         request: &TpProcessRequest,
         submission: Submission,
-        operations: Vec<ChronicleOperation>,
+        operations: ChronicleTransaction,
         mut state: OperationState<SawtoothAddress>,
     ) -> Result<TPSideEffects, ApplyError> {
         let mut effects = TPSideEffects::new();
@@ -109,6 +115,7 @@ impl TP for ChronicleTransactionHandler {
 
         //pre compute dependencies
         let deps = operations
+            .tx
             .iter()
             .flat_map(|tx| tx.dependencies())
             .collect::<HashSet<_>>();
@@ -125,7 +132,7 @@ impl TP for ChronicleTransactionHandler {
         let mut model = ProvModel::default();
 
         // Now apply operations to the model
-        for operation in operations {
+        for operation in operations.tx {
             let res = operation.process(model, state.input()).await;
             match res {
                 // A contradiction raises an event and shortcuts processing
@@ -261,22 +268,23 @@ pub mod test {
     use std::{cell::RefCell, collections::BTreeMap};
 
     use common::{
-        k256::{ecdsa::SigningKey, SecretKey},
+        k256::ecdsa::SigningKey,
         protocol::messages,
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
+            ActivityId, AgentId, AuthId, ChronicleTransaction, DelegationId, ExternalId,
+            ExternalIdPart, NamespaceId, Role,
         },
+        signing::DirectoryStoredKeys,
     };
     use prost::Message;
-    use rand::rngs::StdRng;
-    use rand_core::SeedableRng;
     use sawtooth_protocol::messaging::OperationMessageBuilder;
     use sawtooth_sdk::{
         messages::{processor::TpProcessRequest, transaction::TransactionHeader},
         processor::handler::{ContextError, TransactionContext, TransactionHandler},
     };
     use serde_json::Value;
+    use tempfile::TempDir;
 
     use uuid::Uuid;
 
@@ -393,7 +401,7 @@ pub mod test {
         } else {
             format!("testns{}", tag.unwrap())
         };
-        NamespaceId::from_external_id(&external_id, uuid())
+        NamespaceId::from_external_id(external_id, uuid())
     }
 
     fn create_namespace_helper(tag: Option<i32>) -> ChronicleOperation {
@@ -438,15 +446,23 @@ pub mod test {
     #[tokio::test]
     async fn simple_non_contradicting_operation() {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
+
+        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
+        keystore.generate_chronicle().unwrap();
+        let signed_identity = AuthId::chronicle().signed_identity(&keystore).unwrap();
+
         // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
-        let tx = vec![
-            create_namespace_helper(None),
-            agent_exists_helper(),
-            create_agent_acts_on_behalf_of(),
-        ];
+        let tx = ChronicleTransaction::new(
+            vec![
+                create_namespace_helper(None),
+                agent_exists_helper(),
+                create_agent_acts_on_behalf_of(),
+            ],
+            signed_identity,
+        );
 
-        let secret: SigningKey = SecretKey::random(StdRng::from_entropy()).into();
+        let secret: SigningKey = keystore.chronicle_signing().unwrap();
 
         // Get a signed tx from sawtooth protocol
         let mut submission_builder = OperationMessageBuilder::new(&secret, "TEST", "1.0");

@@ -24,8 +24,9 @@ use common::{
             WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleTransactionId, Contradiction, EntityId, ExternalId,
-        ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel, Role,
+        ActivityId, AgentId, AuthId, ChronicleTransaction, ChronicleTransactionId, Contradiction,
+        EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel,
+        Role,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -82,7 +83,7 @@ impl From<Infallible> for ApiError {
 impl UFE for ApiError {}
 
 type LedgerSendWithReply = (
-    Vec<ChronicleOperation>,
+    ChronicleTransaction,
     Sender<Result<ChronicleTransactionId, SubmissionError>>,
 );
 
@@ -108,7 +109,7 @@ impl BlockingLedgerWriter {
             local.spawn_local(async move {
                 loop {
                     if let Some((submission, reply)) = rx.recv().await {
-                        let result = ledger_writer.submit(submission.as_slice()).await;
+                        let result = ledger_writer.submit(&submission).await;
 
                         reply
                             .send(result.map_err(SubmissionError::from))
@@ -131,11 +132,11 @@ impl BlockingLedgerWriter {
 
     fn submit_blocking(
         &mut self,
-        tx: &[ChronicleOperation],
+        tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
-        trace!(?tx, "Dispatch submission to ledger");
-        self.tx.clone().blocking_send((tx.to_vec(), reply_tx))?;
+        trace!(?tx.tx, "Dispatch submission to ledger");
+        self.tx.clone().blocking_send((tx.clone(), reply_tx))?;
 
         let reply = reply_rx.blocking_recv();
 
@@ -147,7 +148,7 @@ impl BlockingLedgerWriter {
     }
 }
 
-type ApiSendWithReply = (ApiCommand, Sender<Result<ApiResponse, ApiError>>);
+type ApiSendWithReply = ((ApiCommand, AuthId), Sender<Result<ApiResponse, ApiError>>);
 
 pub trait UuidGen {
     fn uuid() -> Uuid {
@@ -181,10 +182,17 @@ pub struct ApiDispatch {
 
 impl ApiDispatch {
     #[instrument]
-    pub async fn dispatch(&self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+    pub async fn dispatch(
+        &self,
+        command: ApiCommand,
+        identity: AuthId,
+    ) -> Result<ApiResponse, ApiError> {
         let (reply_tx, mut reply_rx) = mpsc::channel(1);
         trace!(?command, "Dispatch command to api");
-        self.tx.clone().send((command, reply_tx)).await?;
+        self.tx
+            .clone()
+            .send(((command, identity), reply_tx))
+            .await?;
 
         let reply = reply_rx.recv().await;
 
@@ -325,7 +333,7 @@ where
     /// This is a measure to keep the api interface stable once this is introduced
     fn submit_blocking(
         &mut self,
-        tx: &[ChronicleOperation],
+        tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, ApiError> {
         let res = self.ledger_writer.submit_blocking(tx);
 
@@ -386,6 +394,7 @@ where
         id: EntityId,
         namespace: ExternalId,
         activity_id: ActivityId,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -402,8 +411,10 @@ where
 
                 to_apply.push(create);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -419,6 +430,7 @@ where
         id: EntityId,
         namespace: ExternalId,
         activity_id: ActivityId,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -438,8 +450,10 @@ where
                     (id, to_apply)
                 };
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -456,6 +470,7 @@ where
         id: ActivityId,
         namespace: ExternalId,
         informing_activity_id: ActivityId,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -475,8 +490,10 @@ where
                     (id, to_apply)
                 };
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -493,6 +510,7 @@ where
         external_id: ExternalId,
         namespace: ExternalId,
         attributes: Attributes,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -518,8 +536,10 @@ where
 
                 to_apply.push(set_type);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -536,6 +556,7 @@ where
         external_id: ExternalId,
         namespace: ExternalId,
         attributes: Attributes,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -560,8 +581,10 @@ where
 
                 to_apply.push(set_type);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -578,6 +601,7 @@ where
         external_id: ExternalId,
         namespace: ExternalId,
         attributes: Attributes,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -602,8 +626,10 @@ where
 
                 to_apply.push(set_type);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -612,7 +638,11 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::CreateNamespace) if the external_id part does not already exist in local storage
-    async fn create_namespace(&self, external_id: &ExternalId) -> Result<ApiResponse, ApiError> {
+    async fn create_namespace(
+        &self,
+        external_id: &ExternalId,
+        identity: AuthId,
+    ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         let external_id = external_id.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -620,8 +650,10 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(namespace, model, tx_id))
             })
@@ -630,107 +662,173 @@ where
     }
 
     #[instrument]
-    async fn dispatch(&mut self, command: ApiCommand) -> Result<ApiResponse, ApiError> {
+    async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
         match command {
-            ApiCommand::NameSpace(NamespaceCommand::Create { external_id }) => {
-                self.create_namespace(&external_id).await
+            (ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) => {
+                self.create_namespace(&external_id, identity).await
             }
-            ApiCommand::Agent(AgentCommand::Create {
-                external_id,
-                namespace,
-                attributes,
-            }) => self.create_agent(external_id, namespace, attributes).await,
-            ApiCommand::Agent(AgentCommand::RegisterKey {
-                id,
-                namespace,
-                registration,
-            }) => self.register_key(id, namespace, registration).await,
-            ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }) => {
+            (
+                ApiCommand::Agent(AgentCommand::Create {
+                    external_id,
+                    namespace,
+                    attributes,
+                }),
+                identity,
+            ) => {
+                self.create_agent(external_id, namespace, attributes, identity)
+                    .await
+            }
+            (
+                ApiCommand::Agent(AgentCommand::RegisterKey {
+                    id,
+                    namespace,
+                    registration,
+                }),
+                identity,
+            ) => {
+                self.register_key(id, namespace, registration, identity)
+                    .await
+            }
+            (ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) => {
                 self.use_agent_in_cli_context(id, namespace).await
             }
-            ApiCommand::Agent(AgentCommand::Delegate {
-                id,
-                delegate,
-                activity,
-                namespace,
-                role,
-            }) => self.delegate(namespace, id, delegate, activity, role).await,
-            ApiCommand::Activity(ActivityCommand::Create {
-                external_id,
-                namespace,
-                attributes,
-            }) => {
-                self.create_activity(external_id, namespace, attributes)
+            (
+                ApiCommand::Agent(AgentCommand::Delegate {
+                    id,
+                    delegate,
+                    activity,
+                    namespace,
+                    role,
+                }),
+                identity,
+            ) => {
+                self.delegate(namespace, id, delegate, activity, role, identity)
                     .await
             }
-            ApiCommand::Activity(ActivityCommand::Instant {
-                id,
-                namespace,
-                time,
-                agent,
-            }) => self.instant(id, namespace, time, agent).await,
-            ApiCommand::Activity(ActivityCommand::Start {
-                id,
-                namespace,
-                time,
-                agent,
-            }) => self.start_activity(id, namespace, time, agent).await,
-            ApiCommand::Activity(ActivityCommand::End {
-                id,
-                namespace,
-                time,
-                agent,
-            }) => self.end_activity(id, namespace, time, agent).await,
-            ApiCommand::Activity(ActivityCommand::Use {
-                id,
-                namespace,
-                activity,
-            }) => self.activity_use(id, namespace, activity).await,
-            ApiCommand::Activity(ActivityCommand::WasInformedBy {
-                id,
-                namespace,
-                informing_activity,
-            }) => {
-                self.activity_was_informed_by(id, namespace, informing_activity)
+            (
+                ApiCommand::Activity(ActivityCommand::Create {
+                    external_id,
+                    namespace,
+                    attributes,
+                }),
+                identity,
+            ) => {
+                self.create_activity(external_id, namespace, attributes, identity)
                     .await
             }
-            ApiCommand::Activity(ActivityCommand::Associate {
-                id,
-                namespace,
-                responsible,
-                role,
-            }) => self.associate(namespace, responsible, id, role).await,
-            ApiCommand::Entity(EntityCommand::Create {
-                external_id,
-                namespace,
-                attributes,
-            }) => self.create_entity(external_id, namespace, attributes).await,
-            ApiCommand::Activity(ActivityCommand::Generate {
-                id,
-                namespace,
-                activity,
-            }) => self.activity_generate(id, namespace, activity).await,
-            ApiCommand::Entity(EntityCommand::Attach {
-                id,
-                namespace,
-                file,
-                locator,
-                agent,
-            }) => {
-                self.entity_attach(id, namespace, file.clone(), locator, agent)
+            (
+                ApiCommand::Activity(ActivityCommand::Instant {
+                    id,
+                    namespace,
+                    time,
+                    agent,
+                }),
+                identity,
+            ) => self.instant(id, namespace, time, agent, identity).await,
+            (
+                ApiCommand::Activity(ActivityCommand::Start {
+                    id,
+                    namespace,
+                    time,
+                    agent,
+                }),
+                identity,
+            ) => {
+                self.start_activity(id, namespace, time, agent, identity)
                     .await
             }
-            ApiCommand::Entity(EntityCommand::Derive {
-                id,
-                namespace,
-                activity,
-                used_entity,
-                derivation,
-            }) => {
-                self.entity_derive(id, namespace, activity, used_entity, derivation)
+            (
+                ApiCommand::Activity(ActivityCommand::End {
+                    id,
+                    namespace,
+                    time,
+                    agent,
+                }),
+                identity,
+            ) => {
+                self.end_activity(id, namespace, time, agent, identity)
                     .await
             }
-            ApiCommand::Query(query) => self.query(query).await,
+            (
+                ApiCommand::Activity(ActivityCommand::Use {
+                    id,
+                    namespace,
+                    activity,
+                }),
+                identity,
+            ) => self.activity_use(id, namespace, activity, identity).await,
+            (
+                ApiCommand::Activity(ActivityCommand::WasInformedBy {
+                    id,
+                    namespace,
+                    informing_activity,
+                }),
+                identity,
+            ) => {
+                self.activity_was_informed_by(id, namespace, informing_activity, identity)
+                    .await
+            }
+            (
+                ApiCommand::Activity(ActivityCommand::Associate {
+                    id,
+                    namespace,
+                    responsible,
+                    role,
+                }),
+                identity,
+            ) => {
+                self.associate(namespace, responsible, id, role, identity)
+                    .await
+            }
+            (
+                ApiCommand::Entity(EntityCommand::Create {
+                    external_id,
+                    namespace,
+                    attributes,
+                }),
+                identity,
+            ) => {
+                self.create_entity(external_id, namespace, attributes, identity)
+                    .await
+            }
+            (
+                ApiCommand::Activity(ActivityCommand::Generate {
+                    id,
+                    namespace,
+                    activity,
+                }),
+                identity,
+            ) => {
+                self.activity_generate(id, namespace, activity, identity)
+                    .await
+            }
+            (
+                ApiCommand::Entity(EntityCommand::Attach {
+                    id,
+                    namespace,
+                    file,
+                    locator,
+                    agent,
+                }),
+                identity,
+            ) => {
+                self.entity_attach(id, namespace, file.clone(), locator, agent, identity)
+                    .await
+            }
+            (
+                ApiCommand::Entity(EntityCommand::Derive {
+                    id,
+                    namespace,
+                    activity,
+                    used_entity,
+                    derivation,
+                }),
+                identity,
+            ) => {
+                self.entity_derive(id, namespace, activity, used_entity, derivation, identity)
+                    .await
+            }
+            (ApiCommand::Query(query), _identity) => self.query(query).await,
         }
     }
 
@@ -742,6 +840,7 @@ where
         delegate_id: AgentId,
         activity_id: Option<ActivityId>,
         role: Option<Role>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
 
@@ -761,8 +860,10 @@ where
 
                 to_apply.push(tx);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
                 Ok(ApiResponse::submission(responsible_id, model, tx_id))
             })
         })
@@ -776,6 +877,7 @@ where
         responsible_id: AgentId,
         activity_id: ActivityId,
         role: Option<Role>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
 
@@ -793,8 +895,11 @@ where
                 ));
 
                 to_apply.push(tx);
+
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
                 Ok(ApiResponse::submission(responsible_id, model, tx_id))
             })
         })
@@ -809,6 +914,7 @@ where
         activity_id: Option<ActivityId>,
         used_id: EntityId,
         typ: Option<DerivationType>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
 
@@ -828,8 +934,10 @@ where
 
                 to_apply.push(tx);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
         })
@@ -848,6 +956,7 @@ where
         file: PathOrFile,
         locator: Option<String>,
         agent: Option<AgentId>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         // Do our file io in async context at least
         let buf = match file {
@@ -905,8 +1014,10 @@ where
 
                 to_apply.push(tx);
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -954,6 +1065,7 @@ where
         id: AgentId,
         namespace: ExternalId,
         registration: KeyRegistration,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -985,8 +1097,10 @@ where
                     publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
                 }));
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -1002,6 +1116,7 @@ where
         namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1037,8 +1152,10 @@ where
                     ));
                 }
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -1054,6 +1171,7 @@ where
         namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1084,8 +1202,10 @@ where
                     ));
                 }
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -1101,6 +1221,7 @@ where
         namespace: ExternalId,
         time: Option<DateTime<Utc>>,
         agent: Option<AgentId>,
+        identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1131,8 +1252,10 @@ where
                     ));
                 }
 
+                let identity = identity.signed_identity(&api.keystore)?;
+
                 let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&to_apply)?;
+                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
                 Ok(ApiResponse::submission(id, model, tx_id))
             })
@@ -1175,9 +1298,10 @@ mod test {
         database::{get_embedded_db_connection, Database},
         ledger::InMemLedger,
         prov::{
-            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
+            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId, AuthId,
             ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
         },
+        signing::DirectoryStoredKeys,
     };
     use std::collections::HashMap;
     use tempfile::TempDir;
@@ -1192,9 +1316,10 @@ mod test {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
+            identity: AuthId,
         ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.api.dispatch(command).await? {
+            if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
                 // Recv until we get a commit notification
                 loop {
                     let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
@@ -1225,7 +1350,11 @@ mod test {
     async fn test_api() -> TestDispatch {
         telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
 
-        let secretpath = TempDir::new().unwrap();
+        let secretpath = TempDir::new().unwrap().into_path();
+
+        let keystore_path = secretpath.clone();
+        let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
+        keystore.generate_chronicle().unwrap();
 
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
@@ -1236,7 +1365,7 @@ mod test {
             pool,
             ledger,
             reader,
-            &secretpath.into_path(),
+            &secretpath,
             SameUuid,
             HashMap::default(),
         )
@@ -1253,10 +1382,12 @@ mod test {
     async fn create_namespace() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(api
             .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
                 external_id: "testns".into(),
-            }))
+            }), identity)
             .await
             .unwrap()
             .unwrap()
@@ -1278,6 +1409,8 @@ mod test {
     async fn create_agent() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
             namespace: "testns".into(),
@@ -1293,7 +1426,7 @@ mod test {
                 .into_iter()
                 .collect(),
             },
-            }))
+            }), identity)
             .await
             .unwrap()
             .unwrap()
@@ -1331,6 +1464,8 @@ mod test {
     async fn agent_public_key() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         let pk = r#"
 -----BEGIN PRIVATE KEY-----
 MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
@@ -1339,20 +1474,26 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 -----END PRIVATE KEY-----
 "#;
 
-        api.dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-            external_id: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::NameSpace(NamespaceCommand::Create {
+                external_id: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
         let delta = api
-            .dispatch(ApiCommand::Agent(AgentCommand::RegisterKey {
-                id: AgentId::from_external_id("testagent"),
-                namespace: "testns".into(),
-                registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
-                    buffer: pk.as_bytes().into(),
+            .dispatch(
+                ApiCommand::Agent(AgentCommand::RegisterKey {
+                    id: AgentId::from_external_id("testagent"),
+                    namespace: "testns".into(),
+                    registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
+                        buffer: pk.as_bytes().into(),
+                    }),
                 }),
-            }))
+                identity,
+            )
             .await
             .unwrap()
             .unwrap();
@@ -1420,6 +1561,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn create_activity() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
             namespace: "testns".into(),
@@ -1435,7 +1578,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -1473,6 +1616,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn start_activity() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
@@ -1489,7 +1634,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1522,10 +1667,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }
         "###);
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::Agent(AgentCommand::UseInContext {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
@@ -1535,7 +1683,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -1584,6 +1732,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn contradict_attributes() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
@@ -1600,7 +1750,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1634,22 +1784,25 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         "###);
 
         let res = api
-            .dispatch(ApiCommand::Agent(AgentCommand::Create {
-                external_id: "testagent".into(),
-                namespace: "testns".into(),
-                attributes: Attributes {
-                    typ: Some(DomaintypeId::from_external_id("test")),
-                    attributes: [(
-                        "test".to_owned(),
-                        Attribute {
-                            typ: "test".to_owned(),
-                            value: serde_json::Value::String("test2".to_owned()),
-                        },
-                    )]
-                    .into_iter()
-                    .collect(),
-                },
-            }))
+            .dispatch(
+                ApiCommand::Agent(AgentCommand::Create {
+                    external_id: "testagent".into(),
+                    namespace: "testns".into(),
+                    attributes: Attributes {
+                        typ: Some(DomaintypeId::from_external_id("test")),
+                        attributes: [(
+                            "test".to_owned(),
+                            Attribute {
+                                typ: "test".to_owned(),
+                                value: serde_json::Value::String("test2".to_owned()),
+                            },
+                        )]
+                        .into_iter()
+                        .collect(),
+                    },
+                }),
+                identity,
+            )
             .await;
 
         insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
@@ -1658,6 +1811,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     #[tokio::test]
     async fn contradict_start_time() {
         let mut api = test_api().await;
+
+        let identity = AuthId::chronicle();
 
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
@@ -1675,7 +1830,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1708,10 +1863,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }
         "###);
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::Agent(AgentCommand::UseInContext {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
@@ -1721,7 +1879,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1767,12 +1925,15 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
         // Should contradict
         let res = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::Start {
-                id: ActivityId::from_external_id("testactivity"),
-                namespace: "testns".into(),
-                time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
-                agent: None,
-            }))
+            .dispatch(
+                ApiCommand::Activity(ActivityCommand::Start {
+                    id: ActivityId::from_external_id("testactivity"),
+                    namespace: "testns".into(),
+                    time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
+                    agent: None,
+                }),
+                identity,
+            )
             .await;
 
         insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
@@ -1781,6 +1942,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     #[tokio::test]
     async fn contradict_end_time() {
         let mut api = test_api().await;
+
+        let identity = AuthId::chronicle();
 
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
@@ -1798,7 +1961,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1831,10 +1994,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }
         "###);
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::Agent(AgentCommand::UseInContext {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
@@ -1844,7 +2010,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
             agent: None,
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1890,12 +2056,15 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
 
         // Should contradict
         let res = api
-            .dispatch(ApiCommand::Activity(ActivityCommand::End {
-                id: ActivityId::from_external_id("testactivity"),
-                namespace: "testns".into(),
-                time: Some(Utc.ymd(2022, 7, 8).and_hms(9, 10, 11)),
-                agent: None,
-            }))
+            .dispatch(
+                ApiCommand::Activity(ActivityCommand::End {
+                    id: ActivityId::from_external_id("testactivity"),
+                    namespace: "testns".into(),
+                    time: Some(Utc.ymd(2022, 7, 8).and_hms(9, 10, 11)),
+                    agent: None,
+                }),
+                identity,
+            )
             .await;
 
         insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
@@ -1904,6 +2073,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     #[tokio::test]
     async fn end_activity() {
         let mut api = test_api().await;
+
+        let identity = AuthId::chronicle();
 
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
@@ -1921,7 +2092,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -1954,10 +2125,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }
         "###);
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::Agent(AgentCommand::UseInContext {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
@@ -1967,7 +2141,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2018,7 +2192,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: None,
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2053,6 +2227,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn activity_use() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             external_id: "testagent".into(),
@@ -2069,7 +2245,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2102,10 +2278,13 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         }
         "###);
 
-        api.dispatch(ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }))
+        api.dispatch(
+            ApiCommand::Agent(AgentCommand::UseInContext {
+                id: AgentId::from_external_id("testagent"),
+                namespace: "testns".into(),
+            }),
+            identity.clone(),
+        )
         .await
         .unwrap();
 
@@ -2125,7 +2304,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2163,7 +2342,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
             activity: ActivityId::from_external_id("testactivity"),
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2212,7 +2391,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             namespace: "testns".into(),
             time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
             agent: Some(AgentId::from_external_id("testagent")),
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -2269,6 +2448,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn activity_generate() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
@@ -2285,7 +2466,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
                 .into_iter()
                 .collect(),
             },
-        }))
+        }), identity.clone())
         .await
         .unwrap()
         .unwrap()
@@ -2323,7 +2504,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
             activity: ActivityId::from_external_id("testactivity"),
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -2359,6 +2540,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn derive_entity_abstract() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
@@ -2366,7 +2549,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
             derivation: None,
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -2409,6 +2592,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn derive_entity_primary_source() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
@@ -2416,7 +2601,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             activity: None,
             derivation: Some(DerivationType::PrimarySource),
             used_entity: EntityId::from_external_id("testusedentity"),
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -2459,6 +2644,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn derive_entity_revision() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
@@ -2466,7 +2653,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
             derivation: Some(DerivationType::Revision),
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()
@@ -2509,6 +2696,8 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
     async fn derive_entity_quotation() {
         let mut api = test_api().await;
 
+        let identity = AuthId::chronicle();
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
@@ -2516,7 +2705,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
             derivation: Some(DerivationType::Quotation),
-        }))
+        }), identity)
         .await
         .unwrap()
         .unwrap()

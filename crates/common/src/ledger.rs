@@ -13,8 +13,8 @@ use crate::prov::{
         SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
     },
     to_json_ld::ToJson,
-    ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
-    ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
+    ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId, Contradiction,
+    EntityId, ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
 };
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -147,7 +147,7 @@ pub type CommitResult = Result<Commit, (ChronicleTransactionId, Contradiction)>;
 pub trait LedgerWriter {
     async fn submit(
         &mut self,
-        tx: &[ChronicleOperation],
+        tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, SubmissionError>;
 }
 
@@ -311,7 +311,7 @@ impl LedgerWriter for InMemLedger {
     #[instrument(skip(self), level="debug" ret(Debug))]
     async fn submit(
         &mut self,
-        tx: &[ChronicleOperation],
+        tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, SubmissionError> {
         let id = ChronicleTransactionId::from(Uuid::new_v4());
 
@@ -319,7 +319,8 @@ impl LedgerWriter for InMemLedger {
         let mut state = OperationState::new();
 
         //pre compute and pre-load dependencies
-        let deps = tx
+        let deps = &tx
+            .tx
             .iter()
             .flat_map(|tx| tx.dependencies())
             .collect::<HashSet<_>>();
@@ -337,7 +338,7 @@ impl LedgerWriter for InMemLedger {
 
         trace!(ledger_state_before = %self);
 
-        for tx in tx {
+        for tx in &tx.tx {
             let res = tx.process(model, state.input()).await;
 
             match res {
@@ -847,10 +848,13 @@ pub mod test {
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
             to_json_ld::ToJson,
-            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
+            ActivityId, AgentId, AuthId, ChronicleTransaction, DelegationId, ExternalId,
+            ExternalIdPart, NamespaceId, Role, SignedIdentity,
         },
+        signing::DirectoryStoredKeys,
     };
     use futures::StreamExt;
+    use temp_dir::TempDir;
     use uuid::Uuid;
 
     use super::{LedgerReader, LedgerWriter, Offset};
@@ -910,13 +914,22 @@ pub mod test {
         })
     }
 
+    fn signed_identity_helper() -> SignedIdentity {
+        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().path()).unwrap();
+        keystore.generate_chronicle().unwrap();
+        AuthId::chronicle().signed_identity(&keystore).unwrap()
+    }
+
     #[tokio::test]
     async fn test_delta_incrementally() {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
         let mut reader = reader.state_updates(Offset::Genesis).await.unwrap();
 
-        ledger.submit(&[]).await.ok();
+        ledger
+            .submit(&ChronicleTransaction::new(vec![], signed_identity_helper()))
+            .await
+            .ok();
 
         let res = reader.next().await.unwrap().unwrap();
 
@@ -924,7 +937,10 @@ pub mod test {
         insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
 
         ledger
-            .submit(&[create_namespace_helper(Some(1))])
+            .submit(&ChronicleTransaction::new(
+                vec![create_namespace_helper(Some(1))],
+                signed_identity_helper(),
+            ))
             .await
             .ok();
 
@@ -939,7 +955,10 @@ pub mod test {
         "###);
 
         ledger
-            .submit(&[create_namespace_helper(Some(1))])
+            .submit(&ChronicleTransaction::new(
+                vec![create_namespace_helper(Some(1))],
+                signed_identity_helper(),
+            ))
             .await
             .ok();
 
@@ -948,7 +967,13 @@ pub mod test {
         // No delta
         insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
 
-        ledger.submit(&[agent_exists_helper()]).await.ok();
+        ledger
+            .submit(&ChronicleTransaction::new(
+                vec![agent_exists_helper()],
+                signed_identity_helper(),
+            ))
+            .await
+            .ok();
 
         let res = reader.next().await.unwrap().unwrap();
 
@@ -970,7 +995,13 @@ pub mod test {
         externalId = 'testns'
         "###);
 
-        ledger.submit(&[agent_exists_helper()]).await.ok();
+        ledger
+            .submit(&ChronicleTransaction::new(
+                vec![agent_exists_helper()],
+                signed_identity_helper(),
+            ))
+            .await
+            .ok();
 
         let res = reader.next().await.unwrap().unwrap();
 
@@ -979,7 +1010,10 @@ pub mod test {
           .await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
 
         ledger
-            .submit(&[create_agent_acts_on_behalf_of()])
+            .submit(&ChronicleTransaction::new(
+                vec![create_agent_acts_on_behalf_of()],
+                signed_identity_helper(),
+            ))
             .await
             .ok();
 

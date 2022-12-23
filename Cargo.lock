@@ -1104,6 +1104,7 @@ dependencies = [
  "der",
  "elliptic-curve",
  "rfc6979",
+ "serdect",
  "signature",
 ]
 
@@ -1130,6 +1131,7 @@ dependencies = [
  "pkcs8",
  "rand_core 0.6.3",
  "sec1",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -1891,6 +1893,7 @@ dependencies = [
  "cfg-if",
  "ecdsa",
  "elliptic-curve",
+ "serdect",
  "sha2",
 ]
 
@@ -2852,6 +2855,7 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_derive",
+ "tempfile",
  "tokio",
  "tracing",
  "url",
@@ -3262,6 +3266,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "telemetry",
+ "tempfile",
  "tokio",
  "tracing",
  "url",
@@ -3314,6 +3319,7 @@ dependencies = [
  "der",
  "generic-array",
  "pkcs8",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -3435,6 +3441,16 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "serdect"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "038fce1bf4d74b9b30ea7dcd59df75ba8ec669a5dcb3cc64fbfcef7334ced32c"
+dependencies = [
+ "base16ct",
+ "serde",
 ]
 
 [[package]]

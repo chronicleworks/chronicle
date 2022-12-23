@@ -10,7 +10,7 @@ use common::{
     k256::ecdsa::SigningKey,
     ledger::{LedgerWriter, SubmissionError},
     protocol::ProtocolError,
-    prov::{operations::ChronicleOperation, ChronicleTransactionId, ProcessorError},
+    prov::{ChronicleTransaction, ChronicleTransactionId, ProcessorError},
 };
 use custom_error::*;
 use derivative::Derivative;
@@ -49,9 +49,10 @@ impl OperationMessageBuilder {
 
     pub async fn make_tx(
         &mut self,
-        transactions: &[ChronicleOperation],
+        transactions: &ChronicleTransaction,
     ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
         let addresses = transactions
+            .tx
             .iter()
             .flat_map(|tx| tx.dependencies())
             .map(|addr| (SawtoothAddress::from(&addr).to_string(), addr))
@@ -78,7 +79,7 @@ impl OperationMessageBuilder {
         inputs: Vec<String>,
         outputs: Vec<String>,
         dependencies: Vec<String>,
-        payload: &[ChronicleOperation],
+        payload: &ChronicleTransaction,
     ) -> Result<(Transaction, ChronicleTransactionId), ProtocolError> {
         self.builder
             .make_sawtooth_transaction(inputs, outputs, dependencies, payload)
@@ -112,7 +113,7 @@ impl SawtoothSubmitter {
     )]
     async fn submit(
         &mut self,
-        transactions: &[ChronicleOperation],
+        transactions: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, (ChronicleTransactionId, SawtoothSubmissionError)> {
         // Practically, a protobuf serialization error here is probably a crash
         // loop level fault, but we will handle it without panic for now
@@ -168,7 +169,7 @@ impl LedgerWriter for SawtoothSubmitter {
     /// which also exposes a bunch of non clonable types so we probably need another dispatch / join mpsc here
     async fn submit(
         &mut self,
-        tx: &[ChronicleOperation],
+        tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, SubmissionError> {
         self.submit(tx)
             .await

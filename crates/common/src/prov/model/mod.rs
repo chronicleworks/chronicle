@@ -7,6 +7,7 @@ use custom_error::custom_error;
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
 
+use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -18,7 +19,10 @@ use tokio::task::JoinError;
 use tracing::{instrument, trace};
 use uuid::Uuid;
 
-use crate::attributes::{Attribute, Attributes};
+use crate::{
+    attributes::{Attribute, Attributes},
+    signing::{DirectoryStoredKeys, SignerError},
+};
 
 use super::{
     id,
@@ -39,12 +43,14 @@ custom_error! {pub ProcessorError
     Compaction{source: CompactionError} = "Json Ld Error {source}",
     Expansion{inner: String} = "Json Ld Error {inner}",
     IRef{source: iref::Error} = "Invalid IRI {source}",
+    KeyStore{source: SignerError} = "Invalid key store directory {source}",
     NotAChronicleIri{source: id::ParseIriError } = "Not a Chronicle IRI {source}",
     Tokio{source: JoinError} = "Tokio Error",
     MissingId{object: JsonValue} = "Missing @id {object:?}",
     MissingProperty{iri: String, object: JsonValue} = "Missing property {iri}:{object:?}",
     NotANode{} = "Json LD object is not a node",
     NotAnObject {} = "Chronicle value is not a json object",
+    Signing{source: k256::ecdsa::Error} = "Signing error {source}",
     Time{source: chrono::ParseError} = "Unparsable date/time {source}",
     Json{source: json::JsonError} = "Malformed JSON {source}",
     SerdeJson{source: serde_json::Error } = "Malformed JSON {source}",
@@ -91,11 +97,112 @@ impl ChronicleTransactionId {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ChronicleTransaction {
     pub tx: Vec<ChronicleOperation>,
+    pub identity: SignedIdentity,
 }
 
 impl ChronicleTransaction {
-    pub fn new(tx: Vec<ChronicleOperation>) -> Self {
-        Self { tx }
+    pub fn new(tx: Vec<ChronicleOperation>, identity: SignedIdentity) -> Self {
+        Self { tx, identity }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum AuthId {
+    Chronicle,
+    Jwt(AgentId),
+}
+
+impl AuthId {
+    pub fn agent(agent: &AgentId) -> Self {
+        Self::Jwt(agent.to_owned())
+    }
+
+    pub fn chronicle() -> Self {
+        Self::Chronicle
+    }
+
+    pub fn signed_identity(
+        &self,
+        store: &DirectoryStoredKeys,
+    ) -> Result<SignedIdentity, ProcessorError> {
+        let verifying_key = self.verifying_key(store)?;
+        let signing_key = self.signing_key(store)?;
+
+        let id_and_type = IdToSign::new(self);
+        let buf = id_and_type.to_sign()?;
+
+        let signature: Signature = signing_key.try_sign(&buf)?;
+        let signed_id = SignedIdentity::new(self, signature, verifying_key)?;
+
+        Ok(signed_id)
+    }
+
+    fn signing_key(&self, store: &DirectoryStoredKeys) -> Result<SigningKey, ProcessorError> {
+        match self {
+            Self::Chronicle => Ok(store.chronicle_signing()?),
+            Self::Jwt(agent_id) => Ok(store.agent_signing(agent_id)?),
+        }
+    }
+
+    fn verifying_key(&self, store: &DirectoryStoredKeys) -> Result<VerifyingKey, ProcessorError> {
+        match self {
+            Self::Chronicle => Ok(store.chronicle_verifying()?),
+            Self::Jwt(agent_id) => Ok(store.agent_verifying(agent_id)?),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SignedIdentity {
+    id: String,
+    signature: Signature,
+    verifying_key: VerifyingKey,
+}
+
+impl SignedIdentity {
+    fn new(
+        id: &AuthId,
+        signature: Signature,
+        verifying_key: VerifyingKey,
+    ) -> Result<Self, ProcessorError> {
+        let id = serde_json::to_string(&IdToSign::new(id))?;
+        Ok(Self {
+            id,
+            signature,
+            verifying_key,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct IdToSign {
+    typ: String,
+    id: serde_json::Value,
+}
+
+impl IdToSign {
+    fn new(id: &AuthId) -> Self {
+        match id {
+            AuthId::Chronicle => Self {
+                typ: "key".to_owned(),
+                id: serde_json::Value::from("chronicle"),
+            },
+            AuthId::Jwt(agent_id) => Self {
+                typ: "JWT".to_owned(),
+                id: serde_json::Value::from(agent_id.external_id_part().as_str()),
+            },
+        }
+    }
+    fn to_sign(&self) -> Result<Vec<u8>, ProcessorError> {
+        Ok(serde_json::to_string(self)?.as_bytes().to_vec())
+    }
+}
+
+impl TryFrom<&str> for IdToSign {
+    type Error = serde_json::Error;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        serde_json::from_str(s)
     }
 }
 

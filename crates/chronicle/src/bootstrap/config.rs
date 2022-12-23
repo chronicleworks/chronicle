@@ -22,12 +22,12 @@ pub struct ValidatorConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
-    pub secrets: SecretConfig,
-    pub validator: ValidatorConfig,
-    pub namespace_bindings: HashMap<String, Uuid>,
+    pub(crate) secrets: SecretConfig,
+    pub(crate) validator: ValidatorConfig,
+    pub(crate) namespace_bindings: HashMap<String, Uuid>,
 }
 
-pub fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
+pub(crate) fn handle_config_and_init(model: &CliModel) -> Result<Config, CliError> {
     let path = model
         .as_cmd()
         .get_matches()
