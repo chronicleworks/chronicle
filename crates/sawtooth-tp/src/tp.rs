@@ -487,7 +487,7 @@ pub mod test {
             - - chronicle/prov-update
               - - - transaction_id
                   - TRANSACTION_SIGNATURE
-              - "@context": "https://blockchaintp.com/chr/1.0/c.jsonld"
+              - "@context": "https://btp.works/chr/1.0/c.jsonld"
                 "@graph":
                   - "@id": "chronicle:activity:test%5Factivity"
                     "@type": "prov:Activity"

@@ -25,7 +25,7 @@ impl ToJson for ProvModel {
             doc.push(object! {
                 "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::Namespace).as_str(),
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "http://btp.works/chronicle/ns#externalId": [{
                     "@value": ns.external_id.as_str(),
                 }]
             })
@@ -35,10 +35,10 @@ impl ToJson for ProvModel {
             doc.push(object! {
                 "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::Identity).as_str(),
-                "http://blockchaintp.com/chronicle/ns#publicKey": [{
+                "http://btp.works/chronicle/ns#publicKey": [{
                     "@value": identity.public_key.to_string(),
                 }],
-                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                "http://btp.works/chronicle/ns#hasNamespace": [{
                     "@id": ns.de_compact()
                 }],
             })
@@ -48,12 +48,12 @@ impl ToJson for ProvModel {
             let mut attachmentdoc = object! {
                 "@id": (*id.de_compact()),
                 "@type": Iri::from(Chronicle::HasEvidence).as_str(),
-                "http://blockchaintp.com/chronicle/ns#entitySignature": attachment.signature.to_string(),
-                "http://blockchaintp.com/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
-                "http://blockchaintp.com/chronicle/ns#signedBy": {
+                "http://btp.works/chronicle/ns#entitySignature": attachment.signature.to_string(),
+                "http://btp.works/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
+                "http://btp.works/chronicle/ns#signedBy": {
                     "@id": attachment.signer.de_compact()
                 },
-                "http://blockchaintp.com/chronicle/ns#hasNamespace": [{
+                "http://btp.works/chronicle/ns#hasNamespace": [{
                     "@id": ns.de_compact()
                 }],
             };
@@ -82,7 +82,7 @@ impl ToJson for ProvModel {
             let mut agentdoc = object! {
                 "@id": (*id.de_compact()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "http://btp.works/chronicle/ns#externalId": [{
                    "@value": agent.external_id.as_str(),
                 }]
             };
@@ -261,7 +261,7 @@ impl ToJson for ProvModel {
             let mut activitydoc = object! {
                 "@id": (*id.de_compact()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "http://btp.works/chronicle/ns#externalId": [{
                    "@value": activity.external_id.as_str(),
                 }]
             };
@@ -357,7 +357,7 @@ impl ToJson for ProvModel {
             let mut entitydoc = object! {
                 "@id": (*id.de_compact()),
                 "@type": typ,
-                "http://blockchaintp.com/chronicle/ns#externalId": [{
+                "http://btp.works/chronicle/ns#externalId": [{
                    "@value": entity.external_id.as_str()
                 }]
             };

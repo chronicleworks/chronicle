@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::{ActivityId, AgentId, ExternalId, ExternalIdPart, Role};
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
-#[iri_prefix("chronicleop" = "http://blockchaintp.com/chronicleoperations/ns#")]
+#[iri_prefix("chronicleop" = "http://btp.works/chronicleoperations/ns#")]
 pub enum ChronicleOperations {
     #[iri("chronicleop:CreateNamespace")]
     CreateNamespace,
@@ -137,7 +137,7 @@ pub enum Prov {
 }
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
-#[iri_prefix("chronicle" = "http://blockchaintp.com/chronicle/ns#")]
+#[iri_prefix("chronicle" = "http://btp.works/chronicle/ns#")]
 pub enum Chronicle {
     #[iri("chronicle:externalId")]
     ExternalId,
@@ -177,6 +177,7 @@ pub enum Chronicle {
 
 /// Operations to format specific Iri kinds, using percentage encoding to ensure they are infallible
 impl Chronicle {
+    pub const LONG_PREFIX: &'static str = "http://btp.works/chronicle/ns#";
     pub const PREFIX: &'static str = "chronicle:";
 
     fn encode(s: &str) -> String {

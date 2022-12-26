@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://www.blockchaintp.com/schema/chronicle-1.json",
+    "$id": "https://btp.works/schema/chronicle-1.json",
     "title": "Chronicle Domain",
     "description": "a domain for Chronicle's blockchain-backed provenance",
     "type": "object",

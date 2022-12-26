@@ -123,6 +123,70 @@ mod test {
     }
 
     #[tokio::test]
+    async fn accept_long_form_including_original_name_iris() {
+        let schema = test_schema().await;
+
+        insta::assert_toml_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          mutation {
+              actedOnBehalfOf(
+                  responsible: { id: "http://btp.works/chronicle/ns#agent:testagent" },
+                  delegate: { id: "http://blockchaintp.com/chronicle/ns#agent:testdelegate" },
+                  role: MANUFACTURER
+                  ) {
+                  context
+              }
+          }
+      "#,
+          ))
+          .await, @r###"
+        [data.actedOnBehalfOf]
+        context = 'chronicle:agent:testagent'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+          query {
+              agentById(id: { id: "chronicle:agent:testagent" }) {
+                  ... on ProvAgent {
+                      id
+                      externalId
+                      actedOnBehalfOf {
+                          agent {
+                              ... on ProvAgent {
+                                  id
+                              }
+                          }
+                          role
+                      }
+                  }
+              }
+          }
+      "#,
+          ))
+          .await.data, @r###"
+        {
+          "agentById": {
+            "id": "chronicle:agent:testagent",
+            "externalId": "testagent",
+            "actedOnBehalfOf": [
+              {
+                "agent": {
+                  "id": "chronicle:agent:testdelegate"
+                },
+                "role": "MANUFACTURER"
+              }
+            ]
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn activity_timeline_no_duplicates() {
         let schema = test_schema().await;
 
@@ -682,8 +746,6 @@ mod test {
         "###);
     }
 
-    // Note that this test demonstrates Chronicle accepting
-    // long-form and short-form iris as input
     #[tokio::test]
     async fn agent_delegation() {
         let schema = test_schema().await;
@@ -694,7 +756,7 @@ mod test {
           mutation {
               actedOnBehalfOf(
                   responsible: { id: "chronicle:agent:testagent" },
-                  delegate: { id: "http://blockchaintp.com/chronicle/ns#agent:testdelegate" },
+                  delegate: { id: "chronicle:agent:testdelegate" },
                   role: MANUFACTURER
                   ) {
                   context
