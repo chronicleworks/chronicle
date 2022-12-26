@@ -11,12 +11,12 @@ use std::{
 use url::Url;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SecretConfig {
+pub(crate) struct SecretConfig {
     pub path: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ValidatorConfig {
+pub(crate) struct ValidatorConfig {
     pub address: Url,
 }
 
