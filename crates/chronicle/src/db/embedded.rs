@@ -14,6 +14,23 @@ pub struct EmbeddedPostgres {
     _pg: pg_embed::postgres::PgEmbed,
 }
 
+// Macos M1 has no pg image, but can run pg under rosetta, arm64 linux cannot
+// currently, but has an image
+#[tracing(ret(Info))]
+fn arch() -> Architecture {
+    if cfg!(target_os = "macos") {
+        Architecture::Amd64
+    } else if cfg!(target_arch = "aarch64") {
+        Architecture::Arm64v8
+    } else if cfg!(target_arch = "x86_64") {
+        Architecture::Amd64
+    } else if cfg!(target_arch = "x86") {
+        Architecture::I386
+    } else {
+        panic!("Unsupported architecture");
+    }
+}
+
 impl EmbeddedPostgres {
     pub async fn new(config_file: &str) -> Self {
         let port = portpicker::pick_unused_port().expect("No free port");
@@ -44,7 +61,7 @@ impl EmbeddedPostgres {
 
         let fetch_settings = PgFetchSettings {
             version: PG_V13,
-            architecture: Architecture::Amd64,
+            architecture: arch(),
             ..Default::default()
         };
 

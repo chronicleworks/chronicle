@@ -131,10 +131,19 @@ WORKDIR /
 RUN apt-get update && \
   apt-get install -y \
   libpq5 \
+  ca-certificates \
   && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
+
+RUN chmod 755 \
+  /usr/local/bin/chronicle
+
+RUN groupadd -g 999 chronicle && \
+  useradd -m -r -u 999 -g chronicle chronicle
+
+USER chronicle
 
 # Copy tp to image
 FROM debian:bullseye-slim AS chronicle-tp
