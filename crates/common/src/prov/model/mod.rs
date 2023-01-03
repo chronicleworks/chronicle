@@ -128,7 +128,7 @@ impl AuthId {
         let verifying_key = self.verifying_key(store)?;
         let signing_key = self.signing_key(store)?;
 
-        let id_and_type = IdToSign::new(self);
+        let id_and_type = IdentityContext::new(self);
         let buf = id_and_type.to_sign()?;
 
         let signature: Signature = signing_key.try_sign(&buf)?;
@@ -165,7 +165,7 @@ impl SignedIdentity {
         signature: Signature,
         verifying_key: VerifyingKey,
     ) -> Result<Self, ProcessorError> {
-        let id = serde_json::to_string(&IdToSign::new(id))?;
+        let id = serde_json::to_string(&IdentityContext::new(id))?;
         Ok(Self {
             id,
             signature,
@@ -175,21 +175,21 @@ impl SignedIdentity {
 }
 
 #[derive(Serialize, Deserialize)]
-struct IdToSign {
-    typ: String,
+struct IdentityContext {
     id: serde_json::Value,
+    typ: String,
 }
 
-impl IdToSign {
+impl IdentityContext {
     fn new(id: &AuthId) -> Self {
         match id {
             AuthId::Chronicle => Self {
-                typ: "key".to_owned(),
                 id: serde_json::Value::from("chronicle"),
+                typ: "key".to_owned(),
             },
             AuthId::Jwt(agent_id) => Self {
-                typ: "JWT".to_owned(),
                 id: serde_json::Value::from(agent_id.external_id_part().as_str()),
+                typ: "JWT".to_owned(),
             },
         }
     }
@@ -198,12 +198,18 @@ impl IdToSign {
     }
 }
 
-impl TryFrom<&str> for IdToSign {
+impl TryFrom<&str> for IdentityContext {
     type Error = serde_json::Error;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         serde_json::from_str(s)
     }
+}
+
+#[async_trait::async_trait]
+trait OpaExecutor {
+    fn executor(id: IdentityContext, rule: String) -> bool;
+    // fn loader()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
