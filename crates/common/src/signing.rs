@@ -21,7 +21,7 @@ custom_error! {pub SignerError
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
     InvalidPublicKey{source: pkcs8::Error}                  = "Invalid public key",
-    InvalidPrivateKey{source:  spki::Error}                 = "Invalid public key",
+    InvalidPrivateKey{source: spki::Error}                  = "Invalid private key",
     NoPublicKeyFound{}                                      = "No public key found",
     NoPrivateKeyFound{}                                     = "No private key found",
 }
