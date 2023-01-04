@@ -42,6 +42,7 @@ k256 = { version = "0.11.3", features = [
   "pem",
 ] }
 lazy_static = "1.4.0"
+opa-wasm = { git = "https://github.com/matrix-org/rust-opa-wasm.git" }
 percent-encoding = "2.1.0"
 pg-embed = "0.6.5"
 pkcs8 = { version = "*", features = ["std", "alloc"] }
@@ -60,6 +61,7 @@ tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = { version = "2.2.2", features = ["serde"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
+wasmtime = { version = "4.0.0", default-features = false, features = ["async", "cranelift"] }
 
 [build-dependencies]
 glob        = "0.3.0"

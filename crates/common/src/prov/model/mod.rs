@@ -13,6 +13,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
+    error::Error,
     fmt::Display,
 };
 use tokio::task::JoinError;
@@ -66,6 +67,10 @@ impl From<Infallible> for ProcessorError {
 
 custom_error! {pub ChronicleTransactionIdError
     InvalidTransactionId {id: String} = "Invalid transaction id",
+}
+
+custom_error! {pub OpaExecutorError
+    OPAEvaluation{source: Box<dyn Error>} = "Policy evaluation failed, or policy did not belong to the given store: {source}",
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -128,7 +133,7 @@ impl AuthId {
         let verifying_key = self.verifying_key(store)?;
         let signing_key = self.signing_key(store)?;
 
-        let id_and_type = IdToSign::new(self);
+        let id_and_type = IdentityContext::new(self);
         let buf = id_and_type.to_sign()?;
 
         let signature: Signature = signing_key.try_sign(&buf)?;
@@ -154,7 +159,7 @@ impl AuthId {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SignedIdentity {
-    id: String,
+    identity_context: String,
     signature: Signature,
     verifying_key: VerifyingKey,
 }
@@ -165,9 +170,9 @@ impl SignedIdentity {
         signature: Signature,
         verifying_key: VerifyingKey,
     ) -> Result<Self, ProcessorError> {
-        let id = serde_json::to_string(&IdToSign::new(id))?;
+        let identity_context = serde_json::to_string(&IdentityContext::new(id))?;
         Ok(Self {
-            id,
+            identity_context,
             signature,
             verifying_key,
         })
@@ -175,21 +180,21 @@ impl SignedIdentity {
 }
 
 #[derive(Serialize, Deserialize)]
-struct IdToSign {
-    typ: String,
+struct IdentityContext {
     id: serde_json::Value,
+    typ: String,
 }
 
-impl IdToSign {
+impl IdentityContext {
     fn new(id: &AuthId) -> Self {
         match id {
             AuthId::Chronicle => Self {
-                typ: "key".to_owned(),
                 id: serde_json::Value::from("chronicle"),
+                typ: "key".to_owned(),
             },
             AuthId::Jwt(agent_id) => Self {
-                typ: "JWT".to_owned(),
                 id: serde_json::Value::from(agent_id.external_id_part().as_str()),
+                typ: "JWT".to_owned(),
             },
         }
     }
@@ -198,11 +203,67 @@ impl IdToSign {
     }
 }
 
-impl TryFrom<&str> for IdToSign {
+impl TryFrom<&str> for IdentityContext {
     type Error = serde_json::Error;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         serde_json::from_str(s)
+    }
+}
+
+#[async_trait::async_trait]
+trait OpaExecutor {
+    async fn executor(
+        &mut self,
+        id: &AuthId,
+        context: serde_json::Value,
+    ) -> Result<bool, Box<dyn Error>>;
+}
+
+pub struct WasmTimeOpaExecutor {
+    store: wasmtime::Store<()>,
+    instance: opa_wasm::Policy<opa_wasm::DefaultContext>,
+    register_entrypoint: String,
+    // client_registration_entrypoint: String, // Doing some cribbing here, so leaving these in in case they mean something to someone
+    // authorization_grant_endpoint: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Violation {
+    pub msg: String,
+    pub field: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EvaluationResult {
+    #[serde(rename = "result")]
+    pub violations: Vec<Violation>,
+}
+
+impl EvaluationResult {
+    #[must_use]
+    pub fn valid(&self) -> bool {
+        self.violations.is_empty()
+    }
+}
+
+#[async_trait::async_trait]
+impl OpaExecutor for WasmTimeOpaExecutor {
+    async fn executor(
+        &mut self,
+        id: &AuthId,
+        context: serde_json::Value,
+    ) -> Result<bool, Box<dyn Error>> {
+        let input = serde_json::json!({
+            "identity": IdentityContext::new(id),
+            "context": context,
+        });
+        let [res]: [EvaluationResult; 1] = self
+            .instance
+            .evaluate(&mut self.store, &self.register_entrypoint, &input)
+            .await?;
+
+        Ok(res.valid())
     }
 }
 
