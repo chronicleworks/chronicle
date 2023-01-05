@@ -22,11 +22,25 @@ lazy_static! {
     static ref TEMP_DIRS: Mutex<Vec<TempDir>> = Mutex::new(Vec::new());
 }
 
+fn arch() -> Architecture {
+    if cfg!(target_os = "macos") {
+        Architecture::Amd64
+    } else if cfg!(target_arch = "aarch64") {
+        Architecture::Arm64v8
+    } else if cfg!(target_arch = "x86_64") {
+        Architecture::Amd64
+    } else if cfg!(target_arch = "x86") {
+        Architecture::I386
+    } else {
+        panic!("Unsupported architecture");
+    }
+}
+
 pub fn pg_fetch_settings() -> PgFetchSettings {
     PgFetchSettings {
         host: "https://repo1.maven.org".to_string(),
         operating_system: OperationSystem::default(),
-        architecture: Architecture::Amd64,
+        architecture: arch(),
         version: PG_V13,
     }
 }
