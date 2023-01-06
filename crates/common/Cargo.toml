@@ -56,7 +56,7 @@ serde_json = "1.0.79"
 static-iref = "2.0.0"
 temp-dir = "0.1.11"
 thiserror = "1.0.36"
-tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = { version = "2.2.2", features = ["serde"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
