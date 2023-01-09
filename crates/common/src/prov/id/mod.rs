@@ -176,7 +176,7 @@ pub trait AsCompact {
 impl<T: Display> AsCompact for T {
     fn compact(&self) -> String {
         self.to_string()
-            .replace("http://blockchaintp.com/chronicle/ns#", Chronicle::PREFIX)
+            .replace(Chronicle::LONG_PREFIX, Chronicle::PREFIX)
     }
 }
 
@@ -188,7 +188,7 @@ pub trait FromCompact {
 impl<T: Display> FromCompact for T {
     fn de_compact(&self) -> String {
         self.to_string()
-            .replace(Chronicle::PREFIX, "http://blockchaintp.com/chronicle/ns#")
+            .replace(Chronicle::PREFIX, Chronicle::LONG_PREFIX)
     }
 }
 
@@ -283,7 +283,7 @@ impl FromStr for ChronicleIri {
         //Compacted form, expand
         let iri = {
             if s.starts_with(Chronicle::PREFIX) {
-                s.replace(Chronicle::PREFIX, "http://blockchaintp.com/chronicle/ns#")
+                s.replace(Chronicle::PREFIX, Chronicle::LONG_PREFIX)
             } else {
                 s.to_owned()
             }

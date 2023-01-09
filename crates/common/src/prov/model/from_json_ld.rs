@@ -114,7 +114,7 @@ impl ProvModel {
     /// We rely on reified @types, so subclassing must also include supertypes
     #[instrument(level = "trace", skip(self, json))]
     pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
-        json.insert("@context", "https://blockchaintp.com/chr/1.0/c.jsonld")
+        json.insert("@context", "https://btp.works/chr/1.0/c.jsonld")
             .ok();
 
         trace!(to_apply_compact=%json.pretty(2));

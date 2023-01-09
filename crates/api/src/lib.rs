@@ -1397,7 +1397,7 @@ mod test {
             .await
             .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
           "@type": "chronicle:Namespace",
           "externalId": "testns"
@@ -1436,7 +1436,7 @@ mod test {
             .await
             .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -1588,7 +1588,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -1644,7 +1644,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -1693,7 +1693,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -1760,7 +1760,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -1840,7 +1840,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -1889,7 +1889,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -1971,7 +1971,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -2020,7 +2020,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2102,7 +2102,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -2151,7 +2151,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2202,7 +2202,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2255,7 +2255,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -2314,7 +2314,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2352,7 +2352,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2401,7 +2401,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2476,7 +2476,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -2514,7 +2514,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testentity",
@@ -2559,7 +2559,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -2611,7 +2611,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -2663,7 +2663,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -2715,7 +2715,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
         .await
         .unwrap(), @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",

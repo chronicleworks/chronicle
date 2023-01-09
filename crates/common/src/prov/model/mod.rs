@@ -1276,7 +1276,7 @@ impl ExpandedJson {
             })?;
 
         output
-            .insert("@context", "https://blockchaintp.com/chr/1.0/c.jsonld")
+            .insert("@context", "https://btp.works/chr/1.0/c.jsonld")
             .unwrap();
 
         Ok(CompactedJson(output))

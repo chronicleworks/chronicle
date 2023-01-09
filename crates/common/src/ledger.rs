@@ -934,7 +934,7 @@ pub mod test {
         let res = reader.next().await.unwrap().unwrap();
 
         // No transaction, so no delta
-        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://btp.works/chr/1.0/c.jsonld'"###);
 
         ledger
             .submit(&ChronicleTransaction::new(
@@ -948,7 +948,7 @@ pub mod test {
 
         // Namespace delta
         insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###"
-        "@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'
+        "@context" = 'https://btp.works/chr/1.0/c.jsonld'
         "@id" = 'chronicle:ns:testns1:a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8'
         "@type" = 'chronicle:Namespace'
         externalId = 'testns1'
@@ -965,7 +965,7 @@ pub mod test {
         let res = reader.next().await.unwrap().unwrap();
 
         // No delta
-        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+        insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###""@context" = 'https://btp.works/chr/1.0/c.jsonld'"###);
 
         ledger
             .submit(&ChronicleTransaction::new(
@@ -979,7 +979,7 @@ pub mod test {
 
         // Agent delta
         insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order().await.unwrap(), @r###"
-        "@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'
+        "@context" = 'https://btp.works/chr/1.0/c.jsonld'
 
         [["@graph"]]
         "@id" = 'chronicle:agent:test%5Fagent'
@@ -1007,7 +1007,7 @@ pub mod test {
 
         // No delta
         insta::assert_toml_snapshot!(res.delta.to_json().compact_stable_order()
-          .await.unwrap(), @r###""@context" = 'https://blockchaintp.com/chr/1.0/c.jsonld'"###);
+          .await.unwrap(), @r###""@context" = 'https://btp.works/chr/1.0/c.jsonld'"###);
 
         ledger
             .submit(&ChronicleTransaction::new(
@@ -1024,7 +1024,7 @@ pub mod test {
             .compact_stable_order().await.unwrap()).unwrap(),
              @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:test%5Factivity",

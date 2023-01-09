@@ -554,7 +554,7 @@ pub mod test {
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:test%5Fagent",
@@ -592,7 +592,7 @@ pub mod test {
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:test%5Fagent",
@@ -704,7 +704,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:agent:testagent",
@@ -747,7 +747,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -792,7 +792,7 @@ pub mod test {
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:test%5Fentity",
@@ -830,7 +830,7 @@ pub mod test {
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:test%5Fentity",
@@ -873,7 +873,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -919,7 +919,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -965,7 +965,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -1011,7 +1011,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testgeneratedentity",
@@ -1049,7 +1049,7 @@ pub mod test {
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:test%5Factivity",
@@ -1087,7 +1087,7 @@ pub mod test {
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:test%5Factivity",
@@ -1138,7 +1138,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -1206,7 +1206,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
@@ -1248,7 +1248,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:entity:testentity",
@@ -1301,7 +1301,7 @@ pub mod test {
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
         {
-          "@context": "https://blockchaintp.com/chr/1.0/c.jsonld",
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
           "@graph": [
             {
               "@id": "chronicle:activity:testactivity",
