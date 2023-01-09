@@ -25,8 +25,8 @@ hex = "0.4.3"
 json = "0.12.4"
 lazy_static = "1.4.0"
 openssl = "0.10.38"
-opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "0.16.0", features = [
+opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
+opentelemetry-jaeger = { version = "0.17.0", features = [
   "rt-tokio",
   "reqwest_collector_client",
   "collector_client",
