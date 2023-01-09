@@ -73,7 +73,7 @@ custom_error! {
     ProcessorError{source: ProcessorError}                      = "Processor {source}",
 }
 
-/// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+/// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
 impl From<Infallible> for ApiError {
     fn from(_: Infallible) -> Self {
         unreachable!()

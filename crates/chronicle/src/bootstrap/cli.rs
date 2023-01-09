@@ -43,7 +43,7 @@ custom_error::custom_error! {pub CliError
     CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream {source}",
 }
 
-/// Ugly but we need this until ! is stable https://github.com/rust-lang/rust/issues/64715
+/// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
 impl From<Infallible> for CliError {
     fn from(_: Infallible) -> Self {
         unreachable!()

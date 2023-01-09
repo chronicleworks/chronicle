@@ -211,7 +211,7 @@ impl From<&str> for Offset {
 
 #[async_trait::async_trait]
 pub trait LedgerReader {
-    /// Subscribe to state updates from this ledger, starting at [offset]
+    /// Subscribe to state updates from this ledger, starting at `offset`
     async fn state_updates(
         self,
         offset: Offset,
