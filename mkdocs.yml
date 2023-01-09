@@ -3,7 +3,7 @@ theme:
   name: material
   palette:
     scheme: default
-copyright: Copyright &copy; 2022 Blockchain Technology Partners
+copyright: Copyright &copy; 2022-23 Blockchain Technology Partners
 strict: false
 markdown_extensions:
   - pymdownx.highlight:
