@@ -10,6 +10,7 @@ pub mod context;
 pub mod database;
 pub mod identity;
 pub mod ledger;
+pub mod opa_executor;
 pub mod protocol;
 pub mod prov;
 pub mod signing;
