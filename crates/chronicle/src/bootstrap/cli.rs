@@ -26,21 +26,21 @@ use crate::{
 };
 
 custom_error::custom_error! {pub CliError
-    MissingArgument{arg: String}                    = "Missing argument {arg}",
+    MissingArgument{arg: String}                    = "Missing argument: {arg}",
     InvalidArgument{arg: String, expected: String, got: String } = "Invalid argument {arg} expected {expected} got {got}",
-    ArgumentParsing{source: clap::Error}            = "Bad argument {source}",
-    InvalidIri{source: iref::Error}                 = "Invalid IRI {source}",
-    InvalidChronicleIri{source: ParseIriError}      = "Invalid chronicle IRI {source}",
-    InvalidJson{source: serde_json::Error}          = "Invalid JSON {source}",
-    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp {source}",
-    InvalidCoercion{arg: String}                    = "Invalid coercion {arg}",
-    ApiError{source: ApiError}                      = "Api failure {source}",
-    Keys{source: SignerError}                       = "Key storage {source}",
-    FileSystem{source: std::io::Error}              = "Cannot locate configuration file {source}",
-    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file {source}",
-    InvalidPath                                     = "Invalid path", //TODO - the path, you know how annoying this is
-    Ld{source: CompactionError}                     = "Invalid Json LD {source}",
-    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream {source}",
+    ArgumentParsing{source: clap::Error}            = "Bad argument: {source}",
+    InvalidIri{source: iref::Error}                 = "Invalid IRI: {source}",
+    InvalidChronicleIri{source: ParseIriError}      = "Invalid Chronicle IRI: {source}",
+    InvalidJson{source: serde_json::Error}          = "Invalid JSON: {source}",
+    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp: {source}",
+    InvalidCoercion{arg: String}                    = "Invalid coercion: {arg}",
+    ApiError{source: ApiError}                      = "API failure: {source}",
+    Keys{source: SignerError}                       = "Key storage: {source}",
+    FileSystem{source: std::io::Error}              = "Cannot locate configuration file: {source}",
+    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file: {source}",
+    InvalidPath{path: String}                       = "Invalid path: {path}",
+    Ld{source: CompactionError}                     = "Invalid JSON-LD: {source}",
+    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream: {source}",
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>

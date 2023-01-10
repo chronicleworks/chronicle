@@ -63,7 +63,9 @@ fn init_chronicle_at(path: &Path) -> Result<(), CliError> {
     let secretpath = Question::new("Where should Chronicle store secrets?")
         .default(Answer::RESPONSE(
             Path::join(
-                path.parent().ok_or(CliError::InvalidPath)?,
+                path.parent().ok_or(CliError::InvalidPath {
+                    path: path.to_string_lossy().to_string(),
+                })?,
                 PathBuf::from("secrets"),
             )
             .to_string_lossy()
