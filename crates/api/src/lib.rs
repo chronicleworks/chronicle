@@ -1296,6 +1296,11 @@ mod test {
             KeyRegistration, NamespaceCommand,
         },
         database::{get_embedded_db_connection, Database},
+        k256::{
+            ecdsa::SigningKey,
+            pkcs8::{self, spki, DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
+            SecretKey,
+        },
         ledger::InMemLedger,
         prov::{
             operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId, AuthId,
@@ -1303,6 +1308,8 @@ mod test {
         },
         signing::DirectoryStoredKeys,
     };
+    use rand_core::SeedableRng;
+
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -1460,20 +1467,19 @@ mod test {
         "###);
     }
 
+    fn key_from_seed(seed: u8) -> String {
+        let secret: SecretKey = SecretKey::random(rand::rngs::StdRng::from_seed([seed; 32]));
+
+        secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
+    }
+
     #[tokio::test]
     async fn agent_public_key() {
         let mut api = test_api().await;
 
         let identity = AuthId::chronicle();
 
-        let pk = r#"
------BEGIN PRIVATE KEY-----
-MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgCyEwIMMP6BdfMi7qyj9n
-CXfOgpTQqiEPHC7qOZl7wbGhRANCAAQZfbhU2MakiNSg7z7x/LDAbWZHj66eh6I3
-Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
------END PRIVATE KEY-----
-"#;
-
+        let pk = key_from_seed(0);
         api.dispatch(
             ApiCommand::NameSpace(NamespaceCommand::Create {
                 external_id: "testns".into(),
@@ -1527,14 +1533,14 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
           ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - external_id: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
           : id:
               external_id: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
             namespaceid:
               external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+            public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
         attachments: {}
         has_identity:
           ? - external_id: testns
@@ -1543,7 +1549,7 @@ Fyz29vfeI2LG5PAmY/rKJsn/cEHHx+mdz1NB3vwzV/DJqj0NM+4s
           : - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             - external_id: testagent
-              public_key: 02197db854d8c6a488d4a0ef3ef1fcb0c06d66478fae9e87a237172cf6f6f7de23
+              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
         had_identity: {}
         has_evidence: {}
         had_attachment: {}
