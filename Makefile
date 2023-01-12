@@ -38,7 +38,7 @@ publish: gh-create-draft-release
 		$(GH_RELEASE) upload $(VERSION) target/* ; \
 	fi
 
-PHONY: build-end-to-end-test
+.PHONY: build-end-to-end-test
 build-end-to-end-test:
 	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
 
