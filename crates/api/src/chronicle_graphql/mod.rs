@@ -2,9 +2,9 @@ use async_graphql::{
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig},
     scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject,
-    Subscription,
+    Subscription, SubscriptionType,
 };
-use async_graphql_poem::{GraphQL, GraphQLSubscription};
+use async_graphql_poem::{GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::AuthId,
@@ -20,18 +20,30 @@ use diesel::{
 };
 use futures::Stream;
 use poem::{
-    get, handler, listener::TcpListener, post, web::Html, EndpointExt, IntoResponse, Route, Server,
+    get, handler,
+    http::{HeaderValue, StatusCode},
+    listener::TcpListener,
+    post,
+    web::{
+        headers::authorization::{Bearer, Credentials},
+        Html,
+    },
+    Endpoint, EndpointExt, IntoResponse, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
-use tracing::error;
+use tracing::{error, trace_span, Instrument};
+use url::Url;
 
+use self::authorization::JwtChecker;
 use crate::ApiDispatch;
+
 #[macro_use]
-mod cursor_query;
 pub mod activity;
 pub mod agent;
+mod authorization;
+mod cursor_query;
 pub mod entity;
 pub mod mutation;
 pub mod query;
@@ -367,6 +379,53 @@ async fn gql_playground() -> impl IntoResponse {
     ))
 }
 
+#[derive(Clone, Debug)]
+pub struct JwtClaims(pub serde_json::Map<String, serde_json::Value>);
+
+struct AuthorizationEndpoint<Q, M, S> {
+    checker: JwtChecker,
+    schema: Schema<Q, M, S>,
+}
+
+#[poem::async_trait]
+impl<Q, M, S> Endpoint for AuthorizationEndpoint<Q, M, S>
+where
+    Q: ObjectType + 'static,
+    M: ObjectType + 'static,
+    S: SubscriptionType + 'static,
+{
+    type Output = GraphQLBatchResponse;
+
+    async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+        if let Some(authorization) = req.header("Authorization") {
+            if let Ok(authorization) = HeaderValue::from_str(authorization) {
+                let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
+                if let Some(bearer_token) = bearer_token_maybe {
+                    if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
+                        tracing::debug!("verified JWT with claims: {:?}", claims);
+
+                        use poem::FromRequest;
+                        let (req, mut body) = req.split();
+                        let req = GraphQLBatchRequest::from_request(&req, &mut body).await?;
+                        let req = req.0.data(JwtClaims(claims));
+                        let span = trace_span!("Execute GraphQL request", request = ?req);
+                        return Ok(GraphQLBatchResponse(
+                            self.schema.execute_batch(req).instrument(span).await,
+                        ));
+                    }
+                }
+            }
+            tracing::warn!("rejected authorization: {:?}", authorization);
+        } else {
+            tracing::info!("rejected anonymous access attempt");
+        }
+        Err(poem::error::Error::from_string(
+            "Authorization header must provide valid bearer token",
+            StatusCode::UNAUTHORIZED,
+        ))
+    }
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -402,7 +461,18 @@ where
             Server::new(TcpListener::bind(address)).run(app).await.ok();
         } else {
             let app = Route::new()
-                .at("/", post(GraphQL::new(schema.clone())))
+                .at(
+                    "/",
+                    post(AuthorizationEndpoint {
+                        checker: JwtChecker::new(
+                            &Url::from_str(
+                                "https://dev-cha-9aet.us.auth0.com/.well-known/jwks.json",
+                            )
+                            .unwrap(),
+                        ),
+                        schema: schema.clone(),
+                    }),
+                )
                 .at("/ws", get(GraphQLSubscription::new(schema)));
 
             Server::new(TcpListener::bind(address)).run(app).await.ok();
