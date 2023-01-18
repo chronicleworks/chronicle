@@ -1,0 +1,20 @@
+@startuml
+
+!include ../include/default.iuml
+left to right direction
+hide empty members
+
+rectangle jwks as "JWKS server"
+rectangle oauth as "OAUTH"
+rectangle chronicle as "Chronicle"
+rectangle chronicleKP as "Chronicle KeyPair"
+rectangle chronicleTP as "Chronicle TP"
+rectangle chronicleGQL as "Chronicle GraphQL"
+
+[chronicleGQL] <--> [oauth] : gets JWT from
+[chronicleGQL] --> [jwks] : verifies JWT using
+[chronicleGQL] --> [chronicle] : passes JWT id to
+[chronicle] ---> [chronicleTP] : passes identity to
+[chronicle] <- [chronicleKP] : get Chronicle id from
+
+@enduml

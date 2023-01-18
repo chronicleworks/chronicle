@@ -1,0 +1,17 @@
+@startuml
+
+!include ../include/default.iuml
+left to right direction
+hide empty members
+
+rectangle authTp as "Authz TP"
+rectangle chronicleTp as "Chronicle TP"
+rectangle chroniclePublicKey as "Chronicle PubKey"
+rectangle chronicle as "Chronicle"
+
+[chronicle] --> [authTp] : init / rotate key
+[authTp] --> [chroniclePublicKey] : publishes to sawtooth address
+[chronicleTp] <- [chroniclePublicKey] : reads + verifies
+[chronicle] <- [chroniclePublicKey] : reads + verifies
+
+@enduml
