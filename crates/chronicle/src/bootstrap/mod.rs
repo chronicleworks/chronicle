@@ -30,7 +30,7 @@ use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use telemetry::{self, ConsoleLogging};
 use url::Url;
 
-use std::{io, net::SocketAddr};
+use std::{io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -101,13 +101,14 @@ pub async fn graphql_server<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
     options: &ArgMatches,
     open: bool,
+    jwks_uri: Option<Url>,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
     if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, open)
+        gql.serve_graphql(pool.clone(), api.clone(), addr, open, jwks_uri)
             .await
     }
 
@@ -240,7 +241,27 @@ where
     let api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-graphql") {
-        graphql_server(&api, &pool, gql, matches, matches.contains_id("open")).await?;
+        let jwks_uri = if matches.is_present("anonymous-api") {
+            Ok(None)
+        } else if let Some(uri) = matches.value_of("jwks-address") {
+            Ok(Some(Url::from_str(uri)?))
+        } else if cfg!(feature = "anonymous-api") {
+            Ok(None)
+        } else {
+            Err(CliError::MissingArgument {
+                arg: "jwks-address".to_string(),
+            })
+        }?;
+
+        graphql_server(
+            &api,
+            &pool,
+            gql,
+            matches,
+            matches.contains_id("open"),
+            jwks_uri,
+        )
+        .await?;
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {

@@ -23,8 +23,8 @@ pub enum Error {
         #[from]
         source: jwtk::Error,
     },
-    #[error("application error: {0}", message)]
-    Simple { message: String },
+    #[error("formatting error: {0}", message)]
+    Format { message: String },
 }
 
 pub struct JwtChecker {
@@ -38,7 +38,7 @@ impl JwtChecker {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), ret(Debug))]
     pub async fn verify_jwt(
         &self,
         token: &str,
@@ -51,7 +51,7 @@ impl JwtChecker {
             .map(|component| base64_engine.decode(component))
             .collect::<Result<Vec<Vec<u8>>, base64::DecodeError>>()?;
         if components.len() != 3 {
-            return Err(Error::Simple {
+            return Err(Error::Format {
                 message: format!("JWT has unexpected format: {}", token),
             });
         };
@@ -63,7 +63,7 @@ impl JwtChecker {
         if let Value::Object(claims) = serde_json::from_slice(components[1].as_slice())? {
             Ok(claims)
         } else {
-            Err(Error::Simple {
+            Err(Error::Format {
                 message: format!("JWT claims have unexpected format: {:?}", components[1]),
             })
         }
