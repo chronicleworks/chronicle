@@ -12,8 +12,9 @@ pub use cli::*;
 use common::{
     commands::ApiResponse,
     database::Database,
+    identity::AuthId,
     ledger::SubmissionStage,
-    prov::{to_json_ld::ToJson, AuthId},
+    prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
 use tracing::{debug, error, info, instrument};
@@ -402,9 +403,10 @@ pub mod test {
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::{get_embedded_db_connection, Database},
+        identity::AuthId,
         ledger::{InMemLedger, SubmissionStage},
         prov::{
-            to_json_ld::ToJson, ActivityId, AgentId, AuthId, ChronicleIri, ChronicleTransactionId,
+            to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
         },
         signing::DirectoryStoredKeys,

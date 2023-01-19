@@ -3,9 +3,12 @@ use std::io::Cursor;
 use prost::Message;
 use tracing::span;
 
-use crate::prov::{
-    operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction, CompactionError,
-    Contradiction, ExpandedJson, ProcessorError, ProvModel, SignedIdentity,
+use crate::{
+    identity::SignedIdentity,
+    prov::{
+        operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction, CompactionError,
+        Contradiction, ExpandedJson, ProcessorError, ProvModel,
+    },
 };
 
 use thiserror::Error;
@@ -188,10 +191,10 @@ pub async fn chronicle_identity_from_submission(
 mod test {
     use super::*;
     use crate::{
+        identity::{AuthId, SignedIdentity},
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-            ActivityId, AgentId, AuthId, DelegationId, ExternalId, ExternalIdPart, NamespaceId,
-            Role, SignedIdentity,
+            ActivityId, AgentId, DelegationId, ExternalId, ExternalIdPart, NamespaceId, Role,
         },
         signing::DirectoryStoredKeys,
     };

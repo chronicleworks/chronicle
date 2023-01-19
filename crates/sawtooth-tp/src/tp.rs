@@ -268,12 +268,13 @@ pub mod test {
     use std::{cell::RefCell, collections::BTreeMap};
 
     use common::{
+        identity::AuthId,
         k256::ecdsa::SigningKey,
         protocol::messages,
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
-            ActivityId, AgentId, AuthId, ChronicleTransaction, DelegationId, ExternalId,
-            ExternalIdPart, NamespaceId, Role,
+            ActivityId, AgentId, ChronicleTransaction, DelegationId, ExternalId, ExternalIdPart,
+            NamespaceId, Role,
         },
         signing::DirectoryStoredKeys,
     };

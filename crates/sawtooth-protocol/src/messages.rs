@@ -145,9 +145,10 @@ impl MessageBuilder {
 #[cfg(test)]
 mod test {
     use common::{
+        identity::AuthId,
         prov::{
             operations::{ChronicleOperation, CreateNamespace},
-            AuthId, ChronicleTransaction, NamespaceId,
+            ChronicleTransaction, NamespaceId,
         },
         signing::DirectoryStoredKeys,
     };

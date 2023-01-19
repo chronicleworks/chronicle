@@ -844,12 +844,13 @@ impl ChronicleOperation {
 pub mod test {
 
     use crate::{
+        identity::{AuthId, SignedIdentity},
         ledger::InMemLedger,
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
             to_json_ld::ToJson,
-            ActivityId, AgentId, AuthId, ChronicleTransaction, DelegationId, ExternalId,
-            ExternalIdPart, NamespaceId, Role, SignedIdentity,
+            ActivityId, AgentId, ChronicleTransaction, DelegationId, ExternalId, ExternalIdPart,
+            NamespaceId, Role,
         },
         signing::DirectoryStoredKeys,
     };

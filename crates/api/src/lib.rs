@@ -12,6 +12,7 @@ use futures::{select, AsyncReadExt, FutureExt, StreamExt};
 use common::{
     attributes::Attributes,
     commands::*,
+    identity::{AuthId, IdentityError},
     k256::ecdsa::{signature::Signer, Signature},
     ledger::{
         LedgerReader, LedgerWriter, Offset, SubmissionError, SubmissionStage, SubscriptionError,
@@ -24,9 +25,8 @@ use common::{
             WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, AuthId, ChronicleTransaction, ChronicleTransactionId, Contradiction,
-        EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel,
-        Role,
+        ActivityId, AgentId, ChronicleTransaction, ChronicleTransactionId, Contradiction, EntityId,
+        ExternalId, ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel, Role,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -71,6 +71,7 @@ custom_error! {
     EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
     Contradiction{source: Contradiction}                        = "Contradiction {source}",
     ProcessorError{source: ProcessorError}                      = "Processor {source}",
+    IdentityError{source: IdentityError}                        = "Identity {source}",
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -1296,13 +1297,14 @@ mod test {
             KeyRegistration, NamespaceCommand,
         },
         database::{get_embedded_db_connection, Database},
+        identity::AuthId,
         k256::{
             pkcs8::{EncodePrivateKey, LineEnding},
             SecretKey,
         },
         ledger::InMemLedger,
         prov::{
-            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId, AuthId,
+            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
             ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
         },
         signing::DirectoryStoredKeys,
