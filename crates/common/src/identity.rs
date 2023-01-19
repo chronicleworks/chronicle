@@ -14,6 +14,7 @@ custom_error! {pub IdentityError
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum AuthId {
+    Anonymous,
     Chronicle,
     Jwt(AgentId),
 }
@@ -21,6 +22,10 @@ pub enum AuthId {
 impl AuthId {
     pub fn agent(agent: &AgentId) -> Self {
         Self::Jwt(agent.to_owned())
+    }
+
+    pub fn anonymous() -> Self {
+        Self::Anonymous
     }
 
     pub fn chronicle() -> Self {
@@ -45,6 +50,7 @@ impl AuthId {
 
     fn signing_key(&self, store: &DirectoryStoredKeys) -> Result<SigningKey, IdentityError> {
         match self {
+            Self::Anonymous => Ok(store.agent_signing(&AgentId::from_external_id("anonymous"))?),
             Self::Chronicle => Ok(store.chronicle_signing()?),
             Self::Jwt(agent_id) => Ok(store.agent_signing(agent_id)?),
         }
@@ -52,6 +58,7 @@ impl AuthId {
 
     fn verifying_key(&self, store: &DirectoryStoredKeys) -> Result<VerifyingKey, IdentityError> {
         match self {
+            Self::Anonymous => Ok(store.agent_verifying(&AgentId::from_external_id("anonymous"))?),
             Self::Chronicle => Ok(store.chronicle_verifying()?),
             Self::Jwt(agent_id) => Ok(store.agent_verifying(agent_id)?),
         }
@@ -89,6 +96,10 @@ pub(crate) struct IdentityContext {
 impl IdentityContext {
     pub(crate) fn new(id: &AuthId) -> Self {
         match id {
+            AuthId::Anonymous => Self {
+                id: serde_json::Value::from("anonymous"),
+                typ: "anonymous".to_owned(),
+            },
             AuthId::Chronicle => Self {
                 id: serde_json::Value::from("chronicle"),
                 typ: "key".to_owned(),
