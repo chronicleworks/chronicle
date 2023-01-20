@@ -954,13 +954,6 @@ impl SubCommand for CliModel {
                 Command::new("serve-graphql")
                     .about("Start a graphql server")
                     .arg(
-                        Arg::new("open")
-                            .long("open")
-                            .required(false)
-                            .takes_value(false)
-                            .help("Open apollo studio sandbox"),
-                    )
-                    .arg(
                         Arg::new("interface")
                             .long("interface")
                             .required(false)

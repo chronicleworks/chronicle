@@ -100,7 +100,6 @@ pub async fn graphql_server<Query, Mutation>(
     pool: &ConnectionPool,
     gql: ChronicleGraphQl<Query, Mutation>,
     options: &ArgMatches,
-    open: bool,
     jwks_uri: Option<Url>,
     id_pointer: Option<String>,
 ) -> Result<(), ApiError>
@@ -109,7 +108,7 @@ where
     Mutation: ObjectType + Copy,
 {
     if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, open, jwks_uri, id_pointer)
+        gql.serve_graphql(pool.clone(), api.clone(), addr, jwks_uri, id_pointer)
             .await
     }
 
@@ -266,16 +265,7 @@ where
             })
         }?;
 
-        graphql_server(
-            &api,
-            &pool,
-            gql,
-            matches,
-            matches.contains_id("open"),
-            jwks_uri,
-            id_pointer,
-        )
-        .await?;
+        graphql_server(&api, &pool, gql, matches, jwks_uri, id_pointer).await?;
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {

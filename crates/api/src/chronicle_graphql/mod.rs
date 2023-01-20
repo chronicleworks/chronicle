@@ -1,8 +1,6 @@
 use async_graphql::{
-    extensions::OpenTelemetry,
-    http::{playground_source, GraphQLPlaygroundConfig},
-    scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject,
-    Subscription, SubscriptionType,
+    extensions::OpenTelemetry, scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType,
+    Schema, SimpleObject, Subscription, SubscriptionType,
 };
 use async_graphql_poem::{GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -20,18 +18,15 @@ use diesel::{
 };
 use futures::Stream;
 use poem::{
-    get, handler,
+    get,
     http::{HeaderValue, StatusCode},
     listener::TcpListener,
     post,
-    web::{
-        headers::authorization::{Bearer, Credentials},
-        Html,
-    },
-    Endpoint, EndpointExt, IntoResponse, Route, Server,
+    web::headers::authorization::{Bearer, Credentials},
+    Endpoint, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, trace_span, Instrument};
 use url::Url;
@@ -348,7 +343,6 @@ pub trait ChronicleGraphQlServer {
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
-        open: bool,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
     );
@@ -372,13 +366,6 @@ where
 
         schema.sdl()
     }
-}
-
-#[handler]
-async fn gql_playground() -> impl IntoResponse {
-    Html(playground_source(
-        GraphQLPlaygroundConfig::new("/").subscription_endpoint("/ws"),
-    ))
 }
 
 #[derive(Clone, Debug)]
@@ -477,7 +464,6 @@ where
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
-        open: bool,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
     ) {
@@ -495,40 +481,27 @@ where
             .data(AuthId::chronicle())
             .finish();
 
-        if open {
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                open::that(format!("http://{}", address)).ok();
-            });
-            let app = Route::new()
-                .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
-                .at("/ws", get(GraphQLSubscription::new(schema.clone())))
-                .data(schema);
+        let app = match jwks_uri {
+            Some(jwks_uri) => {
+                tracing::debug!("API endpoint authentication uses {}", jwks_uri);
+                Route::new()
+                    .at(
+                        "/",
+                        post(AuthorizationEndpoint {
+                            checker: JwtChecker::new(&jwks_uri),
+                            schema: schema.clone(),
+                        }),
+                    )
+                    .at("/ws", get(GraphQLSubscription::new(schema)))
+            }
+            None => {
+                tracing::warn!("API endpoint uses no authentication");
+                Route::new()
+                    .at("/", post(GraphQL::new(schema.clone())))
+                    .at("/ws", get(GraphQLSubscription::new(schema)))
+            }
+        };
 
-            Server::new(TcpListener::bind(address)).run(app).await.ok();
-        } else {
-            let app = match jwks_uri {
-                Some(jwks_uri) => {
-                    tracing::debug!("API endpoint authentication uses {}", jwks_uri);
-                    Route::new()
-                        .at(
-                            "/",
-                            post(AuthorizationEndpoint {
-                                checker: JwtChecker::new(&jwks_uri),
-                                schema: schema.clone(),
-                            }),
-                        )
-                        .at("/ws", get(GraphQLSubscription::new(schema)))
-                }
-                None => {
-                    tracing::warn!("API endpoint uses no authentication");
-                    Route::new()
-                        .at("/", post(GraphQL::new(schema.clone())))
-                        .at("/ws", get(GraphQLSubscription::new(schema)))
-                }
-            };
-
-            Server::new(TcpListener::bind(address)).run(app).await.ok();
-        }
+        Server::new(TcpListener::bind(address)).run(app).await.ok();
     }
 }
