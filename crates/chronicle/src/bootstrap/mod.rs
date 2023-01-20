@@ -102,13 +102,14 @@ pub async fn graphql_server<Query, Mutation>(
     options: &ArgMatches,
     open: bool,
     jwks_uri: Option<Url>,
+    id_pointer: Option<String>,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
     if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, open, jwks_uri)
+        gql.serve_graphql(pool.clone(), api.clone(), addr, open, jwks_uri, id_pointer)
             .await
     }
 
@@ -253,6 +254,18 @@ where
             })
         }?;
 
+        let id_pointer = if matches.is_present("anonymous-api") {
+            Ok(None)
+        } else if let Some(id_pointer) = matches.value_of("id-pointer") {
+            Ok(Some(id_pointer.to_string()))
+        } else if cfg!(feature = "anonymous-api") {
+            Ok(None)
+        } else {
+            Err(CliError::MissingArgument {
+                arg: "id-pointer".to_string(),
+            })
+        }?;
+
         graphql_server(
             &api,
             &pool,
@@ -260,6 +273,7 @@ where
             matches,
             matches.contains_id("open"),
             jwks_uri,
+            id_pointer,
         )
         .await?;
 

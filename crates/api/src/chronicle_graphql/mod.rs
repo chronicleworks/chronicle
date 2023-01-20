@@ -31,7 +31,7 @@ use poem::{
     Endpoint, EndpointExt, IntoResponse, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, trace_span, Instrument};
 use url::Url;
@@ -350,6 +350,7 @@ pub trait ChronicleGraphQlServer {
         address: SocketAddr,
         open: bool,
         jwks_uri: Option<Url>,
+        id_pointer: Option<String>,
     );
 }
 
@@ -403,8 +404,6 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        tracing::debug!("verified JWT with claims: {:?}", claims);
-
                         use poem::FromRequest;
                         let (req, mut body) = req.split();
                         let req = GraphQLBatchRequest::from_request(&req, &mut body).await?;
@@ -427,6 +426,46 @@ where
     }
 }
 
+struct AuthFromJwt {
+    json_pointer: String,
+}
+
+#[async_trait::async_trait]
+impl async_graphql::extensions::Extension for AuthFromJwt {
+    async fn prepare_request(
+        &self,
+        ctx: &async_graphql::extensions::ExtensionContext<'_>,
+        mut request: async_graphql::Request,
+        next: async_graphql::extensions::NextPrepareRequest<'_>,
+    ) -> async_graphql::ServerResult<async_graphql::Request> {
+        if let Some(claims) = ctx.data_opt::<JwtClaims>() {
+            use common::prov::AgentId;
+            use serde_json::Value;
+
+            if let Some(Value::String(external_id)) =
+                Value::Object(claims.0.clone()).pointer(&self.json_pointer)
+            {
+                let chronicle_id = AuthId::agent(&AgentId::from_external_id(external_id));
+                tracing::debug!(
+                    "Chronicle identity for GraphQL request is {:?}",
+                    chronicle_id
+                );
+                request = request.data(chronicle_id);
+            }
+        }
+        next.run(ctx, request).await
+    }
+}
+
+#[async_trait::async_trait]
+impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
+    fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
+        Arc::new(AuthFromJwt {
+            json_pointer: self.json_pointer.clone(),
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -440,11 +479,17 @@ where
         address: SocketAddr,
         open: bool,
         jwks_uri: Option<Url>,
+        id_pointer: Option<String>,
     ) {
-        let schema = Schema::build(self.query, self.mutation, Subscription)
-            .extension(OpenTelemetry::new(opentelemetry::global::tracer(
-                "chronicle-api-gql",
-            )))
+        let mut schema = Schema::build(self.query, self.mutation, Subscription).extension(
+            OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")),
+        );
+        if let Some(id_pointer) = id_pointer {
+            schema = schema.extension(AuthFromJwt {
+                json_pointer: id_pointer,
+            })
+        };
+        let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
             .data(AuthId::chronicle())

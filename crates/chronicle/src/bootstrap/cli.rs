@@ -900,8 +900,7 @@ impl SubCommand for CliModel {
                     .long("embedded-database")
                     .help("use an embedded PostgreSQL")
                     .conflicts_with("remote-database")
-                    // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x - then use ArgGroup or,
-                    // .conflicts_with_all(&["remote-database", "database-host", "database-port", "database-username", "database-name"])
+                // no conflict with database_* because they may be set in environment but not used for this invocation
             )
             .arg(
                 Arg::new("remote-database")
@@ -979,13 +978,26 @@ impl SubCommand for CliModel {
                         } else {
                             arg
                             .required_unless_present("anonymous-api")
-                            // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x
+                        }
+                    }
+                    ).arg({
+                        let arg = Arg::new("id-pointer")
+                            .long("id-pointer")
+                            .takes_value(true)
+                            .env("JWT_POINTER")
+                            .help("JSON pointer into JWT claims for Chronicle ID");
+                        if cfg!(feature = "anonymous-api") {
+                            arg
+                        } else {
+                            arg
+                            .required_unless_present("anonymous-api")
                         }
                     }
                     ).arg(
                         Arg::new("anonymous-api")
                             .long("anonymous-api")
                             .help("accept GraphQL without authentication by web tokens")
+                        // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));
