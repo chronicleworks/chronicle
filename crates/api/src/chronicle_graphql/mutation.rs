@@ -10,7 +10,8 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
         PathOrFile,
     },
-    prov::{operations::DerivationType, ActivityId, AgentId, AuthId, EntityId, Role},
+    identity::AuthId,
+    prov::{operations::DerivationType, ActivityId, AgentId, EntityId, Role},
 };
 
 use crate::ApiDispatch;

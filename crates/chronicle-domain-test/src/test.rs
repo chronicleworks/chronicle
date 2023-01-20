@@ -71,7 +71,7 @@ mod test {
         async_graphql::{Request, Schema},
         chrono::{DateTime, NaiveDate, Utc},
         common::{
-            database::get_embedded_db_connection, ledger::InMemLedger, prov::AuthId,
+            database::get_embedded_db_connection, identity::AuthId, ledger::InMemLedger,
             signing::DirectoryStoredKeys,
         },
         tokio,

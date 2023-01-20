@@ -7,8 +7,9 @@ use async_graphql::{
 use async_graphql_poem::{GraphQL, GraphQLSubscription};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
+    identity::AuthId,
     ledger::{SubmissionError, SubmissionStage},
-    prov::{to_json_ld::ToJson, AuthId, ChronicleTransactionId, ProvModel},
+    prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;
 use derivative::*;
