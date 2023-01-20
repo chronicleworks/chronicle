@@ -7,6 +7,7 @@ use k256::{
 };
 use prost::Message;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpaTransactionId(String);
 
 impl OpaTransactionId {
@@ -19,9 +20,15 @@ impl OpaTransactionId {
     }
 }
 
-impl From<String> for OpaTransactionId {
-    fn from(tx_id: String) -> Self {
-        Self(tx_id)
+impl std::fmt::Display for OpaTransactionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<&str> for OpaTransactionId {
+    fn from(tx_id: &str) -> Self {
+        Self(tx_id.to_owned())
     }
 }
 

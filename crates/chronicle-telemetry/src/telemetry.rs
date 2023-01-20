@@ -34,7 +34,7 @@ macro_rules! apm_layer {
 pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLogging) {
     LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
     match (collector_endpoint, console_logging) {
         (Some(otel), ConsoleLogging::Json) => {
             set_global_default(

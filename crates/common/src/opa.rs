@@ -162,6 +162,7 @@ impl SawtoothPolicyLoader {
             entrypoint: String::default(),
         }
     }
+
     fn sawtooth_address(&self, policy: impl AsRef<str>) -> String {
         policy_address(policy)
     }
@@ -193,22 +194,28 @@ impl PolicyLoader for SawtoothPolicyLoader {
     fn set_address(&mut self, address: &str) {
         self.address = address.to_owned()
     }
+
     fn set_entrypoint(&mut self, entrypoint: &str) {
         self.entrypoint = entrypoint.to_owned()
     }
+
     fn get_address(&self) -> &str {
         &self.address
     }
+
     fn get_entrypoint(&self) -> &str {
         &self.entrypoint
     }
+
     fn get_policy(&self) -> &[u8] {
         &self.policy
     }
+
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
         self.policy = self.get_policy().await?;
         Ok(())
     }
+
     fn load_policy_from_bytes(&mut self, policy: &[u8]) {
         self.policy = policy.to_vec()
     }
@@ -267,21 +274,27 @@ impl PolicyLoader for CliPolicyLoader {
     fn set_address(&mut self, address: &str) {
         self.address = address.to_owned()
     }
+
     fn set_entrypoint(&mut self, entrypoint: &str) {
         self.entrypoint = entrypoint.to_owned()
     }
+
     fn get_address(&self) -> &str {
         &self.address
     }
+
     fn get_entrypoint(&self) -> &str {
         &self.entrypoint
     }
+
     fn get_policy(&self) -> &[u8] {
         &self.policy
     }
+
     fn load_policy_from_bytes(&mut self, policy: &[u8]) {
         self.policy = policy.to_vec()
     }
+
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
         self.policy = self.get_policy_from_file().await?;
         Ok(())

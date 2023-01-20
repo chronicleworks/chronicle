@@ -6,8 +6,10 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
+async-trait = "0.1.61"
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap = { version = "4.1.1", features = ["env"] }
+futures = "0.3.21"
 k256 = { version = "0.11.3", features = [
   "default",
   "arithmetic",
@@ -18,4 +20,23 @@ k256 = { version = "0.11.3", features = [
   "pem",
 ] }
 opa-tp-protocol = { path = "../opa-tp-protocol" }
+pin-project = "1.0.12"
+rand = { version = "0.8.5", features = ["getrandom"] }
+rand_core = "0.6.3"
+sawtooth-sdk = "0.5.2"
+serde = "1.0.152"
+serde_derive = "1.0.152"
+serde_json = "1.0.93"
+thiserror = "1.0.38"
+tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
+tokio-stream = "0.1.11"
+tracing = "0.1.37"
 url = "2.3.1"
+user-error = "1.2.8"
+
+[dev-dependencies]
+insta      = { version = "1.26.0", features = ["redactions", "toml", "yaml"] }
+opa-tp     = { path = "../opa-tp" }
+protobuf   = "2.27.1"
+serde_json = "1.0.79"
+tempfile   = "3.3.0"

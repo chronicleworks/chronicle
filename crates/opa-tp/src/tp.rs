@@ -6,7 +6,7 @@ use opa_tp_protocol::{
     address::{HasSawtoothAddress, FAMILY, PREFIX, VERSION},
     events::opa_event,
     messages::Submission,
-    state::{key_address, policy_address, KeyRegistration, Keys, PolicyMeta},
+    state::{key_address, policy_address, KeyRegistration, Keys, OpaOperationEvent, PolicyMeta},
 };
 
 use k256::ecdsa::{Signature, VerifyingKey};
@@ -53,6 +53,12 @@ impl OpaTransactionHandler {
     }
 }
 
+impl Default for OpaTransactionHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // Verifies the submission.
 // Keys == None indicates that the opa tp is not bootstrapped, so the bootstrap
 // operation can be performed, otherwise this will be an error
@@ -96,6 +102,7 @@ fn verify_signed_operation(
             if *verifying_key == root_keys.as_ref().unwrap().current.key {
                 Ok(())
             } else {
+                error!(verifying_key = ?verifying_key, current_key = ?root_keys.as_ref().unwrap().current.key, "Invalid signing key");
                 Err(OpaTpError::InvalidSigningKey)
             }
         }
@@ -107,9 +114,10 @@ fn verify_signed_operation(
 }
 
 // Either apply our bootstrap operation or our signed operation
-#[instrument(skip(context), ret(Debug))]
+#[instrument(skip(context, request), ret(Debug))]
 fn apply_signed_operation(
     payload: opa_tp_protocol::messages::submission::Payload,
+    request: &TpProcessRequest,
     context: &mut dyn TransactionContext,
 ) -> Result<(), OpaTpError> {
     match payload {
@@ -138,9 +146,9 @@ fn apply_signed_operation(
             )?;
 
             context.add_event(
-                "opa/keys".to_string(),
-                vec![],
-                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                "opa/operation".to_string(),
+                vec![("transaction_id".to_string(), request.signature.clone())],
+                &opa_event(1, keys.into())?,
             )?;
 
             Ok(())
@@ -154,7 +162,7 @@ fn apply_signed_operation(
                 verifying_key: _,
                 signature: _,
             },
-        ) => apply_signed_operation_payload(operation, context),
+        ) => apply_signed_operation_payload(request, operation, context),
         _ => {
             error!(malformed_message = ?payload);
             Err(OpaTpError::MalformedMessage)
@@ -164,6 +172,7 @@ fn apply_signed_operation(
 
 #[instrument(skip(context), ret(Debug))]
 fn apply_signed_operation_payload(
+    request: &TpProcessRequest,
     payload: opa_tp_protocol::messages::signed_operation::payload::Operation,
     context: &mut dyn TransactionContext,
 ) -> Result<(), OpaTpError> {
@@ -198,9 +207,9 @@ fn apply_signed_operation_payload(
             )?;
 
             context.add_event(
-                "opa/keys".to_string(),
-                vec![],
-                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                "opa/operation".to_string(),
+                vec![("transaction_id".to_string(), request.signature.clone())],
+                &opa_event(1, keys.into())?,
             )?;
 
             Ok(())
@@ -271,9 +280,9 @@ fn apply_signed_operation_payload(
             )?;
 
             context.add_event(
-                "opa/keys".to_string(),
-                vec![],
-                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                "opa/operation".to_string(),
+                vec![("transaction_id".to_string(), request.signature.clone())],
+                &opa_event(1, keys.into())?,
             )?;
 
             Ok(())
@@ -295,9 +304,9 @@ fn apply_signed_operation_payload(
             context.set_state_entry(policy_address(id), policy)?;
 
             context.add_event(
-                "opa/policy".to_string(),
-                vec![],
-                &opa_event(1, Ok(serde_json::to_value(&policy_meta)?)),
+                "opa/operation".to_string(),
+                vec![("transaction_id".to_string(), request.signature.clone())],
+                &opa_event(1, policy_meta.into())?,
             )?;
 
             Ok(())
@@ -339,7 +348,7 @@ impl TP for OpaTransactionHandler {
         let process: Result<_, OpaTpError> = (|| {
             verify_signed_operation(&submission, &root_keys_from_state(request, context)?)?;
 
-            apply_signed_operation(submission.payload.unwrap(), context)?;
+            apply_signed_operation(submission.payload.unwrap(), request, context)?;
             Ok(())
         })();
 
@@ -350,9 +359,10 @@ impl TP for OpaTransactionHandler {
             Err(e @ OpaTpError::MalformedMessage) => Err(ApplyError::InternalError(e.to_string())),
             Err(e @ OpaTpError::JsonSerialize(_)) => Err(ApplyError::InternalError(e.to_string())),
             Err(e) => Ok(context.add_event(
-                "opa/error".to_string(),
-                vec![],
-                &opa_event(1, Err(e.to_string())),
+                "opa/operation".to_string(),
+                vec![("transaction_id".to_string(), request.signature.clone())],
+                &opa_event(1, OpaOperationEvent::Error(e.to_string()))
+                    .map_err(|e| ApplyError::InternalError(e.to_string()))?,
             )?),
         }
     }
@@ -392,17 +402,20 @@ impl TransactionHandler for OpaTransactionHandler {
 #[cfg(test)]
 mod test {
     use k256::{ecdsa::SigningKey, SecretKey};
-    use opa_tp_protocol::messages::Submission;
     use opa_tp_protocol::{
-        address, messages::OpaEvent, sawtooth::MessageBuilder, state::key_address,
+        address,
+        messages::{OpaEvent, Submission},
+        sawtooth::MessageBuilder,
+        state::key_address,
         submission::SubmissionBuilder,
     };
     use prost::Message;
     use rand::rngs::StdRng;
     use rand_core::SeedableRng;
-    use sawtooth_sdk::messages::processor::TpProcessRequest;
-    use sawtooth_sdk::messages::transaction::TransactionHeader;
-    use sawtooth_sdk::processor::handler::{ContextError, TransactionContext};
+    use sawtooth_sdk::{
+        messages::{processor::TpProcessRequest, transaction::TransactionHeader},
+        processor::handler::{ContextError, TransactionContext},
+    };
     use serde_json::Value;
     use std::{cell::RefCell, collections::BTreeMap};
 
@@ -531,8 +544,7 @@ mod test {
         addresses: Vec<String>,
         submission: Submission,
     ) -> TestTransactionContext {
-        let mut message_builder =
-            MessageBuilder::new(transactor_key, address::FAMILY, address::VERSION);
+        let message_builder = MessageBuilder::new_deterministic(address::FAMILY, address::VERSION);
 
         let input_addresses = addresses.clone();
         let output_addresses = addresses;
@@ -542,7 +554,8 @@ mod test {
             input_addresses,
             output_addresses,
             dependencies,
-            submission,
+            &submission,
+            &transactor_key,
         );
 
         let processor = OpaTransactionHandler::new();
@@ -571,12 +584,14 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(), {
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         "###);
@@ -584,13 +599,15 @@ mod test {
             ".**.date" => "[date]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              expired: ~
+              id: root
         "###);
     }
 
@@ -607,26 +624,32 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         "### );
         insta::assert_yaml_snapshot!(context.readable_events(), {
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
+        - - opa/operation
+          - - - transaction_id
+              - 3b8241d24ff6c90035ed8f64f3b6ffc64999670d9b8406a7fe717976ea650a164581fec952450e1284b36079748c794ddb8b5776b1db2384a38cd872d3f75737
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: root
         "###);
     }
 
@@ -662,39 +685,47 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
 
         },  @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             id: root
         "### );
 
         insta::assert_yaml_snapshot!(context.readable_events(), {
            ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
-            expired:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            id: root
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - c9f05ca8c5f70d577707b2c547cc7ab75fdc7034f1484dab2658c1c2e2ef25461b1fe8df23d3949811cd78f9927aa4655a984e344299011e2d009e8638fb7eb8
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired:
+                date: "[date]"
+                key: "[pem]"
+              id: root
         "### );
     }
 
@@ -712,39 +743,47 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: nonroot
         "### );
         insta::assert_yaml_snapshot!(context.readable_events(), {
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: nonroot
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: nonroot
         "###);
     }
 
@@ -774,50 +813,60 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEhrzHBZnrxCCzuJd+zGDllLtWdJvqpWLX\r\n+Aqb3//Kqh3+eYGicM34gRRoNbTumhYxNilD2cQgMjxAw6n0Zxs6AA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             id: nonroot
         "### );
         insta::assert_yaml_snapshot!(context.readable_events(), {
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: nonroot
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEhrzHBZnrxCCzuJd+zGDllLtWdJvqpWLX\r\n+Aqb3//Kqh3+eYGicM34gRRoNbTumhYxNilD2cQgMjxAw6n0Zxs6AA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
-            id: nonroot
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired: ~
+              id: nonroot
+        - - opa/operation
+          - - - transaction_id
+              - df0e2ce772a73cb8aab7591a05fdae10bdd169279925b94221091e662ff336a971d18175f98b67608e4fb08ac0bef3c0c5fece2ec1ab6d91765abcb4174f294b
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "[pem]"
+              expired:
+                date: "[date]"
+                key: "[pem]"
+              id: nonroot
         "###);
     }
 
@@ -835,12 +884,14 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         "### );
@@ -848,15 +899,18 @@ mod test {
             ".**.date" => "[date]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/error
-          - []
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - b11356fef5b170aa20d80d6f16c2da5dd284e4bf18a08f1a75a16e5d2736e02e562901349b0c173de62b54e7103d6b6c3061100329c7f6ae1444418f7aea964c
           - error: Invalid operation
         "###);
     }
@@ -885,18 +939,20 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: nonroot
         "### );
@@ -904,22 +960,27 @@ mod test {
             ".**.date" => "[date]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/keys
-          - []
-          - current:
-              date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: nonroot
-        - - opa/error
-          - []
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+              expired: ~
+              id: nonroot
+        - - opa/operation
+          - - - transaction_id
+              - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
           - error: Invalid operation
         "###);
     }
@@ -938,12 +999,14 @@ mod test {
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
         }, @r###"
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              key: "[pem]"
             expired: ~
             id: root
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
@@ -957,18 +1020,22 @@ mod test {
             ".**.date" => "[date]",
         }, @r###"
         ---
-        - - opa/keys
-          - []
-          - current:
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                date: "[date]"
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - d97436915a49d3a37eb5b0615c9fd415fc7f79cd5cb1c8f45fcd2d948e9bff7029cb8351cb59a5d25aee9315158af8bed3be5416dd28975803d83465dfd189e1
+          - PolicyUpdate:
               date: "[date]"
-              key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
-            expired: ~
-            id: root
-        - - opa/policy
-          - []
-          - date: "[date]"
-            id: test
-            policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
+              id: test
+              policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
     }
 }

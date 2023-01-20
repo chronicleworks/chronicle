@@ -108,6 +108,7 @@ impl TP for ChronicleTransactionHandler {
 
         Ok(state)
     }
+
     async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
         let identity = chronicle_identity_from_submission(submission.identity)
             .await

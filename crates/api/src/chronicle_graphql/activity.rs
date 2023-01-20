@@ -22,9 +22,7 @@ pub async fn was_associated_with<'a>(
     id: i32,
     ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<(Agent, Option<Role>, Option<Agent>, Option<Role>)>> {
-    use crate::persistence::schema::agent;
-    use crate::persistence::schema::association;
-    use crate::persistence::schema::delegation;
+    use crate::persistence::schema::{agent, association, delegation};
 
     #[derive(Queryable)]
     struct DelegationAgents {
