@@ -11,8 +11,6 @@ component "Chronicle" {
 
     [API]
 
-    [graphql playground]
-
     () GraphQL
 }
 
@@ -28,8 +26,6 @@ component "Sawtooth" {
 
 
 [Apollo Server] <..> GraphQL: federates
-[API] ..> [graphql playground]: serves
-[graphql playground] <..> GraphQL
 CLI <..> API: spawns or uses remote
 CLI <..> GraphQL: uses
 [API] <..> GraphQL
