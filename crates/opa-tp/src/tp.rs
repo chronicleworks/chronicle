@@ -7,6 +7,7 @@ use opa_tp_protocol::{
     events::opa_event,
     messages::Submission,
     state::{key_address, policy_address, KeyRegistration, Keys, OpaOperationEvent, PolicyMeta},
+    state::{key_address, policy_address, KeyRegistration, Keys, OpaOperationEvent, PolicyMeta},
 };
 
 use k256::ecdsa::{Signature, VerifyingKey};
@@ -50,6 +51,12 @@ impl OpaTransactionHandler {
             family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
         }
+    }
+}
+
+impl Default for OpaTransactionHandler {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
