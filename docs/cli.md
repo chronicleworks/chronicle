@@ -12,10 +12,27 @@ Run Chronicle as a GraphQL server.
 
 The GraphQL server socket address - defaults to 127.0.0.1:9982.
 
-#### `--open`
+##### `--anonymous-api`
 
-Serve the GraphQL playground IDE on the GraphQL server interface and open a web
-browser to it.
+Allow unauthenticated access to the GraphQL API.
+Otherwise, the following two arguments are relevant and required.
+
+##### `--jwks-address <URI>`
+
+The URI from which the JSON Web Key Set (JWKS) can be obtained.
+This typically has a suffix of `jwks.json`.
+The JWKS is used for verifying JSON Web Tokens provided via HTTP
+`Authorized: Bearer ...`.
+
+Ignored if `--anonymous-api` is given.
+
+##### `id-pointer <JSON ptr>`
+
+A JSON pointer into the JSON Web Token claims, specifying the location of
+a string value corresponding to the external ID that should be used in
+constructing the authenticated user's Chronicle identity.
+
+Ignored if `--anonymous-api` is given.
 
 ### `export-schema`
 

@@ -58,9 +58,12 @@ valico = "3.6.0"
 
 
 [features]
+devmode = ["anonymous-api", "inmem"]
+# Allow unauthenticated API access
+anonymous-api = []
+# Use an in-memory stub ledger
+inmem  = []
 strict = []
-# Use an in memory stub ledger
-inmem = []
 
 [build-dependencies]
 

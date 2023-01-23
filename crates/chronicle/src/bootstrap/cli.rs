@@ -32,6 +32,7 @@ custom_error::custom_error! {pub CliError
     InvalidIri{source: iref::Error}                 = "Invalid IRI: {source}",
     InvalidChronicleIri{source: ParseIriError}      = "Invalid Chronicle IRI: {source}",
     InvalidJson{source: serde_json::Error}          = "Invalid JSON: {source}",
+    InvalidUri{source: url::ParseError}             = "Invalid URI: {source}",
     InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp: {source}",
     InvalidCoercion{arg: String}                    = "Invalid coercion: {arg}",
     ApiError{source: ApiError}                      = "API failure: {source}",
@@ -899,8 +900,7 @@ impl SubCommand for CliModel {
                     .long("embedded-database")
                     .help("use an embedded PostgreSQL")
                     .conflicts_with("remote-database")
-                    // see https://github.com/clap-rs/clap/issues/1605 - fixed in v3.x - then use ArgGroup or,
-                    // .conflicts_with_all(&["remote-database", "database-host", "database-port", "database-username", "database-name"])
+                // no conflict with database_* because they may be set in environment but not used for this invocation
             )
             .arg(
                 Arg::new("remote-database")
@@ -939,7 +939,7 @@ impl SubCommand for CliModel {
                     .help("name of the database")
                     .default_value("chronicle"),
             )
-                .subcommand(
+            .subcommand(
                 Command::new("completions")
                     .about("Generate shell completions and exit")
                     .arg(
@@ -954,19 +954,43 @@ impl SubCommand for CliModel {
                 Command::new("serve-graphql")
                     .about("Start a graphql server")
                     .arg(
-                        Arg::new("open")
-                            .long("open")
-                            .required(false)
-                            .takes_value(false)
-                            .help("Open apollo studio sandbox"),
-                    )
-                    .arg(
                         Arg::new("interface")
                             .long("interface")
                             .required(false)
                             .takes_value(true)
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
+                    ).arg({
+                        let arg = Arg::new("jwks-address")
+                            .long("jwks-address")
+                            .takes_value(true)
+                            .env("JWKS_URI")
+                            .help("URI of the JSON key set for verifying web tokens");
+                        if cfg!(feature = "anonymous-api") {
+                            arg
+                        } else {
+                            arg
+                            .required_unless_present("anonymous-api")
+                        }
+                    }
+                    ).arg({
+                        let arg = Arg::new("id-pointer")
+                            .long("id-pointer")
+                            .takes_value(true)
+                            .env("JWT_POINTER")
+                            .help("JSON pointer into JWT claims for Chronicle ID");
+                        if cfg!(feature = "anonymous-api") {
+                            arg
+                        } else {
+                            arg
+                            .required_unless_present("anonymous-api")
+                        }
+                    }
+                    ).arg(
+                        Arg::new("anonymous-api")
+                            .long("anonymous-api")
+                            .help("accept GraphQL without authentication by web tokens")
+                        // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));

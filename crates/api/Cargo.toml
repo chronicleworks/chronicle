@@ -16,6 +16,7 @@ async-graphql = { features = [
 async-graphql-poem = "4.0.9"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
+base64 = "0.21"
 chrono = "0.4.19"
 common = { path = "../common" }
 custom_error = "1.9.2"
@@ -34,6 +35,7 @@ iref = "2.1.2"
 iref-enum = "2.0.0"
 json = "0.12.4"
 json-ld = "0.4.0"
+jwtk = { version = "0.2.4", features = ["remote-jwks"] }
 open = "3.2.0"
 opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
@@ -46,6 +48,7 @@ serde_derive = "1.0.136"
 serde_json = "1.0.81"
 static-iref = "2.0.0"
 telemetry = { path = "../telemetry" }
+thiserror = "1.0.36"
 tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = "2.2.2"
@@ -59,5 +62,9 @@ tempfile = "3.3.0"
 [build-dependencies]
 
 [features]
+devmode = ["anonymous-api", "inmem"]
+# Allow unauthenticated API access
+anonymous-api = []
+# Use an in-memory stub ledger
 inmem  = []
 strict = []
