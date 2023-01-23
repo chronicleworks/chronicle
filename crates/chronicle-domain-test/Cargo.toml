@@ -22,7 +22,10 @@ chronicle = { path = "../chronicle" }
 
 [features]
 strict = []
-# Use an in memory stub ledger
+devmode = ["anonymous-api", "inmem"]
+# Allow unauthenticated API access
+anonymous-api = ["chronicle/anonymous-api"]
+# Use an in-memory stub ledger
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
