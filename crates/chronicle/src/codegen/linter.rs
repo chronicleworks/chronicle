@@ -3,7 +3,7 @@ use jsonschema::{error::ValidationErrorKind, JSONSchema};
 use std::{collections::HashSet, path::Path, process::exit};
 
 fn bad_filename(filename: &str) {
-    println!("JSON or YAML filename extension required for {}", filename);
+    println!("JSON or YAML filename extension required for {filename}");
     exit(2);
 }
 
@@ -11,7 +11,7 @@ fn build_json_validator(domain: &str) -> JSONSchema {
     let json = match serde_json::from_str(domain) {
         Ok(json) => json,
         Err(error) => {
-            println!("failed to parse valid JSON from domain schema: {}", error);
+            println!("failed to parse valid JSON from domain schema: {error}");
             exit(2);
         }
     };
@@ -21,7 +21,7 @@ fn build_json_validator(domain: &str) -> JSONSchema {
     {
         Ok(json_schema) => json_schema,
         Err(error) => {
-            println!("failed to interpret JSON as a domain schema: {}", error);
+            println!("failed to interpret JSON as a domain schema: {error}");
             exit(2);
         }
     }
@@ -31,7 +31,7 @@ fn check_json_valid(json_validator: &JSONSchema, json_data: &str) {
     let json = match serde_json::from_str(json_data) {
         Ok(json) => json,
         Err(error) => {
-            println!("failed to parse valid JSON: {}", error);
+            println!("failed to parse valid JSON: {error}");
             exit(2);
         }
     };
@@ -62,14 +62,14 @@ fn check_yaml_valid(json_validator: &JSONSchema, yaml_data: &str) {
     let json = match serde_yaml::from_str::<serde_json::Value>(yaml_data) {
         Ok(json) => json,
         Err(error) => {
-            println!("failed to parse valid YAML: {}", error);
+            println!("failed to parse valid YAML: {error}");
             exit(2);
         }
     };
     let json_data = match serde_json::to_string(&json) {
         Ok(json_data) => json_data,
         Err(error) => {
-            println!("failed to write valid JSON from YAML: {}", error);
+            println!("failed to write valid JSON from YAML: {error}");
             exit(2);
         }
     };
@@ -80,7 +80,7 @@ fn read_json_domain(data: &str) -> model::DomainFileInput {
     match serde_json::from_str(data) {
         Ok(domain) => domain,
         Err(error) => {
-            println!("failed to interpret JSON as a domain: {}", error);
+            println!("failed to interpret JSON as a domain: {error}");
             exit(2);
         }
     }
@@ -90,7 +90,7 @@ fn read_yaml_domain(data: &str) -> model::DomainFileInput {
     match serde_yaml::from_str(data) {
         Ok(domain) => domain,
         Err(error) => {
-            println!("failed to interpret YAML as a domain: {}", error);
+            println!("failed to interpret YAML as a domain: {error}");
             exit(2);
         }
     }
@@ -136,7 +136,7 @@ pub fn check_files(filenames: Vec<&str>) {
         let data = match std::fs::read_to_string(filepath) {
             Ok(data) => data,
             Err(error) => {
-                println!("failed to read {}: {}", filename, error);
+                println!("failed to read {filename}: {error}");
                 exit(2);
             }
         };

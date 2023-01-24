@@ -34,7 +34,6 @@ use std::{io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
-#[allow(dead_code)]
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     Ok(SawtoothSubmitter::new(
         &options
@@ -45,7 +44,6 @@ fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter,
     ))
 }
 
-#[allow(dead_code)]
 fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
     Ok(StateDelta::new(
         &options
@@ -321,11 +319,11 @@ where
                         if commit.tx_id == tx_id {
                             debug!("Transaction committed: {}", commit.tx_id);
                         }
-                        println!("{}", subject);
+                        println!("{subject}");
                     }
                     SubmissionStage::Committed(Err((id, contradiction))) => {
                         if id == tx_id {
-                            eprintln!("Transaction rejected by ledger: {} {}", id, contradiction);
+                            eprintln!("Transaction rejected by ledger: {id} {contradiction}");
                             break;
                         }
                     }
@@ -463,7 +461,7 @@ pub mod test {
                         break Ok(Some((commit.delta, commit.tx_id)));
                     }
                     if let SubmissionStage::Committed(Err((_, contradiction))) = submission {
-                        panic!("Contradiction: {}", contradiction);
+                        panic!("Contradiction: {contradiction}");
                     }
                 }
             } else {
