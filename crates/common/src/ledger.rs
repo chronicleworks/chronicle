@@ -105,9 +105,9 @@ impl std::error::Error for SubscriptionError {
 impl Display for SubmissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Implementation { source, .. } => write!(f, "Ledger error {} ", source),
-            Self::Processor { source, .. } => write!(f, "Processor error {} ", source),
-            Self::Contradiction { source, .. } => write!(f, "Contradiction: {}", source),
+            Self::Implementation { source, .. } => write!(f, "Ledger error {source} "),
+            Self::Processor { source, .. } => write!(f, "Processor error {source} "),
+            Self::Contradiction { source, .. } => write!(f, "Contradiction: {source}"),
         }
     }
 }
@@ -346,7 +346,7 @@ impl LedgerWriter for InMemLedger {
                     return Err(SubmissionError::contradiction(&id, source))
                 }
                 //This fake ledger is used for development purposes and testing, so we panic on serious error
-                Err(e) => panic!("{:?}", e),
+                Err(e) => panic!("{e:?}"),
                 Ok((tx_output, updated_model)) => {
                     state.update_state(
                         tx_output

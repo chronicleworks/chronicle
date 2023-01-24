@@ -32,20 +32,16 @@ impl std::fmt::Display for Contradiction {
                     value,
                     attempted,
                 } => {
-                    write!(
-                        f,
-                        "attribute value change: {} {:?} {:?}",
-                        name, value, attempted
-                    )?;
+                    write!(f, "attribute value change: {name} {value:?} {attempted:?}")?;
                 }
                 ContradictionDetail::StartAlteration { value, attempted } => {
-                    write!(f, "start date alteration: {} {}", value, attempted)?;
+                    write!(f, "start date alteration: {value} {attempted}")?;
                 }
                 ContradictionDetail::EndAlteration { value, attempted } => {
-                    write!(f, "end date alteration: {} {}", value, attempted)?;
+                    write!(f, "end date alteration: {value} {attempted}")?;
                 }
                 ContradictionDetail::InvalidRange { start, end } => {
-                    write!(f, "invalid range: {} {}", start, end)?;
+                    write!(f, "invalid range: {start} {end}")?;
                 }
             }
         }
