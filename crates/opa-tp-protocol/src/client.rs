@@ -63,7 +63,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         let res = Handle::current().block_on(async move {
             let mut future = self
                 .tx
-                .send(Self::message_type(), &correlation_id, &*bytes)?;
+                .send(Self::message_type(), &correlation_id, &bytes)?;
 
             debug!(send_message=%correlation_id);
             trace!(body=?tx);
@@ -72,7 +72,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         });
 
         res.and_then(|res| {
-            RX::parse_from_bytes(&*res.content).map_err(SawtoothCommunicationError::from)
+            RX::parse_from_bytes(&res.content).map_err(SawtoothCommunicationError::from)
         })
     }
 }

@@ -98,7 +98,6 @@ custom_error! {pub SawtoothSubmissionError
 
 /// The sawtooth futures and their sockets are not controlled by a compatible reactor
 impl SawtoothSubmitter {
-    #[allow(dead_code)]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = OperationMessageBuilder::new(signer, FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();

@@ -140,7 +140,7 @@ fn apply_signed_operation(
             context.add_event(
                 "opa/keys".to_string(),
                 vec![],
-                &*opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
             )?;
 
             Ok(())
@@ -200,7 +200,7 @@ fn apply_signed_operation_payload(
             context.add_event(
                 "opa/keys".to_string(),
                 vec![],
-                &*opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
             )?;
 
             Ok(())
@@ -223,7 +223,7 @@ fn apply_signed_operation_payload(
             }
 
             let existing_key: Keys = serde_json::from_str(
-                from_utf8(&*existing_key.unwrap()).map_err(|_| OpaTpError::MalformedMessage)?,
+                from_utf8(&existing_key.unwrap()).map_err(|_| OpaTpError::MalformedMessage)?,
             )?;
 
             if previous_signing_key != existing_key.current.key {
@@ -235,7 +235,7 @@ fn apply_signed_operation_payload(
             let payload_bytes = payload.encode_to_vec();
             let previous_signature = Signature::try_from(&*previous_signature)
                 .map_err(|_| OpaTpError::OperationSignatureVerification)?;
-            let previous_key = VerifyingKey::from_public_key_pem(&*previous_signing_key)
+            let previous_key = VerifyingKey::from_public_key_pem(&previous_signing_key)
                 .map_err(|_| OpaTpError::OperationSignatureVerification)?;
 
             previous_key
@@ -245,7 +245,7 @@ fn apply_signed_operation_payload(
             //Verify the new key and signature
             let new_signature = Signature::try_from(&*new_signature)
                 .map_err(|_| OpaTpError::OperationSignatureVerification)?;
-            let new_key = VerifyingKey::from_public_key_pem(&*new_signing_key)
+            let new_key = VerifyingKey::from_public_key_pem(&new_signing_key)
                 .map_err(|_| OpaTpError::OperationSignatureVerification)?;
 
             new_key
@@ -273,7 +273,7 @@ fn apply_signed_operation_payload(
             context.add_event(
                 "opa/keys".to_string(),
                 vec![],
-                &*opa_event(1, Ok(serde_json::to_value(&keys)?)),
+                &opa_event(1, Ok(serde_json::to_value(&keys)?)),
             )?;
 
             Ok(())
@@ -297,7 +297,7 @@ fn apply_signed_operation_payload(
             context.add_event(
                 "opa/policy".to_string(),
                 vec![],
-                &*opa_event(1, Ok(serde_json::to_value(&policy_meta)?)),
+                &opa_event(1, Ok(serde_json::to_value(&policy_meta)?)),
             )?;
 
             Ok(())
@@ -314,7 +314,7 @@ fn root_keys_from_state(
 
     if let Some(existing_key) = existing_key {
         let existing_key: Keys = serde_json::from_str(
-            from_utf8(&*existing_key).map_err(|_| OpaTpError::MalformedMessage)?,
+            from_utf8(&existing_key).map_err(|_| OpaTpError::MalformedMessage)?,
         )?;
 
         Ok(Some(existing_key))
@@ -331,7 +331,7 @@ impl TP for OpaTransactionHandler {
     ) -> Result<(), ApplyError> {
         let payload = request.get_payload();
         let submission = Submission::decode(payload).map_err(|err| {
-            ApplyError::InvalidTransaction(format!("Failed to parse payload: {}", err))
+            ApplyError::InvalidTransaction(format!("Failed to parse payload: {err}"))
         })?;
 
         debug!(signed_operation = ?submission);
@@ -352,7 +352,7 @@ impl TP for OpaTransactionHandler {
             Err(e) => Ok(context.add_event(
                 "opa/error".to_string(),
                 vec![],
-                &*opa_event(1, Err(e.to_string())),
+                &opa_event(1, Err(e.to_string())),
             )?),
         }
     }
