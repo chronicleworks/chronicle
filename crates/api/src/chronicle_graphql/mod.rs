@@ -7,6 +7,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::AuthId,
     ledger::{SubmissionError, SubmissionStage},
+    opa_executor::WasmtimeOpaExecutor,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;
@@ -345,6 +346,7 @@ pub trait ChronicleGraphQlServer {
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
+        opa_executor: WasmtimeOpaExecutor,
     );
 }
 
@@ -466,6 +468,7 @@ where
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
+        opa_executor: WasmtimeOpaExecutor,
     ) {
         let mut schema = Schema::build(self.query, self.mutation, Subscription).extension(
             OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")),
@@ -478,6 +481,7 @@ where
         let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
+            .data(opa_executor)
             .data(AuthId::chronicle())
             .finish();
 

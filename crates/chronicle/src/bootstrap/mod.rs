@@ -14,6 +14,9 @@ use common::{
     database::Database,
     identity::AuthId,
     ledger::SubmissionStage,
+    opa_executor::{
+        CliPolicyLoader, OpaExecutor, PolicyLoader, SawtoothPolicyLoader, WasmtimeOpaExecutor,
+    },
     prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -34,6 +37,7 @@ use std::{io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
+#[allow(dead_code)]
 fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
     Ok(SawtoothSubmitter::new(
         &options
@@ -44,6 +48,7 @@ fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter,
     ))
 }
 
+#[allow(dead_code)]
 fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
     Ok(StateDelta::new(
         &options
@@ -52,6 +57,97 @@ fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, Sign
             .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
         &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
     ))
+}
+
+#[allow(dead_code)]
+fn sawtooth_policy_loader(
+    config: &Config,
+    options: &ArgMatches,
+) -> Result<SawtoothPolicyLoader, CliError> {
+    let mut loader = SawtoothPolicyLoader::new(
+        &options
+            .get_one::<String>("sawtooth")
+            .map(|s| Url::parse(s))
+            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
+    );
+    loader.set_address(options)?;
+    Ok(loader)
+}
+
+#[allow(dead_code)]
+fn cli_policy_loader(_config: &Config, options: &ArgMatches) -> Result<CliPolicyLoader, CliError> {
+    let mut loader = CliPolicyLoader::new();
+    loader.set_address(options)?;
+    Ok(loader)
+}
+
+trait SetRuleOptions {
+    fn set_address(&mut self, options: &ArgMatches) -> Result<(), CliError>;
+    fn set_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError>;
+}
+
+impl SetRuleOptions for SawtoothPolicyLoader {
+    fn set_address(&mut self, options: &ArgMatches) -> Result<(), CliError> {
+        let address = rule_addr(options)?;
+        self.set_policy_address(&address);
+        Ok(())
+    }
+
+    fn set_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
+        let entrypoint = rule_entrypoint(options)?;
+        self.set_policy_entrypoint(&entrypoint);
+        Ok(())
+    }
+}
+
+impl SetRuleOptions for CliPolicyLoader {
+    fn set_address(&mut self, options: &ArgMatches) -> Result<(), CliError> {
+        let address = rule_addr(options)?;
+        self.set_policy_address(&address);
+        Ok(())
+    }
+
+    fn set_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
+        let entrypoint = rule_entrypoint(options)?;
+        self.set_policy_entrypoint(&entrypoint);
+        Ok(())
+    }
+}
+
+fn rule_addr(options: &ArgMatches) -> Result<String, CliError> {
+    if let Some(path) = options.get_one::<String>("opa-rule") {
+        Ok(path.to_owned())
+    } else {
+        Err(CliError::MissingArgument {
+            arg: "opa-rule".to_string(),
+        })
+    }
+}
+
+fn rule_entrypoint(options: &ArgMatches) -> Result<String, CliError> {
+    if let Some(entrypoint) = options.get_one::<String>("opa-entrypoint") {
+        Ok(entrypoint.to_owned())
+    } else {
+        Err(CliError::MissingArgument {
+            arg: "opa-entrypoint".to_string(),
+        })
+    }
+}
+
+async fn wasmtime_opa_executor(
+    config: &Config,
+    options: &ArgMatches,
+) -> Result<WasmtimeOpaExecutor, CliError> {
+    let entrypoint = rule_entrypoint(options)?;
+    if cfg!(not(feature = "inmem")) {
+        let mut policy_loader = sawtooth_policy_loader(config, options)?;
+        let policy = policy_loader.load_policy().await?;
+        Ok(WasmtimeOpaExecutor::new(&policy, &entrypoint))
+    } else {
+        let mut policy_loader = cli_policy_loader(config, options)?;
+        let policy = policy_loader.load_policy().await?;
+        Ok(WasmtimeOpaExecutor::new(&policy, &entrypoint))
+    }
 }
 
 #[cfg(feature = "inmem")]
@@ -100,14 +196,22 @@ pub async fn graphql_server<Query, Mutation>(
     options: &ArgMatches,
     jwks_uri: Option<Url>,
     id_pointer: Option<String>,
+    opa_executor: WasmtimeOpaExecutor,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
     if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, jwks_uri, id_pointer)
-            .await
+        gql.serve_graphql(
+            pool.clone(),
+            api.clone(),
+            addr,
+            jwks_uri,
+            id_pointer,
+            opa_executor,
+        )
+        .await
     }
 
     Ok(())
@@ -263,7 +367,18 @@ where
             })
         }?;
 
-        graphql_server(&api, &pool, gql, matches, jwks_uri, id_pointer).await?;
+        let opa_executor = wasmtime_opa_executor(&config, matches).await?;
+
+        graphql_server(
+            &api,
+            &pool,
+            gql,
+            matches,
+            jwks_uri,
+            id_pointer,
+            opa_executor,
+        )
+        .await?;
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
