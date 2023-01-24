@@ -1336,8 +1336,8 @@ mod test {
                         common::ledger::SubmissionStage::Committed(Ok(commit)) => {
                             return Ok(Some((commit.delta, commit.tx_id)))
                         }
-                        common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{:?}", e),
-                        common::ledger::SubmissionStage::Committed(Err(e)) => panic!("{:?}", e),
+                        common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
+                        common::ledger::SubmissionStage::Committed(Err(e)) => panic!("{e:?}"),
                     }
                 }
             } else {
@@ -1688,7 +1688,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
             agent: None,
         }), identity)
         .await
@@ -1884,7 +1884,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
             agent: None,
         }), identity.clone())
         .await
@@ -1936,7 +1936,7 @@ mod test {
                 ApiCommand::Activity(ActivityCommand::Start {
                     id: ActivityId::from_external_id("testactivity"),
                     namespace: "testns".into(),
-                    time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
+                    time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
                     agent: None,
                 }),
                 identity,
@@ -2015,7 +2015,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2018, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
             agent: None,
         }), identity.clone())
         .await
@@ -2067,7 +2067,7 @@ mod test {
                 ApiCommand::Activity(ActivityCommand::End {
                     id: ActivityId::from_external_id("testactivity"),
                     namespace: "testns".into(),
-                    time: Some(Utc.ymd(2022, 7, 8).and_hms(9, 10, 11)),
+                    time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
                     agent: None,
                 }),
                 identity,
@@ -2146,7 +2146,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
             agent: None,
         }), identity.clone())
         .await
@@ -2197,7 +2197,7 @@ mod test {
 
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
             agent: None,
         }), identity.clone())
         .await
@@ -2396,7 +2396,7 @@ mod test {
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
-            time: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
             agent: Some(AgentId::from_external_id("testagent")),
         }), identity)
         .await

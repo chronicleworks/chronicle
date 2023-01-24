@@ -52,7 +52,7 @@ impl JwtChecker {
             .collect::<Result<Vec<Vec<u8>>, base64::DecodeError>>()?;
         if components.len() != 3 {
             return Err(Error::Format {
-                message: format!("JWT has unexpected format: {}", token),
+                message: format!("JWT has unexpected format: {token}"),
             });
         };
 

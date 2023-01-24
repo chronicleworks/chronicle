@@ -192,7 +192,7 @@ impl ErrorExtensions for GraphQlError {
             if let Some(reasons) = Self::error_sources(custom_error::Error::source(&self)) {
                 let mut i = 1;
                 for reason in reasons {
-                    e.set(format!("reason {}", i), reason);
+                    e.set(format!("reason {i}"), reason);
                     i += 1;
                 }
             }

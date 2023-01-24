@@ -83,7 +83,7 @@ impl<T> QueryFragment<Pg> for CursorPosition<T>
 where
     T: QueryFragment<Pg>,
 {
-    fn walk_ast<'a, 'b>(&'b self, mut out: AstPass<'a, 'b, Pg>) -> QueryResult<()> {
+    fn walk_ast<'a>(&'a self, mut out: AstPass<'_, 'a, Pg>) -> QueryResult<()> {
         out.push_sql("SELECT *, COUNT(*) OVER () FROM (");
         self.query.walk_ast(out.reborrow())?;
         out.push_sql(") t LIMIT ");
