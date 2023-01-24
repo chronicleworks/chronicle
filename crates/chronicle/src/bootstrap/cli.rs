@@ -123,7 +123,7 @@ where
         Ok(id.external_id_part().to_owned())
     } else {
         Err(CliError::MissingArgument {
-            arg: format!("Missing {} and {}", name_param, id_param),
+            arg: format!("Missing {name_param} and {id_param}"),
         })
     }
 }
@@ -136,7 +136,7 @@ where
         Ok(Id::try_from(Iri::from_str(id)?)?)
     } else {
         Err(CliError::MissingArgument {
-            arg: format!("Missing {} ", id_param),
+            arg: format!("Missing {id_param} "),
         })
     }
 }
@@ -171,7 +171,7 @@ fn attribute_value_from_param(
 ) -> Result<serde_json::Value, CliError> {
     let value = {
         if !value.contains('"') {
-            format!(r#""{}""#, value)
+            format!(r#""{value}""#)
         } else {
             value.to_owned()
         }

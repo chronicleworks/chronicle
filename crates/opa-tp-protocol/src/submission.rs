@@ -109,7 +109,7 @@ impl SubmissionBuilder {
             )),
         };
 
-        let signature: Signature = root_key.sign(&*operation.encode_to_vec());
+        let signature: Signature = root_key.sign(&operation.encode_to_vec());
         let key: PublicKey = root_key.verifying_key().into();
         let signed_operation = messages::SignedOperation {
             payload: Some(operation),
@@ -133,7 +133,7 @@ impl SubmissionBuilder {
             )),
         };
 
-        let signature: Signature = root_key.sign(&*operation.encode_to_vec());
+        let signature: Signature = root_key.sign(&operation.encode_to_vec());
         let key: PublicKey = root_key.verifying_key().into();
 
         let signed_operation = messages::SignedOperation {
@@ -153,7 +153,7 @@ impl SubmissionBuilder {
             )),
         };
 
-        let signature: Signature = root_key.sign(&*operation.encode_to_vec());
+        let signature: Signature = root_key.sign(&operation.encode_to_vec());
         let key: PublicKey = root_key.verifying_key().into();
 
         let signed_operation = messages::SignedOperation {

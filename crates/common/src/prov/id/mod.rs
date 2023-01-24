@@ -208,15 +208,15 @@ pub enum ChronicleIri {
 impl Display for ChronicleIri {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ChronicleIri::Attachment(id) => write!(f, "{}", id),
-            ChronicleIri::Identity(id) => write!(f, "{}", id),
-            ChronicleIri::Namespace(id) => write!(f, "{}", id),
-            ChronicleIri::Domaintype(id) => write!(f, "{}", id),
-            ChronicleIri::Entity(id) => write!(f, "{}", id),
-            ChronicleIri::Agent(id) => write!(f, "{}", id),
-            ChronicleIri::Activity(id) => write!(f, "{}", id),
-            ChronicleIri::Association(id) => write!(f, "{}", id),
-            ChronicleIri::Delegation(id) => write!(f, "{}", id),
+            ChronicleIri::Attachment(id) => write!(f, "{id}"),
+            ChronicleIri::Identity(id) => write!(f, "{id}"),
+            ChronicleIri::Namespace(id) => write!(f, "{id}"),
+            ChronicleIri::Domaintype(id) => write!(f, "{id}"),
+            ChronicleIri::Entity(id) => write!(f, "{id}"),
+            ChronicleIri::Agent(id) => write!(f, "{id}"),
+            ChronicleIri::Activity(id) => write!(f, "{id}"),
+            ChronicleIri::Association(id) => write!(f, "{id}"),
+            ChronicleIri::Delegation(id) => write!(f, "{id}"),
         }
     }
 }
@@ -379,7 +379,7 @@ fn fragment_components(iri: Iri) -> Vec<String> {
 }
 
 fn optional_component(external_id: &str, component: &str) -> Result<Option<String>, ParseIriError> {
-    let kv = format!("{}=", external_id);
+    let kv = format!("{external_id}=");
     if !component.starts_with(&*kv) {
         return Err(ParseIriError::MissingComponent {
             component: external_id.to_string(),

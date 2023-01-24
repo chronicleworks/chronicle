@@ -23,7 +23,6 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
-    #[allow(dead_code)]
     pub fn new(signer: SigningKey, family_name: &str, family_version: &str) -> Self {
         let rng = StdRng::from_entropy();
         Self {
@@ -154,7 +153,7 @@ mod test {
         let mut bytes = vec![];
         // Serialize, then deserialize the batch
         protobuf::Message::write_to_vec(&batch, &mut bytes).unwrap();
-        let batch_sdk_parsed: Batch = protobuf::Message::parse_from_bytes(&*bytes).unwrap();
+        let batch_sdk_parsed: Batch = protobuf::Message::parse_from_bytes(&bytes).unwrap();
 
         for tx in batch_sdk_parsed.transactions {
             let header = TransactionHeader::parse_from_bytes(tx.header.as_slice()).unwrap();

@@ -1951,13 +1951,19 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let from = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(1968, 9, 1).and_hms(0, 0, 0), Utc);
+        let from = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(1968, 9, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        );
 
         for i in 1..10 {
             let activity_name = if i % 2 == 0 {
-                format!("testactivity{}", i)
+                format!("testactivity{i}")
             } else {
-                format!("anothertestactivity{}", i)
+                format!("anothertestactivity{i}")
             };
 
             if (i % 2) == 0 {
@@ -1966,12 +1972,11 @@ mod test {
                         &format!(
                             r#"
                     mutation {{
-                      defineItemCertifiedActivity(externalId:"{}", attributes: {{ certIdAttribute: "testcertid" }}) {{
+                      defineItemCertifiedActivity(externalId:"{activity_name}", attributes: {{ certIdAttribute: "testcertid" }}) {{
                             context
                         }}
                     }}
-                "#,
-                            activity_name
+                "#
                         ),
                     ))
                     .await;
@@ -1982,12 +1987,11 @@ mod test {
                     .execute(Request::new(&format!(
                         r#"
                     mutation {{
-                      defineItemCodifiedActivity(externalId:"{}") {{
+                      defineItemCodifiedActivity(externalId:"{activity_name}") {{
                             context
                         }}
                     }}
-                "#,
-                        activity_name
+                "#
                     )))
                     .await;
 
@@ -1999,12 +2003,11 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                used(id: {{ id: "chronicle:entity:testentity1" }}, activity: {{id: "chronicle:activity:{}" }}) {{
+                used(id: {{ id: "chronicle:entity:testentity1" }}, activity: {{id: "chronicle:activity:{activity_name}" }}) {{
                     context
                 }}
             }}
-        "#,
-                    activity_name
+        "#
                 )))
                 .await;
             assert_eq!(res.errors, vec![]);
@@ -2059,11 +2062,11 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                wasAssociatedWith( role: CERTIFIER, responsible: {{ id: "chronicle:agent:{}" }}, activity: {{id: "chronicle:activity:{}" }}) {{
+                wasAssociatedWith( role: CERTIFIER, responsible: {{ id: "chronicle:agent:{agent}" }}, activity: {{id: "chronicle:activity:{activity_name}" }}) {{
                     context
                 }}
             }}
-        "#, agent, activity_name
+        "#
                 )))
                 .await;
 
@@ -3002,12 +3005,11 @@ mod test {
                 .execute(Request::new(format!(
                     r#"
             mutation {{
-                defineContractorAgent(externalId:"testagent{}", attributes: {{ locationAttribute: "testattribute" }}) {{
+                defineContractorAgent(externalId:"testagent{i}", attributes: {{ locationAttribute: "testattribute" }}) {{
                     context
                 }}
             }}
-        "#,
-                    i
+        "#
                 )))
                 .await;
 

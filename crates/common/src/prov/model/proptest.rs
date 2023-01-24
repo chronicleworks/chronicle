@@ -112,7 +112,7 @@ prop_compose! {
     fn start_activity() (external_id in external_id(),namespace in namespace(), offset in (0..10)) -> StartActivity {
         let id = ActivityId::from_external_id(&external_id);
 
-        let today = Utc::today().and_hms_micro(0, 0,0,0);
+        let today = Utc::now().date_naive().and_hms_micro_opt(0, 0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
 
         StartActivity {
             namespace,
@@ -127,7 +127,7 @@ prop_compose! {
     fn end_activity() (external_id in external_id(),namespace in namespace(), offset in (0..10)) -> EndActivity {
         let id = ActivityId::from_external_id(&external_id);
 
-        let today = Utc::today().and_hms_micro(0, 0,0,0);
+        let today = Utc::now().date_naive().and_hms_micro_opt(0, 0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
 
         EndActivity {
             namespace,
@@ -173,7 +173,7 @@ prop_compose! {
         let agent: AgentId = AgentId::from_external_id(&agent_name);
         let identityid = IdentityId::from_external_id(&agent_name , &*public_key);
 
-        let signature_time = Utc::today().and_hms_micro(offset, 0,0,0);
+        let signature_time = Utc::now().date_naive().and_hms_micro_opt(offset, 0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
 
         EntityHasEvidence {
             namespace,

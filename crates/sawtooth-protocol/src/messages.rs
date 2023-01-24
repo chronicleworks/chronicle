@@ -15,7 +15,7 @@ use crate::{address::PREFIX, sawtooth::event_filter::FilterType};
 use super::sawtooth::*;
 
 custom_error! {pub MessageBuilderError
-    Serialize{source: serde_cbor::Error}                              = "Could not serialize as CBOR",
+    Serialize{source: serde_cbor::Error} = "Could not serialize as CBOR",
 }
 
 #[derive(Debug, Clone)]
@@ -27,7 +27,6 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
-    #[allow(dead_code)]
     pub fn new(signer: SigningKey, family_name: &str, family_version: &str) -> Self {
         let rng = StdRng::from_entropy();
         Self {
@@ -43,7 +42,6 @@ impl MessageBuilder {
         hex::encode(bytes)
     }
 
-    #[allow(dead_code)]
     pub fn make_subscription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
 
