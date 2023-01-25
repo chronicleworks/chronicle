@@ -104,7 +104,7 @@ impl AgentCliModel {
             attributes,
             external_id: agent.as_cli_name(),
             about: format!("Operations on {} agents", agent.as_type_name()),
-            define_about: format!("Define an agent of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", agent.as_type_name())
+            define_about: format!("Define an agent of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", agent.as_type_name())
         }
     }
 }
@@ -409,7 +409,7 @@ impl ActivityCliModel {
             attributes,
             external_id: activity.as_cli_name(),
             about: format!("Operations on {} activities", activity.as_type_name()),
-            define_about: format!("Define an activity of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", activity.as_type_name()),
+            define_about: format!("Define an activity of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", activity.as_type_name()),
         }
     }
 }
@@ -666,7 +666,7 @@ impl EntityCliModel {
             attributes,
             external_id: entity.as_cli_name(),
             about: format!("Operations on {} entities", entity.as_type_name()),
-            define_about: format!("Define an entity of type {} with the given external_id or IRI, re-definition with different attribute values is not allowed", entity.as_type_name()),
+            define_about: format!("Define an entity of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", entity.as_type_name()),
         }
     }
 }
