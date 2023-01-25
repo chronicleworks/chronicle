@@ -8,6 +8,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
         PathOrFile,
     },
+    opa_executor::PolicyLoaderError,
     prov::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
         ExternalId, ExternalIdPart, ParseIriError,
@@ -42,6 +43,7 @@ custom_error::custom_error! {pub CliError
     InvalidPath{path: String}                       = "Invalid path: {path}",
     Ld{source: CompactionError}                     = "Invalid JSON-LD: {source}",
     CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream: {source}",
+    OpaPolicyLoader{source: PolicyLoaderError}      = "Policy loader error: {source}",
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -991,6 +993,19 @@ impl SubCommand for CliModel {
                             .long("anonymous-api")
                             .help("accept GraphQL without authentication by web tokens")
                         // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
+                    )
+                    .arg(
+                        Arg::new("opa-rule")
+                            .long("opa-rule")
+                            .required(true)
+                            .value_hint(ValueHint::FilePath)
+                            .help("Path to a wasm OPA policy")
+                    )
+                    .arg(
+                        Arg::new("opa-entrypoint")
+                            .long("opa-entrypoint")
+                            .required(true)
+                            .help("OPA policy entrypoint")
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));
