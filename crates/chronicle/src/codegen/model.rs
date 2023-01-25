@@ -43,10 +43,6 @@ impl TypeName for AttributeDef {
             _ => format!("{}Attribute", self.typ),
         }
     }
-
-    fn as_method_name(&self) -> String {
-        format!("define{}", self.as_scalar_type())
-    }
 }
 
 impl AttributeDef {
@@ -83,7 +79,10 @@ pub trait CliName {
 pub trait TypeName {
     fn as_type_name(&self) -> String;
     fn preserve_inflection(&self) -> String;
-    fn as_method_name(&self) -> String;
+
+    fn as_method_name(&self) -> String {
+        format!("define{}", self.as_type_name())
+    }
 }
 
 /// Entities, Activites and Agents have a specific set of attributes.
@@ -135,30 +134,11 @@ pub struct AgentDef {
 
 impl TypeName for &AgentDef {
     fn as_type_name(&self) -> String {
-        match &self.external_id {
-            ex_id if ex_id == "ProvAgent" => ex_id.to_owned(),
-            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
-                (_, Some(c), _) if c.is_uppercase() => format!("{}Agent", self.external_id.clone()),
-                (Some(first), _, body) => format!("{}{}Agent", first.to_uppercase(), body),
-                _ => format!("{}Agent", to_pascal_case(&self.external_id)),
-            },
-        }
+        type_name_for_kind("Agent", &self.external_id)
     }
 
     fn preserve_inflection(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
-            _ => to_camel_case(&self.external_id),
-        }
-    }
-
-    fn as_method_name(&self) -> String {
-        format!("define{}", self.as_type_name())
+        preserve_inflection_for_kind("Agent", &self.external_id)
     }
 }
 
@@ -202,32 +182,11 @@ pub struct EntityDef {
 
 impl TypeName for &EntityDef {
     fn as_type_name(&self) -> String {
-        match &self.external_id {
-            ex_id if ex_id == "ProvEntity" => ex_id.to_owned(),
-            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
-                (_, Some(c), _) if c.is_uppercase() => {
-                    format!("{}Entity", self.external_id.clone())
-                }
-                (Some(first), _, body) => format!("{}{}Entity", first.to_uppercase(), body),
-                _ => format!("{}Entity", to_pascal_case(&self.external_id)),
-            },
-        }
+        type_name_for_kind("Entity", &self.external_id)
     }
 
     fn preserve_inflection(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
-            _ => to_camel_case(&self.external_id),
-        }
-    }
-
-    fn as_method_name(&self) -> String {
-        format!("define{}", self.as_type_name())
+        preserve_inflection_for_kind("Entity", &self.external_id)
     }
 }
 
@@ -271,32 +230,11 @@ pub struct ActivityDef {
 
 impl TypeName for &ActivityDef {
     fn as_type_name(&self) -> String {
-        match &self.external_id {
-            ex_id if ex_id == "ProvActivity" => ex_id.to_owned(),
-            ex_id => match (ex_id.chars().next(), ex_id.chars().nth(1), &ex_id[1..]) {
-                (_, Some(c), _) if c.is_uppercase() => {
-                    format!("{}Activity", self.external_id.clone())
-                }
-                (Some(first), _, body) => format!("{}{}Activity", first.to_uppercase(), body),
-                _ => format!("{}Activity", to_pascal_case(&self.external_id)),
-            },
-        }
+        type_name_for_kind("Activity", &self.external_id)
     }
 
     fn preserve_inflection(&self) -> String {
-        match (
-            self.external_id.chars().next(),
-            self.external_id.chars().nth(1),
-            &self.external_id[1..],
-        ) {
-            (_, Some(c), _) if c.is_uppercase() => self.external_id.clone(),
-            (Some(first), _, body) => format!("{}{}", first.to_lowercase(), body),
-            _ => to_camel_case(&self.external_id),
-        }
-    }
-
-    fn as_method_name(&self) -> String {
-        format!("define{}", self.as_type_name())
+        preserve_inflection_for_kind("Activity", &self.external_id)
     }
 }
 
@@ -357,9 +295,25 @@ impl TypeName for &RoleDef {
     fn preserve_inflection(&self) -> String {
         self.external_id.clone()
     }
+}
 
-    fn as_method_name(&self) -> String {
-        format!("define{}", self.as_type_name())
+fn type_name_for_kind(kind: &str, id: &str) -> String {
+    if id == format!("Prov{kind}") {
+        id.to_string()
+    } else {
+        match (id.chars().next(), id.chars().nth(1), &id[1..]) {
+            (_, Some(c), _) if c.is_uppercase() => format!("{id}{kind}"),
+            (Some(first), _, body) => format!("{}{}{}", first.to_uppercase(), body, kind),
+            _ => format!("{}{}", to_pascal_case(id), kind),
+        }
+    }
+}
+
+fn preserve_inflection_for_kind(kind: &str, id: &str) -> String {
+    match (id.chars().next(), id.chars().nth(1), &id[1..]) {
+        (_, Some(c), _) if c.is_uppercase() => format!("{id}{kind}"),
+        (Some(first), _, body) => format!("{}{}{}", first.to_lowercase(), body, kind),
+        _ => to_camel_case(&format!("{id}{kind}")),
     }
 }
 
@@ -624,19 +578,19 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
         file.agents = domain
             .agents
             .iter()
-            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .map(|x| (x.external_id.clone(), ResourceDef::from(x)))
             .collect();
 
         file.entities = domain
             .entities
             .iter()
-            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .map(|x| (x.external_id.clone(), ResourceDef::from(x)))
             .collect();
 
         file.activities = domain
             .activities
             .iter()
-            .map(|x| (x.as_type_name(), ResourceDef::from(x)))
+            .map(|x| (x.external_id.clone(), ResourceDef::from(x)))
             .collect();
 
         file.roles = domain.roles.iter().map(|x| x.as_type_name()).collect();
@@ -1080,15 +1034,15 @@ pub mod test {
           String:
             type: String
         agents:
-          FriendAgent:
+          friend:
             attributes:
               - String
         entities:
-          OctopiEntity:
+          octopi:
             attributes:
               - String
         activities:
-          GardeningActivity:
+          gardening:
             attributes:
               - String
         roles:
@@ -1270,37 +1224,37 @@ pub mod test {
           Version:
             type: Int
         agents:
-          OrganizationAgent:
+          Organization:
             attributes:
               - Title
-          PersonAgent:
+          Person:
             attributes:
               - CMSId
         entities:
-          EvidenceReferenceEntity:
+          EvidenceReference:
             attributes:
               - SearchParameter
               - Reference
-          GuidanceEntity:
+          Guidance:
             attributes:
               - Title
               - Version
-          PublishedGuidanceEntity:
+          PublishedGuidance:
             attributes: []
-          QuestionEntity:
+          Question:
             attributes:
               - CMSId
               - Content
         activities:
-          PublishedActivity:
+          Published:
             attributes:
               - Version
-          QuestionAskedActivity:
+          QuestionAsked:
             attributes:
               - Content
-          ResearchedActivity:
+          Researched:
             attributes: []
-          RevisedActivity:
+          Revised:
             attributes:
               - CMSId
               - Version
