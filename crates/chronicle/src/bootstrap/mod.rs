@@ -20,6 +20,7 @@ use common::{
     prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
+use rust_embed::RustEmbed;
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
@@ -138,17 +139,32 @@ async fn wasmtime_opa_executor(
     config: &Config,
     options: &ArgMatches,
 ) -> Result<WasmtimeOpaExecutor, CliError> {
-    let entrypoint = rule_entrypoint(options)?;
-    if cfg!(not(feature = "inmem")) {
-        let mut policy_loader = sawtooth_policy_loader(config, options)?;
-        let policy = policy_loader.load_policy().await?;
-        Ok(WasmtimeOpaExecutor::new(&policy, &entrypoint))
+    let (policy, entrypoint) = if cfg!(feature = "devmode") && !options.is_present("opa-rule") {
+        if let Some(file) = DefaultAllowOpaPolicy::get("default_allow.wasm") {
+            let entrypoint = "default_allow.allow".to_string();
+            let policy = file.data.to_vec();
+            (policy, entrypoint)
+        } else {
+            return Err(CliError::EmbeddedOpaRule);
+        }
     } else {
-        let mut policy_loader = cli_policy_loader(config, options)?;
-        let policy = policy_loader.load_policy().await?;
-        Ok(WasmtimeOpaExecutor::new(&policy, &entrypoint))
-    }
+        let entrypoint = rule_entrypoint(options)?;
+        if cfg!(not(feature = "inmem")) {
+            let mut policy_loader = sawtooth_policy_loader(config, options)?;
+            let policy = policy_loader.load_policy().await?;
+            (policy, entrypoint)
+        } else {
+            let mut policy_loader = cli_policy_loader(config, options)?;
+            let policy = policy_loader.load_policy().await?;
+            (policy, entrypoint)
+        }
+    };
+    Ok(WasmtimeOpaExecutor::new(&policy, &entrypoint))
 }
+
+#[derive(RustEmbed)]
+#[folder = "../common/src/dev_policies/"]
+struct DefaultAllowOpaPolicy;
 
 #[cfg(feature = "inmem")]
 fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
@@ -1475,5 +1491,27 @@ pub mod test {
           ]
         }
         "###);
+    }
+
+    use crate::bootstrap::DefaultAllowOpaPolicy;
+    use common::opa_executor::{OpaExecutor, WasmtimeOpaExecutor};
+
+    #[tokio::test]
+    async fn embedded_opa_rule() {
+        // See src/dev_policies/default_allow.rego for source
+        let mut executor = if let Some(file) = DefaultAllowOpaPolicy::get("default_allow.wasm") {
+            let entrypoint = "default_allow.allow";
+            let policy = file.data;
+            WasmtimeOpaExecutor::new(&policy, entrypoint)
+        } else {
+            panic!("No embedded file found!")
+        };
+
+        let result = executor
+            .evaluate(&AuthId::chronicle(), &serde_json::json!({}))
+            .await
+            .unwrap();
+
+        assert!(result);
     }
 }
