@@ -194,19 +194,19 @@ the result of an operation should await the
  Chronicle will notify commit completion in 2 stages, the first will be a submit
  notification like:
 
- ```json
+```json
 {
   "stage": "SUBMIT",
   "error": null,
   "delta": null,
   "txId": "12d3236ae1b227391725d2d9315b7ca53747217c5d..",
 }
- ```
+```
 
  And the second, when the Chronicle transaction has been committed to the
  ledger:
 
- ```json
+```json
 {
   "stage": "COMMIT",
   "error": null,
