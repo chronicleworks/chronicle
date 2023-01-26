@@ -43,6 +43,7 @@ custom_error::custom_error! {pub CliError
     InvalidPath{path: String}                       = "Invalid path: {path}",
     Ld{source: CompactionError}                     = "Invalid JSON-LD: {source}",
     CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream: {source}",
+    EmbeddedOpaRule                                 = "Embedded rule not found",
     OpaPolicyLoader{source: PolicyLoaderError}      = "Policy loader error: {source}",
 }
 
@@ -994,18 +995,33 @@ impl SubCommand for CliModel {
                             .help("accept GraphQL without authentication by web tokens")
                         // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
                     )
-                    .arg(
-                        Arg::new("opa-rule")
+                    .arg({
+                        let arg = Arg::new("opa-rule")
                             .long("opa-rule")
+                            .takes_value(true);
+                        if cfg!(not(feature = "inmem")) {
+                            arg
                             .required(true)
+                            .help("Wasm OPA policy Sawtooth address")
+                        } else {
+                            arg
+                            .required(false)
+                            .help("Wasm OPA policy file path")
                             .value_hint(ValueHint::FilePath)
-                            .help("Path to a wasm OPA policy")
+                        }
+                    }
                     )
-                    .arg(
-                        Arg::new("opa-entrypoint")
+                    .arg({
+                        let arg = Arg::new("opa-entrypoint")
                             .long("opa-entrypoint")
-                            .required(true)
-                            .help("OPA policy entrypoint")
+                            .takes_value(true)
+                            .help("OPA policy entrypoint");
+                        if cfg!(not(feature = "inmem")) {
+                            arg.required(true)
+                        } else {
+                            arg.required(false)
+                        }
+                    }
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));
