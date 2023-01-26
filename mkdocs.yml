@@ -17,8 +17,7 @@ plugins:
   - search
   - build_plantuml:
       theme_enabled: false
-      render: "local"
-      bin_path: "/opt/homebrew/bin/plantuml"
+      render: "server"
       server: "https://www.plantuml.com/plantuml"
       disable_ssl_certificate_validation: false
       output_format: "svg"
@@ -27,19 +26,19 @@ plugins:
       input_folder: "src"
       input_extensions: ""
 nav:
-  - "Overview": index.md
-  - "Architecture": ./chronicle_architecture.md
-  - "Installing":
-      - "Building for your domain": ./building.md
-      - "Installing with Sextant": ./sextant.md
-  - "Development":
-      - "Provenance concepts": ./provenance_concepts.md
-      - "Modeling a provenance domain": ./domain_modeling.md
-      - "Recording provenance": ./recording_provenance.md
-      - "Querying provenance": ./querying_provenance.md
-      - "Untyped Chronicle": ./untyped_chronicle.md
-  - "Upgrading": ./upgrading.md
-  - "Operating":
-      - "CLI": ./cli.md
-      - "Configuration options": ./config.md
-      - "Authentication and authorization": ./authz.md
+  - Overview: index.md
+  - Architecture: ./chronicle_architecture.md
+  - Installing:
+      - Building for your domain: ./building.md
+      - Installing with Sextant: ./sextant.md
+  - Development:
+      - Provenance concepts: ./provenance_concepts.md
+      - Modeling a provenance domain: ./domain_modeling.md
+      - Recording provenance: ./recording_provenance.md
+      - Querying provenance: ./querying_provenance.md
+      - Untyped Chronicle: ./untyped_chronicle.md
+  - Upgrading: ./upgrading.md
+  - Operating:
+      - CLI: ./cli.md
+      - Configuration options: ./config.md
+      - Authentication and authorization: ./authz.md
