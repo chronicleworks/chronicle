@@ -163,7 +163,7 @@ async fn wasmtime_opa_executor(
 }
 
 #[derive(RustEmbed)]
-#[folder = "../common/src/dev_policies/"]
+#[folder = "default_allow_opa/"]
 struct DefaultAllowOpaPolicy;
 
 #[cfg(feature = "inmem")]
