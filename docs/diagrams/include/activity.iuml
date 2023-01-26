@@ -1,4 +1,4 @@
-abstract Activity {
+abstract activity {
     + id
     + externalId
     + startedAtTime

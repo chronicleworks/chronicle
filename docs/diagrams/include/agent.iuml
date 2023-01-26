@@ -1,4 +1,4 @@
-abstract Agent {
+abstract agent {
     + id
     + externalId
 }

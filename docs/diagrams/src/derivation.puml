@@ -5,7 +5,7 @@
 
 !include ../include/entity.iuml
 
-Entity -> Entity : wasDerivedFrom
+entity -> entity : wasDerivedFrom
 
 
 @enduml

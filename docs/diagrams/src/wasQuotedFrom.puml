@@ -5,6 +5,6 @@
 
 !include ../include/entity.iuml
 
-Entity -> Entity : wasQuotedFrom
+entity -> entity : wasQuotedFrom
 
 @enduml

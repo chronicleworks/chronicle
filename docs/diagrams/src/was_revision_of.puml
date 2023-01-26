@@ -5,7 +5,7 @@
 
 !include ../include/entity.iuml
 
-Entity -> Entity : wasRevisionOf
+entity -> entity : wasRevisionOf
 
 
 @enduml

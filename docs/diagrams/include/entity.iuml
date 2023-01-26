@@ -1,4 +1,4 @@
-abstract Entity {
+abstract entity {
     + id
     + externalId
 }

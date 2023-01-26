@@ -9,8 +9,8 @@ abstract actedOnBehalfOf {
     + role
 }
 
-Agent -> actedOnBehalfOf
-actedOnBehalfOf -> Agent
-actedOnBehalfOf ..> Activity
+agent -> actedOnBehalfOf
+actedOnBehalfOf -> agent
+actedOnBehalfOf ..> activity
 
 @enduml
