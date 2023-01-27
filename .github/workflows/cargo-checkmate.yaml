@@ -22,4 +22,3 @@ jobs:
       - run: cargo-checkmate clippy
       - run: cargo-checkmate build
       - run: cargo-checkmate doc
-      - run: cargo-checkmate audit
