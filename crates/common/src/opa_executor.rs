@@ -234,7 +234,7 @@ pub enum OpaExecutorError {
 pub trait OpaExecutor {
     fn new(policy: &[u8], entrypoint: &str) -> Self;
     async fn evaluate(
-        &mut self,
+        &self,
         id: &AuthId,
         context: &serde_json::Value,
     ) -> Result<bool, OpaExecutorError>;
@@ -256,7 +256,7 @@ impl OpaExecutor for WasmtimeOpaExecutor {
 
     #[instrument(level = "info", skip_all, ret)]
     async fn evaluate(
-        &mut self,
+        &self,
         id: &AuthId,
         context: &serde_json::Value,
     ) -> Result<bool, OpaExecutorError> {
@@ -303,8 +303,7 @@ mod tests {
         loader.set_policy_address("src/dev_policies/auth.wasm");
         loader.set_policy_entrypoint(&auth_entrypoint());
 
-        let mut executor =
-            WasmtimeOpaExecutor::new(&loader.load_policy().await?, &loader.entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&loader.load_policy().await?, &loader.entrypoint);
 
         let result = executor.evaluate(&chronicle_id(), &context()).await?;
 
@@ -330,7 +329,7 @@ mod tests {
         // See src/dev_policies/auth.rego for source
         let policy = policy("src/dev_policies/auth.wasm");
         let entrypoint = auth_entrypoint();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         let result = executor.evaluate(&chronicle_id(), &context()).await?;
 
@@ -348,7 +347,7 @@ mod tests {
         // See src/dev_policies/auth.rego for source
         let policy = policy("src/dev_policies/auth.wasm");
         let entrypoint = auth_entrypoint();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         let result = executor.evaluate(&unauthorized_agent(), &context()).await?;
 
@@ -362,7 +361,7 @@ mod tests {
         // Source - empty file with .wasm suffix
         let policy = policy("src/dev_policies/blank.wasm");
         let entrypoint = auth_entrypoint();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         match executor.evaluate(&chronicle_id(), &context()).await {
             Err(OpaExecutorError::OpaEvaluationError(source)) => {
@@ -377,7 +376,7 @@ mod tests {
         // Source - Base64 encoded image with .wasm suffix
         let policy = policy("src/dev_policies/invalid_content.wasm");
         let entrypoint = auth_entrypoint();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         match executor.evaluate(&chronicle_id(), &context()).await {
             Err(OpaExecutorError::OpaEvaluationError(source)) => {
@@ -396,7 +395,7 @@ mod tests {
         // See src/dev_policies/auth.rego for source
         let policy = policy("src/dev_policies/auth.wasm");
         let entrypoint = invalid_entrypoint();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         match executor.evaluate(&chronicle_id(), &context()).await {
             Err(OpaExecutorError::OpaEvaluationError(source)) => {
@@ -411,7 +410,7 @@ mod tests {
         // See src/dev_policies/default_allow.rego for source
         let policy = policy("src/dev_policies/default_allow.wasm");
         let entrypoint = "default_allow.allow".to_string();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         let result = executor.evaluate(&chronicle_id(), &context()).await?;
 
@@ -425,7 +424,7 @@ mod tests {
         // See src/dev_policies/default_deny.rego for source
         let policy = policy("src/dev_policies/default_deny.wasm");
         let entrypoint = "default_deny.allow".to_string();
-        let mut executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
+        let executor = WasmtimeOpaExecutor::new(&policy, &entrypoint);
 
         let result = executor.evaluate(&chronicle_id(), &context()).await?;
 
