@@ -13,4 +13,10 @@ ignore = [
 
   #CBOR will be replaced with proto for TP events before long
   "RUSTSEC-2021-0127",
+
+  #dotenv is unmaintained https://rustsec.org/advisories/RUSTSEC-2021-0141
+  "RUSTSEC-2021-0141",
+
+  #json is unmaintained https://rustsec.org/advisories/RUSTSEC-2022-0081
+  "RUSTSEC-2022-0081"
 ]
