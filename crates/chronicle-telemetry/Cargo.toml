@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "telemetry"
+name    = "chronicle-telemetry"
 version = "0.6.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

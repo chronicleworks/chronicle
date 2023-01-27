@@ -30,8 +30,8 @@ use diesel::{
     PgConnection,
 };
 
+use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
-use telemetry::{self, ConsoleLogging};
 use url::Url;
 
 use std::{io, net::SocketAddr, str::FromStr};
@@ -504,7 +504,7 @@ pub async fn bootstrap<Query, Mutation>(
         print!("{}", gql.exportable_schema());
         std::process::exit(0);
     }
-    telemetry::telemetry(
+    chronicle_telemetry::telemetry(
         matches
             .get_one::<String>("instrument")
             .and_then(|s| Url::parse(s).ok()),
@@ -611,7 +611,7 @@ pub mod test {
     }
 
     async fn test_api() -> TestDispatch {
-        telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
 

@@ -95,6 +95,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "base64 0.21.0",
+ "chronicle-telemetry",
  "chrono",
  "common",
  "custom_error",
@@ -121,7 +122,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "static-iref",
- "telemetry",
  "tempfile",
  "thiserror",
  "tokio",
@@ -520,6 +520,7 @@ dependencies = [
  "api",
  "assert_fs",
  "async-graphql",
+ "chronicle-telemetry",
  "chrono",
  "clap 3.2.23",
  "clap_complete",
@@ -549,7 +550,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shellexpand",
- "telemetry",
  "tempfile",
  "tokio",
  "toml 0.5.10",
@@ -583,12 +583,26 @@ name = "chronicle-example"
 version = "0.6.0"
 dependencies = [
  "chronicle",
+ "chronicle-telemetry",
  "insta",
- "telemetry",
  "tempfile",
  "tracing",
  "tracing-log",
  "uuid 1.2.2",
+]
+
+[[package]]
+name = "chronicle-telemetry"
+version = "0.6.0"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "tracing",
+ "tracing-elastic-apm",
+ "tracing-log",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -2628,6 +2642,7 @@ name = "opa-tp"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chronicle-telemetry",
  "chrono",
  "clap 3.2.23",
  "insta",
@@ -2640,7 +2655,6 @@ dependencies = [
  "rand_core 0.6.4",
  "sawtooth-sdk",
  "serde_json",
- "telemetry",
  "thiserror",
  "tokio",
  "tracing",
@@ -3843,6 +3857,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "bytes",
+ "chronicle-telemetry",
  "clap 3.2.23",
  "clap_generate",
  "common",
@@ -3869,7 +3884,6 @@ dependencies = [
  "serde_cbor",
  "serde_derive",
  "serde_json",
- "telemetry",
  "tempfile",
  "tokio",
  "tracing",
@@ -4358,20 +4372,6 @@ name = "target-lexicon"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9410d0f6853b1d94f0e519fb95df60f29d2c1eff2d921ffdf01a4c8a3b54f12d"
-
-[[package]]
-name = "telemetry"
-version = "0.6.0"
-dependencies = [
- "opentelemetry",
- "opentelemetry-jaeger",
- "tracing",
- "tracing-elastic-apm",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
-]
 
 [[package]]
 name = "temp-dir"

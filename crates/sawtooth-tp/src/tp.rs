@@ -446,7 +446,7 @@ pub mod test {
 
     #[tokio::test]
     async fn simple_non_contradicting_operation() {
-        telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
         keystore.generate_chronicle().unwrap();

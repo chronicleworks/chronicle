@@ -3,8 +3,8 @@ mod tp;
 use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
 use sawtooth_sdk::processor::TransactionProcessor;
 
-use ::telemetry::ConsoleLogging;
-use telemetry::telemetry;
+use ::chronicle_telemetry::ConsoleLogging;
+use chronicle_telemetry::telemetry;
 use tokio::runtime::Handle;
 use tp::ChronicleTransactionHandler;
 use tracing::info;
