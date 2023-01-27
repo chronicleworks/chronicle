@@ -1499,7 +1499,7 @@ pub mod test {
     #[tokio::test]
     async fn embedded_opa_rule() {
         // See src/dev_policies/default_allow.rego for source
-        let mut executor = if let Some(file) = DefaultAllowOpaPolicy::get("default_allow.wasm") {
+        let executor = if let Some(file) = DefaultAllowOpaPolicy::get("default_allow.wasm") {
             let entrypoint = "default_allow.allow";
             let policy = file.data;
             WasmtimeOpaExecutor::new(&policy, entrypoint)
