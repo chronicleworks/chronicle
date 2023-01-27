@@ -28,7 +28,7 @@ prost = "0.11.3"
 proto = { path = "../sawtooth-protocol" }
 sawtooth-sdk = "0.5.2"
 serde_json = "1.0.79"
-telemetry = { path = "../telemetry" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 thiserror = "1.0.36"
 tokio = { version = "1.17.0", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.37"
@@ -39,4 +39,4 @@ insta     = { version = "1.14.0", features = ["redactions", "toml", "yaml"] }
 protobuf  = "2.27.1"
 rand      = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
-telemetry = { path = "../telemetry" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }

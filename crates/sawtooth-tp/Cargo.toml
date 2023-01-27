@@ -40,7 +40,7 @@ serde = "1.0.136"
 serde_cbor = "0.11.2"
 serde_derive = "1.0.136"
 serde_json = "1.0.89"
-telemetry = { path = "../telemetry" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = "2.2.2"

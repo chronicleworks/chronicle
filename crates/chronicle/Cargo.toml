@@ -47,7 +47,7 @@ serde_derive = "1.0.136"
 serde_json = "1.0.81"
 serde_yaml = "0.9.14"
 shellexpand = "3.0.0"
-telemetry = { path = "../telemetry" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 toml = "0.5.8"
 tracing = "0.1.32"

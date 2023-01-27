@@ -420,7 +420,7 @@ mod test {
 
     impl TestTransactionContext {
         pub fn new() -> Self {
-            telemetry::telemetry(None, telemetry::ConsoleLogging::Pretty);
+            chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
             Self {
                 state: RefCell::new(BTreeMap::new()),
                 events: RefCell::new(vec![]),
