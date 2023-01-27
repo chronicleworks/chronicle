@@ -16,7 +16,9 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: cargo install cargo-checkmate
+      - run: >
+          cargo install --git
+          https://github.com/cargo-checkmate/cargo-checkmate.git
       - run: cargo-checkmate check
       - run: cargo-checkmate format
       - run: cargo-checkmate clippy
