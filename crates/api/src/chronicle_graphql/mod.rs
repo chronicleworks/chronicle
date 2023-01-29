@@ -29,7 +29,7 @@ use poem::{
 use serde::{Deserialize, Serialize};
 use std::{
     net::SocketAddr,
-    sync::Arc
+    sync::{Arc, Mutex},
 };
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, trace_span, Instrument};
@@ -349,7 +349,7 @@ pub trait ChronicleGraphQlServer {
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa: WasmtimeOpaExecutor,
+        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
     );
 }
 
@@ -471,7 +471,7 @@ where
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa: WasmtimeOpaExecutor,
+        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
     ) {
         let mut schema = Schema::build(self.query, self.mutation, Subscription).extension(
             OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")),

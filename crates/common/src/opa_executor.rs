@@ -219,7 +219,8 @@ impl CliPolicyLoader {
     async fn get_policy(&self) -> Result<Vec<u8>, CliPolicyLoaderError> {
         let mut policy = Vec::<u8>::new();
         {
-            let file = std::fs::File::open(self.get_address()).map_err(CliPolicyLoaderError::FileIo)?;
+            let file =
+                std::fs::File::open(self.get_address()).map_err(CliPolicyLoaderError::FileIo)?;
             let mut buf_reader = std::io::BufReader::new(file);
             buf_reader.read_to_end(&mut policy)?;
         }

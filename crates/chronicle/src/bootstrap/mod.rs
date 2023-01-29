@@ -33,9 +33,10 @@ use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
 use std::{
-  io,
-  net::SocketAddr,
-  str::FromStr
+    io,
+    net::SocketAddr,
+    str::FromStr,
+    sync::{Arc, Mutex},
 };
 
 use crate::codegen::ChronicleDomainDef;
@@ -228,7 +229,7 @@ pub async fn graphql_server<Query, Mutation>(
     options: &ArgMatches,
     jwks_uri: Option<Url>,
     id_pointer: Option<String>,
-    opa: WasmtimeOpaExecutor,
+    opa: Arc<Mutex<WasmtimeOpaExecutor>>,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
@@ -392,7 +393,7 @@ where
             })
         }?;
 
-        let opa = wasmtime_opa_executor(&config, matches).await?;
+        let opa = Arc::new(Mutex::new(wasmtime_opa_executor(&config, matches).await?));
 
         graphql_server(&api, &pool, gql, matches, jwks_uri, id_pointer, opa).await?;
 
