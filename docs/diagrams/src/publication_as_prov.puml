@@ -6,18 +6,18 @@
 !include ../include/activity.iuml
 !include ../include/entity.iuml
 
-Guidance <|-- Entity
-PublishedGuidance <|-- Entity
-Person <|-- Agent
-Publication <|-- Activity
+Guidance <|-- entity
+PublishedGuidance <|-- entity
+Person <|-- agent
+Publication <|-- activity
 
 
 Person -> Publication: wasAssociatedWith
-note on link: (role=Stakeholder)
+note on link: Role: Stakeholder
 Person -> Person: actedOnBehalfOf
-note on link: (role=Stakeholder)
+note on link: Role: Stakeholder
 Person -> Publication: wasAssociatedWith
-note on link: (role=Editor)
+note on link: Role: Editor
 PublishedGuidance -> Revision: hadPrimarySource
 Publication -> Guidance : used
 PublishedGuidance -> Publication: wasGeneratedBy

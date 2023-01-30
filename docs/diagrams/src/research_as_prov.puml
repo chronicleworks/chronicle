@@ -6,13 +6,13 @@
 !include ../include/activity.iuml
 !include ../include/entity.iuml
 
-Question <|-- Entity
-Evidence <|-- Entity
-Person <|-- Agent
-Researched <|-- Activity
+Question <|-- entity
+Evidence <|-- entity
+Person <|-- agent
+Researched <|-- activity
 
 Person -> Researched : wasAssociatedWith
-note on link: (role=Researcher)
+note on link: Role: Researcher
 Question -> Researched : used
 Evidence -> Researched : wasGeneratedBy
 

@@ -9,7 +9,7 @@ abstract wasAssociatedWith{
     + role
 }
 
-Agent -> wasAssociatedWith
-wasAssociatedWith -> Activity
+agent -> wasAssociatedWith
+wasAssociatedWith -> activity
 
 @enduml

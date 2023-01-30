@@ -6,17 +6,17 @@
 !include ../include/activity.iuml
 !include ../include/entity.iuml
 
-Question <|-- Entity
-Person <|-- Agent
-Organization <|-- Agent
-QuestionAsked <|-- Activity
+Question <|-- entity
+Person <|-- agent
+Organization <|-- agent
+QuestionAsked <|-- activity
 
 Person -> QuestionAsked : wasAssociatedWith
-note on link: (role=Stakeholder)
+note on link: Role: Stakeholder
 Organization -> QuestionAsked : wasAssociatedWith
-note on link: (role=Stakeholder)
+note on link: Role: Stakeholder
 Person -> QuestionAsked : wasAssociatedWith
-note on link: (role=Author)
+note on link: Role: Author
 Question -> QuestionAsked : wasGeneratedBy
 
 @enduml

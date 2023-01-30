@@ -5,10 +5,10 @@
 !include ../include/activity.iuml
 !include ../include/entity.iuml
 
-Question <|-- Entity
-Guidance <|-- Entity
-Evidence <|-- Entity
-Revised <|-- Activity
+Question <|-- entity
+Guidance <|-- entity
+Evidence <|-- entity
+Revised <|-- activity
 
 Question -> Revised : used
 Evidence -> Revised : used
