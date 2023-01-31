@@ -27,7 +27,10 @@ use poem::{
     Endpoint, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, trace_span, Instrument};
 use url::Url;
@@ -346,7 +349,7 @@ pub trait ChronicleGraphQlServer {
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa_executor: WasmtimeOpaExecutor,
+        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
     );
 }
 
@@ -468,7 +471,7 @@ where
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa_executor: WasmtimeOpaExecutor,
+        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
     ) {
         let mut schema = Schema::build(self.query, self.mutation, Subscription).extension(
             OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")),
@@ -481,7 +484,7 @@ where
         let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
-            .data(opa_executor)
+            .data(opa)
             .data(AuthId::chronicle())
             .finish();
 

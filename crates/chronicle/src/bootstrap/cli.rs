@@ -8,7 +8,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
         PathOrFile,
     },
-    opa_executor::PolicyLoaderError,
+    opa_executor::{OpaExecutorError, PolicyLoaderError},
     prov::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
         ExternalId, ExternalIdPart, ParseIriError,
@@ -45,6 +45,7 @@ custom_error::custom_error! {pub CliError
     CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream: {source}",
     EmbeddedOpaRule                                 = "Embedded rule not found",
     OpaPolicyLoader{source: PolicyLoaderError}      = "Policy loader error: {source}",
+    OpaExecutor{source: OpaExecutorError}           = "OPA executor error: {source}",
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>

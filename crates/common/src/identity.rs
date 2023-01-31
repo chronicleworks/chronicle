@@ -32,6 +32,10 @@ impl AuthId {
         Self::Chronicle
     }
 
+    pub fn context(&self) -> IdentityContext {
+        IdentityContext::new(self)
+    }
+
     pub fn signed_identity(
         &self,
         store: &DirectoryStoredKeys,
@@ -88,7 +92,7 @@ impl SignedIdentity {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct IdentityContext {
+pub struct IdentityContext {
     id: serde_json::Value,
     typ: String,
 }
