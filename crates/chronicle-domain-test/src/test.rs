@@ -65,20 +65,27 @@ mod test {
     use super::{Mutation, Query};
     use chronicle::{
         api::{
-            chronicle_graphql::{Store, Subscription},
+            chronicle_graphql::{OpaCheck, Store, Subscription},
             Api, UuidGen,
         },
-        async_graphql::{Request, Schema},
+        async_graphql::{Request, Response, Schema},
+        bootstrap::CliError,
         chrono::{DateTime, NaiveDate, Utc},
         common::{
-            database::get_embedded_db_connection, identity::AuthId, ledger::InMemLedger,
+            database::get_embedded_db_connection,
+            identity::AuthId,
+            ledger::InMemLedger,
+            opa_executor::{CliPolicyLoader, PolicyLoader, WasmtimeOpaExecutor},
             signing::DirectoryStoredKeys,
         },
         tokio,
         uuid::Uuid,
     };
-    use std::{collections::HashMap, time::Duration};
+    use core::future::Future;
+    use rust_embed::RustEmbed;
+    use std::{collections::HashMap, sync::Arc, time::Duration};
     use tempfile::TempDir;
+    use tokio::sync::Mutex;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -89,7 +96,39 @@ mod test {
         }
     }
 
+    fn embedded_policy_loader(wasm: &str, entrypoint: &str) -> Result<CliPolicyLoader, CliError> {
+        #[derive(RustEmbed)]
+        #[folder = "../common/src/dev_policies/"]
+        struct EmbeddedOpaPolicies;
+
+        if let Some(file) = EmbeddedOpaPolicies::get(wasm) {
+            let policy = file.data.to_vec();
+            let mut loader = CliPolicyLoader::new();
+            loader.set_entrypoint(entrypoint);
+            loader.load_policy_from_bytes(&policy);
+            Ok(loader)
+        } else {
+            Err(CliError::EmbeddedOpaRule)
+        }
+    }
+
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
+        let loader = embedded_policy_loader("default_allow.wasm", "default_allow.allow").unwrap();
+        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+
+        test_schema_with_opa(opa_executor).await
+    }
+
+    async fn test_schema_blocked_api() -> Schema<Query, Mutation, Subscription> {
+        let loader = embedded_policy_loader("default_deny.wasm", "default_deny.allow").unwrap();
+        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+
+        test_schema_with_opa(opa_executor).await
+    }
+
+    async fn test_schema_with_opa(
+        opa_executor: WasmtimeOpaExecutor,
+    ) -> Schema<Query, Mutation, Subscription> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
@@ -115,10 +154,12 @@ mod test {
         .unwrap();
 
         Schema::build(Query, Mutation, Subscription)
+            .extension(OpaCheck)
             .data(Store::new(pool))
             .data(dispatch)
             .data(database) // share the lifetime
             .data(AuthId::Chronicle)
+            .data(Arc::new(Mutex::new(opa_executor)))
             .finish()
     }
 
@@ -3512,5 +3553,499 @@ mod test {
           }
         }
         "###);
+    }
+
+    #[tokio::test]
+    async fn subscribe_commit_notification() {
+        use chronicle::async_graphql::futures_util::StreamExt;
+
+        let schema = test_schema().await;
+
+        let mut stream = schema.execute_stream(Request::new(
+            r#"
+          subscription {
+            commitNotifications {
+              stage
+            }
+          }
+          "#
+            .to_string(),
+        ));
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+            mutation {
+              defineContractorAgent(
+                externalId: "testagent"
+                attributes: { locationAttribute: "location" }
+              ) {
+                context
+              }
+            }
+            "#,
+            ))
+            .await, @r#"
+          {
+            "data": {
+              "defineContractorAgent": {
+                "context": "chronicle:agent:testagent"
+              }
+            }
+          }
+          "#);
+
+        let res = stream.next().await.unwrap();
+
+        insta::assert_json_snapshot!(res, @r###"
+        {
+          "data": {
+            "commitNotifications": {
+              "stage": "COMMIT"
+            }
+          }
+        }
+        "###);
+    }
+
+    async fn subscription_response(
+        schema: &Schema<Query, Mutation, Subscription>,
+        subscription: &str,
+        mutation: &str,
+    ) -> Response {
+        use futures::StreamExt;
+
+        let mut stream = schema.execute_stream(Request::new(subscription));
+        assert!(schema.execute(Request::new(mutation)).await.is_ok());
+        stream.next().await.unwrap()
+    }
+
+    struct SchemaPair {
+        schema_allow: Schema<Query, Mutation, Subscription>,
+        schema_deny: Schema<Query, Mutation, Subscription>,
+    }
+
+    impl SchemaPair {
+        async fn check_responses(
+            res_allow: impl Future<Output = Response>,
+            res_deny: impl Future<Output = Response>,
+        ) {
+            use chronicle::async_graphql::Value;
+
+            let res_allow = res_allow.await;
+            let res_deny = res_deny.await;
+
+            assert_ne!(res_allow.data, Value::Null);
+            assert!(res_allow.errors.is_empty());
+
+            assert_eq!(res_deny.data, Value::Null);
+            assert!(!res_deny.errors.is_empty());
+        }
+
+        async fn check_responses_qm(&self, query: &str) {
+            Self::check_responses(
+                self.schema_allow.execute(Request::new(query)),
+                self.schema_deny.execute(Request::new(query)),
+            )
+            .await;
+        }
+
+        async fn check_responses_s(&self, subscription: &str, mutation: &str) {
+            Self::check_responses(
+                subscription_response(&self.schema_allow, subscription, mutation),
+                subscription_response(&self.schema_deny, subscription, mutation),
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn query_api_secured() {
+        let schemas = SchemaPair {
+            schema_allow: test_schema().await,
+            schema_deny: test_schema_blocked_api().await,
+        };
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                activityTimeline(
+                  activityTypes: [],
+                  forEntity: [],
+                  forAgent: [],
+                ) {
+                  edges {
+                    cursor
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                agentsByType(
+                  agentType: ContractorAgent
+                ) {
+                  nodes {
+                    ...on ContractorAgent {
+                      id
+                    }
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                activitiesByType(
+                  activityType: ItemCertifiedActivity
+                ) {
+                  nodes {
+                    ...on ItemCertifiedActivity {
+                      id
+                    }
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                entitiesByType(
+                  entityType: CertificateEntity
+                ) {
+                  nodes {
+                    ...on CertificateEntity {
+                      id
+                    }
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                agentById(id: { id: "chronicle:agent:testagent" }) {
+                  ... on ProvAgent {
+                    id
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                activityById(id: { id: "chronicle:activity:testactivity" }) {
+                  ... on ProvActivity {
+                    id
+                  }
+                }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              query {
+                entityById(id: { id: "chronicle:entity:testentity" }) {
+                  ... on ProvEntity {
+                    id
+                  }
+                }
+              }"#,
+            )
+            .await;
+    }
+
+    #[tokio::test]
+    async fn subscribe_api_secured() {
+        let loader = embedded_policy_loader("allow_defines.wasm", "allow_defines.allow").unwrap();
+        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
+
+        let schemas = SchemaPair {
+            schema_allow: test_schema().await,
+            schema_deny: test_schema_allow_defines,
+        };
+
+        schemas
+            .check_responses_s(
+                r#"
+              subscription {
+                commitNotifications {
+                  stage
+                }
+              }"#,
+                r#"
+              mutation {
+                defineContractorAgent(
+                  externalId: "testagent"
+                  attributes: { locationAttribute: "location" }
+                ) {
+                  context
+                }
+              }"#,
+            )
+            .await;
+    }
+
+    #[tokio::test]
+    async fn mutation_api_secured() {
+        let schemas = SchemaPair {
+            schema_allow: test_schema().await,
+            schema_deny: test_schema_blocked_api().await,
+        };
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineAgent(
+                  externalId: "test agent",
+                  attributes: {}
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineActivity(
+                  externalId: "test activity",
+                  attributes: {}
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineEntity(
+                  externalId: "test entity",
+                  attributes: {}
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                actedOnBehalfOf(
+                  responsible: { externalId: "test agent 1" },
+                  delegate: { externalId: "test agent 2" },
+                  role: MANUFACTURER
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasDerivedFrom(
+                  generatedEntity: { externalId: "test entity 1" },
+                  usedEntity: { externalId: "test entity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasRevisionOf(
+                  generatedEntity: { externalId: "test entity 1" },
+                  usedEntity: { externalId: "test entity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                hadPrimarySource(
+                  generatedEntity: { externalId: "test entity 1" },
+                  usedEntity: { externalId: "test entity 2" }
+                ) { context }
+              }
+              "#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasQuotedFrom(
+                  generatedEntity: { externalId: "test entity 1" },
+                  usedEntity: { externalId: "test entity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                generateKey(
+                  id: { externalId: "test agent" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                instantActivity(
+                  id: { externalId: "test activity 1" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                startActivity(
+                  id: { externalId: "test activity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                endActivity(
+                  id: { externalId: "test activity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasAssociatedWith(
+                  responsible: { externalId: "test agent" },
+                  activity: { externalId: "test activity" },
+                  role: MANUFACTURER
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                used(
+                  activity: { externalId: "test activity" },
+                  id: { externalId: "test entity" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasInformedBy(
+                  activity: { externalId: "test activity 1" },
+                  informingActivity: { externalId: "test activity 2" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                wasGeneratedBy(
+                  activity: { externalId: "test activity" },
+                  id: { externalId: "test entity" }
+                ) { context }
+              }"#,
+            )
+            .await;
+    }
+
+    #[tokio::test]
+    async fn mutation_generated_api_secured() {
+        let schemas = SchemaPair {
+            schema_allow: test_schema().await,
+            schema_deny: test_schema_blocked_api().await,
+        };
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineContractorAgent(
+                  externalId: "test agent"
+                  attributes: { locationAttribute: "location" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineItemCertifiedActivity(
+                  externalId: "test activity",
+                  attributes: { certIdAttribute: "12345" }
+                ) { context }
+              }"#,
+            )
+            .await;
+
+        schemas
+            .check_responses_qm(
+                r#"
+              mutation {
+                defineCertificateEntity(
+                  externalId: "test entity",
+                  attributes: { certIdAttribute: "12345" }
+                ) { context }
+              }"#,
+            )
+            .await;
     }
 }

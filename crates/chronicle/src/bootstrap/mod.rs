@@ -19,6 +19,7 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 use rust_embed::RustEmbed;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
@@ -32,12 +33,7 @@ use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::{
-    io,
-    net::SocketAddr,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::{io, net::SocketAddr, str::FromStr, sync::Arc};
 
 use crate::codegen::ChronicleDomainDef;
 
