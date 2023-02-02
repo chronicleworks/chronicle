@@ -1,4 +1,4 @@
-use crate::identity::{AuthId, IdentityContext};
+use crate::identity::{AuthId, IdentityError};
 use opa::wasm::Opa;
 use opa_tp_protocol::state::policy_address;
 use protobuf::{ProtobufEnum, ProtobufError};
@@ -12,9 +12,9 @@ use sawtooth_sdk::{
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
     },
 };
-use std::io::Read;
+use std::{io::Read, sync::Arc};
 use thiserror::Error;
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, sync::Mutex};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
@@ -215,7 +215,7 @@ impl CliPolicyLoader {
             ..Default::default()
         }
     }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     async fn get_policy(&self) -> Result<Vec<u8>, CliPolicyLoaderError> {
         let mut policy = Vec::<u8>::new();
         {
@@ -256,10 +256,16 @@ impl PolicyLoader for CliPolicyLoader {
 
 #[derive(Debug, Error)]
 pub enum OpaExecutorError {
-    #[error("Error loading OPA policy")]
+    #[error("Access denied")]
+    AccessDenied,
+
+    #[error("Identity error {0}")]
+    IdentityError(#[from] IdentityError),
+
+    #[error("Error loading OPA policy {0}")]
     PolicyLoaderError(#[from] PolicyLoaderError),
 
-    #[error("Error evaluating OPA policy")]
+    #[error("Error evaluating OPA policy {0}")]
     OpaEvaluationError(#[from] anyhow::Error),
 }
 
@@ -270,9 +276,31 @@ pub trait OpaExecutor {
         &mut self,
         id: &AuthId,
         context: &serde_json::Value,
-    ) -> Result<bool, OpaExecutorError>;
+    ) -> Result<(), OpaExecutorError>;
 }
 
+#[derive(Clone, Debug)]
+pub struct ExecutorContext {
+    executor: Arc<Mutex<WasmtimeOpaExecutor>>,
+}
+
+impl ExecutorContext {
+    pub async fn evaluate(
+        &self,
+        id: &AuthId,
+        context: &serde_json::Value,
+    ) -> Result<(), OpaExecutorError> {
+        self.executor.lock().await.evaluate(id, context).await
+    }
+
+    pub fn from_loader<L: PolicyLoader>(loader: &L) -> Result<Self, OpaExecutorError> {
+        Ok(Self {
+            executor: Arc::new(Mutex::new(WasmtimeOpaExecutor::from_loader(loader)?)),
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct WasmtimeOpaExecutor {
     opa: Opa,
     entrypoint: String,
@@ -295,11 +323,13 @@ impl OpaExecutor for WasmtimeOpaExecutor {
         &mut self,
         id: &AuthId,
         context: &serde_json::Value,
-    ) -> Result<bool, OpaExecutorError> {
+    ) -> Result<(), OpaExecutorError> {
         self.opa.set_data(context)?;
-        let input = IdentityContext::new(id);
-        let res = self.opa.eval(&self.entrypoint, &input)?;
-        Ok(res)
+        let input = id.identity_context()?;
+        match self.opa.eval(&self.entrypoint, &input)? {
+            true => Ok(()),
+            false => Err(OpaExecutorError::AccessDenied),
+        }
     }
 }
 
@@ -341,7 +371,7 @@ mod tests {
 
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
 
-        assert!(executor.evaluate(&chronicle_id(), &context()).await?);
+        assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
 
         Ok(())
     }
@@ -359,7 +389,12 @@ mod tests {
 
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
 
-        assert!(!executor.evaluate(&unauthorized_agent(), &context()).await?);
+        match executor.evaluate(&unauthorized_agent(), &context()).await {
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Access denied")
+            }
+            _ => panic!("expected error"),
+        }
 
         Ok(())
     }
@@ -372,8 +407,8 @@ mod tests {
         let loader = cli_loader(address, entrypoint).await.unwrap();
 
         match WasmtimeOpaExecutor::from_loader(&loader) {
-            Err(OpaExecutorError::OpaEvaluationError(source)) => {
-                insta::assert_snapshot!(source.to_string(), @"failed to parse WebAssembly module")
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy failed to parse WebAssembly module")
             }
             _ => panic!("expected error"),
         }
@@ -387,8 +422,8 @@ mod tests {
         let loader = cli_loader(address, entrypoint).await.unwrap();
 
         match WasmtimeOpaExecutor::from_loader(&loader) {
-            Err(OpaExecutorError::OpaEvaluationError(source)) => {
-                insta::assert_snapshot!(source.to_string(), @"failed to parse WebAssembly module")
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy failed to parse WebAssembly module")
             }
             _ => panic!("expected error"),
         }
@@ -404,8 +439,8 @@ mod tests {
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
 
         match executor.evaluate(&chronicle_id(), &context()).await {
-            Err(OpaExecutorError::OpaEvaluationError(source)) => {
-                insta::assert_snapshot!(source.to_string(), @"invalid entrypoint `x`")
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy invalid entrypoint `x`")
             }
             _ => panic!("expected error"),
         }
@@ -420,7 +455,7 @@ mod tests {
 
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
 
-        assert!(executor.evaluate(&chronicle_id(), &context()).await?);
+        assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
 
         Ok(())
     }
@@ -434,7 +469,12 @@ mod tests {
 
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
 
-        assert!(!executor.evaluate(&chronicle_id(), &context()).await?);
+        match executor.evaluate(&chronicle_id(), &context()).await {
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Access denied")
+            }
+            _ => panic!("expected error"),
+        }
 
         Ok(())
     }

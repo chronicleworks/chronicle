@@ -68,7 +68,10 @@ async fn main() {
             "Starting Chronicle Transaction Processor on {:?}",
             matches.get_one::<String>("connect")
         );
-        let handler = ChronicleTransactionHandler::new();
+        let handler = match ChronicleTransactionHandler::new() {
+            Ok(handler) => handler,
+            Err(e) => panic!("Error initializing TransactionHandler: {e}"),
+        };
         let mut processor = TransactionProcessor::new({
             if let Some(connect) = matches.get_one::<String>("connect") {
                 connect

@@ -14,12 +14,11 @@ use common::{
     database::Database,
     identity::AuthId,
     ledger::SubmissionStage,
-    opa_executor::{CliPolicyLoader, PolicyLoader, SawtoothPolicyLoader, WasmtimeOpaExecutor},
+    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader, SawtoothPolicyLoader},
     prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
 use rust_embed::RustEmbed;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
@@ -33,7 +32,7 @@ use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::{io, net::SocketAddr, str::FromStr, sync::Arc};
+use std::{io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -158,20 +157,17 @@ impl SetRuleOptions for CliPolicyLoader {
     }
 }
 
-async fn wasmtime_opa_executor(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<WasmtimeOpaExecutor, CliError> {
+async fn opa_executor(config: &Config, options: &ArgMatches) -> Result<ExecutorContext, CliError> {
     if cfg!(feature = "devmode") && !options.is_present("opa-rule") {
         tracing::warn!("insecure operating mode");
         let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
-        Ok(WasmtimeOpaExecutor::from_loader(&loader)?)
+        Ok(ExecutorContext::from_loader(&loader)?)
     } else if cfg!(not(feature = "inmem")) {
         let loader = sawtooth_policy_loader(config, options).await?;
-        Ok(WasmtimeOpaExecutor::from_loader(&loader)?)
+        Ok(ExecutorContext::from_loader(&loader)?)
     } else {
         let loader = cli_policy_loader(config, options).await?;
-        Ok(WasmtimeOpaExecutor::from_loader(&loader)?)
+        Ok(ExecutorContext::from_loader(&loader)?)
     }
 }
 
@@ -225,7 +221,7 @@ pub async fn graphql_server<Query, Mutation>(
     options: &ArgMatches,
     jwks_uri: Option<Url>,
     id_pointer: Option<String>,
-    opa: Arc<Mutex<WasmtimeOpaExecutor>>,
+    opa: ExecutorContext,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
@@ -389,7 +385,7 @@ where
             })
         }?;
 
-        let opa = Arc::new(Mutex::new(wasmtime_opa_executor(&config, matches).await?));
+        let opa = opa_executor(&config, matches).await?;
 
         graphql_server(&api, &pool, gql, matches, jwks_uri, id_pointer, opa).await?;
 
@@ -1491,18 +1487,18 @@ pub mod test {
     }
 
     use crate::bootstrap::{cli_policy_loader_from_embedded, CliError};
-    use common::opa_executor::{OpaExecutor, WasmtimeOpaExecutor};
+    use common::opa_executor::ExecutorContext;
 
     #[tokio::test]
     async fn embedded_opa_rule() -> Result<(), CliError> {
         // Policy source: src/dev_policies/default_allow.rego
         let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
+        let executor = ExecutorContext::from_loader(&loader)?;
 
         assert!(executor
             .evaluate(&AuthId::chronicle(), &serde_json::json!({}))
             .await
-            .unwrap());
+            .is_ok());
 
         Ok(())
     }

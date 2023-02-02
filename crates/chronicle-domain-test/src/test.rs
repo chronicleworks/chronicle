@@ -75,7 +75,7 @@ mod test {
             database::get_embedded_db_connection,
             identity::AuthId,
             ledger::InMemLedger,
-            opa_executor::{CliPolicyLoader, PolicyLoader, WasmtimeOpaExecutor},
+            opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
             signing::DirectoryStoredKeys,
         },
         tokio,
@@ -83,9 +83,8 @@ mod test {
     };
     use core::future::Future;
     use rust_embed::RustEmbed;
-    use std::{collections::HashMap, sync::Arc, time::Duration};
+    use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
-    use tokio::sync::Mutex;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -114,20 +113,20 @@ mod test {
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
         let loader = embedded_policy_loader("default_allow.wasm", "default_allow.allow").unwrap();
-        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
     }
 
     async fn test_schema_blocked_api() -> Schema<Query, Mutation, Subscription> {
         let loader = embedded_policy_loader("default_deny.wasm", "default_deny.allow").unwrap();
-        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
     }
 
     async fn test_schema_with_opa(
-        opa_executor: WasmtimeOpaExecutor,
+        opa_executor: ExecutorContext,
     ) -> Schema<Query, Mutation, Subscription> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
@@ -159,7 +158,7 @@ mod test {
             .data(dispatch)
             .data(database) // share the lifetime
             .data(AuthId::Chronicle)
-            .data(Arc::new(Mutex::new(opa_executor)))
+            .data(opa_executor)
             .finish()
     }
 
@@ -3777,7 +3776,7 @@ mod test {
     #[tokio::test]
     async fn subscribe_api_secured() {
         let loader = embedded_policy_loader("allow_defines.wasm", "allow_defines.allow").unwrap();
-        let opa_executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
         let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
 
         let schemas = SchemaPair {

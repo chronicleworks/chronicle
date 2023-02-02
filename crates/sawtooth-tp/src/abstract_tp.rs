@@ -1,4 +1,10 @@
-use common::{ledger::OperationState, protocol::messages::Submission, prov::ChronicleTransaction};
+use common::{
+    identity::SignedIdentity,
+    ledger::OperationState,
+    opa_executor::ExecutorContext,
+    protocol::messages::Submission,
+    prov::{operations::ChronicleOperation, ChronicleTransaction},
+};
 use sawtooth_protocol::address::SawtoothAddress;
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
@@ -18,11 +24,18 @@ pub trait TP {
     ) -> Result<OperationState<SawtoothAddress>, ApplyError>;
     async fn tp_operations(request: Submission) -> Result<ChronicleTransaction, ApplyError>;
     async fn tp(
+        opa_executor: &ExecutorContext,
         request: &TpProcessRequest,
         submission: Submission,
         operations: ChronicleTransaction,
         state: OperationState<SawtoothAddress>,
     ) -> Result<TPSideEffects, ApplyError>;
+    async fn enforce_opa(
+        opa_executor: &ExecutorContext,
+        identity: &SignedIdentity,
+        operation: &ChronicleOperation,
+        state: &OperationState<SawtoothAddress>,
+    ) -> Result<(), ApplyError>;
 }
 
 #[derive(Debug)]

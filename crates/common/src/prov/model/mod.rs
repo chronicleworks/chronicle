@@ -2,7 +2,6 @@ mod contradiction;
 pub use contradiction::Contradiction;
 
 use chrono::{DateTime, Utc};
-use custom_error::custom_error;
 
 use json::JsonValue;
 use json_ld::{context::Local, Document, JsonContext, NoLoader};
@@ -20,7 +19,8 @@ use uuid::Uuid;
 
 use crate::{
     attributes::{Attribute, Attributes},
-    identity::SignedIdentity,
+    identity::{IdentityError, SignedIdentity},
+    opa_executor::OpaExecutorError,
 };
 
 use super::{
@@ -37,22 +37,44 @@ use super::{
 
 pub mod to_json_ld;
 
-custom_error! {pub ProcessorError
-    Address{} = "Invalid address",
-    Compaction{source: CompactionError} = "Json Ld Error {source}",
-    Expansion{inner: String} = "Json Ld Error {inner}",
-    IRef{source: iref::Error} = "Invalid IRI {source}",
-    NotAChronicleIri{source: id::ParseIriError } = "Not a Chronicle IRI {source}",
-    Tokio{source: JoinError} = "Tokio Error",
-    MissingId{object: JsonValue} = "Missing @id {object:?}",
-    MissingProperty{iri: String, object: JsonValue} = "Missing property {iri}:{object:?}",
-    NotANode{} = "Json LD object is not a node",
-    NotAnObject {} = "Chronicle value is not a json object",
-    Time{source: chrono::ParseError} = "Unparsable date/time {source}",
-    Json{source: json::JsonError} = "Malformed JSON {source}",
-    SerdeJson{source: serde_json::Error } = "Malformed JSON {source}",
-    Utf8{source: std::str::Utf8Error} = "State is not valid utf8 {source}",
-    Contradiction{source: Contradiction} = "Contradiction {source}",
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ProcessorError {
+    #[error("Invalid address")]
+    Address,
+    #[error("Json Ld Error {0}")]
+    Compaction(#[from] CompactionError),
+    #[error("Contradiction {0}")]
+    Contradiction(#[from] Contradiction),
+    #[error("Json Ld Error {inner}")]
+    Expansion { inner: String },
+    #[error("IdentityError {0}")]
+    Identity(#[from] IdentityError),
+    #[error("Invalid IRI {0}")]
+    IRef(#[from] iref::Error),
+    #[error("Malformed JSON {0}")]
+    Json(#[from] json::JsonError),
+    #[error("Not a Chronicle IRI {0}")]
+    NotAChronicleIri(#[from] id::ParseIriError),
+    #[error("Missing @id {object:?}")]
+    MissingId { object: JsonValue },
+    #[error("Missing property {iri}:{object:?}")]
+    MissingProperty { iri: String, object: JsonValue },
+    #[error("Json LD object is not a node")]
+    NotANode,
+    #[error("Chronicle value is not a json object")]
+    NotAnObject,
+    #[error("OpaExecutorError: {0}")]
+    OpaExecutor(#[from] OpaExecutorError),
+    #[error("Malformed JSON {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[error("Unparsable date/time {0}")]
+    Time(#[from] chrono::ParseError),
+    #[error("Tokio Error {0}")]
+    Tokio(#[from] JoinError),
+    #[error("State is not valid utf8 {0}")]
+    Utf8(#[from] std::str::Utf8Error),
 }
 
 impl From<Infallible> for ProcessorError {
@@ -61,8 +83,10 @@ impl From<Infallible> for ProcessorError {
     }
 }
 
-custom_error! {pub ChronicleTransactionIdError
-    InvalidTransactionId {id: String} = "Invalid transaction id",
+#[derive(Error, Debug)]
+pub enum ChronicleTransactionIdError {
+    #[error("Invalid transaction id {id}")]
+    InvalidTransactionId { id: String },
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
