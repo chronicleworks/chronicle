@@ -760,13 +760,34 @@ mutation {
 
 ### Derivation
 
+#### Derived
+
+See [provenance concepts](./provenance_concepts.md#derivation)
+
+Derived sources can be recorded in Chronicle using the `wasDerivedFrom`
+mutation, which takes two entities - the generatedEntity having been derived
+from the usedEntity.
+
+```graphql
+mutation {
+  wasDerivedFrom {
+    usedEntity: {id: "chronicle:entity:anaphylaxis-assessment-question" },
+    generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
+  }
+}
+```
+
+Note that derivation is a general concept into which fit the three below:
+primary sources, revision, and quotation, are subtypes of derivation.
+Where applicable, use those instead for greater specificity.
+
 #### Primary Source
 
 See [provenance concepts](./provenance_concepts.md#primary-source)
 
 Primary sources can be recorded in Chronicle using the `hadPrimarySource`
 mutation, which takes two entities - the generatedEntity having a primary source
-of the useEntity.
+of the usedEntity.
 
 ```graphql
 mutation {
