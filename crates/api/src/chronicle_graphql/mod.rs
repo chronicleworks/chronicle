@@ -1,13 +1,16 @@
 use async_graphql::{
-    extensions::OpenTelemetry, scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType,
-    Schema, SimpleObject, Subscription, SubscriptionType,
+    extensions::OpenTelemetry, http::ALL_WEBSOCKET_PROTOCOLS, scalar, Context, Enum, Error,
+    ErrorExtensions, Object, ObjectType, Schema, SimpleObject, Subscription, SubscriptionType,
 };
-use async_graphql_poem::{GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLSubscription};
+use async_graphql_poem::{
+    GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLProtocol, GraphQLSubscription,
+    GraphQLWebSocket,
+};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::AuthId,
     ledger::{SubmissionError, SubmissionStage},
-    opa_executor::WasmtimeOpaExecutor,
+    opa_executor::{OpaExecutor, WasmtimeOpaExecutor},
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;
@@ -27,12 +30,9 @@ use poem::{
     Endpoint, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::broadcast::error::RecvError;
-use tracing::{error, trace_span, Instrument};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::{broadcast::error::RecvError, Mutex};
+use tracing::{error, instrument, trace_span, Instrument};
 use url::Url;
 
 use self::authorization::JwtChecker;
@@ -376,19 +376,19 @@ where
 #[derive(Clone, Debug)]
 pub struct JwtClaims(pub serde_json::Map<String, serde_json::Value>);
 
-struct AuthorizationEndpoint<Q, M, S> {
+struct AuthorizationEndpointQuery<Q, M, S> {
     checker: JwtChecker,
     schema: Schema<Q, M, S>,
 }
 
 #[poem::async_trait]
-impl<Q, M, S> Endpoint for AuthorizationEndpoint<Q, M, S>
+impl<Q, M, S> Endpoint for AuthorizationEndpointQuery<Q, M, S>
 where
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    type Output = GraphQLBatchResponse;
+    type Output = poem::Response;
 
     async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
         if let Some(authorization) = req.header("Authorization") {
@@ -396,20 +396,85 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        use poem::FromRequest;
+                        use poem::{FromRequest, IntoResponse};
                         let (req, mut body) = req.split();
                         let req = GraphQLBatchRequest::from_request(&req, &mut body).await?;
                         let req = req.0.data(JwtClaims(claims));
                         let span = trace_span!("Execute GraphQL request", request = ?req);
                         return Ok(GraphQLBatchResponse(
                             self.schema.execute_batch(req).instrument(span).await,
-                        ));
+                        )
+                        .into_response());
                     }
                 }
             }
-            tracing::warn!("rejected authorization: {:?}", authorization);
+            tracing::warn!(
+                "rejected authorization from {}: {:?}",
+                req.remote_addr(),
+                authorization
+            );
         } else {
-            tracing::info!("rejected anonymous access attempt");
+            tracing::info!(
+                "rejected anonymous access attempt from {}",
+                req.remote_addr()
+            );
+        }
+        Err(poem::error::Error::from_string(
+            "Authorization header must provide valid bearer token",
+            StatusCode::UNAUTHORIZED,
+        ))
+    }
+}
+
+struct AuthorizationEndpointSubscription<Q, M, S> {
+    checker: JwtChecker,
+    schema: Schema<Q, M, S>,
+}
+
+#[poem::async_trait]
+impl<Q, M, S> Endpoint for AuthorizationEndpointSubscription<Q, M, S>
+where
+    Q: ObjectType + 'static,
+    M: ObjectType + 'static,
+    S: SubscriptionType + 'static,
+{
+    type Output = poem::Response;
+
+    async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+        if let Some(authorization) = req.header("Authorization") {
+            if let Ok(authorization) = HeaderValue::from_str(authorization) {
+                let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
+                if let Some(bearer_token) = bearer_token_maybe {
+                    if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
+                        use poem::{FromRequest, IntoResponse};
+                        let (req, mut body) = req.split();
+                        let websocket =
+                            poem::web::websocket::WebSocket::from_request(&req, &mut body).await?;
+                        let protocol = GraphQLProtocol::from_request(&req, &mut body).await?;
+                        let mut data = async_graphql::Data::default();
+                        data.insert(JwtClaims(claims));
+                        let schema = self.schema.clone();
+                        return Ok(websocket
+                            .protocols(ALL_WEBSOCKET_PROTOCOLS)
+                            .on_upgrade(move |stream| {
+                                GraphQLWebSocket::new(stream, schema, protocol)
+                                    .with_data(data)
+                                    .serve()
+                            })
+                            .into_response());
+                    }
+                }
+            }
+            tracing::warn!(
+                "rejected authorization from {}: {:?}",
+                req.remote_addr(),
+                authorization
+            );
+        } else {
+            tracing::info!(
+                "rejected anonymous access attempt from {}",
+                req.remote_addr()
+            );
         }
         Err(poem::error::Error::from_string(
             "Authorization header must provide valid bearer token",
@@ -458,6 +523,79 @@ impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
     }
 }
 
+pub struct OpaCheck;
+
+#[async_trait::async_trait]
+impl async_graphql::extensions::Extension for OpaCheck {
+    #[instrument(level = "debug", skip_all, ret(Debug))]
+    async fn resolve(
+        &self,
+        ctx: &async_graphql::extensions::ExtensionContext<'_>,
+        info: async_graphql::extensions::ResolveInfo<'_>,
+        next: async_graphql::extensions::NextResolve<'_>,
+    ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
+        use async_graphql::ServerError;
+        use serde_json::Value;
+        if let (Some(identity), Some(opa_executor)) = (
+            ctx.data_opt::<AuthId>(),
+            ctx.data_opt::<Arc<Mutex<WasmtimeOpaExecutor>>>(),
+        ) {
+            let opa_context = Value::Object(
+                [
+                    (
+                        "parent_type".to_string(),
+                        Value::String(info.parent_type.to_string()),
+                    ),
+                    (
+                        "resolve_path".to_string(),
+                        Value::Array(
+                            info.path_node
+                                .to_string_vec()
+                                .into_iter()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            );
+            let verdict = opa_executor
+                .lock()
+                .await
+                .evaluate(identity, &opa_context)
+                .await;
+            match verdict {
+                Ok(true) => next.run(ctx, info).await,
+                Ok(false) => {
+                    tracing::warn!(
+                        "attempt to violate policy rules by {:?} in context {:#?}",
+                        identity,
+                        opa_context
+                    );
+                    Err(ServerError::new("violation of policy rules", None))
+                }
+                Err(error) => Err(ServerError {
+                    message: "cannot check policy rules".to_string(),
+                    source: Some(Arc::new(error)),
+                    locations: Vec::new(),
+                    path: Vec::new(),
+                    extensions: None,
+                }),
+            }
+        } else {
+            Err(ServerError::new("cannot check policy rules", None))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl async_graphql::extensions::ExtensionFactory for OpaCheck {
+    fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
+        Arc::new(OpaCheck)
+    }
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -473,9 +611,11 @@ where
         id_pointer: Option<String>,
         opa: Arc<Mutex<WasmtimeOpaExecutor>>,
     ) {
-        let mut schema = Schema::build(self.query, self.mutation, Subscription).extension(
-            OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")),
-        );
+        let mut schema = Schema::build(self.query, self.mutation, Subscription)
+            .extension(OpenTelemetry::new(opentelemetry::global::tracer(
+                "chronicle-api-gql",
+            )))
+            .extension(OpaCheck);
         if let Some(id_pointer) = id_pointer {
             schema = schema.extension(AuthFromJwt {
                 json_pointer: id_pointer,
@@ -494,12 +634,18 @@ where
                 Route::new()
                     .at(
                         "/",
-                        post(AuthorizationEndpoint {
+                        post(AuthorizationEndpointQuery {
                             checker: JwtChecker::new(&jwks_uri),
                             schema: schema.clone(),
                         }),
                     )
-                    .at("/ws", get(GraphQLSubscription::new(schema)))
+                    .at(
+                        "/ws",
+                        get(AuthorizationEndpointSubscription {
+                            checker: JwtChecker::new(&jwks_uri),
+                            schema,
+                        }),
+                    )
             }
             None => {
                 tracing::warn!("API endpoint uses no authentication");

@@ -290,7 +290,7 @@ impl WasmtimeOpaExecutor {
 
 #[async_trait::async_trait]
 impl OpaExecutor for WasmtimeOpaExecutor {
-    #[instrument(level = "info", skip_all, ret)]
+    #[instrument(level = "info", skip(self), ret)]
     async fn evaluate(
         &mut self,
         id: &AuthId,

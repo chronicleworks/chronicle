@@ -598,7 +598,9 @@ version = "0.6.0"
 dependencies = [
  "chronicle",
  "chronicle-telemetry",
+ "futures",
  "insta",
+ "rust-embed",
  "tempfile",
  "tracing",
  "tracing-log",
