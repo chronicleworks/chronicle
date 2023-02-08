@@ -32,7 +32,7 @@ use poem::{
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::{broadcast::error::RecvError, Mutex};
-use tracing::{error, instrument, trace_span, Instrument};
+use tracing::{error, instrument};
 use url::Url;
 
 use self::authorization::JwtChecker;
@@ -381,6 +381,25 @@ struct AuthorizationEndpointQuery<Q, M, S> {
     schema: Schema<Q, M, S>,
 }
 
+impl<Q, M, S> AuthorizationEndpointQuery<Q, M, S>
+where
+    Q: ObjectType + 'static,
+    M: ObjectType + 'static,
+    S: SubscriptionType + 'static,
+{
+    #[instrument(level = "debug", skip(self, prepare_req), ret(Debug))]
+    async fn respond(
+        &self,
+        req: poem::Request,
+        prepare_req: impl FnOnce(GraphQLBatchRequest) -> async_graphql::BatchRequest,
+    ) -> poem::Result<poem::Response> {
+        use poem::{FromRequest, IntoResponse};
+        let (req, mut body) = req.split();
+        let req = prepare_req(GraphQLBatchRequest::from_request(&req, &mut body).await?);
+        Ok(GraphQLBatchResponse(self.schema.execute_batch(req).await).into_response())
+    }
+}
+
 #[poem::async_trait]
 impl<Q, M, S> Endpoint for AuthorizationEndpointQuery<Q, M, S>
 where
@@ -396,15 +415,7 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        use poem::{FromRequest, IntoResponse};
-                        let (req, mut body) = req.split();
-                        let req = GraphQLBatchRequest::from_request(&req, &mut body).await?;
-                        let req = req.0.data(JwtClaims(claims));
-                        let span = trace_span!("Execute GraphQL request", request = ?req);
-                        return Ok(GraphQLBatchResponse(
-                            self.schema.execute_batch(req).instrument(span).await,
-                        )
-                        .into_response());
+                        return self.respond(req, |req| req.0.data(JwtClaims(claims))).await;
                     }
                 }
             }
@@ -413,22 +424,48 @@ where
                 req.remote_addr(),
                 authorization
             );
+            Err(poem::error::Error::from_string(
+                "Authorization header did not provide a valid bearer token",
+                StatusCode::UNAUTHORIZED,
+            ))
         } else {
-            tracing::info!(
-                "rejected anonymous access attempt from {}",
-                req.remote_addr()
-            );
+            tracing::debug!("anonymous access from {}", req.remote_addr());
+            self.respond(req, |req| req.0).await
         }
-        Err(poem::error::Error::from_string(
-            "Authorization header must provide valid bearer token",
-            StatusCode::UNAUTHORIZED,
-        ))
     }
 }
 
 struct AuthorizationEndpointSubscription<Q, M, S> {
     checker: JwtChecker,
     schema: Schema<Q, M, S>,
+}
+
+impl<Q, M, S> AuthorizationEndpointSubscription<Q, M, S>
+where
+    Q: ObjectType + 'static,
+    M: ObjectType + 'static,
+    S: SubscriptionType + 'static,
+{
+    #[instrument(level = "debug", skip(self), ret(Debug))]
+    async fn respond(
+        &self,
+        req: poem::Request,
+        data: async_graphql::Data,
+    ) -> poem::Result<poem::Response> {
+        use poem::{FromRequest, IntoResponse};
+        let (req, mut body) = req.split();
+        let websocket = poem::web::websocket::WebSocket::from_request(&req, &mut body).await?;
+        let protocol = GraphQLProtocol::from_request(&req, &mut body).await?;
+        let schema = self.schema.clone();
+        Ok(websocket
+            .protocols(ALL_WEBSOCKET_PROTOCOLS)
+            .on_upgrade(move |stream| {
+                GraphQLWebSocket::new(stream, schema, protocol)
+                    .with_data(data)
+                    .serve()
+            })
+            .into_response())
+    }
 }
 
 #[poem::async_trait]
@@ -446,22 +483,9 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        use poem::{FromRequest, IntoResponse};
-                        let (req, mut body) = req.split();
-                        let websocket =
-                            poem::web::websocket::WebSocket::from_request(&req, &mut body).await?;
-                        let protocol = GraphQLProtocol::from_request(&req, &mut body).await?;
                         let mut data = async_graphql::Data::default();
                         data.insert(JwtClaims(claims));
-                        let schema = self.schema.clone();
-                        return Ok(websocket
-                            .protocols(ALL_WEBSOCKET_PROTOCOLS)
-                            .on_upgrade(move |stream| {
-                                GraphQLWebSocket::new(stream, schema, protocol)
-                                    .with_data(data)
-                                    .serve()
-                            })
-                            .into_response());
+                        return self.respond(req, data).await;
                     }
                 }
             }
@@ -470,16 +494,13 @@ where
                 req.remote_addr(),
                 authorization
             );
+            Err(poem::error::Error::from_string(
+                "Authorization header did not provide a valid bearer token",
+                StatusCode::UNAUTHORIZED,
+            ))
         } else {
-            tracing::info!(
-                "rejected anonymous access attempt from {}",
-                req.remote_addr()
-            );
+            self.respond(req, async_graphql::Data::default()).await
         }
-        Err(poem::error::Error::from_string(
-            "Authorization header must provide valid bearer token",
-            StatusCode::UNAUTHORIZED,
-        ))
     }
 }
 
@@ -625,7 +646,7 @@ where
             .data(Store::new(pool.clone()))
             .data(api)
             .data(opa)
-            .data(AuthId::chronicle())
+            .data(AuthId::anonymous())
             .finish();
 
         let app = match jwks_uri {
