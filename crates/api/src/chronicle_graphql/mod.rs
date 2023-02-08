@@ -556,31 +556,30 @@ impl async_graphql::extensions::Extension for OpaCheck {
         next: async_graphql::extensions::NextResolve<'_>,
     ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
         use async_graphql::ServerError;
-        use serde_json::Value;
+        use serde_json::{Map, Value};
         if let (Some(identity), Some(opa_executor)) = (
             ctx.data_opt::<AuthId>(),
             ctx.data_opt::<Arc<Mutex<WasmtimeOpaExecutor>>>(),
         ) {
-            let opa_context = Value::Object(
-                [
-                    (
-                        "parent_type".to_string(),
-                        Value::String(info.parent_type.to_string()),
-                    ),
-                    (
-                        "resolve_path".to_string(),
-                        Value::Array(
-                            info.path_node
-                                .to_string_vec()
-                                .into_iter()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    ),
-                ]
-                .into_iter()
-                .collect(),
+            let mut opa_context = Map::new();
+            opa_context.insert(
+                "parent_type".to_string(),
+                Value::String(info.parent_type.to_string()),
             );
+            opa_context.insert(
+                "resolve_path".to_string(),
+                Value::Array(
+                    info.path_node
+                        .to_string_vec()
+                        .into_iter()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            );
+            if let Some(JwtClaims(claims)) = ctx.data_opt::<JwtClaims>() {
+                opa_context.insert("identity_claims".to_string(), Value::Object(claims.clone()));
+            }
+            let opa_context = Value::Object(opa_context);
             let verdict = opa_executor
                 .lock()
                 .await
