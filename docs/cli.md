@@ -14,7 +14,8 @@ The GraphQL server socket address - defaults to 127.0.0.1:9982.
 
 ##### `--anonymous-api`
 
-Allow unauthenticated access to the GraphQL API.
+Ignore any JSON Web Tokens that are provided to the GraphQL API,
+regard all access as being anonymous from unauthenticated users.
 Otherwise, the following two arguments are relevant and required.
 
 ##### `--jwks-address <URI>`
