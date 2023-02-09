@@ -342,7 +342,7 @@ impl LedgerWriter for InMemLedger {
             let res = tx.process(model, state.input()).await;
 
             match res {
-                Err(ProcessorError::Contradiction { source }) => {
+                Err(ProcessorError::Contradiction(source)) => {
                     return Err(SubmissionError::contradiction(&id, source))
                 }
                 //This fake ledger is used for development purposes and testing, so we panic on serious error
@@ -592,6 +592,16 @@ where
             .collect::<Vec<_>>()
             .into_iter()
     }
+
+    /// Return the input data held in `OperationState` for `addresses` as a vector of `StateInput`s
+    pub fn opa_context(&self, addresses: HashSet<T>) -> Vec<StateInput> {
+        self.state
+            .iter()
+            .filter(|(addr, _data)| addresses.iter().any(|a| &a == addr))
+            .map(|(_, data)| data.clone())
+            .filter_map(|v| v.value.map(StateInput::new))
+            .collect()
+    }
 }
 
 impl ChronicleOperation {
@@ -776,14 +786,12 @@ impl ChronicleOperation {
         }
     }
 
-    /// Take input states and apply them to the prov model, then apply transaction,
-    /// then transform to the compact representation and write each resource to the output state,
-    #[instrument(level = "debug", skip(self, model, input))]
-    pub async fn process(
+    /// Apply an operation's input states to the prov model
+    pub async fn dependencies_graph(
         &self,
-        mut model: ProvModel,
+        model: &mut ProvModel,
         input: Vec<StateInput>,
-    ) -> Result<(Vec<StateOutput<LedgerAddress>>, ProvModel), ProcessorError> {
+    ) -> Result<serde_json::Value, ProcessorError> {
         for input in input {
             let graph = json::parse(&input.data)?;
             debug!(input_model=%graph.pretty(2));
@@ -799,7 +807,18 @@ impl ChronicleOperation {
         json_ld
             .as_object_mut()
             .map(|graph| graph.remove("@context"));
+        Ok(json_ld)
+    }
 
+    /// Take input states and apply them to the prov model, then apply transaction,
+    /// then transform to the compact representation and write each resource to the output state,
+    #[instrument(level = "debug", skip(self, model, input))]
+    pub async fn process(
+        &self,
+        mut model: ProvModel,
+        input: Vec<StateInput>,
+    ) -> Result<(Vec<StateOutput<LedgerAddress>>, ProvModel), ProcessorError> {
+        let json_ld = self.dependencies_graph(&mut model, input).await?;
         Ok((
             if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
                 // Separate graph into discrete outputs
@@ -836,6 +855,49 @@ impl ChronicleOperation {
             },
             model,
         ))
+    }
+
+    /// Apply the list of operation dependencies to the prov model and transform to the compact representation,
+    /// then transform the model's @graph to a list of dependency objects with the @id as the key.
+    #[instrument(level = "debug", skip(self, model, deps))]
+    pub async fn opa_context_state(
+        &self,
+        mut model: ProvModel,
+        deps: Vec<StateInput>,
+    ) -> Result<Vec<serde_json::Value>, ProcessorError> {
+        if deps.is_empty() {
+            // No @graph to process in this case
+            Ok(vec![serde_json::Value::default()])
+        } else {
+            let mut json_ld = self.dependencies_graph(&mut model, deps).await?;
+            Ok(
+                if let Some(graph) = json_ld.get_mut("@graph").and_then(|g| g.as_array_mut()) {
+                    graph
+                        .iter_mut()
+                        .map(|entry| {
+                            Ok(serde_json::json!({
+                                entry
+                                    .as_object_mut()
+                                    .and_then(|o| o.remove("@id"))
+                                    .as_ref()
+                                    .and_then(|v| v.as_str())
+                                    .ok_or(ProcessorError::NotANode)?:
+                                    entry
+                            }))
+                        })
+                        .collect::<Result<Vec<_>, ProcessorError>>()?
+                } else {
+                    vec![serde_json::json!({
+                        json_ld
+                            .as_object_mut()
+                            .and_then(|o| o.remove("@id"))
+                            .as_ref()
+                            .and_then(|v| v.as_str())
+                            .ok_or(ProcessorError::NotANode)?: json_ld
+                    })]
+                },
+            )
+        }
     }
 }
 

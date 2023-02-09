@@ -1,27 +1,42 @@
 use crate::{
-    prov::{AgentId, ExternalIdPart},
+    prov::AgentId,
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use custom_error::custom_error;
 use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
+use thiserror::Error;
 
-custom_error! {pub IdentityError
-    KeyStore{source: SignerError} = "Invalid key store directory {source}",
-    SerdeJson{source: serde_json::Error } = "Malformed JSON {source}",
-    Signing{source: k256::ecdsa::Error} = "Signing error {source}",
+#[derive(Error, Debug)]
+pub enum IdentityError {
+    #[error("Invalid key store directory {0}")]
+    KeyStore(#[from] SignerError),
+    #[error("Malformed JSON {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[error("Serialization error {0}")]
+    SerdeJsonSerialize(String),
+    #[error("Signing error {0}")]
+    Signing(#[from] k256::ecdsa::Error),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[serde(tag = "type", content = "id")]
 pub enum AuthId {
     Anonymous,
     Chronicle,
-    Jwt(AgentId),
+    JWT(AgentId),
+}
+
+impl TryFrom<&str> for AuthId {
+    type Error = serde_json::Error;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        serde_json::from_str(s)
+    }
 }
 
 impl AuthId {
     pub fn agent(agent: &AgentId) -> Self {
-        Self::Jwt(agent.to_owned())
+        Self::JWT(agent.to_owned())
     }
 
     pub fn anonymous() -> Self {
@@ -32,8 +47,14 @@ impl AuthId {
         Self::Chronicle
     }
 
-    pub fn context(&self) -> IdentityContext {
-        IdentityContext::new(self)
+    pub fn identity_context(&self) -> Result<serde_json::Value, IdentityError> {
+        serde_json::to_value(self).map_err(|e| IdentityError::SerdeJsonSerialize(e.to_string()))
+    }
+
+    fn signature(&self, store: &DirectoryStoredKeys) -> Result<Signature, IdentityError> {
+        let signing_key = self.signing_key(store)?;
+        let buf = serde_json::to_string(self)?.as_bytes().to_vec();
+        Ok(signing_key.try_sign(&buf)?)
     }
 
     pub fn signed_identity(
@@ -41,30 +62,23 @@ impl AuthId {
         store: &DirectoryStoredKeys,
     ) -> Result<SignedIdentity, IdentityError> {
         let verifying_key = self.verifying_key(store)?;
-        let signing_key = self.signing_key(store)?;
-
-        let id_and_type = IdentityContext::new(self);
-        let buf = id_and_type.to_sign()?;
-
-        let signature: Signature = signing_key.try_sign(&buf)?;
-        let signed_id = SignedIdentity::new(self, signature, verifying_key)?;
-
-        Ok(signed_id)
+        let signature = self.signature(store)?;
+        SignedIdentity::new(self, signature, verifying_key)
     }
 
     fn signing_key(&self, store: &DirectoryStoredKeys) -> Result<SigningKey, IdentityError> {
         match self {
-            Self::Anonymous => Ok(store.agent_signing(&AgentId::from_external_id("anonymous"))?),
+            Self::Anonymous => Ok(store.agent_signing(&AgentId::from_external_id("Anonymous"))?),
             Self::Chronicle => Ok(store.chronicle_signing()?),
-            Self::Jwt(agent_id) => Ok(store.agent_signing(agent_id)?),
+            Self::JWT(agent_id) => Ok(store.agent_signing(agent_id)?),
         }
     }
 
     fn verifying_key(&self, store: &DirectoryStoredKeys) -> Result<VerifyingKey, IdentityError> {
         match self {
-            Self::Anonymous => Ok(store.agent_verifying(&AgentId::from_external_id("anonymous"))?),
+            Self::Anonymous => Ok(store.agent_verifying(&AgentId::from_external_id("Anonymous"))?),
             Self::Chronicle => Ok(store.chronicle_verifying()?),
-            Self::Jwt(agent_id) => Ok(store.agent_verifying(agent_id)?),
+            Self::JWT(agent_id) => Ok(store.agent_verifying(agent_id)?),
         }
     }
 }
@@ -82,7 +96,7 @@ impl SignedIdentity {
         signature: Signature,
         verifying_key: VerifyingKey,
     ) -> Result<Self, IdentityError> {
-        let identity_context = serde_json::to_string(&IdentityContext::new(id))?;
+        let identity_context = serde_json::to_string(&id)?;
         Ok(Self {
             identity_context,
             signature,
@@ -91,38 +105,10 @@ impl SignedIdentity {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct IdentityContext {
-    id: serde_json::Value,
-    typ: String,
-}
-
-impl IdentityContext {
-    pub(crate) fn new(id: &AuthId) -> Self {
-        match id {
-            AuthId::Anonymous => Self {
-                id: serde_json::Value::from("anonymous"),
-                typ: "anonymous".to_owned(),
-            },
-            AuthId::Chronicle => Self {
-                id: serde_json::Value::from("chronicle"),
-                typ: "key".to_owned(),
-            },
-            AuthId::Jwt(agent_id) => Self {
-                id: serde_json::Value::from(agent_id.external_id_part().as_str()),
-                typ: "JWT".to_owned(),
-            },
-        }
-    }
-    fn to_sign(&self) -> Result<Vec<u8>, IdentityError> {
-        Ok(serde_json::to_string(self)?.as_bytes().to_vec())
-    }
-}
-
-impl TryFrom<&str> for IdentityContext {
+impl TryFrom<&SignedIdentity> for AuthId {
     type Error = serde_json::Error;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        serde_json::from_str(s)
+    fn try_from(signed_identity: &SignedIdentity) -> Result<Self, Self::Error> {
+        serde_json::from_str(&signed_identity.identity_context)
     }
 }

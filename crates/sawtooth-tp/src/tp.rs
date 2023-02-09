@@ -1,12 +1,17 @@
 use std::collections::{BTreeMap, HashSet};
 
 use common::{
+    identity::{AuthId, SignedIdentity},
     ledger::{OperationState, StateOutput, SubmissionError},
+    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
     protocol::{
         chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
         chronicle_operations_from_submission, deserialize_submission, messages::Submission,
     },
-    prov::{ChronicleTransaction, ChronicleTransactionId, ProcessorError, ProvModel},
+    prov::{
+        operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction,
+        ChronicleTransactionId, ProcessorError, ProvModel,
+    },
 };
 
 use prost::Message;
@@ -21,20 +26,51 @@ use tracing::{debug, error, info, instrument};
 
 use crate::abstract_tp::{TPSideEffects, TP};
 
+#[derive(rust_embed::RustEmbed)]
+#[folder = "../common/src/dev_policies/"]
+struct DefaultAllowOpaPolicy;
+
+fn policy_loader_from_embedded(
+    wasm: &str,
+    entrypoint: &str,
+) -> Result<CliPolicyLoader, ApplyError> {
+    if let Some(file) = DefaultAllowOpaPolicy::get(wasm) {
+        let policy = file.data.to_vec();
+        let mut loader = CliPolicyLoader::new();
+        loader.set_entrypoint(entrypoint);
+        loader.load_policy_from_bytes(&policy);
+        Ok(loader)
+    } else {
+        Err(ApplyError::InternalError(
+            "TP failed to get embedded opa policy".to_string(),
+        ))
+    }
+}
+
 #[derive(Debug)]
 pub struct ChronicleTransactionHandler {
     family_name: String,
     family_versions: Vec<String>,
     namespaces: Vec<String>,
+    opa_executor: ExecutorContext,
 }
 
 impl ChronicleTransactionHandler {
-    pub fn new() -> ChronicleTransactionHandler {
-        ChronicleTransactionHandler {
+    // Bootstrap an embedded allow access to user `Chronicle` policy
+    pub fn new() -> Result<ChronicleTransactionHandler, ApplyError> {
+        Ok(ChronicleTransactionHandler {
             family_name: FAMILY.to_owned(),
             family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
-        }
+            opa_executor: {
+                ExecutorContext::from_loader(&policy_loader_from_embedded(
+                    // Source: crates/common/src/dev_policies/auth.rego
+                    "auth.wasm",
+                    "auth.is_authenticated",
+                )?)
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?
+            },
+        })
     }
 }
 
@@ -102,6 +138,7 @@ impl TP for ChronicleTransactionHandler {
     }
 
     async fn tp(
+        opa_executor: &ExecutorContext,
         request: &TpProcessRequest,
         submission: Submission,
         operations: ChronicleTransaction,
@@ -133,10 +170,12 @@ impl TP for ChronicleTransactionHandler {
 
         // Now apply operations to the model
         for operation in operations.tx {
+            Self::enforce_opa(opa_executor, &operations.identity, &operation, &state).await?;
+
             let res = operation.process(model, state.input()).await;
             match res {
                 // A contradiction raises an event and shortcuts processing
-                Err(ProcessorError::Contradiction { source }) => {
+                Err(ProcessorError::Contradiction(source)) => {
                     info!(contradiction = %source);
                     let ev = chronicle_contradicted(span, &source)
                         .map_err(|e| ApplyError::InternalError(e.to_string()))?;
@@ -216,6 +255,62 @@ impl TP for ChronicleTransactionHandler {
 
         Ok(effects)
     }
+
+    /// Get identity, the content of the compact json-ld representation of the operation, and a more
+    /// readable serialization of the @graph from a provmodel containing the operation's dependencies and then
+    /// pass them as the context to an OPA rule check, returning an error upon OPA policy failure
+    async fn enforce_opa(
+        opa_executor: &ExecutorContext,
+        identity: &SignedIdentity,
+        tx: &ChronicleOperation,
+        state: &OperationState<SawtoothAddress>,
+    ) -> Result<(), ApplyError> {
+        let identity = AuthId::try_from(identity)
+            .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
+
+        let identity_context = identity
+            .identity_context()
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        // Set up Context for OPA rule check
+        let operation = serde_json::to_value(
+            tx.to_json()
+                .compact()
+                .await
+                .map_err(|e| ApplyError::InternalError(ProcessorError::Compaction(e).to_string()))?
+                .dump(),
+        )
+        .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
+
+        // Get the dependencies
+        let deps = tx
+            .dependencies()
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .iter()
+            .map(SawtoothAddress::from)
+            .collect::<HashSet<_>>();
+
+        let operation_state = state.opa_context(deps);
+
+        let state = tx
+            .opa_context_state(ProvModel::default(), operation_state)
+            .await
+            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
+        let context = serde_json::json!({
+            "identity": identity_context,
+            "operation": operation,
+            "state": state,
+        });
+
+        info!(opa_evaluation_context = %context);
+
+        match opa_executor.evaluate(&identity, &context).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(ApplyError::InvalidTransaction(e.to_string())),
+        }
+    }
 }
 
 impl TransactionHandler for ChronicleTransactionHandler {
@@ -252,9 +347,17 @@ impl TransactionHandler for ChronicleTransactionHandler {
             .block_on(async move { Self::tp_operations(submission.clone()).await })?;
 
         let state = Self::tp_state(context, &operations)?;
-
         let effects = Handle::current()
-            .block_on(async move { Self::tp(request, submission_clone, operations, state).await })
+            .block_on(async move {
+                Self::tp(
+                    &self.opa_executor,
+                    request,
+                    submission_clone,
+                    operations,
+                    state,
+                )
+                .await
+            })
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
         effects
@@ -480,7 +583,7 @@ pub mod test {
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
             let mut context = TestTransactionContext::new();
-            let handler = ChronicleTransactionHandler::new();
+            let handler = ChronicleTransactionHandler::new().unwrap();
             handler.apply(&request, &mut context).unwrap();
 
             insta::assert_yaml_snapshot!(context.readable_events(), @r###"
@@ -561,6 +664,58 @@ pub mod test {
                 "@type": "chronicle:Namespace"
                 externalId: testns
             "###);
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn anonymous_access_denied() {
+        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+
+        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
+        keystore
+            .generate_agent(&AgentId::from_external_id("Anonymous"))
+            .unwrap();
+        let signed_identity = AuthId::anonymous().signed_identity(&keystore).unwrap();
+
+        // Example transaction payload of `CreateNamespace`,
+        // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
+        let tx = ChronicleTransaction::new(
+            vec![
+                create_namespace_helper(None),
+                agent_exists_helper(),
+                create_agent_acts_on_behalf_of(),
+            ],
+            signed_identity,
+        );
+
+        let secret: SigningKey = keystore
+            .agent_signing(&AgentId::from_external_id("Anonymous"))
+            .unwrap();
+
+        // Get a signed tx from sawtooth protocol
+        let mut submission_builder = OperationMessageBuilder::new(&secret, "TEST", "1.0");
+        let (tx, _id) = submission_builder.make_tx(&tx).await.unwrap();
+
+        let header =
+            <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();
+
+        let mut request = TpProcessRequest::default();
+        request.set_header(header);
+        request.set_payload(tx.payload);
+        request.set_signature("TRANSACTION_SIGNATURE".to_string());
+
+        tokio::task::spawn_blocking(move || {
+            // Create a `TestTransactionContext` to pass to the `tp` function
+            let mut context = TestTransactionContext::new();
+            let handler = ChronicleTransactionHandler::new().unwrap();
+            match handler.apply(&request, &mut context) {
+                Err(e) => {
+                    insta::assert_snapshot!(e.to_string(), @"InternalError: InvalidTransaction: Access denied")
+                }
+                _ => panic!("expected error"),
+            }
         })
         .await
         .unwrap();

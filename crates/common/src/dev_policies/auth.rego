@@ -5,5 +5,5 @@ import input
 default is_authenticated = false
 
 is_authenticated {
-  input.id == "chronicle"
+  input.type == "Chronicle"
 }

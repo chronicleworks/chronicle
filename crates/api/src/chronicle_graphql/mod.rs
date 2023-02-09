@@ -10,7 +10,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::AuthId,
     ledger::{SubmissionError, SubmissionStage},
-    opa_executor::{OpaExecutor, WasmtimeOpaExecutor},
+    opa_executor::ExecutorContext,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;
@@ -31,7 +31,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::{broadcast::error::RecvError, Mutex};
+use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
 
@@ -349,7 +349,7 @@ pub trait ChronicleGraphQlServer {
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
+        opa: ExecutorContext,
     );
 }
 
@@ -557,10 +557,9 @@ impl async_graphql::extensions::Extension for OpaCheck {
     ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
         use async_graphql::ServerError;
         use serde_json::{Map, Value};
-        if let (Some(identity), Some(opa_executor)) = (
-            ctx.data_opt::<AuthId>(),
-            ctx.data_opt::<Arc<Mutex<WasmtimeOpaExecutor>>>(),
-        ) {
+        if let (Some(identity), Some(opa_executor)) =
+            (ctx.data_opt::<AuthId>(), ctx.data_opt::<ExecutorContext>())
+        {
             let mut opa_context = Map::new();
             opa_context.insert(
                 "parent_type".to_string(),
@@ -580,28 +579,15 @@ impl async_graphql::extensions::Extension for OpaCheck {
                 opa_context.insert("identity_claims".to_string(), Value::Object(claims.clone()));
             }
             let opa_context = Value::Object(opa_context);
-            let verdict = opa_executor
-                .lock()
-                .await
-                .evaluate(identity, &opa_context)
-                .await;
+            let verdict = opa_executor.evaluate(identity, &opa_context).await;
             match verdict {
-                Ok(true) => next.run(ctx, info).await,
-                Ok(false) => {
+                Ok(()) => next.run(ctx, info).await,
+                Err(error) => {
                     tracing::warn!(
-                        "attempt to violate policy rules by {:?} in context {:#?}",
-                        identity,
-                        opa_context
+                        "{error}: attempt to violate policy rules by {identity:?} in context {opa_context:#?}"
                     );
                     Err(ServerError::new("violation of policy rules", None))
                 }
-                Err(error) => Err(ServerError {
-                    message: "cannot check policy rules".to_string(),
-                    source: Some(Arc::new(error)),
-                    locations: Vec::new(),
-                    path: Vec::new(),
-                    extensions: None,
-                }),
             }
         } else {
             Err(ServerError::new("cannot check policy rules", None))
@@ -629,7 +615,7 @@ where
         address: SocketAddr,
         jwks_uri: Option<Url>,
         id_pointer: Option<String>,
-        opa: Arc<Mutex<WasmtimeOpaExecutor>>,
+        opa: ExecutorContext,
     ) {
         let mut schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
