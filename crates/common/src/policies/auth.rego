@@ -2,8 +2,8 @@ package auth
 
 import input
 
-default is_authenticated = false
+default is_authorized = false
 
-is_authenticated {
-  input.type == "Chronicle"
+is_authorized {
+  input.type == "chronicle"
 }

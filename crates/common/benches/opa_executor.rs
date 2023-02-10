@@ -1,13 +1,14 @@
 use common::{
-    identity::AuthId,
+    identity::{AuthId, IdentityContext, OpaData},
     opa::{CliPolicyLoader, OpaExecutor, OpaExecutorError, WasmtimeOpaExecutor},
 };
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use serde_json::Value;
 use tokio::runtime::Runtime;
 
 fn load_wasm_from_file() -> Result<(), OpaExecutorError> {
     let wasm = "auth.tar.gz";
-    let entrypoint = "auth.is_authenticated";
+    let entrypoint = "auth.is_authorized";
     CliPolicyLoader::from_embedded_policy(wasm, entrypoint)?;
     Ok(())
 }
@@ -26,7 +27,7 @@ fn build_executor_from_loader(loader: &CliPolicyLoader) -> Result<(), OpaExecuto
 fn bench_build_opa_executor(c: &mut Criterion) {
     let input = {
         let wasm = "auth.tar.gz";
-        let entrypoint = "auth.is_authenticated";
+        let entrypoint = "auth.is_authorized";
         CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap()
     };
     c.bench_with_input(
@@ -38,10 +39,12 @@ fn bench_build_opa_executor(c: &mut Criterion) {
     );
 }
 
-async fn evaluate(executor: &mut WasmtimeOpaExecutor) -> Result<(), OpaExecutorError> {
-    let id = AuthId::chronicle();
-    let context = serde_json::json!({});
-    executor.evaluate(&id, &context).await?;
+async fn evaluate(
+    executor: &mut WasmtimeOpaExecutor,
+    id: &AuthId,
+    data: &OpaData,
+) -> Result<(), OpaExecutorError> {
+    executor.evaluate(id, data).await?;
     Ok(())
 }
 
@@ -50,14 +53,20 @@ fn bench_evaluate_policy(c: &mut Criterion) {
         b.iter_batched_ref(
             || {
                 let wasm = "auth.tar.gz";
-                let entrypoint = "auth.is_authenticated";
+                let entrypoint = "auth.is_authorized";
                 let loader = CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap();
-                WasmtimeOpaExecutor::from_loader(&loader).unwrap()
+                let id = AuthId::chronicle();
+                let data = OpaData::Operation(IdentityContext::new(
+                    AuthId::chronicle(),
+                    Value::default(),
+                    Value::default(),
+                ));
+                (WasmtimeOpaExecutor::from_loader(&loader).unwrap(), id, data)
             },
-            |input| {
+            |(executor, id, data)| {
                 let rt = Runtime::new().unwrap();
                 let handle = rt.handle();
-                handle.block_on(async move { evaluate(input).await.unwrap() })
+                handle.block_on(async move { evaluate(executor, id, data).await.unwrap() })
             },
             BatchSize::SmallInput,
         );

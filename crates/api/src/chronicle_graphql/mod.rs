@@ -8,7 +8,7 @@ use async_graphql_poem::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    identity::AuthId,
+    identity::{AuthId, JwtClaims, OpaData},
     ledger::{SubmissionError, SubmissionStage},
     opa::ExecutorContext,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
@@ -389,9 +389,6 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct JwtClaims(pub serde_json::Map<String, serde_json::Value>);
-
 fn check_required_claim(must_value: &str, actual_value: &serde_json::Value) -> bool {
     match actual_value {
         serde_json::Value::String(actual_value) => must_value == actual_value,
@@ -561,16 +558,7 @@ pub struct AuthFromJwt {
 impl AuthFromJwt {
     #[instrument(level = "debug", ret(Debug))]
     fn identity(&self, claims: &JwtClaims) -> Option<AuthId> {
-        use common::prov::AgentId;
-        use serde_json::Value;
-
-        if let Some(Value::String(external_id)) =
-            Value::Object(claims.0.clone()).pointer(&self.json_pointer)
-        {
-            Some(AuthId::agent(&AgentId::from_external_id(external_id)))
-        } else {
-            None
-        }
+        AuthId::from_jwt_claims(claims, &self.json_pointer).ok()
     }
 }
 
@@ -615,16 +603,22 @@ impl async_graphql::extensions::Extension for OpaCheck {
         next: async_graphql::extensions::NextResolve<'_>,
     ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
         use async_graphql::ServerError;
-        use serde_json::{Map, Value};
+        use serde_json::Value;
         if let Some(opa_executor) = ctx.data_opt::<ExecutorContext>() {
-            let mut opa_context = Map::new();
-            opa_context.insert(
-                "parent_type".to_string(),
-                Value::String(info.parent_type.to_string()),
-            );
-            opa_context.insert(
-                "resolve_path".to_string(),
-                Value::Array(
+            // If unable to get an external_id from the JwtClaims or no claims found,
+            // identity will be `Anonymous`
+            let identity = match (ctx.data_opt::<JwtClaims>(), &self.claim_parser) {
+                (Some(claims), Some(parser)) => {
+                    parser.identity(claims).unwrap_or(AuthId::anonymous())
+                }
+                _ => AuthId::anonymous(),
+            };
+
+            // Create OPA context data for the user identity
+            let opa_data = OpaData::graphql(
+                &identity,
+                &Value::String(info.parent_type.to_string()),
+                &Value::Array(
                     info.path_node
                         .to_string_vec()
                         .into_iter()
@@ -632,23 +626,14 @@ impl async_graphql::extensions::Extension for OpaCheck {
                         .collect(),
                 ),
             );
-            if let Some(JwtClaims(claims)) = ctx.data_opt::<JwtClaims>() {
-                opa_context.insert("identity_claims".to_string(), Value::Object(claims.clone()));
-            }
-            let opa_context = Value::Object(opa_context);
-            let identity = if let (Some(claims), Some(parser)) =
-                (ctx.data_opt::<JwtClaims>(), &self.claim_parser)
-            {
-                parser.identity(claims).unwrap_or(AuthId::Anonymous)
-            } else {
-                AuthId::Anonymous
-            };
-            let verdict = opa_executor.evaluate(&identity, &opa_context).await;
-            match verdict {
+
+            // Execute OPA check
+            match opa_executor.evaluate(&identity, &opa_data).await {
                 Ok(()) => next.run(ctx, info).await,
                 Err(error) => {
                     tracing::warn!(
-                        "{error}: attempt to violate policy rules by {identity:?} in context {opa_context:#?}"
+                        "{error}: attempt to violate policy rules by identity: {identity}, in context: {:#?}",
+                        opa_data
                     );
                     Err(ServerError::new("violation of policy rules", None))
                 }

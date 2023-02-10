@@ -1,4 +1,4 @@
-use crate::identity::{AuthId, IdentityError};
+use crate::identity::{AuthId, IdentityError, OpaData};
 use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::state::policy_address;
 use protobuf::{ProtobufEnum, ProtobufError};
@@ -319,11 +319,7 @@ pub enum OpaExecutorError {
 #[async_trait::async_trait]
 pub trait OpaExecutor {
     /// Evaluate the loaded OPA instance against the provided identity and context
-    async fn evaluate(
-        &mut self,
-        id: &AuthId,
-        context: &serde_json::Value,
-    ) -> Result<(), OpaExecutorError>;
+    async fn evaluate(&mut self, id: &AuthId, context: &OpaData) -> Result<(), OpaExecutorError>;
 }
 
 #[derive(Clone, Debug)]
@@ -333,11 +329,7 @@ pub struct ExecutorContext {
 
 impl ExecutorContext {
     #[instrument(skip(self), level = "trace", ret(Debug))]
-    pub async fn evaluate(
-        &self,
-        id: &AuthId,
-        context: &serde_json::Value,
-    ) -> Result<(), OpaExecutorError> {
+    pub async fn evaluate(&self, id: &AuthId, context: &OpaData) -> Result<(), OpaExecutorError> {
         self.executor.lock().await.evaluate(id, context).await
     }
 
@@ -367,13 +359,9 @@ impl WasmtimeOpaExecutor {
 #[async_trait::async_trait]
 impl OpaExecutor for WasmtimeOpaExecutor {
     #[instrument(level = "info", skip(self), ret)]
-    async fn evaluate(
-        &mut self,
-        id: &AuthId,
-        context: &serde_json::Value,
-    ) -> Result<(), OpaExecutorError> {
+    async fn evaluate(&mut self, id: &AuthId, context: &OpaData) -> Result<(), OpaExecutorError> {
         self.opa.set_data(context)?;
-        let input = id.identity_context()?;
+        let input = id.identity()?;
         match self.opa.eval(&self.entrypoint, &input)? {
             true => Ok(()),
             false => Err(OpaExecutorError::AccessDenied),
@@ -388,24 +376,27 @@ struct EmbeddedOpaPolicies;
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
+    use crate::identity::IdentityContext;
+
     use super::*;
-    use crate::{identity::AuthId, prov::AgentId};
 
     fn chronicle_id() -> AuthId {
         AuthId::chronicle()
     }
 
-    // Empty placeholder context for OPA check
-    fn context() -> serde_json::Value {
-        serde_json::json!({})
+    fn opa_data() -> OpaData {
+        OpaData::Operation(IdentityContext::new(
+            AuthId::anonymous(),
+            Value::default(),
+            Value::default(),
+        ))
     }
 
     // Dev policy and entrypoints
-    fn auth_is_authenticated() -> (String, String) {
-        (
-            "auth.tar.gz".to_string(),
-            "auth.is_authenticated".to_string(),
-        )
+    fn auth_is_authorized() -> (String, String) {
+        ("auth.tar.gz".to_string(), "auth.is_authorized".to_string())
     }
     // '.' and '/' in policy entrypoint style both work
     fn default_allow() -> (String, String) {
@@ -423,23 +414,26 @@ mod tests {
 
     #[tokio::test]
     async fn opa_executor_authorized_id() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = auth_is_authenticated();
+        let (wasm, entrypoint) = auth_is_authorized();
         let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
+        assert!(executor
+            .evaluate(&chronicle_id(), &opa_data())
+            .await
+            .is_ok());
         Ok(())
     }
 
     fn unauthorized_agent() -> AuthId {
-        AuthId::agent(&AgentId::from_external_id("x"))
+        AuthId::anonymous()
     }
 
     #[tokio::test]
     async fn opa_executor_unauthorized_id() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = auth_is_authenticated();
+        let (wasm, entrypoint) = auth_is_authorized();
         let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        match executor.evaluate(&unauthorized_agent(), &context()).await {
+        match executor.evaluate(&unauthorized_agent(), &opa_data()).await {
             Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
             _ => panic!("expected error"),
         }
@@ -448,7 +442,7 @@ mod tests {
 
     #[test]
     fn policy_loader_invalid_entrypoint() {
-        let (wasm, _entrypoint) = auth_is_authenticated();
+        let (wasm, _entrypoint) = auth_is_authorized();
         let invalid_entrypoint = "x";
         match CliPolicyLoader::from_embedded_policy(&wasm, invalid_entrypoint) {
             Err(e) => {
@@ -463,7 +457,10 @@ mod tests {
         let (wasm, entrypoint) = default_allow();
         let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-        assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
+        assert!(executor
+            .evaluate(&chronicle_id(), &opa_data())
+            .await
+            .is_ok());
         Ok(())
     }
 
@@ -472,7 +469,7 @@ mod tests {
         let (wasm, entrypoint) = default_deny();
         let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        match executor.evaluate(&chronicle_id(), &context()).await {
+        match executor.evaluate(&chronicle_id(), &opa_data()).await {
             Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
             _ => panic!("expected error"),
         }

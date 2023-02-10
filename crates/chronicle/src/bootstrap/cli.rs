@@ -1023,6 +1023,7 @@ impl SubCommand for CliModel {
                             .long("id-pointer")
                             .takes_value(true)
                             .env("JWT_POINTER")
+                            .default_value("/sub")
                             .help("JSON pointer into JWT claims for Chronicle ID"),
                     ).arg(
                         Arg::new("anonymous-api")
