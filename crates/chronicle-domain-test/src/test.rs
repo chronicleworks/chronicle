@@ -143,7 +143,7 @@ mod test {
             .data(Store::new(pool))
             .data(dispatch)
             .data(database) // share the lifetime
-            .data(AuthId::Chronicle)
+            .data(AuthId::chronicle())
             .data(opa_executor)
             .finish()
     }
