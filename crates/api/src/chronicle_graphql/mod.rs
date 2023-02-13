@@ -13,7 +13,6 @@ use common::{
     opa::ExecutorContext,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
-use custom_error::custom_error;
 use derivative::*;
 use diesel::{
     prelude::*,
@@ -31,6 +30,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
@@ -162,12 +162,22 @@ pub enum TimelineOrder {
     OldestFirst,
 }
 
-custom_error! {pub GraphQlError
-    Db{source: diesel::result::Error}                           = "Database operation failed",
-    R2d2{source: r2d2::Error }                                  = "Connection pool error",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
-    Api{source: crate::ApiError}                                = "API",
-    Io{source: std::io::Error}                                  = "I/O",
+#[derive(Error, Debug)]
+pub enum GraphQlError {
+    #[error("Database operation failed: {0}")]
+    Db(#[from] diesel::result::Error),
+
+    #[error("Connection pool error: {0}")]
+    R2d2(#[from] r2d2::Error),
+
+    #[error("Database connection failed: {0}")]
+    DbConnection(#[from] diesel::ConnectionError),
+
+    #[error("API: {0}")]
+    Api(#[from] crate::ApiError),
+
+    #[error("I/O: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl GraphQlError {
