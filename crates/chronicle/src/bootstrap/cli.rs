@@ -978,6 +978,13 @@ impl SubCommand for CliModel {
                         }
                     }
                     ).arg({
+                        Arg::new("userinfo-address")
+                            .long("userinfo-address")
+                            .takes_value(true)
+                            .env("USERINFO_URI")
+                            .help("URI of the OIDC UserInfo endpoint")
+                    }
+                    ).arg({
                         let arg = Arg::new("id-pointer")
                             .long("id-pointer")
                             .takes_value(true)

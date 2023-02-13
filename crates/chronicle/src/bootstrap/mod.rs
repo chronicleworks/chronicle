@@ -371,6 +371,12 @@ where
             })
         }?;
 
+        let userinfo_uri = if let Some(uri) = matches.value_of("userinfo-address") {
+            Some(Url::from_str(uri)?)
+        } else {
+            None
+        };
+
         let id_pointer = if matches.is_present("anonymous-api") {
             Ok(None)
         } else if let Some(id_pointer) = matches.value_of("id-pointer") {
@@ -404,6 +410,7 @@ where
             matches,
             SecurityConf {
                 jwks_uri,
+                userinfo_uri,
                 id_pointer,
                 jwt_must_claim,
                 opa,

@@ -35,6 +35,13 @@ constructing the authenticated user's Chronicle identity.
 
 Ignored if `--anonymous-api` is given.
 
+##### `--userinfo-address`
+
+The URI that should be used to exchange access tokens for user information,
+typically suffixed `/userinfo`. If this option is supplied then the endpoint
+must supply any additional claims in response to the same `Authorization:`
+header that was provided by a user in making their API request.
+
 ##### `--jwt-must-claim name value`
 
 For security, the GraphQL server can be set to ignore JSON Web Tokens that
