@@ -996,6 +996,14 @@ impl SubCommand for CliModel {
                             .help("accept GraphQL without authentication by web tokens")
                         // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
                     )
+                    .arg(
+                        Arg::new("jwt-must-claim")
+                        .long("jwt-must-claim")
+                        .multiple_occurrences(true)
+                        .multiple_values(true)
+                        .number_of_values(2)
+                        .help("claim name and value that must be present for accepting a JWT")
+                    )
                     .arg({
                         let arg = Arg::new("opa-rule")
                             .long("opa-rule")
