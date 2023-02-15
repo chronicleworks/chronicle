@@ -342,6 +342,7 @@ where
 
 pub struct SecurityConf {
     pub jwks_uri: Option<Url>,
+    pub userinfo_uri: Option<Url>,
     pub id_pointer: Option<String>,
     pub jwt_must_claim: HashMap<String, String>,
     pub opa: ExecutorContext,
@@ -697,7 +698,7 @@ where
                     .at(
                         "/",
                         post(AuthorizationEndpointQuery {
-                            checker: JwtChecker::new(&jwks_uri),
+                            checker: JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref()),
                             must_claim: sec.jwt_must_claim.clone(),
                             schema: schema.clone(),
                         }),
@@ -705,7 +706,7 @@ where
                     .at(
                         "/ws",
                         get(AuthorizationEndpointSubscription {
-                            checker: JwtChecker::new(&jwks_uri),
+                            checker: JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref()),
                             must_claim: sec.jwt_must_claim,
                             schema,
                         }),
