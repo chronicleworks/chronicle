@@ -2,7 +2,7 @@ mod cli;
 mod config;
 
 use api::{
-    chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer},
+    chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer, SecurityConf},
     Api, ApiDispatch, ApiError, UuidGen,
 };
 use async_graphql::ObjectType;
@@ -32,7 +32,7 @@ use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::{io, net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -219,16 +219,14 @@ pub async fn graphql_server<Query, Mutation>(
     pool: &ConnectionPool,
     gql: ChronicleGraphQl<Query, Mutation>,
     options: &ArgMatches,
-    jwks_uri: Option<Url>,
-    id_pointer: Option<String>,
-    opa: ExecutorContext,
+    security_conf: SecurityConf,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
     if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, jwks_uri, id_pointer, opa)
+        gql.serve_graphql(pool.clone(), api.clone(), addr, security_conf)
             .await
     }
 
@@ -385,9 +383,33 @@ where
             })
         }?;
 
+        let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
+        for (name, value) in std::env::vars() {
+            if let Some(name) = name.strip_prefix("JWT_MUST_CLAIM_") {
+                jwt_must_claim.insert(name.to_lowercase(), value);
+            }
+        }
+        if let Some(mut claims) = matches.get_many::<String>("jwt-must-claim") {
+            while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
+                jwt_must_claim.insert(name.clone(), value.clone());
+            }
+        }
+
         let opa = opa_executor(&config, matches).await?;
 
-        graphql_server(&api, &pool, gql, matches, jwks_uri, id_pointer, opa).await?;
+        graphql_server(
+            &api,
+            &pool,
+            gql,
+            matches,
+            SecurityConf {
+                jwks_uri,
+                id_pointer,
+                jwt_must_claim,
+                opa,
+            },
+        )
+        .await?;
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {

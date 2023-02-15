@@ -35,6 +35,18 @@ constructing the authenticated user's Chronicle identity.
 
 Ignored if `--anonymous-api` is given.
 
+##### `--jwt-must-claim name value`
+
+For security, the GraphQL server can be set to ignore JSON Web Tokens that
+do not include the expected claims. It may be appropriate to set required
+values for names such as `iss`, `aud`, or `azp` depending on the claims
+expected in the JWTs issued by the authorization server.
+
+This option may be given multiple times. To set via environment variables
+instead, prefix each variable name with `JWT_MUST_CLAIM_`.
+
+Ignored if `--anonymous-api` is given.
+
 ##### `--opa-rule <opa-rule>`
 
 A path or a Sawtooth address of an OPA policy compiled to Wasm. Required

@@ -30,7 +30,7 @@ use poem::{
     Endpoint, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
@@ -340,6 +340,13 @@ where
     mutation: Mutation,
 }
 
+pub struct SecurityConf {
+    pub jwks_uri: Option<Url>,
+    pub id_pointer: Option<String>,
+    pub jwt_must_claim: HashMap<String, String>,
+    pub opa: ExecutorContext,
+}
+
 #[async_trait::async_trait]
 pub trait ChronicleGraphQlServer {
     async fn serve_graphql(
@@ -347,9 +354,7 @@ pub trait ChronicleGraphQlServer {
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
-        jwks_uri: Option<Url>,
-        id_pointer: Option<String>,
-        opa: ExecutorContext,
+        security_conf: SecurityConf,
     );
 }
 
@@ -376,8 +381,36 @@ where
 #[derive(Clone, Debug)]
 pub struct JwtClaims(pub serde_json::Map<String, serde_json::Value>);
 
+fn check_required_claim(must_value: &str, actual_value: &serde_json::Value) -> bool {
+    match actual_value {
+        serde_json::Value::String(actual_value) => must_value == actual_value,
+        serde_json::Value::Array(actual_values) => actual_values
+            .iter()
+            .any(|actual_value| check_required_claim(must_value, actual_value)),
+        _ => false,
+    }
+}
+
+#[instrument(level = "debug", ret(Debug))]
+fn check_required_claims(
+    must_claim: &HashMap<String, String>,
+    actual_claims: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    for (name, value) in must_claim {
+        if let Some(json) = actual_claims.get(name) {
+            if !check_required_claim(value, json) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
 struct AuthorizationEndpointQuery<Q, M, S> {
     checker: JwtChecker,
+    must_claim: HashMap<String, String>,
     schema: Schema<Q, M, S>,
 }
 
@@ -415,7 +448,9 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        return self.respond(req, |req| req.0.data(JwtClaims(claims))).await;
+                        if check_required_claims(&self.must_claim, &claims) {
+                            return self.respond(req, |req| req.0.data(JwtClaims(claims))).await;
+                        }
                     }
                 }
             }
@@ -425,7 +460,7 @@ where
                 authorization
             );
             Err(poem::error::Error::from_string(
-                "Authorization header did not provide a valid bearer token",
+                "Authorization header present but without a satisfactory bearer token",
                 StatusCode::UNAUTHORIZED,
             ))
         } else {
@@ -437,6 +472,7 @@ where
 
 struct AuthorizationEndpointSubscription<Q, M, S> {
     checker: JwtChecker,
+    must_claim: HashMap<String, String>,
     schema: Schema<Q, M, S>,
 }
 
@@ -483,9 +519,11 @@ where
                 let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
                 if let Some(bearer_token) = bearer_token_maybe {
                     if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        let mut data = async_graphql::Data::default();
-                        data.insert(JwtClaims(claims));
-                        return self.respond(req, data).await;
+                        if check_required_claims(&self.must_claim, &claims) {
+                            let mut data = async_graphql::Data::default();
+                            data.insert(JwtClaims(claims));
+                            return self.respond(req, data).await;
+                        }
                     }
                 }
             }
@@ -495,7 +533,7 @@ where
                 authorization
             );
             Err(poem::error::Error::from_string(
-                "Authorization header did not provide a valid bearer token",
+                "Authorization header present but without a satisfactory bearer token",
                 StatusCode::UNAUTHORIZED,
             ))
         } else {
@@ -613,16 +651,14 @@ where
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
-        jwks_uri: Option<Url>,
-        id_pointer: Option<String>,
-        opa: ExecutorContext,
+        sec: SecurityConf,
     ) {
         let mut schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
                 "chronicle-api-gql",
             )))
             .extension(OpaCheck);
-        if let Some(id_pointer) = id_pointer {
+        if let Some(id_pointer) = sec.id_pointer {
             schema = schema.extension(AuthFromJwt {
                 json_pointer: id_pointer,
             })
@@ -630,11 +666,11 @@ where
         let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
-            .data(opa)
+            .data(sec.opa)
             .data(AuthId::anonymous())
             .finish();
 
-        let app = match jwks_uri {
+        let app = match sec.jwks_uri {
             Some(jwks_uri) => {
                 tracing::debug!("API endpoint authentication uses {}", jwks_uri);
                 Route::new()
@@ -642,6 +678,7 @@ where
                         "/",
                         post(AuthorizationEndpointQuery {
                             checker: JwtChecker::new(&jwks_uri),
+                            must_claim: sec.jwt_must_claim.clone(),
                             schema: schema.clone(),
                         }),
                     )
@@ -649,6 +686,7 @@ where
                         "/ws",
                         get(AuthorizationEndpointSubscription {
                             checker: JwtChecker::new(&jwks_uri),
+                            must_claim: sec.jwt_must_claim,
                             schema,
                         }),
                     )
