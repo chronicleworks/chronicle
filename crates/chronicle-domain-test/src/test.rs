@@ -153,7 +153,7 @@ mod test {
         .unwrap();
 
         Schema::build(Query, Mutation, Subscription)
-            .extension(OpaCheck)
+            .extension(OpaCheck { claim_parser: None })
             .data(Store::new(pool))
             .data(dispatch)
             .data(database) // share the lifetime

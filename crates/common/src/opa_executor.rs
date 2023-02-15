@@ -285,6 +285,7 @@ pub struct ExecutorContext {
 }
 
 impl ExecutorContext {
+    #[instrument(skip(self), level = "debug", ret(Debug))]
     pub async fn evaluate(
         &self,
         id: &AuthId,

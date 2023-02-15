@@ -542,8 +542,25 @@ where
     }
 }
 
-struct AuthFromJwt {
+#[derive(Clone, Debug)]
+pub struct AuthFromJwt {
     json_pointer: String,
+}
+
+impl AuthFromJwt {
+    #[instrument(level = "debug", ret(Debug))]
+    fn identity(&self, claims: &JwtClaims) -> Option<AuthId> {
+        use common::prov::AgentId;
+        use serde_json::Value;
+
+        if let Some(Value::String(external_id)) =
+            Value::Object(claims.0.clone()).pointer(&self.json_pointer)
+        {
+            Some(AuthId::agent(&AgentId::from_external_id(external_id)))
+        } else {
+            None
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -555,17 +572,7 @@ impl async_graphql::extensions::Extension for AuthFromJwt {
         next: async_graphql::extensions::NextPrepareRequest<'_>,
     ) -> async_graphql::ServerResult<async_graphql::Request> {
         if let Some(claims) = ctx.data_opt::<JwtClaims>() {
-            use common::prov::AgentId;
-            use serde_json::Value;
-
-            if let Some(Value::String(external_id)) =
-                Value::Object(claims.0.clone()).pointer(&self.json_pointer)
-            {
-                let chronicle_id = AuthId::agent(&AgentId::from_external_id(external_id));
-                tracing::debug!(
-                    "Chronicle identity for GraphQL request is {:?}",
-                    chronicle_id
-                );
+            if let Some(chronicle_id) = self.identity(claims) {
                 request = request.data(chronicle_id);
             }
         }
@@ -582,7 +589,10 @@ impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
     }
 }
 
-pub struct OpaCheck;
+#[derive(Clone, Debug)]
+pub struct OpaCheck {
+    pub claim_parser: Option<AuthFromJwt>,
+}
 
 #[async_trait::async_trait]
 impl async_graphql::extensions::Extension for OpaCheck {
@@ -595,9 +605,7 @@ impl async_graphql::extensions::Extension for OpaCheck {
     ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
         use async_graphql::ServerError;
         use serde_json::{Map, Value};
-        if let (Some(identity), Some(opa_executor)) =
-            (ctx.data_opt::<AuthId>(), ctx.data_opt::<ExecutorContext>())
-        {
+        if let Some(opa_executor) = ctx.data_opt::<ExecutorContext>() {
             let mut opa_context = Map::new();
             opa_context.insert(
                 "parent_type".to_string(),
@@ -617,7 +625,14 @@ impl async_graphql::extensions::Extension for OpaCheck {
                 opa_context.insert("identity_claims".to_string(), Value::Object(claims.clone()));
             }
             let opa_context = Value::Object(opa_context);
-            let verdict = opa_executor.evaluate(identity, &opa_context).await;
+            let identity = if let (Some(claims), Some(parser)) =
+                (ctx.data_opt::<JwtClaims>(), &self.claim_parser)
+            {
+                parser.identity(claims).unwrap_or(AuthId::Anonymous)
+            } else {
+                AuthId::Anonymous
+            };
+            let verdict = opa_executor.evaluate(&identity, &opa_context).await;
             match verdict {
                 Ok(()) => next.run(ctx, info).await,
                 Err(error) => {
@@ -636,7 +651,9 @@ impl async_graphql::extensions::Extension for OpaCheck {
 #[async_trait::async_trait]
 impl async_graphql::extensions::ExtensionFactory for OpaCheck {
     fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
-        Arc::new(OpaCheck)
+        Arc::new(OpaCheck {
+            claim_parser: self.claim_parser.clone(),
+        })
     }
 }
 
@@ -653,16 +670,19 @@ where
         address: SocketAddr,
         sec: SecurityConf,
     ) {
+        let claim_parser = sec
+            .id_pointer
+            .map(|json_pointer| AuthFromJwt { json_pointer });
         let mut schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
                 "chronicle-api-gql",
             )))
-            .extension(OpaCheck);
-        if let Some(id_pointer) = sec.id_pointer {
-            schema = schema.extension(AuthFromJwt {
-                json_pointer: id_pointer,
-            })
-        };
+            .extension(OpaCheck {
+                claim_parser: claim_parser.clone(),
+            });
+        if let Some(claim_parser) = claim_parser {
+            schema = schema.extension(claim_parser);
+        }
         let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
