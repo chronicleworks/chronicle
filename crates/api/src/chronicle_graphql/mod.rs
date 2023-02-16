@@ -693,12 +693,17 @@ where
 
         let app = match sec.jwks_uri {
             Some(jwks_uri) => {
+                const CACHE_EXPIRY_SECONDS: u32 = 100;
                 tracing::debug!("API endpoint authentication uses {}", jwks_uri);
                 Route::new()
                     .at(
                         "/",
                         post(AuthorizationEndpointQuery {
-                            checker: JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref()),
+                            checker: JwtChecker::new(
+                                &jwks_uri,
+                                sec.userinfo_uri.as_ref(),
+                                CACHE_EXPIRY_SECONDS,
+                            ),
                             must_claim: sec.jwt_must_claim.clone(),
                             schema: schema.clone(),
                         }),
@@ -706,7 +711,11 @@ where
                     .at(
                         "/ws",
                         get(AuthorizationEndpointSubscription {
-                            checker: JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref()),
+                            checker: JwtChecker::new(
+                                &jwks_uri,
+                                sec.userinfo_uri.as_ref(),
+                                CACHE_EXPIRY_SECONDS,
+                            ),
                             must_claim: sec.jwt_must_claim,
                             schema,
                         }),

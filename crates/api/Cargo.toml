@@ -17,6 +17,7 @@ async-graphql-poem = "4.0.9"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
 base64 = "0.21"
+cached = "0.42"
 chrono = "0.4.19"
 common = { path = "../common" }
 custom_error = "1.9.2"
