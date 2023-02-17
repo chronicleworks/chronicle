@@ -128,6 +128,9 @@ FROM debian:bullseye-slim AS chronicle
 ARG TARGETARCH
 WORKDIR /
 
+RUN groupadd -g 999 chronicle && \
+  useradd -m -r -u 999 -g chronicle chronicle
+
 RUN apt-get update && \
   apt-get install -y \
   libpq5 \
@@ -137,11 +140,12 @@ RUN apt-get update && \
 
 COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
 
-RUN chmod 755 \
-  /usr/local/bin/chronicle
+VOLUME /var/lib/chronicle
 
-RUN groupadd -g 999 chronicle && \
-  useradd -m -r -u 999 -g chronicle chronicle
+RUN mkdir -p /var/lib/chronicle \
+  && chown root:bin /usr/local/bin/chronicle \
+  && chown -R chronicle:chronicle /var/lib/chronicle \
+  && chmod 755 /usr/local/bin/chronicle /var/lib/chronicle
 
 USER chronicle
 
@@ -149,4 +153,15 @@ USER chronicle
 FROM debian:bullseye-slim AS chronicle-tp
 ARG TARGETARCH
 WORKDIR /
+
+RUN groupadd -g 999 chronicle && \
+  useradd -m -r -u 999 -g chronicle chronicle
+
 COPY .artifacts/artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
+
+RUN mkdir -p /var/lib/chronicle \
+  && chown root:bin /usr/local/bin/chronicle_sawtooth_tp \
+  && chown -R chronicle:chronicle /var/lib/chronicle \
+  && chmod 755 /usr/local/bin/chronicle_sawtooth_tp /var/lib/chronicle
+
+USER chronicle
