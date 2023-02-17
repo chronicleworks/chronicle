@@ -48,7 +48,7 @@ pub trait PolicyLoader {
     fn load_policy_from_bytes(&mut self, policy: &[u8]);
 
     /// Return a built OPA instance from the cached policy
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn build_opa(&self) -> Result<Opa, OpaExecutorError> {
         Ok(Opa::new().build(self.get_policy())?)
     }
