@@ -23,17 +23,24 @@ services:
       - "4004:4004"
       - "8800:8800"
       - "5050:5050"
-    entrypoint: >
-      /bin/bash -xc "sawadm keygen && sawtooth keygen
-      && sawset genesis -k
-      /etc/sawtooth/keys/validator.priv -o config-genesis.batch
-      && sawset proposal create -k /etc/sawtooth/keys/validator.priv
-      sawtooth.consensus.min_wait_time=0
-      sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
-      && sawadm genesis config-genesis.batch consensus-settings.batch
-      && sawtooth-validator -vvv --scheduler parallel
-      --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004
-      --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
+    entrypoint: /bin/bash
+    command:
+      - -exc
+      - |
+        sawadm keygen
+        sawtooth keygen
+        sawset genesis -k \
+          /etc/sawtooth/keys/validator.priv -o config-genesis.batch
+        sawset proposal create -k /etc/sawtooth/keys/validator.priv \
+          sawtooth.consensus.min_wait_time=0 \
+          sawtooth.consensus.max_wait_time=0 \
+          sawtooth.consensus.algorithm.name=Devmode \
+          sawtooth.consensus.algorithm.version=0.1 \
+          -o consensus-settings.batch
+        sawadm genesis config-genesis.batch consensus-settings.batch
+        sawtooth-validator -vvv --scheduler parallel \
+          --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004 \
+          --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800
     volumes: *rngVolumes
 
   devmode-engine:
@@ -57,8 +64,8 @@ services:
 
   chronicle-sawtooth-tp:
     environment: &rustenv
-      - RUST_BACKTRACE=full
-      - RUST_LOG=trace
+      - &rustbacktrace RUST_BACKTRACE=full
+      - &rustlog RUST_LOG=debug
     image: &chronicleTpImage chronicle-tp-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
@@ -79,23 +86,25 @@ services:
 
   chronicle-sawtooth-api:
     environment:
-      - RUST_BACKTRACE=full
-      - RUST_LOG=trace
+      - *rustbacktrace
+      - *rustlog
       - PGHOST=chronicle-pg
       - PGPASSWORD=chronicle
     image: &chronicleImage chronicle-amd64:${ISOLATION_ID:-local}
-    entrypoint: >
-      /bin/sh -xc "
-      sleep 10 &&
-      /usr/local/bin/chronicle -c /etc/chronicle/config/config.toml
-      --console-logging pretty verify-keystore &&
-      /usr/local/bin/chronicle
-      -c /etc/chronicle/config/config.toml
-      --console-logging pretty
-      --sawtooth tcp://validator:4004
-      serve-graphql
-      --interface 0.0.0.0:9982
-      --open"
+    entrypoint: /bin/bash
+    command:
+      - -exc
+      - |
+        sleep 10
+        /usr/local/bin/chronicle \
+          -c /etc/chronicle/config/config.toml \
+          --console-logging pretty verify-keystore
+        /usr/local/bin/chronicle \
+          -c /etc/chronicle/config/config.toml \
+          --console-logging pretty \
+          --sawtooth tcp://validator:4004 \
+          serve-graphql \
+          --interface 0.0.0.0:9982
     volumes:
       - type: bind
         source: ./chronicle-config/config.toml
