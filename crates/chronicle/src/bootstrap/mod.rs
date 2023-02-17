@@ -14,7 +14,7 @@ use common::{
     database::Database,
     identity::AuthId,
     ledger::SubmissionStage,
-    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader, SawtoothPolicyLoader},
+    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
     prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -59,33 +59,6 @@ fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, Sign
 }
 
 #[allow(dead_code)]
-async fn sawtooth_policy_loader(
-    config: &Config,
-    options: &ArgMatches,
-) -> Result<SawtoothPolicyLoader, CliError> {
-    let mut loader = SawtoothPolicyLoader::new(
-        &options
-            .get_one::<String>("sawtooth")
-            .map(|s| Url::parse(s))
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-    );
-    loader.set_addr_and_entrypoint(options)?;
-    loader.load_policy().await?;
-    Ok(loader)
-}
-
-#[allow(dead_code)]
-async fn cli_policy_loader(
-    _config: &Config,
-    options: &ArgMatches,
-) -> Result<CliPolicyLoader, CliError> {
-    let mut loader = CliPolicyLoader::new();
-    loader.set_addr_and_entrypoint(options)?;
-    loader.load_policy().await?;
-    Ok(loader)
-}
-
-#[allow(dead_code)]
 fn cli_policy_loader_from_embedded(
     wasm: &str,
     entrypoint: &str,
@@ -108,29 +81,6 @@ trait SetRuleOptions {
         self.rule_addr(options)?;
         self.rule_entrypoint(options)?;
         Ok(())
-    }
-}
-
-impl SetRuleOptions for SawtoothPolicyLoader {
-    fn rule_addr(&mut self, options: &ArgMatches) -> Result<(), CliError> {
-        if let Some(val) = options.get_one::<String>("opa-rule") {
-            self.set_address(val);
-            Ok(())
-        } else {
-            Err(CliError::MissingArgument {
-                arg: "opa-rule".to_string(),
-            })
-        }
-    }
-    fn rule_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
-        if let Some(val) = options.get_one::<String>("opa-entrypoint") {
-            self.set_entrypoint(val);
-            Ok(())
-        } else {
-            Err(CliError::MissingArgument {
-                arg: "opa-entrypoint".to_string(),
-            })
-        }
     }
 }
 
@@ -157,18 +107,10 @@ impl SetRuleOptions for CliPolicyLoader {
     }
 }
 
-async fn opa_executor(config: &Config, options: &ArgMatches) -> Result<ExecutorContext, CliError> {
-    if cfg!(feature = "devmode") && !options.is_present("opa-rule") {
-        tracing::warn!("insecure operating mode");
-        let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
-        Ok(ExecutorContext::from_loader(&loader)?)
-    } else if cfg!(not(feature = "inmem")) {
-        let loader = sawtooth_policy_loader(config, options).await?;
-        Ok(ExecutorContext::from_loader(&loader)?)
-    } else {
-        let loader = cli_policy_loader(config, options).await?;
-        Ok(ExecutorContext::from_loader(&loader)?)
-    }
+async fn opa_executor() -> Result<ExecutorContext, CliError> {
+    tracing::warn!("insecure operating mode");
+    let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
+    Ok(ExecutorContext::from_loader(&loader)?)
 }
 
 #[derive(RustEmbed)]
@@ -401,7 +343,7 @@ where
             }
         }
 
-        let opa = opa_executor(&config, matches).await?;
+        let opa = opa_executor().await?;
 
         graphql_server(
             &api,
