@@ -1010,34 +1010,6 @@ impl SubCommand for CliModel {
                         .multiple_values(true)
                         .number_of_values(2)
                         .help("claim name and value that must be present for accepting a JWT")
-                    )
-                    .arg({
-                        let arg = Arg::new("opa-rule")
-                            .long("opa-rule")
-                            .takes_value(true);
-                        if cfg!(not(feature = "inmem")) {
-                            arg
-                            .required(true)
-                            .help("Wasm OPA policy Sawtooth address")
-                        } else {
-                            arg
-                            .required(false)
-                            .help("Wasm OPA policy file path")
-                            .value_hint(ValueHint::FilePath)
-                        }
-                    }
-                    )
-                    .arg({
-                        let arg = Arg::new("opa-entrypoint")
-                            .long("opa-entrypoint")
-                            .takes_value(true)
-                            .help("OPA policy entrypoint");
-                        if cfg!(not(feature = "inmem")) {
-                            arg.required(true)
-                        } else {
-                            arg.required(false)
-                        }
-                    }
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));

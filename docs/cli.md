@@ -54,18 +54,6 @@ instead, prefix each variable name with `JWT_MUST_CLAIM_`.
 
 Ignored if `--anonymous-api` is given.
 
-##### `--opa-rule <opa-rule>`
-
-A path or a Sawtooth address of an OPA policy compiled to Wasm. Required
-unless `--features devmode` is selected, in which case Chronicle uses
-an embedded default-allow OPA policy. This devmode feature can be overridden
-by providing `--opa-rule` and `--opa-entrypoint`.
-
-##### `--opa-entrypoint <opa-entrypoint>`
-
-An entrypoint for the OPA policy indexed by `--opa-rule`. Required if
-`--opa-rule` is given.
-
 ### `export-schema`
 
 Write the GraphQL SDL for Chronicle to stdout and exit.
