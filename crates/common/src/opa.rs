@@ -1,7 +1,8 @@
 use crate::identity::{AuthId, IdentityError};
-use opa::wasm::Opa;
+use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::state::policy_address;
 use protobuf::{ProtobufEnum, ProtobufError};
+use rust_embed::RustEmbed;
 use sawtooth_sdk::{
     messages::{
         client_state::{ClientStateGetRequest, ClientStateGetResponse},
@@ -12,7 +13,7 @@ use sawtooth_sdk::{
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
     },
 };
-use std::{io::Read, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::{runtime::Handle, sync::Mutex};
 use tracing::{debug, error, instrument, trace};
@@ -20,11 +21,17 @@ use url::Url;
 
 #[derive(Debug, Error)]
 pub enum PolicyLoaderError {
-    #[error("Error loading OPA policy: {0}")]
-    SawtoothPolicyLoader(#[from] SawtoothCommunicationError),
+    #[error("Failed to read embedded OPA policies")]
+    EmbeddedOpaPolicies,
+
+    #[error("Policy not found with entrypoint: {0}")]
+    MissingPolicy(String),
+
+    #[error("Io error: {0}")]
+    OpaBundleError(#[from] opa::bundle::Error),
 
     #[error("Error loading OPA policy: {0}")]
-    CliPolicyLoader(#[from] CliPolicyLoaderError),
+    SawtoothCommunicationError(#[from] SawtoothCommunicationError),
 }
 
 #[async_trait::async_trait]
@@ -52,23 +59,37 @@ pub trait PolicyLoader {
     fn build_opa(&self) -> Result<Opa, OpaExecutorError> {
         Ok(Opa::new().build(self.get_policy())?)
     }
+
+    /// Load OPA policy from provided policy bundle
+    fn load_policy_from_bundle(&mut self, bundle: &Bundle) -> Result<(), PolicyLoaderError> {
+        let entrypoint = self.get_entrypoint();
+        self.load_policy_from_bytes(
+            bundle
+                .wasm_policies
+                .iter()
+                .find(|p| p.entrypoint == entrypoint.replace('.', "/"))
+                .map(|p| p.bytes.as_ref())
+                .ok_or(PolicyLoaderError::MissingPolicy(entrypoint.to_string()))?,
+        );
+        Ok(())
+    }
 }
 
 #[derive(Error, Debug)]
 pub enum SawtoothCommunicationError {
-    #[error("Protobuf error {0}")]
+    #[error("Protobuf error: {0}")]
     Protobuf(#[from] ProtobufError),
 
-    #[error("Receive error {0}")]
+    #[error("Receive error: {0}")]
     Receive(#[from] ReceiveError),
 
-    #[error("Send error {0}")]
+    #[error("Send error: {0}")]
     Send(#[from] SendError),
 
     #[error("Unexpected status: {0}")]
     UnexpectedStatus(i32),
 
-    #[error("ZMQ error {0}")]
+    #[error("ZMQ error: {0}")]
     ZMQ(#[from] zmq::Error),
 }
 
@@ -193,15 +214,7 @@ impl PolicyLoader for SawtoothPolicyLoader {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum CliPolicyLoaderError {
-    #[error("Io error {0}")]
-    FileIo(#[source] std::io::Error),
-
-    #[error("Error reading policy {0}")]
-    ReadError(#[from] std::io::Error),
-}
-
+/// OPA policy loader for policies passed via CLI or embedded in Chronicle for development
 #[derive(Clone, Default)]
 pub struct CliPolicyLoader {
     address: String,
@@ -215,16 +228,37 @@ impl CliPolicyLoader {
             ..Default::default()
         }
     }
+
     #[instrument(level = "trace", skip(self), ret)]
-    async fn get_policy(&self) -> Result<Vec<u8>, CliPolicyLoaderError> {
-        let mut policy = Vec::<u8>::new();
-        {
-            let file =
-                std::fs::File::open(self.get_address()).map_err(CliPolicyLoaderError::FileIo)?;
-            let mut buf_reader = std::io::BufReader::new(file);
-            buf_reader.read_to_end(&mut policy)?;
+    async fn get_policy_from_file(&mut self) -> Result<Vec<u8>, PolicyLoaderError> {
+        let bundle = Bundle::from_file(self.get_address())?;
+
+        self.load_policy_from_bundle(&bundle)?;
+
+        Ok(self.get_policy().to_vec())
+    }
+
+    /// Create a loaded [`CliPolicyLoader`] from the filename of an embedded dev policy
+    /// in tar.gz format and entrypoint
+    pub fn from_embedded_policy(wasm: &str, entrypoint: &str) -> Result<Self, PolicyLoaderError> {
+        if let Some(file) = EmbeddedOpaPolicies::get(wasm) {
+            let bytes = file.data.as_ref();
+            let bundle = Bundle::from_bytes(bytes)?;
+            let mut loader = CliPolicyLoader::new();
+            loader.set_entrypoint(entrypoint);
+            loader.load_policy_from_bundle(&bundle)?;
+            Ok(loader)
+        } else {
+            Err(PolicyLoaderError::EmbeddedOpaPolicies)
         }
-        Ok(policy)
+    }
+
+    /// Create a loaded [`CliPolicyLoader`] from an OPA policy's bytes and entrypoint
+    pub fn from_policy_bytes(entrypoint: &str, policy: &[u8]) -> CliPolicyLoader {
+        let mut loader = CliPolicyLoader::new();
+        loader.set_entrypoint(entrypoint);
+        loader.load_policy_from_bytes(policy);
+        loader
     }
 }
 
@@ -249,7 +283,7 @@ impl PolicyLoader for CliPolicyLoader {
         self.policy = policy.to_vec()
     }
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
-        self.policy = self.get_policy().await?;
+        self.policy = self.get_policy_from_file().await?;
         Ok(())
     }
 }
@@ -259,13 +293,13 @@ pub enum OpaExecutorError {
     #[error("Access denied")]
     AccessDenied,
 
-    #[error("Identity error {0}")]
+    #[error("Identity error: {0}")]
     IdentityError(#[from] IdentityError),
 
-    #[error("Error loading OPA policy {0}")]
+    #[error("Error loading OPA policy: {0}")]
     PolicyLoaderError(#[from] PolicyLoaderError),
 
-    #[error("Error evaluating OPA policy {0}")]
+    #[error("Error evaluating OPA policy: {0}")]
     OpaEvaluationError(#[from] anyhow::Error),
 }
 
@@ -334,46 +368,52 @@ impl OpaExecutor for WasmtimeOpaExecutor {
     }
 }
 
+/// Embedded OPA development policies - See `crates/common/src/policies/` for source
+#[derive(RustEmbed)]
+#[folder = "$OUT_DIR/opa"]
+struct EmbeddedOpaPolicies;
+
 #[cfg(test)]
 mod tests {
-    use super::{OpaExecutor, OpaExecutorError, PolicyLoaderError, WasmtimeOpaExecutor};
-    use crate::{
-        identity::AuthId,
-        opa_executor::{CliPolicyLoader, PolicyLoader},
-        prov::AgentId,
-    };
+    use super::*;
+    use crate::{identity::AuthId, prov::AgentId};
 
     fn chronicle_id() -> AuthId {
         AuthId::chronicle()
     }
 
-    // Empty placeholder context
+    // Empty placeholder context for OPA check
     fn context() -> serde_json::Value {
         serde_json::json!({})
     }
 
-    async fn cli_loader(
-        address: &str,
-        entrypoint: &str,
-    ) -> Result<CliPolicyLoader, PolicyLoaderError> {
-        let mut loader = CliPolicyLoader::new();
-        loader.set_address(address);
-        loader.set_entrypoint(entrypoint);
-        loader.load_policy().await?;
-        Ok(loader)
+    // Dev policy and entrypoints
+    fn auth_is_authenticated() -> (String, String) {
+        (
+            "auth.tar.gz".to_string(),
+            "auth.is_authenticated".to_string(),
+        )
+    }
+    // '.' and '/' in policy entrypoint style both work
+    fn default_allow() -> (String, String) {
+        (
+            "default_allow.tar.gz".to_string(),
+            "default_allow/allow".to_string(),
+        )
+    }
+    fn default_deny() -> (String, String) {
+        (
+            "default_deny.tar.gz".to_string(),
+            "default_deny.allow".to_string(),
+        )
     }
 
     #[tokio::test]
     async fn opa_executor_authorized_id() -> Result<(), OpaExecutorError> {
-        // Source: src/dev_policies/auth.rego
-        let address = "src/dev_policies/auth.wasm";
-        let entrypoint = "auth.is_authenticated";
-        let loader = cli_loader(address, entrypoint).await?;
-
+        let (wasm, entrypoint) = auth_is_authenticated();
+        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-
         assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
-
         Ok(())
     }
 
@@ -383,65 +423,23 @@ mod tests {
 
     #[tokio::test]
     async fn opa_executor_unauthorized_id() -> Result<(), OpaExecutorError> {
-        // Source: src/dev_policies/auth.rego
-        let address = "src/dev_policies/auth.wasm";
-        let entrypoint = "auth.is_authenticated";
-        let loader = cli_loader(address, entrypoint).await?;
-
+        let (wasm, entrypoint) = auth_is_authenticated();
+        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-
         match executor.evaluate(&unauthorized_agent(), &context()).await {
-            Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Access denied")
-            }
+            Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
             _ => panic!("expected error"),
         }
-
         Ok(())
     }
 
-    #[tokio::test]
-    async fn opa_executor_blank_wasm() {
-        // Source: empty file with .wasm suffix
-        let address = "src/dev_policies/blank.wasm";
-        let entrypoint = "auth.is_authenticated";
-        let loader = cli_loader(address, entrypoint).await.unwrap();
-
-        match WasmtimeOpaExecutor::from_loader(&loader) {
+    #[test]
+    fn policy_loader_invalid_entrypoint() {
+        let (wasm, _entrypoint) = auth_is_authenticated();
+        let invalid_entrypoint = "x";
+        match CliPolicyLoader::from_embedded_policy(&wasm, invalid_entrypoint) {
             Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy failed to parse WebAssembly module")
-            }
-            _ => panic!("expected error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn opa_executor_invalid_wasm() {
-        // Source: Base64 encoded image with .wasm suffix
-        let address = "src/dev_policies/invalid_content.wasm";
-        let entrypoint = "auth.is_authenticated";
-        let loader = cli_loader(address, entrypoint).await.unwrap();
-
-        match WasmtimeOpaExecutor::from_loader(&loader) {
-            Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy failed to parse WebAssembly module")
-            }
-            _ => panic!("expected error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn opa_executor_invalid_entrypoint() {
-        // Source: src/dev_policies/auth.rego
-        let address = "src/dev_policies/auth.wasm";
-        let entrypoint = "x";
-        let loader = cli_loader(address, entrypoint).await.unwrap();
-
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-
-        match executor.evaluate(&chronicle_id(), &context()).await {
-            Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Error evaluating OPA policy invalid entrypoint `x`")
+                insta::assert_snapshot!(e.to_string(), @"Policy not found with entrypoint: x")
             }
             _ => panic!("expected error"),
         }
@@ -449,34 +447,22 @@ mod tests {
 
     #[tokio::test]
     async fn opa_executor_default_allow() -> Result<(), OpaExecutorError> {
-        // Source: src/dev_policies/default_allow.rego
-        let address = "src/dev_policies/default_allow.wasm";
-        let entrypoint = "default_allow.allow";
-        let loader = cli_loader(address, entrypoint).await?;
-
+        let (wasm, entrypoint) = default_allow();
+        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-
         assert!(executor.evaluate(&chronicle_id(), &context()).await.is_ok());
-
         Ok(())
     }
 
     #[tokio::test]
     async fn opa_executor_default_deny() -> Result<(), OpaExecutorError> {
-        // See src/dev_policies/default_deny.rego for source
-        let address = "src/dev_policies/default_deny.wasm";
-        let entrypoint = "default_deny.allow";
-        let loader = cli_loader(address, entrypoint).await?;
-
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-
+        let (wasm, entrypoint) = default_deny();
+        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
+        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
         match executor.evaluate(&chronicle_id(), &context()).await {
-            Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Access denied")
-            }
+            Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
             _ => panic!("expected error"),
         }
-
         Ok(())
     }
 }

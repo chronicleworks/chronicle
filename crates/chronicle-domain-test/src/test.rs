@@ -69,20 +69,18 @@ mod test {
             Api, UuidGen,
         },
         async_graphql::{Request, Response, Schema},
-        bootstrap::CliError,
         chrono::{DateTime, NaiveDate, Utc},
         common::{
             database::get_embedded_db_connection,
             identity::AuthId,
             ledger::InMemLedger,
-            opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
+            opa::{CliPolicyLoader, ExecutorContext},
             signing::DirectoryStoredKeys,
         },
         tokio,
         uuid::Uuid,
     };
     use core::future::Future;
-    use rust_embed::RustEmbed;
     use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
 
@@ -95,31 +93,19 @@ mod test {
         }
     }
 
-    fn embedded_policy_loader(wasm: &str, entrypoint: &str) -> Result<CliPolicyLoader, CliError> {
-        #[derive(RustEmbed)]
-        #[folder = "../common/src/dev_policies/"]
-        struct EmbeddedOpaPolicies;
-
-        if let Some(file) = EmbeddedOpaPolicies::get(wasm) {
-            let policy = file.data.to_vec();
-            let mut loader = CliPolicyLoader::new();
-            loader.set_entrypoint(entrypoint);
-            loader.load_policy_from_bytes(&policy);
-            Ok(loader)
-        } else {
-            Err(CliError::EmbeddedOpaRule)
-        }
-    }
-
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        let loader = embedded_policy_loader("default_allow.wasm", "default_allow.allow").unwrap();
+        let loader =
+            CliPolicyLoader::from_embedded_policy("default_allow.tar.gz", "default_allow.allow")
+                .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
     }
 
     async fn test_schema_blocked_api() -> Schema<Query, Mutation, Subscription> {
-        let loader = embedded_policy_loader("default_deny.wasm", "default_deny.allow").unwrap();
+        let loader =
+            CliPolicyLoader::from_embedded_policy("default_deny.tar.gz", "default_deny.allow")
+                .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
@@ -3775,7 +3761,9 @@ mod test {
 
     #[tokio::test]
     async fn subscribe_api_secured() {
-        let loader = embedded_policy_loader("allow_defines.wasm", "allow_defines.allow").unwrap();
+        let loader =
+            CliPolicyLoader::from_embedded_policy("allow_defines.tar.gz", "allow_defines.allow")
+                .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
         let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
 

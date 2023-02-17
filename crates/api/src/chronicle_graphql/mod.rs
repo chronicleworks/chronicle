@@ -10,7 +10,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::AuthId,
     ledger::{SubmissionError, SubmissionStage},
-    opa_executor::ExecutorContext,
+    opa::ExecutorContext,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
 use custom_error::custom_error;

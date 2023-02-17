@@ -31,5 +31,4 @@ inmem = ["chronicle/inmem"]
 [dev-dependencies]
 futures = "0.3"
 insta    = { version = "1.14.0", features = ["json", "redactions", "toml"] }
-rust-embed = "6.4.2"
 tempfile = "3.3.0"

@@ -8,7 +8,7 @@ use common::{
         ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
         PathOrFile,
     },
-    opa_executor::{OpaExecutorError, PolicyLoaderError},
+    opa::{OpaExecutorError, PolicyLoaderError},
     prov::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
         ExternalId, ExternalIdPart, ParseIriError,
@@ -16,6 +16,7 @@ use common::{
     signing::SignerError,
 };
 use iref::Iri;
+use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use user_error::UFE;
 
@@ -26,26 +27,65 @@ use crate::{
     PrimitiveType,
 };
 
-custom_error::custom_error! {pub CliError
-    MissingArgument{arg: String}                    = "Missing argument: {arg}",
-    InvalidArgument{arg: String, expected: String, got: String } = "Invalid argument {arg} expected {expected} got {got}",
-    ArgumentParsing{source: clap::Error}            = "Bad argument: {source}",
-    InvalidIri{source: iref::Error}                 = "Invalid IRI: {source}",
-    InvalidChronicleIri{source: ParseIriError}      = "Invalid Chronicle IRI: {source}",
-    InvalidJson{source: serde_json::Error}          = "Invalid JSON: {source}",
-    InvalidUri{source: url::ParseError}             = "Invalid URI: {source}",
-    InvalidTimestamp{source: chrono::ParseError}    = "Invalid timestamp: {source}",
-    InvalidCoercion{arg: String}                    = "Invalid coercion: {arg}",
-    ApiError{source: ApiError}                      = "API failure: {source}",
-    Keys{source: SignerError}                       = "Key storage: {source}",
-    FileSystem{source: std::io::Error}              = "Cannot locate configuration file: {source}",
-    ConfigInvalid{source: toml::de::Error}          = "Invalid configuration file: {source}",
-    InvalidPath{path: String}                       = "Invalid path: {path}",
-    Ld{source: CompactionError}                     = "Invalid JSON-LD: {source}",
-    CommitNoticiationStream {source: RecvError}     = "Failure in commit notification stream: {source}",
-    EmbeddedOpaRule                                 = "Embedded rule not found",
-    OpaPolicyLoader{source: PolicyLoaderError}      = "Policy loader error: {source}",
-    OpaExecutor{source: OpaExecutorError}           = "OPA executor error: {source}",
+#[derive(Debug, Error)]
+pub enum CliError {
+    #[error("Missing argument: {arg}")]
+    MissingArgument { arg: String },
+
+    #[error("Invalid argument {arg} expected {expected} got {got}")]
+    InvalidArgument {
+        arg: String,
+        expected: String,
+        got: String,
+    },
+
+    #[error("Bad argument: {0}")]
+    ArgumentParsing(#[from] clap::Error),
+
+    #[error("Invalid IRI: {0}")]
+    InvalidIri(#[from] iref::Error),
+
+    #[error("Invalid Chronicle IRI: {0}")]
+    InvalidChronicleIri(#[from] ParseIriError),
+
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(#[from] serde_json::Error),
+
+    #[error("Invalid URI: {0}")]
+    InvalidUri(#[from] url::ParseError),
+
+    #[error("Invalid timestamp: {0}")]
+    InvalidTimestamp(#[from] chrono::ParseError),
+
+    #[error("Invalid coercion: {arg}")]
+    InvalidCoercion { arg: String },
+
+    #[error("API failure: {0}")]
+    ApiError(#[from] ApiError),
+
+    #[error("Key storage: {0}")]
+    Keys(#[from] SignerError),
+
+    #[error("Cannot locate configuration file: {0}")]
+    FileSystem(#[from] std::io::Error),
+
+    #[error("Invalid configuration file: {0}")]
+    ConfigInvalid(#[from] toml::de::Error),
+
+    #[error("Invalid path: {path}")]
+    InvalidPath { path: String },
+
+    #[error("Invalid JSON-LD: {0}")]
+    Ld(#[from] CompactionError),
+
+    #[error("Failure in commit notification stream: {0}")]
+    CommitNoticiationStream(#[from] RecvError),
+
+    #[error("Policy loader error: {0}")]
+    OpaPolicyLoader(#[from] PolicyLoaderError),
+
+    #[error("OPA executor error: {0}")]
+    OpaExecutor(#[from] OpaExecutorError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>

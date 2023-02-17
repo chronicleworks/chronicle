@@ -5,12 +5,21 @@ use inflector::cases::{
     snakecase::to_snake_case,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-custom_error::custom_error! {pub ModelError
-    AttributeNotDefined{attr: String} = "Attribute not defined",
-    ModelFileNotReadable{source: std::io::Error} = "Model file not readable",
-    ModelFileInvalidJson{source: serde_json::Error} = "Model file invalid JSON",
-    ModelFileInvalidYaml{source: serde_yaml::Error} = "Model file invalid YAML",
+#[derive(Debug, Error)]
+pub enum ModelError {
+    #[error("Attribute not defined argument: {attr}")]
+    AttributeNotDefined { attr: String },
+
+    #[error("Model file not readable: {0}")]
+    ModelFileNotReadable(#[from] std::io::Error),
+
+    #[error("Model file invalid JSON: {0}")]
+    ModelFileInvalidJson(#[from] serde_json::Error),
+
+    #[error("Model file invalid YAML: {0}")]
+    ModelFileInvalidYaml(#[from] serde_yaml::Error),
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -558,7 +567,7 @@ impl FromStr for DomainFileInput {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match serde_json::from_str::<DomainFileInput>(s) {
             Err(_) => match serde_yaml::from_str::<DomainFileInput>(s) {
-                Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
+                Err(source) => Err(ModelError::ModelFileInvalidYaml(source)),
                 Ok(domain) => Ok(domain),
             },
             Ok(domain) => Ok(domain),
@@ -614,14 +623,14 @@ impl ChronicleDomainDef {
 
     pub fn from_json(file: &str) -> Result<Self, ModelError> {
         match serde_json::from_str::<DomainFileInput>(file) {
-            Err(source) => Err(ModelError::ModelFileInvalidJson { source }),
+            Err(source) => Err(ModelError::ModelFileInvalidJson(source)),
             Ok(model) => Self::from_model(model),
         }
     }
 
     pub fn from_yaml(file: &str) -> Result<Self, ModelError> {
         match serde_yaml::from_str::<DomainFileInput>(file) {
-            Err(source) => Err(ModelError::ModelFileInvalidYaml { source }),
+            Err(source) => Err(ModelError::ModelFileInvalidYaml(source)),
             Ok(model) => Self::from_model(model),
         }
     }

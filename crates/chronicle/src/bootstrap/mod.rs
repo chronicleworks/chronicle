@@ -14,11 +14,10 @@ use common::{
     database::Database,
     identity::AuthId,
     ledger::SubmissionStage,
-    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
+    opa::{CliPolicyLoader, ExecutorContext, PolicyLoader},
     prov::{to_json_ld::ToJson, AgentId},
     signing::{DirectoryStoredKeys, SignerError},
 };
-use rust_embed::RustEmbed;
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
@@ -58,22 +57,6 @@ fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, Sign
     ))
 }
 
-#[allow(dead_code)]
-fn cli_policy_loader_from_embedded(
-    wasm: &str,
-    entrypoint: &str,
-) -> Result<CliPolicyLoader, CliError> {
-    if let Some(file) = DefaultAllowOpaPolicy::get(wasm) {
-        let policy = file.data.to_vec();
-        let mut loader = CliPolicyLoader::new();
-        loader.set_entrypoint(entrypoint);
-        loader.load_policy_from_bytes(&policy);
-        Ok(loader)
-    } else {
-        Err(CliError::EmbeddedOpaRule)
-    }
-}
-
 trait SetRuleOptions {
     fn rule_addr(&mut self, options: &ArgMatches) -> Result<(), CliError>;
     fn rule_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError>;
@@ -109,13 +92,10 @@ impl SetRuleOptions for CliPolicyLoader {
 
 async fn opa_executor() -> Result<ExecutorContext, CliError> {
     tracing::warn!("insecure operating mode");
-    let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
+    let loader =
+        CliPolicyLoader::from_embedded_policy("default_allow.tar.gz", "default_allow.allow")?;
     Ok(ExecutorContext::from_loader(&loader)?)
 }
-
-#[derive(RustEmbed)]
-#[folder = "../common/src/dev_policies/"]
-struct DefaultAllowOpaPolicy;
 
 #[cfg(feature = "inmem")]
 fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
@@ -333,7 +313,9 @@ where
             }
         }
 
-        if jwks_uri.is_none() && id_pointer.is_none() {
+        // This may not be the ideal place for this, but we need it for development
+        // as we default to an anonymous user when we serve graphql
+        if jwks_uri.is_none() {
             DirectoryStoredKeys::new(config.secrets.path)?
                 .generate_agent(&AgentId::from_external_id("Anonymous"))?;
         }
@@ -1450,22 +1432,5 @@ pub mod test {
           ]
         }
         "###);
-    }
-
-    use crate::bootstrap::{cli_policy_loader_from_embedded, CliError};
-    use common::opa_executor::ExecutorContext;
-
-    #[tokio::test]
-    async fn embedded_opa_rule() -> Result<(), CliError> {
-        // Policy source: src/dev_policies/default_allow.rego
-        let loader = cli_policy_loader_from_embedded("default_allow.wasm", "default_allow.allow")?;
-        let executor = ExecutorContext::from_loader(&loader)?;
-
-        assert!(executor
-            .evaluate(&AuthId::chronicle(), &serde_json::json!({}))
-            .await
-            .is_ok());
-
-        Ok(())
     }
 }

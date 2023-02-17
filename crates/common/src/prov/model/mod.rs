@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::{
     attributes::{Attribute, Attributes},
     identity::{IdentityError, SignedIdentity},
-    opa_executor::OpaExecutorError,
+    opa::OpaExecutorError,
 };
 
 use super::{
