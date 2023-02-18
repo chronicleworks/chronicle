@@ -48,7 +48,7 @@ pub trait PolicyLoader {
     fn load_policy_from_bytes(&mut self, policy: &[u8]);
 
     /// Return a built OPA instance from the cached policy
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn build_opa(&self) -> Result<Opa, OpaExecutorError> {
         Ok(Opa::new().build(self.get_policy())?)
     }
@@ -99,7 +99,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         Message_MessageType::CLIENT_STATE_GET_REQUEST
     }
 
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     async fn receive_one<RX: protobuf::Message, TX: protobuf::Message>(
         &self,
         tx: &TX,
@@ -144,7 +144,7 @@ impl SawtoothPolicyLoader {
     fn sawtooth_address(&self, policy: impl AsRef<str>) -> String {
         policy_address(policy)
     }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     async fn get_policy(&mut self) -> Result<Vec<u8>, SawtoothCommunicationError> {
         Handle::current().block_on(async move {
             let mut tx = ClientStateGetRequest::new();
@@ -285,7 +285,7 @@ pub struct ExecutorContext {
 }
 
 impl ExecutorContext {
-    #[instrument(skip(self), level = "debug", ret(Debug))]
+    #[instrument(skip(self), level = "trace", ret(Debug))]
     pub async fn evaluate(
         &self,
         id: &AuthId,
