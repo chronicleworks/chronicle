@@ -104,6 +104,7 @@ services:
           --console-logging pretty \
           --sawtooth tcp://validator:4004 \
           serve-graphql \
+          anonymous-api \
           --interface 0.0.0.0:9982
     volumes:
       - type: bind
