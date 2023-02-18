@@ -1,0 +1,83 @@
+---
+version: "3.9"
+networks:
+  default:
+    name: chronicle-${ISOLATION_ID}
+services:
+  settings-tp:
+    image: blockchaintp/sawtooth-settings-tp:BTP2.1.0
+    depends_on:
+      - validator
+    entrypoint: settings-tp -v --connect tcp://validator:4004
+    volumes: &rngVolumes
+      - /dev/urandom:/dev/random
+      - /dev/urandom:/dev/urandom
+
+  validator:
+    image: blockchaintp/sawtooth-validator:BTP2.1.0
+    expose:
+      - 4004
+      - 8800
+      - 5050
+    ports:
+      - "4004:4004"
+      - "8800:8800"
+      - "5050:5050"
+    entrypoint: /bin/bash
+    command:
+      - -exc
+      - |
+        sawadm keygen
+        sawtooth keygen
+        sawset genesis -k \
+          /etc/sawtooth/keys/validator.priv -o config-genesis.batch
+        sawset proposal create -k /etc/sawtooth/keys/validator.priv \
+          sawtooth.consensus.min_wait_time=0 \
+          sawtooth.consensus.max_wait_time=0 \
+          sawtooth.consensus.algorithm.name=Devmode \
+          sawtooth.consensus.algorithm.version=0.1 \
+          -o consensus-settings.batch
+        sawadm genesis config-genesis.batch consensus-settings.batch
+        sawtooth-validator -vvv --scheduler parallel \
+          --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004 \
+          --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800
+    volumes: *rngVolumes
+
+  devmode-engine:
+    image: blockchaintp/sawtooth-devmode-engine-rust:BTP2.1.0
+    depends_on:
+      - validator
+    entrypoint: devmode-engine-rust -C tcp://validator:5050
+    volumes: *rngVolumes
+
+  rest-api:
+    image: blockchaintp/sawtooth-rest-api:BTP2.1.0
+    expose:
+      - 8008
+    ports:
+      - "8008:8008"
+    depends_on:
+      - validator
+    entrypoint: |
+      sawtooth-rest-api --connect tcp://validator:4004 --bind rest-api:8008
+    volumes: *rngVolumes
+
+  opa-tp:
+    environment: &rustenv
+      - RUST_BACKTRACE=full
+      - RUST_LOG=trace
+    image: &chronicleOpaTpImage chronicle-opa-amd64:${ISOLATION_ID:-local}
+    entrypoint: >
+      /bin/bash -xc "/usr/local/bin/opa-tp
+      -C tcp://validator:4004
+      --console-logging pretty"
+    depends_on:
+      - validator
+    volumes: *rngVolumes
+
+  opa-test:
+    image: opa-test:${ISOLATION_ID}
+    profiles: ["test-opa"]
+    depends_on:
+      - opa-tp
+      - validator

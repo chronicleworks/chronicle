@@ -12,9 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM opactl-${HOST_ARCH}:  AS opa-test
-
-RUN npm install -g -f graphqurl
+FROM opactl:${ISOLATION_ID}  AS opa-test
 
 COPY docker/opa-test/opa-test /usr/local/bin/opa-test.sh
 

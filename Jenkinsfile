@@ -36,6 +36,7 @@ pipeline {
       steps {
         sh '''
           make clean build
+          make -f opa.mk clean build
         '''
       }
     }
@@ -44,15 +45,18 @@ pipeline {
       steps {
         sh '''
           make test
+          make -f opa.mk test
         '''
         step([$class: 'TapPublisher', testResults: 'build/results.tap'])
       }
     }
 
+
     stage('Package') {
       steps {
         sh '''
           make package
+          make -f opa.mk package
         '''
       }
     }

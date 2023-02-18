@@ -31,7 +31,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
   g++-aarch64-linux-gnu \
   libssl-dev \
   libzmq3-dev \
-  libpq-dev \
   protobuf-compiler \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -39,11 +38,9 @@ ENV VERSION=AUTO_STRICT
 
 ENV PATH=$PATH:/root/.cargo/bin
 
-# Download OPA binary
-ARG TARGETARCH
 ARG OPA_VERSION=0.49.0
 RUN --mount=type=cache,target=/tmp \
-  curl -L -o /tmp/opa "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_${TARGETARCH}_static" && \
+  curl -L -o /tmp/opa "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_${BUILDARCH}_static" && \
   mv /tmp/opa /usr/local/bin/opa && \
   chmod +x /usr/local/bin/opa
 
@@ -72,7 +69,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
   echo "Unsupported architecture: $(TARGETPLATFORM)"; \
   exit 1; \
   fi &&\
-  cargo test --release --target $TARGET
+  cargo test -p opactl -p opa-tp -p opa-tp-protocol --release --target $TARGET
 USER root
 
 
@@ -89,97 +86,26 @@ RUN --mount=type=cache,target=/var/cache/apt \
   mkdir -p /artifacts/arm64 && \
   apt-get remove -y libpq-dev && \
   apt-get install -y liblzma-dev:arm64 libpq-dev:arm64 && \
-  cargo build --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/arm64 \
+  cargo build -p opactl -p opa-tp --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/aarch64-unknown-linux-gnu/release/opactl /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/opa-tp /artifacts/arm64 \
   && apt-get remove -y libpq-dev \
   && apt-get install -y liblzma-dev:amd64 libpq-dev:amd64 \
-  && cargo build --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle /artifacts/amd64 \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/amd64 \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/amd64 \
+  && cargo build -p opactl -p opa-tp --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/x86_64-unknown-linux-gnu/release/opactl /artifacts/amd64 \
   && mv -f target/x86_64-unknown-linux-gnu/release/opa-tp /artifacts/amd64
-
 
 FROM  alpine:3.16.3 as tested-artifacts
 COPY --from=tested --link /artifacts /artifacts
 
-# Copy linter to a rustc image for the build platform
-FROM rust:1.65 as chronicle-builder
-
-ARG TARGETARCH
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PKG_CONFIG_ALLOW_CROSS=1
-ENV OPENSSL_STATIC=true
-
-RUN apt-get update && \
-  apt-get install -y \
-  build-essential \
-  cmake \
-  libpq-dev \
-  libssl-dev \
-  libzmq3-dev \
-  protobuf-compiler \
-  && \
-  apt-get clean && rm -rf /var/lib/apt/lists/*
-
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle-domain-lint /usr/local/bin
-
-WORKDIR /app
-COPY .cargo /app/.cargo
-COPY Cargo.lock /app
-COPY Cargo.toml /app
-COPY crates /app/crates
-RUN cargo fetch --locked
-
-
-# Copy untyped chronicle to image
-FROM debian:bullseye-slim AS chronicle
+# Copy opa-tp to image
+FROM debian:bullseye-slim AS opa-tp
 ARG TARGETARCH
 WORKDIR /
+COPY .artifacts/artifacts/${TARGETARCH}/opa-tp usr/local/bin
 
-RUN groupadd -g 999 chronicle && \
-  useradd -m -r -u 999 -g chronicle chronicle
-
-RUN apt-get update && \
-  apt-get install -y \
-  libpq5 \
-  ca-certificates \
-  && \
-  apt-get clean && rm -rf /var/lib/apt/lists/*
-
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
-
-VOLUME /var/lib/chronicle
-
-RUN mkdir -p /var/lib/chronicle \
-  && chown root:bin /usr/local/bin/chronicle \
-  && chown -R chronicle:chronicle /var/lib/chronicle \
-  && chmod 755 /usr/local/bin/chronicle /var/lib/chronicle
-
-USER chronicle
-
-# Copy tp to image
-FROM debian:bullseye-slim AS chronicle-tp
+# Copy opactl to image
+FROM debian:bullseye-slim AS opctl
 ARG TARGETARCH
 WORKDIR /
-
-RUN groupadd -g 999 chronicle && \
-  useradd -m -r -u 999 -g chronicle chronicle
-
-RUN apt-get update && \
-  apt-get install -y \
-  libpq5
-
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
-
-RUN mkdir -p /var/lib/chronicle \
-  && chown root:bin /usr/local/bin/chronicle_sawtooth_tp \
-  && chown -R chronicle:chronicle /var/lib/chronicle \
-  && chmod 755 /usr/local/bin/chronicle_sawtooth_tp /var/lib/chronicle
-
-USER chronicle
+COPY .artifacts/artifacts/${TARGETARCH}/opactl usr/local/bin
