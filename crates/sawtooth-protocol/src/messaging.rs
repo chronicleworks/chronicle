@@ -23,7 +23,7 @@ use sawtooth_sdk::{
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
     },
 };
-use tokio::{runtime::Handle, task::JoinError};
+use tokio::task::JoinError;
 use tracing::{debug, instrument, trace};
 
 #[derive(Derivative)]
@@ -124,40 +124,41 @@ impl SawtoothSubmitter {
 
         let ret_tx_id = tx_id.clone();
 
-        Handle::current()
-            .block_on(async move {
-                let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
+        let res = async move {
+            let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
 
-                trace!(?batch, "Validator request");
+            trace!(?batch, "Validator request");
 
-                let request = ClientBatchSubmitRequest {
-                    batches: vec![batch],
-                };
+            let request = ClientBatchSubmitRequest {
+                batches: vec![batch],
+            };
 
-                let mut future = self.tx.send(
-                    Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
-                    &tx_id.to_string(),
-                    &request.encode_to_vec(),
-                )?;
+            let mut future = self.tx.send(
+                Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
+                &tx_id.to_string(),
+                &request.encode_to_vec(),
+            )?;
 
-                debug!(submit_transaction=%tx_id);
+            debug!(submit_transaction=%tx_id);
 
-                let result = future.get_timeout(std::time::Duration::from_secs(10))?;
+            let result = future.get_timeout(std::time::Duration::from_secs(10))?;
 
-                let response = ClientBatchSubmitResponse::decode(&*result.content)
-                    .map_err(ProtocolError::from)?;
+            let response =
+                ClientBatchSubmitResponse::decode(&*result.content).map_err(ProtocolError::from)?;
 
-                debug!(validator_response=?response);
+            debug!(validator_response=?response);
 
-                if response.status == 1 {
-                    Ok(tx_id)
-                } else {
-                    Err(SawtoothSubmissionError::UnexpectedStatus {
-                        status: response.status,
-                    })
-                }
-            })
-            .map_err(|e| (ret_tx_id, e))
+            if response.status == 1 {
+                Ok(tx_id)
+            } else {
+                Err(SawtoothSubmissionError::UnexpectedStatus {
+                    status: response.status,
+                })
+            }
+        }
+        .await;
+
+        res.map_err(|e| (ret_tx_id, e))
     }
 }
 
