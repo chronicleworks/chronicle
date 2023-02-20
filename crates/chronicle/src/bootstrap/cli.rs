@@ -964,19 +964,13 @@ impl SubCommand for CliModel {
                             .takes_value(true)
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
-                    ).arg({
-                        let arg = Arg::new("jwks-address")
+                    ).arg(
+                        Arg::new("jwks-address")
                             .long("jwks-address")
                             .takes_value(true)
                             .env("JWKS_URI")
-                            .help("URI of the JSON key set for verifying web tokens");
-                        if cfg!(feature = "anonymous-api") {
-                            arg
-                        } else {
-                            arg
-                            .required_unless_present("anonymous-api")
-                        }
-                    }
+                            .help("URI of the JSON key set for verifying web tokens"),
+
                     ).arg({
                         Arg::new("userinfo-address")
                             .long("userinfo-address")
@@ -984,19 +978,12 @@ impl SubCommand for CliModel {
                             .env("USERINFO_URI")
                             .help("URI of the OIDC UserInfo endpoint")
                     }
-                    ).arg({
-                        let arg = Arg::new("id-pointer")
+                    ).arg(
+                        Arg::new("id-pointer")
                             .long("id-pointer")
                             .takes_value(true)
                             .env("JWT_POINTER")
-                            .help("JSON pointer into JWT claims for Chronicle ID");
-                        if cfg!(feature = "anonymous-api") {
-                            arg
-                        } else {
-                            arg
-                            .required_unless_present("anonymous-api")
-                        }
-                    }
+                            .help("JSON pointer into JWT claims for Chronicle ID"),
                     ).arg(
                         Arg::new("anonymous-api")
                             .long("anonymous-api")

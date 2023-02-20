@@ -15,7 +15,7 @@ use common::{
     identity::AuthId,
     ledger::SubmissionStage,
     opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
-    prov::to_json_ld::ToJson,
+    prov::{to_json_ld::ToJson, AgentId},
     signing::{DirectoryStoredKeys, SignerError},
 };
 use rust_embed::RustEmbed;
@@ -301,17 +301,11 @@ where
     let api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-graphql") {
-        let jwks_uri = if matches.is_present("anonymous-api") {
-            Ok(None)
-        } else if let Some(uri) = matches.value_of("jwks-address") {
-            Ok(Some(Url::from_str(uri)?))
-        } else if cfg!(feature = "anonymous-api") {
-            Ok(None)
+        let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
+            Some(Url::from_str(uri)?)
         } else {
-            Err(CliError::MissingArgument {
-                arg: "jwks-address".to_string(),
-            })
-        }?;
+            None
+        };
 
         let userinfo_uri = if let Some(uri) = matches.value_of("userinfo-address") {
             Some(Url::from_str(uri)?)
@@ -320,16 +314,12 @@ where
         };
 
         let id_pointer = if matches.is_present("anonymous-api") {
-            Ok(None)
-        } else if let Some(id_pointer) = matches.value_of("id-pointer") {
-            Ok(Some(id_pointer.to_string()))
-        } else if cfg!(feature = "anonymous-api") {
-            Ok(None)
+            None
         } else {
-            Err(CliError::MissingArgument {
-                arg: "id-pointer".to_string(),
-            })
-        }?;
+            matches
+                .value_of("id-pointer")
+                .map(|id_pointer| id_pointer.to_string())
+        };
 
         let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
         for (name, value) in std::env::vars() {
@@ -341,6 +331,11 @@ where
             while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
                 jwt_must_claim.insert(name.clone(), value.clone());
             }
+        }
+
+        if jwks_uri.is_none() && id_pointer.is_none() {
+            DirectoryStoredKeys::new(config.secrets.path)?
+                .generate_agent(&AgentId::from_external_id("Anonymous"))?;
         }
 
         let opa = opa_executor().await?;
