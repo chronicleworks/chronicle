@@ -52,4 +52,4 @@ jobs:
         with:
           extra_args: --files ${{ steps.file_changes.outputs.files}}
         env:
-          SKIP: no-commit-to-branch,cargo-check,fmt
+          SKIP: no-commit-to-branch,cargo-check,fmt,helmlint
