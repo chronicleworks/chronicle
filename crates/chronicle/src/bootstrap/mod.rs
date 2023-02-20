@@ -15,7 +15,7 @@ use common::{
     identity::AuthId,
     ledger::SubmissionStage,
     opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
-    prov::to_json_ld::ToJson,
+    prov::{to_json_ld::ToJson, AgentId},
     signing::{DirectoryStoredKeys, SignerError},
 };
 use rust_embed::RustEmbed;
@@ -331,6 +331,11 @@ where
             while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
                 jwt_must_claim.insert(name.clone(), value.clone());
             }
+        }
+
+        if jwks_uri.is_none() && id_pointer.is_none() {
+            DirectoryStoredKeys::new(config.secrets.path)?
+                .generate_agent(&AgentId::from_external_id("Anonymous"))?;
         }
 
         let opa = opa_executor().await?;
