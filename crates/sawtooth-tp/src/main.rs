@@ -63,12 +63,14 @@ async fn main() {
         },
     );
 
+    let (policy, entrypoint) = ("default_allow.wasm", "default_allow.allow");
+
     Handle::current().spawn_blocking(move || {
         info!(
             "Starting Chronicle Transaction Processor on {:?}",
             matches.get_one::<String>("connect")
         );
-        let handler = match ChronicleTransactionHandler::new() {
+        let handler = match ChronicleTransactionHandler::new(policy, entrypoint) {
             Ok(handler) => handler,
             Err(e) => panic!("Error initializing TransactionHandler: {e}"),
         };

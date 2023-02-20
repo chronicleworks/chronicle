@@ -56,17 +56,16 @@ pub struct ChronicleTransactionHandler {
 }
 
 impl ChronicleTransactionHandler {
-    // Bootstrap an embedded allow access to user `Chronicle` policy
-    pub fn new() -> Result<ChronicleTransactionHandler, ApplyError> {
+    // Bootstrap an embedded default allow policy
+    pub fn new(policy: &str, entrypoint: &str) -> Result<ChronicleTransactionHandler, ApplyError> {
         Ok(ChronicleTransactionHandler {
             family_name: FAMILY.to_owned(),
             family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
             opa_executor: {
                 ExecutorContext::from_loader(&policy_loader_from_embedded(
-                    // Source: crates/common/src/dev_policies/auth.rego
-                    "auth.wasm",
-                    "auth.is_authenticated",
+                    // Source: crates/common/src/dev_policies/default_allow.rego
+                    policy, entrypoint,
                 )?)
                 .map_err(|e| ApplyError::InternalError(e.to_string()))?
             },
@@ -580,10 +579,12 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
+        let (policy, entrypoint) = ("default_allow.wasm", "default_allow.allow");
+
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
             let mut context = TestTransactionContext::new();
-            let handler = ChronicleTransactionHandler::new().unwrap();
+            let handler = ChronicleTransactionHandler::new(policy, entrypoint).unwrap();
             handler.apply(&request, &mut context).unwrap();
 
             insta::assert_yaml_snapshot!(context.readable_events(), @r###"
@@ -706,10 +707,12 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
+        let (policy, entrypoint) = ("auth.wasm", "auth.is_authenticated");
+
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
             let mut context = TestTransactionContext::new();
-            let handler = ChronicleTransactionHandler::new().unwrap();
+            let handler = ChronicleTransactionHandler::new(policy, entrypoint).unwrap();
             match handler.apply(&request, &mut context) {
                 Err(e) => {
                     insta::assert_snapshot!(e.to_string(), @"InternalError: InvalidTransaction: Access denied")
