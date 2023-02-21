@@ -31,7 +31,7 @@ use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, io, net::SocketAddr, str::FromStr, time::Duration};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -120,9 +120,28 @@ async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError>
 }
 
 fn pool_remote(db_uri: &str) -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    use diesel::Connection;
     // before pooling, first establish a test connection to get a clearer error if it fails
-    PgConnection::establish(db_uri).map_err(|source| api::StoreError::DbConnection { source })?;
+    let mut i = 1;
+    let mut j = 1;
+    loop {
+        use diesel::Connection;
+        match PgConnection::establish(db_uri) {
+            Ok(_) => break,
+            Err(source) => {
+                tracing::warn!("database connection failed: {source}");
+                if i < 20 {
+                    if let diesel::ConnectionError::BadConnection(_) = source {
+                        tracing::info!("waiting to retry database connection...");
+                        std::thread::sleep(Duration::from_secs(i));
+                        (i, j) = (i + j, i);
+                        continue;
+                    }
+                };
+                return Err(api::StoreError::DbConnection { source }.into());
+            }
+        }
+    }
+    // connection succeeded so build the connection pool
     Ok((
         Pool::builder().build(ConnectionManager::<PgConnection>::new(db_uri))?,
         None::<Database>,
