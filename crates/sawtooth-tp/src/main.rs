@@ -63,7 +63,7 @@ async fn main() {
         },
     );
 
-    let (policy, entrypoint) = ("default_allow.wasm", "default_allow.allow");
+    let (policy, entrypoint) = ("default_allow.tar.gz", "default_allow.allow");
 
     Handle::current().spawn_blocking(move || {
         info!(

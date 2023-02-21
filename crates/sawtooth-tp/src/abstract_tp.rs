@@ -1,7 +1,7 @@
 use common::{
     identity::SignedIdentity,
     ledger::OperationState,
-    opa_executor::ExecutorContext,
+    opa::ExecutorContext,
     protocol::messages::Submission,
     prov::{operations::ChronicleOperation, ChronicleTransaction},
 };

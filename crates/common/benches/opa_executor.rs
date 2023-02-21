@@ -1,62 +1,39 @@
 use common::{
     identity::AuthId,
-    opa_executor::{
-        CliPolicyLoader, OpaExecutor, OpaExecutorError, PolicyLoader, WasmtimeOpaExecutor,
-    },
+    opa::{CliPolicyLoader, OpaExecutor, OpaExecutorError, WasmtimeOpaExecutor},
 };
-use criterion::{
-    async_executor::FuturesExecutor, criterion_group, criterion_main, BatchSize, BenchmarkId,
-    Criterion,
-};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use tokio::runtime::Runtime;
 
-async fn load_wasm_from_file(loader: &mut CliPolicyLoader) -> Result<(), OpaExecutorError> {
-    loader.load_policy().await?;
+fn load_wasm_from_file() -> Result<(), OpaExecutorError> {
+    let wasm = "auth.tar.gz";
+    let entrypoint = "auth.is_authenticated";
+    CliPolicyLoader::from_embedded_policy(wasm, entrypoint)?;
     Ok(())
 }
 
 fn bench_policy_loader_load_policy(c: &mut Criterion) {
-    c.bench_function("load_wasm_from_file", |b| {
-        b.iter_batched_ref(
-            || {
-                let mut loader = CliPolicyLoader::new();
-                loader.set_address("src/dev_policies/auth.wasm");
-                loader.set_entrypoint("auth.is_authenticated");
-                loader
-            },
-            |input| {
-                let rt = Runtime::new().unwrap();
-                let handle = rt.handle();
-                handle.block_on(async move { load_wasm_from_file(input).await.unwrap() })
-            },
-            BatchSize::SmallInput,
-        );
+    c.bench_function("load_wasm_from_embedded", |b| {
+        b.iter(|| load_wasm_from_file().unwrap());
     });
 }
 
-async fn build_executor_from_loader(loader: &CliPolicyLoader) -> Result<(), OpaExecutorError> {
+fn build_executor_from_loader(loader: &CliPolicyLoader) -> Result<(), OpaExecutorError> {
     let _executor = WasmtimeOpaExecutor::from_loader(loader)?;
     Ok(())
 }
 
 fn bench_build_opa_executor(c: &mut Criterion) {
     let input = {
-        let mut loader = CliPolicyLoader::new();
-        loader.set_address("src/dev_policies/auth.wasm");
-        loader.set_entrypoint("auth.is_authenticated");
-        let rt = Runtime::new().unwrap();
-        let handle = rt.handle();
-        handle.block_on(async move {
-            loader.load_policy().await.unwrap();
-            loader
-        })
+        let wasm = "auth.tar.gz";
+        let entrypoint = "auth.is_authenticated";
+        CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap()
     };
     c.bench_with_input(
         BenchmarkId::new("build_executor_from_loader", "CliPolicyLoader"),
         &input,
         |b, input| {
-            b.to_async(FuturesExecutor)
-                .iter(|| build_executor_from_loader(input));
+            b.iter(|| build_executor_from_loader(input));
         },
     );
 }
@@ -72,15 +49,10 @@ fn bench_evaluate_policy(c: &mut Criterion) {
     c.bench_function("evaluate", |b| {
         b.iter_batched_ref(
             || {
-                let mut loader = CliPolicyLoader::new();
-                loader.set_address("src/dev_policies/auth.wasm");
-                loader.set_entrypoint("auth.is_authenticated");
-                let rt = Runtime::new().unwrap();
-                let handle = rt.handle();
-                handle.block_on(async move {
-                    loader.load_policy().await.unwrap();
-                    WasmtimeOpaExecutor::from_loader(&loader).unwrap()
-                })
+                let wasm = "auth.tar.gz";
+                let entrypoint = "auth.is_authenticated";
+                let loader = CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap();
+                WasmtimeOpaExecutor::from_loader(&loader).unwrap()
             },
             |input| {
                 let rt = Runtime::new().unwrap();

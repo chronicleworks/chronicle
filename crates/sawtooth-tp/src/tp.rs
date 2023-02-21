@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 use common::{
     identity::{AuthId, SignedIdentity},
     ledger::{OperationState, StateOutput, SubmissionError},
-    opa_executor::{CliPolicyLoader, ExecutorContext, PolicyLoader},
+    opa::{CliPolicyLoader, ExecutorContext},
     protocol::{
         chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
         chronicle_operations_from_submission, deserialize_submission, messages::Submission,
@@ -26,27 +26,6 @@ use tracing::{debug, error, info, instrument};
 
 use crate::abstract_tp::{TPSideEffects, TP};
 
-#[derive(rust_embed::RustEmbed)]
-#[folder = "../common/src/dev_policies/"]
-struct DefaultAllowOpaPolicy;
-
-fn policy_loader_from_embedded(
-    wasm: &str,
-    entrypoint: &str,
-) -> Result<CliPolicyLoader, ApplyError> {
-    if let Some(file) = DefaultAllowOpaPolicy::get(wasm) {
-        let policy = file.data.to_vec();
-        let mut loader = CliPolicyLoader::new();
-        loader.set_entrypoint(entrypoint);
-        loader.load_policy_from_bytes(&policy);
-        Ok(loader)
-    } else {
-        Err(ApplyError::InternalError(
-            "TP failed to get embedded opa policy".to_string(),
-        ))
-    }
-}
-
 #[derive(Debug)]
 pub struct ChronicleTransactionHandler {
     family_name: String,
@@ -63,10 +42,13 @@ impl ChronicleTransactionHandler {
             family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
             opa_executor: {
-                ExecutorContext::from_loader(&policy_loader_from_embedded(
-                    // Source: crates/common/src/dev_policies/default_allow.rego
-                    policy, entrypoint,
-                )?)
+                ExecutorContext::from_loader(
+                    &CliPolicyLoader::from_embedded_policy(
+                        // Source: crates/common/src/policies/auth.rego
+                        policy, entrypoint,
+                    )
+                    .map_err(|e| ApplyError::InternalError(e.to_string()))?,
+                )
                 .map_err(|e| ApplyError::InternalError(e.to_string()))?
             },
         })
@@ -579,7 +561,7 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
-        let (policy, entrypoint) = ("default_allow.wasm", "default_allow.allow");
+        let (policy, entrypoint) = ("default_allow.tar.gz", "default_allow.allow");
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
@@ -707,7 +689,7 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
-        let (policy, entrypoint) = ("auth.wasm", "auth.is_authenticated");
+        let (policy, entrypoint) = ("auth.tar.gz", "auth.is_authenticated");
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
