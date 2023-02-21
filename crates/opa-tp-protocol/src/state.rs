@@ -47,3 +47,29 @@ impl HasSawtoothAddress for PolicyMeta {
         policy_address(&self.id)
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpaOperationEvent {
+    PolicyUpdate(PolicyMeta),
+    KeyUpdate(Keys),
+
+    Error(String),
+}
+
+impl From<String> for OpaOperationEvent {
+    fn from(v: String) -> Self {
+        Self::Error(v)
+    }
+}
+
+impl From<Keys> for OpaOperationEvent {
+    fn from(v: Keys) -> Self {
+        Self::KeyUpdate(v)
+    }
+}
+
+impl From<PolicyMeta> for OpaOperationEvent {
+    fn from(v: PolicyMeta) -> Self {
+        Self::PolicyUpdate(v)
+    }
+}

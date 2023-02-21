@@ -78,6 +78,7 @@ impl SetRuleOptions for CliPolicyLoader {
             })
         }
     }
+
     fn rule_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
         if let Some(val) = options.get_one::<String>("opa-entrypoint") {
             self.set_entrypoint(val);

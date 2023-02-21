@@ -80,7 +80,7 @@ tested-$(ISOLATION_ID): ensure-context-chronicle
 		docker cp $$container_id:/artifacts `pwd`/.artifacts/;  \
 		docker rm $$container_id;
 
-.PHONY: test
+.PHONY: test-e2e
 test: test-e2e
 
 define multi-arch-docker =

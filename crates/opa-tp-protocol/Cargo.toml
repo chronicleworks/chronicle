@@ -10,6 +10,8 @@ version = "0.1.0"
 anyhow = "1.0.68"
 async-trait = "0.1.61"
 chrono = { version = "0.4.19", features = ["serde"] }
+derivative = "2.2.0"
+futures = "0.3.21"
 hex = "0.4.3"
 k256 = { version = "0.11.3", features = [
   "default",

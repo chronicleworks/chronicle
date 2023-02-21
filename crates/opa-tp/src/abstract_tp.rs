@@ -2,7 +2,7 @@ use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext},
 };
-pub(crate) trait TP {
+pub trait TP {
     fn apply(
         &self,
         request: &TpProcessRequest,

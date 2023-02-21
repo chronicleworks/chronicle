@@ -104,8 +104,8 @@ impl TPSideEffects {
 }
 
 impl IntoIterator for TPSideEffects {
-    type Item = TPSideEffect;
     type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = TPSideEffect;
 
     fn into_iter(self) -> Self::IntoIter {
         self.effects.into_iter()
