@@ -54,10 +54,31 @@ pub enum SawtoothCommunicationError {
     NoBlocksReturned,
 }
 
+/// A trait representing a communication channel for sending request and receiving
+/// response messages to/from the Sawtooth network.
+///
+/// This trait defines methods for sending a single message and waiting for a response,
+/// listening on the channel for response messages, and reconnecting to the Sawtooth
+/// network if the connection is lost or interrupted.
+///
 #[async_trait::async_trait]
 pub trait RequestResponseSawtoothChannel {
     // Send a message and wait for a response, decoding the response as a
-    // protobuf message of type `TX`.
+    /// protobuf message of type RX.
+    ///
+    /// # Arguments
+    ///
+    /// * tx - The message to send, encoded as a protobuf message of type TX.
+    /// * message_type - The message type to send.
+    /// * timeout - The maximum amount of time to wait for a response.
+    ///
+    /// # Returns
+    ///
+    /// The response message, decoded as a protobuf message of type RX.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the send or receive operation fails.
     async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
         &self,
         tx: TX,
@@ -65,13 +86,21 @@ pub trait RequestResponseSawtoothChannel {
         timeout: std::time::Duration,
     ) -> Result<RX, SawtoothCommunicationError>;
 
-    // Continue listening on this channel for messages, decoding them as a
-    // protobuf message of type `RX`.
+    /// Listens on this channel for messages, decoding them as a
+    /// protobuf message of type `RX`. Terminates when the channel is closed.
+    ///
+    /// # Returns
+    ///
+    /// A stream of response messages, decoded as protobuf messages of type `RX`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the receive operation fails.
     async fn recv_stream<RX: protobuf::Message>(
         self,
     ) -> Result<BoxStream<'static, RX>, SawtoothCommunicationError>;
 
-    fn reconnect(&self);
+    fn reconnect(&self) {}
 }
 
 #[derive(Clone)]

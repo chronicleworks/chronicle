@@ -7,31 +7,6 @@ use k256::{
 };
 use prost::Message;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OpaTransactionId(String);
-
-impl OpaTransactionId {
-    pub fn new(tx_id: String) -> Self {
-        Self(tx_id)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for OpaTransactionId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<&str> for OpaTransactionId {
-    fn from(tx_id: &str) -> Self {
-        Self(tx_id.to_owned())
-    }
-}
-
 fn bootstrap_root(public_key: VerifyingKey) -> messages::BootstrapRoot {
     let public_key: PublicKey = public_key.into();
     messages::BootstrapRoot {

@@ -5,6 +5,10 @@ use std::{
     str::from_utf8,
 };
 
+use async_sawtooth_sdk::{
+    ledger::{LedgerReader, LedgerWriter, TransactionId},
+    zmq_client::{SawtoothCommunicationError, ZmqRequestResponseSawtoothChannel},
+};
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
 use futures::{channel::oneshot, Future, StreamExt};
@@ -14,10 +18,11 @@ use k256::{
     SecretKey,
 };
 use opa_tp_protocol::{
-    ledger::{LedgerReader, LedgerWriter, OpaEvent, OpaLedger, OpaSubmitTransaction},
+    address::{FAMILY, VERSION},
     state::{key_address, policy_address, Keys, OpaOperationEvent},
-    submission::{OpaTransactionId, SubmissionBuilder},
-    zmq_client::{SawtoothCommunicationError, ZmqRequestResponseSawtoothChannel},
+    submission::SubmissionBuilder,
+    transaction::OpaSubmitTransaction,
+    OpaLedger,
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
@@ -44,7 +49,7 @@ pub enum OpaCtlError {
     #[error("Json error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("Transaction not found after wait {0}")]
-    TransactionNotFound(OpaTransactionId),
+    TransactionNotFound(TransactionId),
     #[error("Transaction failed {0}")]
     TransactionFailed(String),
     #[error("Operation cancelled {0}")]
@@ -65,10 +70,14 @@ pub enum Waited {
 /// Collect incoming transaction ids before running submission, as there is the
 /// potential to miss transactions if we do not collect them 'before' submission
 async fn ambient_transactions<
-    R: LedgerReader<OpaEvent, Error = SawtoothCommunicationError> + Send + Sync + Clone + 'static,
+    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 >(
     reader: R,
-    goal_tx_id: OpaTransactionId,
+    goal_tx_id: TransactionId,
     max_steps: u64,
 ) -> impl Future<Output = Result<Waited, oneshot::Canceled>> {
     let span = span!(Level::DEBUG, "wait_for_opa_transaction");
@@ -82,7 +91,9 @@ async fn ambient_transactions<
         debug!(waiting_for=?goal_tx_id, max_steps=?max_steps);
         let goal_clone = goal_tx_id.clone();
 
-        let stream = reader.state_updates(None, Some(max_steps)).await;
+        let stream = reader
+            .state_updates(vec!["opa/operation".to_string()], None, Some(max_steps))
+            .await;
 
         match stream {
             Ok(mut stream) => {
@@ -113,8 +124,12 @@ async fn ambient_transactions<
 
 #[instrument(skip(reader, writer, matches))]
 async fn handle_wait<
-    R: LedgerReader<OpaEvent, Error = SawtoothCommunicationError> + Clone + Send + Sync + 'static,
-    W: LedgerWriter<OpaSubmitTransaction, Error = SawtoothCommunicationError>,
+    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>,
 >(
     matches: &ArgMatches,
     reader: R,
@@ -148,8 +163,12 @@ async fn handle_wait<
 }
 
 async fn dispatch_args<
-    W: LedgerWriter<OpaSubmitTransaction, Error = SawtoothCommunicationError>,
-    R: LedgerReader<OpaEvent, Error = SawtoothCommunicationError> + Send + Sync + Clone + 'static,
+    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>,
+    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 >(
     matches: ArgMatches,
     writer: W,
@@ -303,7 +322,7 @@ async fn main() {
     let args = cli::cli().get_matches();
     let address: &Url = args.get_one("sawtooth-address").unwrap();
     let client = ZmqRequestResponseSawtoothChannel::new(address);
-    let reader = OpaLedger::new(client.clone());
+    let reader = OpaLedger::new(client.clone(), VERSION, FAMILY);
     let writer = reader.clone();
 
     dispatch_args(args, writer, reader)
@@ -326,9 +345,18 @@ async fn main() {
 
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`
 #[cfg(test)]
-mod test {
+pub mod test {
+    use async_sawtooth_sdk::{
+        ledger::SawtoothLedger, zmq_client::RequestResponseSawtoothChannel,
+        zmq_client::SawtoothCommunicationError,
+    };
     use clap::ArgMatches;
     use futures::{Stream, StreamExt};
+    use opa_tp_protocol::{
+        address::{FAMILY, VERSION},
+        state::OpaOperationEvent,
+        transaction::OpaSubmitTransaction,
+    };
     use sawtooth_sdk::messages::client_state::{
         ClientStateGetRequest, ClientStateGetResponse, ClientStateGetResponse_Status,
     };
@@ -339,9 +367,6 @@ mod test {
     };
     use opa_tp::{abstract_tp::TP, tp::OpaTransactionHandler};
 
-    use opa_tp_protocol::ledger::OpaLedger;
-
-    use opa_tp_protocol::zmq_client::{RequestResponseSawtoothChannel, SawtoothCommunicationError};
     use protobuf::Message;
     use rand::rngs::StdRng;
     use rand_core::SeedableRng;
@@ -433,9 +458,10 @@ mod test {
                     .boxed(),
             )
         }
-
-        fn reconnect(&self) {}
     }
+
+    pub type OpaLedger =
+        SawtoothLedger<SimulatedSubmissionChannel, OpaOperationEvent, OpaSubmitTransaction>;
 
     pub struct TestTransactionContext {
         pub state: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -661,7 +687,7 @@ mod test {
     }
 
     struct EmbeddedOpaTp {
-        pub ledger: OpaLedger<SimulatedSubmissionChannel>,
+        pub ledger: OpaLedger,
         context: Arc<Mutex<TestTransactionContext>>,
     }
 
@@ -685,7 +711,11 @@ mod test {
         };
 
         EmbeddedOpaTp {
-            ledger: OpaLedger::new(SimulatedSubmissionChannel::new(Box::new(behavior), rx)),
+            ledger: OpaLedger::new(
+                SimulatedSubmissionChannel::new(Box::new(behavior), rx),
+                FAMILY,
+                VERSION,
+            ),
             context,
         }
     }
@@ -707,7 +737,11 @@ mod test {
         };
 
         EmbeddedOpaTp {
-            ledger: OpaLedger::new(SimulatedSubmissionChannel::new(Box::new(behavior), rx)),
+            ledger: OpaLedger::new(
+                SimulatedSubmissionChannel::new(Box::new(behavior), rx),
+                FAMILY,
+                VERSION,
+            ),
             context,
         }
     }

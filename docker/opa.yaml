@@ -76,7 +76,7 @@ services:
     volumes: *rngVolumes
 
   opa-test:
-    image: opa-test:${ISOLATION_ID}
+    image: opa-test:${ISOLATION_ID:-local}
     profiles: ["test"]
     depends_on:
       - opa-tp
