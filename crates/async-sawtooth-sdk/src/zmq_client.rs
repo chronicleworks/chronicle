@@ -26,13 +26,6 @@ use crate::error::SawtoothCommunicationError;
 /// listening on the channel for response messages, and reconnecting to the Sawtooth
 /// network if the connection is lost or interrupted.
 ///
-/// A trait representing a communication channel for sending request and receiving
-/// response messages to/from the Sawtooth network.
-///
-/// This trait defines methods for sending a single message and waiting for a response,
-/// listening on the channel for response messages, and reconnecting to the Sawtooth
-/// network if the connection is lost or interrupted.
-///
 #[async_trait::async_trait]
 pub trait RequestResponseSawtoothChannel {
     /// Send a message and wait for a response, decoding the response as a
