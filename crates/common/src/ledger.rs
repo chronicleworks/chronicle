@@ -875,31 +875,27 @@ impl ChronicleOperation {
                 if let Some(graph) = json_ld.get_mut("@graph").and_then(|g| g.as_array_mut()) {
                     graph
                         .iter_mut()
-                        .map(|entry| {
-                            Ok(serde_json::json!({
-                                entry
-                                    .as_object_mut()
-                                    .and_then(|o| o.remove("@id"))
-                                    .as_ref()
-                                    .and_then(|v| v.as_str())
-                                    .ok_or(ProcessorError::NotANode)?:
-                                    entry
-                            }))
-                        })
+                        .map(transform_context_graph_object)
                         .collect::<Result<Vec<_>, ProcessorError>>()?
                 } else {
-                    vec![serde_json::json!({
-                        json_ld
-                            .as_object_mut()
-                            .and_then(|o| o.remove("@id"))
-                            .as_ref()
-                            .and_then(|v| v.as_str())
-                            .ok_or(ProcessorError::NotANode)?: json_ld
-                    })]
+                    vec![transform_context_graph_object(&mut json_ld)?]
                 },
             )
         }
     }
+}
+
+fn transform_context_graph_object(
+    value: &mut serde_json::Value,
+) -> Result<serde_json::Value, ProcessorError> {
+    Ok(serde_json::json!({
+        value
+            .as_object_mut()
+            .and_then(|o| o.remove("@id"))
+            .as_ref()
+            .and_then(|v| v.as_str())
+            .ok_or(ProcessorError::NotANode)?: value
+    }))
 }
 
 /// Ensure ledgerwriter only writes dirty values back
@@ -1136,6 +1132,28 @@ pub mod test {
               "externalId": "testns"
             }
           ]
+        }
+        "###);
+    }
+
+    #[test]
+    fn test_transform_context_graph_object() {
+        let mut graph_object = serde_json::json!(
+            {
+                "@id": "http://example.org/library",
+                "@type": "ex:Library",
+                "ex:contains": "http://example.org/library/the-republic"
+            }
+        );
+
+        insta::assert_json_snapshot!(
+            super::transform_context_graph_object(&mut graph_object).unwrap(),
+            @r###"
+        {
+          "http://example.org/library": {
+            "@type": "ex:Library",
+            "ex:contains": "http://example.org/library/the-republic"
+          }
         }
         "###);
     }

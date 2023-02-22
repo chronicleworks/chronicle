@@ -15,7 +15,7 @@ use common::{
     identity::AuthId,
     ledger::SubmissionStage,
     opa::{CliPolicyLoader, ExecutorContext, PolicyLoader},
-    prov::{to_json_ld::ToJson, AgentId},
+    prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
 use tracing::{debug, error, info, instrument};
@@ -313,13 +313,10 @@ where
             None
         };
 
-        let id_pointer = if matches.is_present("anonymous-api") {
-            None
-        } else {
-            matches
-                .value_of("id-pointer")
-                .map(|id_pointer| id_pointer.to_string())
-        };
+        // Defaults to look for "/sub"
+        let id_pointer = matches
+            .value_of("id-pointer")
+            .map(|id_pointer| id_pointer.to_string());
 
         let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
         for (name, value) in std::env::vars() {
@@ -331,13 +328,6 @@ where
             while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
                 jwt_must_claim.insert(name.clone(), value.clone());
             }
-        }
-
-        // This may not be the ideal place for this, but we need it for development
-        // as we default to an anonymous user when we serve graphql
-        if jwks_uri.is_none() {
-            DirectoryStoredKeys::new(config.secrets.path)?
-                .generate_agent(&AgentId::from_external_id("Anonymous"))?;
         }
 
         let opa = opa_executor().await?;

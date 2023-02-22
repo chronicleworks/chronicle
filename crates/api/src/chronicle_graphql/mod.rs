@@ -8,12 +8,11 @@ use async_graphql_poem::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    identity::AuthId,
+    identity::{AuthId, JwtClaims, OpaData},
     ledger::{SubmissionError, SubmissionStage},
     opa::ExecutorContext,
     prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
 };
-use custom_error::custom_error;
 use derivative::*;
 use diesel::{
     prelude::*,
@@ -31,6 +30,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
@@ -162,12 +162,22 @@ pub enum TimelineOrder {
     OldestFirst,
 }
 
-custom_error! {pub GraphQlError
-    Db{source: diesel::result::Error}                           = "Database operation failed",
-    R2d2{source: r2d2::Error }                                  = "Connection pool error",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed",
-    Api{source: crate::ApiError}                                = "API",
-    Io{source: std::io::Error}                                  = "I/O",
+#[derive(Error, Debug)]
+pub enum GraphQlError {
+    #[error("Database operation failed: {0}")]
+    Db(#[from] diesel::result::Error),
+
+    #[error("Connection pool error: {0}")]
+    R2d2(#[from] r2d2::Error),
+
+    #[error("Database connection failed: {0}")]
+    DbConnection(#[from] diesel::ConnectionError),
+
+    #[error("API: {0}")]
+    Api(#[from] crate::ApiError),
+
+    #[error("I/O: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl GraphQlError {
@@ -379,9 +389,6 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct JwtClaims(pub serde_json::Map<String, serde_json::Value>);
-
 fn check_required_claim(must_value: &str, actual_value: &serde_json::Value) -> bool {
     match actual_value {
         serde_json::Value::String(actual_value) => must_value == actual_value,
@@ -551,16 +558,7 @@ pub struct AuthFromJwt {
 impl AuthFromJwt {
     #[instrument(level = "debug", ret(Debug))]
     fn identity(&self, claims: &JwtClaims) -> Option<AuthId> {
-        use common::prov::AgentId;
-        use serde_json::Value;
-
-        if let Some(Value::String(external_id)) =
-            Value::Object(claims.0.clone()).pointer(&self.json_pointer)
-        {
-            Some(AuthId::agent(&AgentId::from_external_id(external_id)))
-        } else {
-            None
-        }
+        AuthId::from_jwt_claims(claims, &self.json_pointer).ok()
     }
 }
 
@@ -605,16 +603,22 @@ impl async_graphql::extensions::Extension for OpaCheck {
         next: async_graphql::extensions::NextResolve<'_>,
     ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
         use async_graphql::ServerError;
-        use serde_json::{Map, Value};
+        use serde_json::Value;
         if let Some(opa_executor) = ctx.data_opt::<ExecutorContext>() {
-            let mut opa_context = Map::new();
-            opa_context.insert(
-                "parent_type".to_string(),
-                Value::String(info.parent_type.to_string()),
-            );
-            opa_context.insert(
-                "resolve_path".to_string(),
-                Value::Array(
+            // If unable to get an external_id from the JwtClaims or no claims found,
+            // identity will be `Anonymous`
+            let identity = match (ctx.data_opt::<JwtClaims>(), &self.claim_parser) {
+                (Some(claims), Some(parser)) => {
+                    parser.identity(claims).unwrap_or(AuthId::anonymous())
+                }
+                _ => AuthId::anonymous(),
+            };
+
+            // Create OPA context data for the user identity
+            let opa_data = OpaData::graphql(
+                &identity,
+                &Value::String(info.parent_type.to_string()),
+                &Value::Array(
                     info.path_node
                         .to_string_vec()
                         .into_iter()
@@ -622,23 +626,14 @@ impl async_graphql::extensions::Extension for OpaCheck {
                         .collect(),
                 ),
             );
-            if let Some(JwtClaims(claims)) = ctx.data_opt::<JwtClaims>() {
-                opa_context.insert("identity_claims".to_string(), Value::Object(claims.clone()));
-            }
-            let opa_context = Value::Object(opa_context);
-            let identity = if let (Some(claims), Some(parser)) =
-                (ctx.data_opt::<JwtClaims>(), &self.claim_parser)
-            {
-                parser.identity(claims).unwrap_or(AuthId::Anonymous)
-            } else {
-                AuthId::Anonymous
-            };
-            let verdict = opa_executor.evaluate(&identity, &opa_context).await;
-            match verdict {
+
+            // Execute OPA check
+            match opa_executor.evaluate(&identity, &opa_data).await {
                 Ok(()) => next.run(ctx, info).await,
                 Err(error) => {
                     tracing::warn!(
-                        "{error}: attempt to violate policy rules by {identity:?} in context {opa_context:#?}"
+                        "{error}: attempt to violate policy rules by identity: {identity}, in context: {:#?}",
+                        opa_data
                     );
                     Err(ServerError::new("violation of policy rules", None))
                 }

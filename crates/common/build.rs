@@ -31,7 +31,7 @@ fn main() -> Result<()> {
 
     let policies = vec![
         ("allow_defines", "allow"),
-        ("auth", "is_authenticated"),
+        ("auth", "is_authorized"),
         ("default_allow", "allow"),
         ("default_deny", "allow"),
     ];

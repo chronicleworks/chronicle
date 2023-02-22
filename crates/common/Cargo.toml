@@ -78,7 +78,7 @@ prost-build = "0.10.0"
 [dev-dependencies]
 api = { path = "../api" }
 criterion = { version = "0.4.0", features = ["async_futures", "async_tokio"] }
-insta = { version = "1.14.0", features = ["redactions", "toml"] }
+insta = { version = "1.14.0", features = ["json", "redactions", "toml"] }
 proptest = "1.0.0"
 sawtooth-sdk = "0.5.2"
 

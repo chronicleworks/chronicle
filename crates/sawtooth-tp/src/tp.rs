@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use common::{
-    identity::{AuthId, SignedIdentity},
+    identity::{AuthId, OpaData, SignedIdentity},
     ledger::{OperationState, StateOutput, SubmissionError},
     opa::{CliPolicyLoader, ExecutorContext},
     protocol::{
@@ -250,10 +250,6 @@ impl TP for ChronicleTransactionHandler {
         let identity = AuthId::try_from(identity)
             .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
 
-        let identity_context = identity
-            .identity_context()
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
-
         // Set up Context for OPA rule check
         let operation = serde_json::to_value(
             tx.to_json()
@@ -275,20 +271,17 @@ impl TP for ChronicleTransactionHandler {
 
         let operation_state = state.opa_context(deps);
 
-        let state = tx
-            .opa_context_state(ProvModel::default(), operation_state)
-            .await
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        let state = serde_json::Value::Array(
+            tx.opa_context_state(ProvModel::default(), operation_state)
+                .await
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?,
+        );
 
-        let context = serde_json::json!({
-            "identity": identity_context,
-            "operation": operation,
-            "state": state,
-        });
+        let opa_data = OpaData::operation(&identity, &operation, &state);
 
-        info!(opa_evaluation_context = %context);
+        info!(opa_evaluation_context = ?opa_data);
 
-        match opa_executor.evaluate(&identity, &context).await {
+        match opa_executor.evaluate(&identity, &opa_data).await {
             Ok(()) => Ok(()),
             Err(e) => Err(ApplyError::InvalidTransaction(e.to_string())),
         }
@@ -658,9 +651,9 @@ pub mod test {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
-        keystore
-            .generate_agent(&AgentId::from_external_id("Anonymous"))
-            .unwrap();
+        keystore.generate_chronicle().unwrap();
+
+        // User identity is `Anonymous`
         let signed_identity = AuthId::anonymous().signed_identity(&keystore).unwrap();
 
         // Example transaction payload of `CreateNamespace`,
@@ -674,9 +667,7 @@ pub mod test {
             signed_identity,
         );
 
-        let secret: SigningKey = keystore
-            .agent_signing(&AgentId::from_external_id("Anonymous"))
-            .unwrap();
+        let secret: SigningKey = keystore.chronicle_signing().unwrap();
 
         // Get a signed tx from sawtooth protocol
         let mut submission_builder = OperationMessageBuilder::new(&secret, "TEST", "1.0");
@@ -690,7 +681,8 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
-        let (policy, entrypoint) = ("auth.tar.gz", "auth.is_authenticated");
+        // The "auth" policy only allows access to identity "chronicle"
+        let (policy, entrypoint) = ("auth.tar.gz", "auth.is_authorized");
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
