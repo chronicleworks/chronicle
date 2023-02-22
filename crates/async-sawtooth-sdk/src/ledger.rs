@@ -34,7 +34,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BlockId(String);
 
-impl std::fmt::Display for BlockId {
+impl std::fmt::Display for TransactionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -190,9 +190,9 @@ where
 pub trait LedgerReader {
     type Error: std::error::Error;
     type Event: LedgerEvent;
+    type Event: LedgerEvent;
     /// Get the state entry at `address`
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
-
     // Get the block height of the ledger, and the id of the highest block
     async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error>;
     /// Subscribe to state updates from this ledger, starting at `offset`, and
@@ -280,7 +280,7 @@ impl<
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok((header.block_num, header.previous_block_id))
+            Ok(header.block_num)
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -302,7 +302,7 @@ impl<
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                subscription_request,
+                request,
                 Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                 Duration::from_secs(10),
             )
@@ -443,9 +443,9 @@ impl<
         }
     }
 
-    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
-        let (block, id) = self.get_block_height().await?;
-        Ok((Offset::from(block), BlockId(id)))
+    async fn block_height(&self) -> Result<Offset, Self::Error> {
+        let block = self.get_block_height().await?;
+        Ok(Offset::from(block))
     }
 
     #[instrument(skip(self))]
@@ -456,13 +456,10 @@ impl<
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, Self::Error> {
         let self_clone = self.clone();
-
-        let (from_offset, from_block_id) = match from_offset {
-            None => (Offset::Genesis, None),
-            Some(from_offset) => {
-                let (_num, id) = self_clone.get_block_height().await?;
-                (from_offset, Some(BlockId(id)))
-            }
+        let from_offset = if let Some(offset) = from_offset {
+            offset
+        } else {
+            self_clone.block_height().await?
         };
 
         let subscribe = self
