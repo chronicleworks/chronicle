@@ -61,6 +61,13 @@ pub enum SawtoothCommunicationError {
 /// listening on the channel for response messages, and reconnecting to the Sawtooth
 /// network if the connection is lost or interrupted.
 ///
+/// A trait representing a communication channel for sending request and receiving
+/// response messages to/from the Sawtooth network.
+///
+/// This trait defines methods for sending a single message and waiting for a response,
+/// listening on the channel for response messages, and reconnecting to the Sawtooth
+/// network if the connection is lost or interrupted.
+///
 #[async_trait::async_trait]
 pub trait RequestResponseSawtoothChannel {
     /// Send a message and wait for a response, decoding the response as a
@@ -86,6 +93,16 @@ pub trait RequestResponseSawtoothChannel {
         timeout: std::time::Duration,
     ) -> Result<RX, SawtoothCommunicationError>;
 
+    /// Listens on this channel for messages, decoding them as a
+    /// protobuf message of type `RX`. Terminates when the channel is closed.
+    ///
+    /// # Returns
+    ///
+    /// A stream of response messages, decoded as protobuf messages of type `RX`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the receive operation fails.
     /// Listens on this channel for messages, decoding them as a
     /// protobuf message of type `RX`. Terminates when the channel is closed.
     ///

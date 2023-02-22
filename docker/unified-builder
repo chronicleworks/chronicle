@@ -152,6 +152,7 @@ USER tester
 FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as artifacts
 COPY --from=crossbuild --link /artifacts /artifacts
 
+USER root
 
 FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as chronicle-builder
 ARG TARGETARCH

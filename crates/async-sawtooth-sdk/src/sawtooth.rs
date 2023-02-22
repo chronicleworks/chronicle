@@ -72,7 +72,6 @@ impl MessageBuilder {
             })
             .into(),
             sorting: vec![ClientSortControls {
-                keys: vec!["block_num".to_owned()].into(),
                 reverse: true,
                 ..Default::default()
             }]
@@ -88,6 +87,8 @@ impl MessageBuilder {
         }
     }
 
+    // Create a `ClientEventsSubscribeRequest` for the given offset and event
+    // type. sawtooth/block-commit events are always subscribed to.
     pub fn make_subscription_request(
         &self,
         block_id: &Option<BlockId>,
@@ -117,9 +118,11 @@ impl MessageBuilder {
             ..Default::default()
         };
 
-        if let Some(block_id) = block_id.as_ref() {
-            request.last_known_block_ids = vec![block_id.to_string()].into();
-        }
+        offset.map(|offset| {
+            request.last_known_block_ids = vec![offset.to_string()].into();
+        });
+
+        operation_subscriptions.push(block_subscription);
 
         operation_subscriptions.push(block_subscription);
 

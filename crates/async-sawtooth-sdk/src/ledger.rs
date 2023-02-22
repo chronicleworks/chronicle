@@ -34,7 +34,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BlockId(String);
 
-impl std::fmt::Display for BlockId {
+impl std::fmt::Display for TransactionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -97,8 +97,8 @@ impl Offset {
     pub fn distance(&self, other: &Self) -> u64 {
         match (self, other) {
             (Offset::Genesis, Offset::Genesis) => 0,
-            (Offset::Genesis, Offset::Identity(_)) => 0,
-            (Offset::Identity(_), Offset::Genesis) => 0,
+            (Offset::Genesis, Offset::Identity(x)) => x,
+            (Offset::Identity(x), Offset::Genesis) => x,
             (Offset::Identity(x), Offset::Identity(y)) => x.saturating_sub(*y),
         }
     }
@@ -110,6 +110,16 @@ impl From<u64> for Offset {
         Offset::Identity(x)
     }
 }
+
+pub trait LedgerEvent {
+    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    where
+        Self: Sized;
+}
+
+// An application specific ledger event with its corresponding transaction id,
+// block height and trace span
+pub type LedgerEventContext<Event> = (Event, TransactionId, Offset, u64);
 
 pub trait LedgerEvent {
     fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
@@ -151,6 +161,7 @@ pub trait LedgerWriter {
 #[async_trait::async_trait]
 pub trait LedgerReader {
     type Error: std::error::Error;
+    type Event: LedgerEvent;
     type Event: LedgerEvent;
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
 
@@ -241,7 +252,7 @@ impl<
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok((header.block_num, header.previous_block_id))
+            Ok(header.block_num)
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -250,8 +261,9 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn get_state_from(
+    async fn get_events_from(
         &self,
+        event_types: Vec<String>,
         offset: &Offset,
         offset_id: &Option<BlockId>,
         event_types: Vec<String>,
@@ -263,7 +275,7 @@ impl<
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                subscription_request,
+                request,
                 Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                 Duration::from_secs(10),
             )
@@ -391,9 +403,9 @@ impl<
         }
     }
 
-    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
-        let (block, id) = self.get_block_height().await?;
-        Ok((Offset::from(block), BlockId(id)))
+    async fn block_height(&self) -> Result<Offset, Self::Error> {
+        let block = self.get_block_height().await?;
+        Ok(Offset::from(block))
     }
 
     #[instrument(skip(self))]
@@ -404,13 +416,10 @@ impl<
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error> {
         let self_clone = self.clone();
-
-        let (from_offset, from_block_id) = match from_offset {
-            None => (Offset::Genesis, None),
-            Some(from_offset) => {
-                let (_num, id) = self_clone.get_block_height().await?;
-                (from_offset, Some(BlockId(id)))
-            }
+        let from_offset = if let Some(offset) = from_offset {
+            offset
+        } else {
+            self_clone.block_height().await?
         };
 
         let subscribe = self
