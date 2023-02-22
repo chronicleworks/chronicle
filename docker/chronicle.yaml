@@ -160,3 +160,9 @@ services:
     profiles: ["test"]
     depends_on:
       - chronicle-sawtooth-api
+
+  opa-test:
+    image: opa-test:${ISOLATION_ID}
+    profiles: ["test-opa"]
+    depends_on:
+      - chronicle-sawtooth-api
