@@ -1000,10 +1000,14 @@ impl SubCommand for CliModel {
                     .arg(
                         Arg::new("interface")
                             .long("interface")
-                            .required(false)
                             .takes_value(true)
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
+                    ).arg(
+                        Arg::new("require-auth")
+                            .long("require-auth")
+                            .requires("jwks-address")
+                            .help("if JWT must be provided, preventing anonymous requests"),
                     ).arg(
                         Arg::new("jwks-address")
                             .long("jwks-address")
@@ -1025,11 +1029,6 @@ impl SubCommand for CliModel {
                             .env("JWT_POINTER")
                             .default_value("/sub")
                             .help("JSON pointer into JWT claims for Chronicle ID"),
-                    ).arg(
-                        Arg::new("anonymous-api")
-                            .long("anonymous-api")
-                            .help("accept GraphQL without authentication by web tokens")
-                        // no conflict with JWT/JWKS settings because they may be set in environment but not used for this invocation
                     )
                     .arg(
                         Arg::new("jwt-must-claim")
