@@ -3,12 +3,13 @@ use lazy_static::lazy_static;
 use pg_embed::{
     self,
     pg_enums::{Architecture, OperationSystem, PgAuthMethod},
+    pg_errors::{PgEmbedError, PgEmbedErrorType},
     pg_fetch::{PgFetchSettings, PG_V13},
     pg_types::PgResult,
     postgres::{self, PgEmbed},
 };
 use r2d2::Pool;
-use std::time::Duration;
+use std::{fmt::Display, time::Duration};
 use temp_dir::TempDir;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -45,7 +46,7 @@ pub fn pg_fetch_settings() -> PgFetchSettings {
     }
 }
 
-pub async fn get_embedded_db_connection(
+async fn get_embedded_db_connection_one_try(
 ) -> PgResult<(Database, Pool<ConnectionManager<PgConnection>>)> {
     let temp_dir = TempDir::new().unwrap();
     TEMP_DIRS.lock().await.push(temp_dir.clone());
@@ -76,4 +77,50 @@ pub async fn get_embedded_db_connection(
         },
         pool,
     ))
+}
+
+pub async fn get_embedded_db_connection(
+) -> PgResult<(Database, Pool<ConnectionManager<PgConnection>>)> {
+    get_connection_with_retry(EmbeddedDatabaseConnector).await
+}
+
+pub struct EmbeddedDatabaseConnector;
+
+#[async_trait::async_trait]
+impl DatabaseConnector<Database, PgEmbedError> for EmbeddedDatabaseConnector {
+    async fn try_connect(
+        &self,
+    ) -> Result<(Database, Pool<ConnectionManager<PgConnection>>), PgEmbedError> {
+        get_embedded_db_connection_one_try().await
+    }
+
+    fn should_retry(&self, error: &PgEmbedError) -> bool {
+        error.error_type == PgEmbedErrorType::PgStartFailure
+    }
+}
+
+#[async_trait::async_trait]
+pub trait DatabaseConnector<X, E> {
+    async fn try_connect(&self) -> Result<(X, Pool<ConnectionManager<PgConnection>>), E>;
+    fn should_retry(&self, error: &E) -> bool;
+}
+
+pub async fn get_connection_with_retry<E: Display, X>(
+    connector: impl DatabaseConnector<X, E>,
+) -> Result<(X, Pool<ConnectionManager<PgConnection>>), E> {
+    let mut i = 1;
+    let mut j = 1;
+    loop {
+        let connection = connector.try_connect().await;
+        if let Err(source) = &connection {
+            tracing::warn!("database connection failed: {source}");
+            if i < 20 && connector.should_retry(source) {
+                tracing::info!("waiting to retry database connection...");
+                std::thread::sleep(Duration::from_secs(i));
+                (i, j) = (i + j, i);
+                continue;
+            }
+        }
+        return connection;
+    }
 }

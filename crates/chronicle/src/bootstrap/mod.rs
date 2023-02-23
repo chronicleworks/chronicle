@@ -3,15 +3,15 @@ mod config;
 
 use api::{
     chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer, SecurityConf},
-    Api, ApiDispatch, ApiError, UuidGen,
+    Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
-use async_graphql::ObjectType;
+use async_graphql::{async_trait, ObjectType};
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
 use common::{
     commands::ApiResponse,
-    database::Database,
+    database::{get_connection_with_retry, Database, DatabaseConnector},
     identity::AuthId,
     ledger::SubmissionStage,
     opa::{CliPolicyLoader, ExecutorContext, PolicyLoader},
@@ -31,7 +31,7 @@ use chronicle_telemetry::{self, ConsoleLogging};
 use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
-use std::{collections::HashMap, io, net::SocketAddr, str::FromStr, time::Duration};
+use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -119,33 +119,39 @@ async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError>
     Ok((pool, Some(database)))
 }
 
-fn pool_remote(db_uri: &str) -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    // before pooling, first establish a test connection to get a clearer error if it fails
-    let mut i = 1;
-    let mut j = 1;
-    loop {
+struct RemoteDatabaseConnector {
+    db_uri: String,
+}
+
+#[async_trait::async_trait]
+impl DatabaseConnector<(), StoreError> for RemoteDatabaseConnector {
+    async fn try_connect(&self) -> Result<((), Pool<ConnectionManager<PgConnection>>), StoreError> {
         use diesel::Connection;
-        match PgConnection::establish(db_uri) {
-            Ok(_) => break,
-            Err(source) => {
-                tracing::warn!("database connection failed: {source}");
-                if i < 20 {
-                    if let diesel::ConnectionError::BadConnection(_) = source {
-                        tracing::info!("waiting to retry database connection...");
-                        std::thread::sleep(Duration::from_secs(i));
-                        (i, j) = (i + j, i);
-                        continue;
-                    }
-                };
-                return Err(api::StoreError::DbConnection { source }.into());
-            }
-        }
+        PgConnection::establish(&self.db_uri)?;
+        Ok((
+            (),
+            Pool::builder().build(ConnectionManager::<PgConnection>::new(&self.db_uri))?,
+        ))
     }
-    // connection succeeded so build the connection pool
-    Ok((
-        Pool::builder().build(ConnectionManager::<PgConnection>::new(db_uri))?,
-        None::<Database>,
-    ))
+
+    fn should_retry(&self, error: &StoreError) -> bool {
+        matches!(
+            error,
+            StoreError::DbConnection {
+                source: diesel::ConnectionError::BadConnection(_),
+            }
+        )
+    }
+}
+
+async fn pool_remote(
+    db_uri: impl ToString,
+) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+    let (_, pool) = get_connection_with_retry(RemoteDatabaseConnector {
+        db_uri: db_uri.to_string(),
+    })
+    .await?;
+    Ok((pool, None::<Database>))
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
@@ -262,7 +268,7 @@ async fn pool(matches: &ArgMatches) -> Result<(ConnectionPool, Option<Database>)
     let mut relevant_error = None;
     if !matches.is_present("embedded-database") {
         debug!("connecting to remote DB");
-        match pool_remote(&construct_db_uri(matches)) {
+        match pool_remote(&construct_db_uri(matches)).await {
             success @ Ok(_) => return success,
             Err(error) => relevant_error = Some(error),
         }
