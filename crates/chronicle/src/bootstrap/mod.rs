@@ -313,7 +313,9 @@ where
             None
         };
 
-        // Defaults to look for "/sub"
+        let allow_anonymous = !matches.is_present("require-auth");
+
+        // CliModel defaults to looking for "/sub"
         let id_pointer = matches
             .value_of("id-pointer")
             .map(|id_pointer| id_pointer.to_string());
@@ -342,6 +344,7 @@ where
                 userinfo_uri,
                 id_pointer,
                 jwt_must_claim,
+                allow_anonymous,
                 opa,
             },
         )

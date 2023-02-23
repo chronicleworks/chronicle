@@ -355,6 +355,7 @@ pub struct SecurityConf {
     pub userinfo_uri: Option<Url>,
     pub id_pointer: Option<String>,
     pub jwt_must_claim: HashMap<String, String>,
+    pub allow_anonymous: bool,
     pub opa: ExecutorContext,
 }
 
@@ -419,6 +420,7 @@ fn check_required_claims(
 struct AuthorizationEndpointQuery<Q, M, S> {
     checker: JwtChecker,
     must_claim: HashMap<String, String>,
+    allow_anonymous: bool,
     schema: Schema<Q, M, S>,
 }
 
@@ -471,9 +473,15 @@ where
                 "Authorization header present but without a satisfactory bearer token",
                 StatusCode::UNAUTHORIZED,
             ))
-        } else {
+        } else if self.allow_anonymous {
             tracing::debug!("anonymous access from {}", req.remote_addr());
             self.respond(req, |req| req.0).await
+        } else {
+            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            Err(poem::error::Error::from_string(
+                "required Authorization header not present",
+                StatusCode::UNAUTHORIZED,
+            ))
         }
     }
 }
@@ -481,6 +489,7 @@ where
 struct AuthorizationEndpointSubscription<Q, M, S> {
     checker: JwtChecker,
     must_claim: HashMap<String, String>,
+    allow_anonymous: bool,
     schema: Schema<Q, M, S>,
 }
 
@@ -544,8 +553,14 @@ where
                 "Authorization header present but without a satisfactory bearer token",
                 StatusCode::UNAUTHORIZED,
             ))
-        } else {
+        } else if self.allow_anonymous {
             self.respond(req, async_graphql::Data::default()).await
+        } else {
+            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            Err(poem::error::Error::from_string(
+                "required Authorization header not present",
+                StatusCode::UNAUTHORIZED,
+            ))
         }
     }
 }
@@ -700,6 +715,7 @@ where
                                 CACHE_EXPIRY_SECONDS,
                             ),
                             must_claim: sec.jwt_must_claim.clone(),
+                            allow_anonymous: sec.allow_anonymous,
                             schema: schema.clone(),
                         }),
                     )
@@ -712,6 +728,7 @@ where
                                 CACHE_EXPIRY_SECONDS,
                             ),
                             must_claim: sec.jwt_must_claim,
+                            allow_anonymous: sec.allow_anonymous,
                             schema,
                         }),
                     )
