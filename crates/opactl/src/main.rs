@@ -263,7 +263,7 @@ async fn dispatch_args<
                 let mut file = File::create(path).unwrap();
                 file.write_all(key.as_bytes()).unwrap();
             } else {
-                println!("{}", key);
+                println!("{key}");
             }
 
             Ok(Waited::NoWait)
