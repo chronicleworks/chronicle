@@ -291,7 +291,7 @@ where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     let matches = cli.as_cmd().get_matches();
     let (pool, _pool_scope) = pool(&matches).await?;

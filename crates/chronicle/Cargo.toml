@@ -21,7 +21,7 @@ diesel = { version = "2.0.0-rc.0", features = [
   "chrono",
   "r2d2",
 ] }
-dotenv = "0.15.0"
+dotenvy = "0.15"
 futures = "0.3.21"
 genco = "0.16.1"
 hex = "0.4.3"
