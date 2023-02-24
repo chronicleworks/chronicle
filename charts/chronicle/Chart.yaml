@@ -1,0 +1,32 @@
+---
+apiVersion: v2
+name: chronicle
+description: |
+  Chronicle is an open-source, blockchain-backed, domain-agnostic provenance
+  product. Chronicle makes it easy for users to record and query immutable
+  provenance information on a distributed ledger - about any asset,
+  in any domain, and across multiple parties.
+type: application
+home: https://docs.btp.works/chronicle
+icon: https://chronicle-resources.s3.amazonaws.com/icons/chronicle-transparent-bg-dark.png
+
+keywords:
+  - provenance
+  - blockchain
+
+# This is the chart version. This version number should be incremented each
+# time you make changes to the chart and its templates, including the app
+# version.
+version: 0.1.6
+
+# This is the version number of Chronicle being deployed. This version
+# number should be incremented each time you make changes to Chronicle.
+appVersion: 0.2.1
+
+dependencies:
+  - name: standard-defs
+    version: ~0.1.0
+    repository: https://btp-charts-stable.s3.amazonaws.com/charts/
+  - name: sawtooth
+    version: ~0.2.0
+    repository: https://btp-charts-stable.s3.amazonaws.com/charts/
