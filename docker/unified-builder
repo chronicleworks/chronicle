@@ -166,6 +166,10 @@ WORKDIR /
 RUN groupadd -g 999 chronicle && \
   useradd -m -r -u 999 -g chronicle chronicle
 
+RUN apt-get update && \
+  apt-get install -y \
+  libpq5
+
 COPY .artifacts/artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
 
 RUN mkdir -p /var/lib/chronicle \
