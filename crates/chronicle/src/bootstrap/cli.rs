@@ -1004,6 +1004,13 @@ impl SubCommand for CliModel {
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
                     ).arg(
+                        Arg::new("unlock-cors")
+                            .long("unlock-cors")
+                            .alias("open")
+                            .required(false)
+                            .takes_value(false)
+                            .help("unlock CORS"),
+                    ).arg(
                         Arg::new("require-auth")
                             .long("require-auth")
                             .requires("jwks-address")
