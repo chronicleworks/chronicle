@@ -36,6 +36,15 @@ use crate::{
     zmq_client::{RequestResponseSawtoothChannel, SawtoothCommunicationError},
 };
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct BlockId(String);
+
+impl std::fmt::Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Offset {
     Genesis,
@@ -68,8 +77,8 @@ impl Offset {
     pub fn distance(&self, other: &Self) -> u64 {
         match (self, other) {
             (Offset::Genesis, Offset::Genesis) => 0,
-            (Offset::Genesis, Offset::Identity(_)) => 0,
-            (Offset::Identity(_), Offset::Genesis) => 0,
+            (Offset::Genesis, Offset::Identity(x)) => *x,
+            (Offset::Identity(x), Offset::Genesis) => *x,
             (Offset::Identity(x), Offset::Identity(y)) => x.saturating_sub(*y),
         }
     }
@@ -110,7 +119,7 @@ pub trait LedgerReader<EV> {
 
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
 
-    async fn block_height(&self) -> Result<Offset, Self::Error>;
+    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error>;
     /// Subscribe to state updates from this ledger, starting at `offset`, and
     /// ending the stream after `number_of_blocks` blocks have been processed.
     async fn state_updates(
@@ -160,8 +169,8 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
         }
     }
 
-    #[instrument(skip(self))]
-    async fn get_block_height(&self) -> Result<u64, SawtoothCommunicationError> {
+    #[instrument(skip(self), ret(Debug))]
+    async fn get_block_height(&self) -> Result<(u64, String), SawtoothCommunicationError> {
         let request = self.builder.make_block_height_request();
         let response: ClientBlockListResponse = self
             .channel
@@ -178,7 +187,7 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok(header.block_num)
+            Ok((header.block_num, header.previous_block_id))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -191,13 +200,14 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
     async fn get_state_from(
         &self,
         offset: &Offset,
+        offset_id: &Option<BlockId>,
     ) -> Result<BoxStream<OpaEvent>, SawtoothCommunicationError> {
-        let request = self.builder.make_subscription_request(offset);
-
+        let subscription_request = self.builder.make_subscription_request(offset_id);
+        debug!(?subscription_request);
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                request,
+                subscription_request,
                 Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                 Duration::from_secs(10),
             )
@@ -323,9 +333,9 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEv
         }
     }
 
-    async fn block_height(&self) -> Result<Offset, Self::Error> {
-        let block = self.get_block_height().await?;
-        Ok(Offset::from(block))
+    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
+        let (block, id) = self.get_block_height().await?;
+        Ok((Offset::from(block), BlockId(id)))
     }
 
     #[instrument(skip(self))]
@@ -335,13 +345,16 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEv
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<OpaEvent>, Self::Error> {
         let self_clone = self.clone();
-        let from_offset = if let Some(offset) = from_offset {
-            offset
-        } else {
-            self_clone.block_height().await?
+
+        let (from_offset, from_block_id) = match from_offset {
+            None => (Offset::Genesis, None),
+            Some(from_offset) => {
+                let (_num, id) = self_clone.get_block_height().await?;
+                (from_offset, Some(BlockId(id)))
+            }
         };
 
-        let subscribe = self.get_state_from(&from_offset).await?;
+        let subscribe = self.get_state_from(&from_offset, &from_block_id).await?;
 
         Ok(subscribe
             .take_while(move |(_, _, offset, _)| {

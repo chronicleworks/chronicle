@@ -55,7 +55,7 @@ pub fn generate() -> Command {
                 .long("output")
                 .num_args(0..=1)
                 .value_hint(ValueHint::FilePath)
-                .value_parser(NonEmptyStringValueParser::new())
+                .value_parser(PathBufValueParser::new())
                 .help("The path to write the policy to, if not specified then the key is written to stdout"),
         )
         .about("Generate a new private key and write it to stdout")
@@ -286,6 +286,7 @@ pub fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
             let path: &String = matches.get_one(name).unwrap();
             let key = std::fs::read_to_string(path)
                 .unwrap_or_else(|_| panic!("Unable to read file {path}"));
+            println!("key: {}", key);
             SecretKey::from_pkcs8_pem(&key).unwrap()
         }
         ValueSource::EnvVariable => {

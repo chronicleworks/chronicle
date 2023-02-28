@@ -104,22 +104,33 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         let correlation_id = uuid::Uuid::new_v4().to_string();
         let mut bytes = vec![];
         tx.write_to_vec(&mut bytes)?;
-        let res = Handle::current().block_on(async move {
-            let mut future = self
-                .tx
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<Result<_, SawtoothCommunicationError>>();
+
+        let send_clone = self.tx.clone();
+        Handle::current().spawn_blocking(move || {
+            let future = send_clone
                 .lock()
                 .unwrap()
-                .send(message_type, &correlation_id, &bytes)?;
+                .send(message_type, &correlation_id, &bytes);
 
+            if let Err(e) = &future {
+                error!(send_message=%correlation_id, error=%e);
+                //tx.send(Err(SawtoothCommunicationError::from(e.clone())));
+                return;
+            }
             debug!(send_message=%correlation_id);
             trace!(body=?tx);
 
-            Ok(future.get_timeout(timeout)?)
+            tx.send(Ok(future.unwrap().get_timeout(timeout))).unwrap();
         });
 
-        res.and_then(|res| {
-            RX::parse_from_bytes(&res.content).map_err(SawtoothCommunicationError::from)
-        })
+        rx.await
+            .unwrap()?
+            .map_err(SawtoothCommunicationError::from)
+            .and_then(|res| {
+                RX::parse_from_bytes(&res.content).map_err(SawtoothCommunicationError::from)
+            })
     }
 
     async fn recv_stream<RX: protobuf::Message>(

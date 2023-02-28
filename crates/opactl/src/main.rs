@@ -160,11 +160,11 @@ async fn dispatch_args<
             )
             .await?)
         }
-        Some(("generate", _matches)) => {
+        Some(("generate", matches)) => {
             let key = SecretKey::random(StdRng::from_entropy());
             let key = key.to_pkcs8_pem(LineEnding::CRLF).unwrap();
 
-            if let Some(path) = matches.get_one::<String>("output") {
+            if let Some(path) = matches.get_one::<PathBuf>("output") {
                 let mut file = File::create(path).unwrap();
                 file.write_all(key.as_bytes()).unwrap();
             } else {
@@ -279,7 +279,7 @@ async fn dispatch_args<
 
             Ok(Waited::NoWait)
         }
-        _ => unreachable!(),
+        _ => Ok(Waited::NoWait),
     }
 }
 
