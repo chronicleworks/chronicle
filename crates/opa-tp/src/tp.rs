@@ -1,12 +1,14 @@
 use std::str::from_utf8;
 
-use chrono::Utc;
 use k256::{ecdsa::signature::Verifier, pkcs8::DecodePublicKey};
 use opa_tp_protocol::{
     address::{HasSawtoothAddress, FAMILY, PREFIX, VERSION},
     events::opa_event,
     messages::Submission,
-    state::{key_address, policy_address, KeyRegistration, Keys, OpaOperationEvent, PolicyMeta},
+    state::{
+        key_address, policy_address, policy_meta_address, KeyRegistration, Keys, OpaOperationEvent,
+        PolicyMeta,
+    },
 };
 
 use k256::ecdsa::{Signature, VerifyingKey};
@@ -135,7 +137,7 @@ fn apply_signed_operation(
                 id: "root".to_string(),
                 current: KeyRegistration {
                     key: public_key,
-                    date: Utc::now(),
+                    version: 0,
                 },
                 expired: None,
             };
@@ -186,7 +188,6 @@ fn apply_signed_operation_payload(
             }
 
             let existing_key = context.get_state_entry(&key_address(id.clone()))?;
-
             if existing_key.is_some() {
                 error!("Key already registered");
                 return Err(OpaTpError::InvalidOperation);
@@ -196,7 +197,7 @@ fn apply_signed_operation_payload(
                 id,
                 current: KeyRegistration {
                     key: public_key,
-                    date: Utc::now(),
+                    version: 0,
                 },
                 expired: None,
             };
@@ -266,11 +267,11 @@ fn apply_signed_operation_payload(
                 id: payload.id,
                 current: KeyRegistration {
                     key: new_signing_key,
-                    date: Utc::now(),
+                    version: existing_key.current.version + 1,
                 },
                 expired: Some(KeyRegistration {
                     key: previous_signing_key,
-                    date: Utc::now(),
+                    version: existing_key.current.version,
                 }),
             };
 
@@ -290,9 +291,21 @@ fn apply_signed_operation_payload(
         opa_tp_protocol::messages::signed_operation::payload::Operation::SetPolicy(
             opa_tp_protocol::messages::SetPolicy { policy, id },
         ) => {
+            let existing_policy_meta = context.get_state_entry(&policy_meta_address(&*id))?;
+
+            let version = if existing_policy_meta.is_some() {
+                let existing_policy: PolicyMeta = serde_json::from_str(
+                    from_utf8(&existing_policy_meta.unwrap())
+                        .map_err(|_| OpaTpError::MalformedMessage)?,
+                )?;
+                existing_policy.version + 1
+            } else {
+                0
+            };
+
             let policy_meta = PolicyMeta {
                 id: id.clone(),
-                date: Utc::now(),
+                version,
                 policy_address: policy_address(&*id),
             };
 

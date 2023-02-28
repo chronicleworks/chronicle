@@ -738,8 +738,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         "###);
@@ -795,10 +795,10 @@ mod test {
             id: root
             current:
               key: "[pem]"
-              date: "[date]"
+              version: 1
             expired:
               key: "[pem]"
-              date: "[date]"
+              version: 0
         "###);
 
         insta::assert_yaml_snapshot!(opa_tp.readable_state(),{
@@ -808,11 +808,11 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 1
             expired:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             id: root
         "###);
     }
@@ -850,7 +850,7 @@ mod test {
             id: test
             current:
               key: "[pem]"
-              date: "[date]"
+              version: 0
             expired: ~
         "###);
 
@@ -861,14 +861,14 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed19336d8b5677c39a7b872910f948944dd84ba014846c81fcd53fe1fd5289b9dfd1c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: test
         "###);
@@ -904,10 +904,10 @@ mod test {
             id: root
             current:
               key: "[pem]"
-              date: "[date]"
+              version: 1
             expired:
               key: "[pem]"
-              date: "[date]"
+              version: 0
         "###);
 
         insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
@@ -917,16 +917,16 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 1
             expired:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             id: root
         - - 7ed19336d8b5677c39a7b872910f948944dd84ba014846c81fcd53fe1fd5289b9dfd1c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: test
         "###);
@@ -964,7 +964,7 @@ mod test {
         WaitedAndFound:
           PolicyUpdate:
             id: test
-            date: "[date]"
+            version: 0
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
@@ -975,8 +975,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
@@ -1005,7 +1005,7 @@ mod test {
         WaitedAndFound:
           PolicyUpdate:
             id: test
-            date: "[date]"
+            version: 0
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "### );
 
@@ -1016,8 +1016,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff

@@ -19,12 +19,7 @@ use sawtooth_sdk::messages::{
 };
 use tracing::{debug, instrument};
 
-use crate::{
-    address::PREFIX,
-    ledger::{BlockId, Offset},
-    messages::Submission,
-    submission::OpaTransactionId,
-};
+use crate::{address::PREFIX, ledger::BlockId, messages::Submission, submission::OpaTransactionId};
 
 #[derive(Debug, Clone)]
 pub struct MessageBuilder {
