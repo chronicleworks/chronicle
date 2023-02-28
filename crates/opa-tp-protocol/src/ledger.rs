@@ -31,7 +31,7 @@ use crate::{
     events::deserialize_opa_event,
     messages::Submission,
     sawtooth::MessageBuilder,
-    state::{key_address, OpaOperationEvent},
+    state::{key_address, policy_address, policy_meta_address, OpaOperationEvent},
     submission::OpaTransactionId,
     zmq_client::{RequestResponseSawtoothChannel, SawtoothCommunicationError},
 };
@@ -374,6 +374,7 @@ pub enum OpaSubmitTransaction {
     RotateRoot(Submission, SigningKey),
     RegisterKey(Submission, SigningKey, String),
     RotateKey(Submission, SigningKey, String),
+    SetPolicy(Submission, SigningKey, String),
 }
 
 impl OpaSubmitTransaction {
@@ -408,6 +409,17 @@ impl OpaSubmitTransaction {
             name.as_ref().to_owned(),
         )
     }
+    pub fn set_policy(
+        name: impl AsRef<str>,
+        submission: Submission,
+        sawtooth_signer: &SigningKey,
+    ) -> Self {
+        Self::SetPolicy(
+            submission,
+            sawtooth_signer.to_owned(),
+            name.as_ref().to_owned(),
+        )
+    }
 }
 
 #[async_trait::async_trait]
@@ -420,6 +432,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
             Self::RotateRoot(_, signer) => signer,
             Self::RegisterKey(_, signer, _) => signer,
             Self::RotateKey(_, signer, _) => signer,
+            Self::SetPolicy(_, signer, _) => signer,
         }
     }
 
@@ -432,10 +445,17 @@ impl LedgerTransaction for OpaSubmitTransaction {
                 vec![key_address("root")]
             }
             Self::RegisterKey(_, _, name) => {
-                vec![key_address(name.clone())]
+                vec![key_address("root"), key_address(name.clone())]
             }
             Self::RotateKey(_, _, name) => {
-                vec![key_address(name.clone())]
+                vec![key_address("root"), key_address(name.clone())]
+            }
+            Self::SetPolicy(_, _, name) => {
+                vec![
+                    key_address("root"),
+                    policy_meta_address(name.clone()),
+                    policy_address(name.clone()),
+                ]
             }
         }
     }
@@ -450,6 +470,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
                 Self::RotateRoot(submission, _) => submission,
                 Self::RegisterKey(submission, _, _) => submission,
                 Self::RotateKey(submission, _, _) => submission,
+                Self::SetPolicy(submission, _, _) => submission,
             },
             self.signer(),
         )

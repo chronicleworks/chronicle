@@ -38,12 +38,13 @@ ENV VERSION=AUTO_STRICT
 
 ENV PATH=$PATH:/root/.cargo/bin
 
+# Download OPA binary
+ARG TARGETARCH
 ARG OPA_VERSION=0.49.0
 RUN --mount=type=cache,target=/tmp \
-  curl -L -o /tmp/opa "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_${BUILDARCH}_static" && \
+  curl -L -o /tmp/opa "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_${TARGETARCH}_static" && \
   mv /tmp/opa /usr/local/bin/opa && \
   chmod +x /usr/local/bin/opa
-
 RUN rustup target add x86_64-unknown-linux-gnu && rustup target add aarch64-unknown-linux-gnu
 
 WORKDIR /app
@@ -99,13 +100,14 @@ FROM  alpine:3.16.3 as tested-artifacts
 COPY --from=tested --link /artifacts /artifacts
 
 # Copy opa-tp to image
+# Copy opa-tp to image
 FROM debian:bullseye-slim AS opa-tp
 ARG TARGETARCH
 WORKDIR /
-COPY .artifacts/artifacts/${TARGETARCH}/opa-tp usr/local/bin
+COPY .artifacts/artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
 
 # Copy opactl to image
-FROM debian:bullseye-slim AS opctl
+FROM debian:bullseye-slim AS opactl
 ARG TARGETARCH
 WORKDIR /
-COPY .artifacts/artifacts/${TARGETARCH}/opactl usr/local/bin
+COPY .artifacts/artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl

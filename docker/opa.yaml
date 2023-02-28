@@ -77,7 +77,7 @@ services:
 
   opa-test:
     image: opa-test:${ISOLATION_ID}
-    profiles: ["test-opa"]
+    profiles: ["test"]
     depends_on:
       - opa-tp
       - validator

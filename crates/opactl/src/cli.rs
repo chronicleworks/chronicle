@@ -21,13 +21,14 @@ fn transactor_key() -> Arg {
 
 fn wait_args(command: Command) -> Command {
     command.arg(
-      Arg::new("wait")
-        .long("wait")
-        .num_args(0..=1)
-        .value_parser(clap::value_parser!(u64).range(1..))
-        .default_value("5")
-        .default_missing_value("5")
-        .help( "Wait for the specified number of blocks transaction to be committed before returning"))
+        Arg::new("wait")
+            .long("wait")
+            .num_args(0..=1)
+            .value_parser(clap::value_parser!(u64).range(1..))
+            .default_value("5")
+            .default_missing_value("5")
+            .help("Wait for the specified number of blocks to be committed before exiting"),
+    )
 }
 
 pub fn bootstrap() -> Command {
@@ -39,6 +40,7 @@ pub fn bootstrap() -> Command {
                     .short('r')
                     .long("root-key")
                     .env("ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("A PEM-encoded private key"),
@@ -70,6 +72,7 @@ pub fn rotate_root() -> Command {
                     .short('c')
                     .long("current-root-key")
                     .env("CURRENT_ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("The current registered root private key"),
@@ -79,6 +82,7 @@ pub fn rotate_root() -> Command {
                     .short('n')
                     .long("new-root-key")
                     .env("NEW_ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("The new key to register as the root key"),
@@ -96,6 +100,7 @@ pub fn register_key() -> Command {
                     .short('k')
                     .long("new-key")
                     .env("NEW_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("A PEM encoded key to register"),
@@ -105,6 +110,7 @@ pub fn register_key() -> Command {
                     .short('r')
                     .long("root-key")
                     .env("ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("A PEM-encoded private key"),
@@ -113,6 +119,7 @@ pub fn register_key() -> Command {
                 Arg::new("id")
                     .short('i')
                     .long("id")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::Unknown)
                     .value_parser(NonEmptyStringValueParser::new())
@@ -131,6 +138,7 @@ pub fn rotate_key() -> Command {
                     .short('c')
                     .long("current-key")
                     .env("CURRENT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("The current registered root key"),
@@ -140,6 +148,7 @@ pub fn rotate_key() -> Command {
                     .short('r')
                     .long("root-key")
                     .env("ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("A PEM-encoded private key"),
@@ -149,6 +158,7 @@ pub fn rotate_key() -> Command {
                     .short('n')
                     .long("new-key")
                     .env("NEW_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("The new key to register for the given name"),
@@ -157,6 +167,7 @@ pub fn rotate_key() -> Command {
                 Arg::new("id")
                     .short('i')
                     .long("id")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::Unknown)
                     .value_parser(NonEmptyStringValueParser::new())
@@ -175,6 +186,7 @@ pub fn set_policy() -> Command {
                     .short('i')
                     .long("id")
                     .num_args(1)
+                    .required(true)
                     .value_hint(ValueHint::Unknown)
                     .value_parser(NonEmptyStringValueParser::new())
                     .default_value("default")
@@ -185,6 +197,7 @@ pub fn set_policy() -> Command {
                     .short('p')
                     .long("policy")
                     .num_args(1)
+                    .required(true)
                     .value_hint(ValueHint::FilePath)
                     .value_parser(PathBufValueParser::new())
                     .help("A path to the policy wasm to register"),
@@ -194,6 +207,7 @@ pub fn set_policy() -> Command {
                     .short('k')
                     .long("root-key")
                     .env("ROOT_KEY")
+                    .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
                     .help("A PEM-encoded private key"),
@@ -234,6 +248,7 @@ pub fn get_policy() -> Command {
                 .short('i')
                 .long("id")
                 .num_args(1)
+                .required(true)
                 .value_hint(ValueHint::Unknown)
                 .value_parser(NonEmptyStringValueParser::new())
                 .default_value("default")
@@ -244,6 +259,7 @@ pub fn get_policy() -> Command {
                 .short('o')
                 .long("output")
                 .num_args(1)
+                .required(true)
                 .value_hint(ValueHint::FilePath)
                 .value_parser(NonEmptyStringValueParser::new())
                 .help("The path to write the policy to"),
@@ -258,6 +274,8 @@ pub fn cli() -> Command {
         .arg(
             Arg::new("sawtooth-address")
                 .short('a')
+                .long("sawtooth-address")
+                .num_args(0..=1)
                 .help("The address of the Sawtooth ZMQ api, as zmq://host:port")
                 .value_parser(clap::value_parser!(Url))
                 .env("SAWTOOTH_ADDRESS")
@@ -286,7 +304,6 @@ pub fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
             let path: &String = matches.get_one(name).unwrap();
             let key = std::fs::read_to_string(path)
                 .unwrap_or_else(|_| panic!("Unable to read file {path}"));
-            println!("key: {}", key);
             SecretKey::from_pkcs8_pem(&key).unwrap()
         }
         ValueSource::EnvVariable => {

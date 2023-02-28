@@ -39,13 +39,15 @@ publish: gh-create-draft-release
 	fi
 
 
+
+
 .PHONY: build-end-to-end-test
 build-end-to-end-test:
-	docker build -t opa-test:$(ISOLATION_ID) -f docker/opa-test/opa-test.dockerfile .
+	docker build -t opa-test:$(ISOLATION_ID) --build-arg TARGETARCH=$(HOST_ARCHITECTURE) --build-arg ISOLATION_ID=$(ISOLATION_ID) -f docker/opa-test/opa-test.dockerfile .
 
 .PHONY: test-e2e
-test-opa-e2e: build-end-to-end-test
-	COMPOSE_PROFILES=test $(COMPOSE) -f docker/opa.yaml up --exit-code-from opa-test
+test-e2e: build-end-to-end-test
+	COMPOSE_PROFILES=test $(COMPOSE) -f docker/opa.yaml up --force-recreate --exit-code-from opa-test
 
 run:
 	$(COMPOSE) -f docker/opa.yaml up -d

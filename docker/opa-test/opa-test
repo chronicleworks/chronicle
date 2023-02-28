@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 echo "Create key material"
-RUST_LOG=trace opactl generate --output ./root.pem
+RUST_LOG=trace /usr/local/bin/opactl generate --output ./root.pem
 
 echo "Wait for stack"
 sleep 20
 
-RUST_LOG=trace opactl bootstrap --root-key ./root.pem
+RUST_LOG=trace /usr/local/bin/opactl --sawtooth-address tcp://validator:4004 bootstrap --root-key ./root.pem

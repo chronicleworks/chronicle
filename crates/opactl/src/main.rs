@@ -47,6 +47,8 @@ pub enum OpaCtlError {
     TransactionNotFound(OpaTransactionId),
     #[error("Transaction failed {0}")]
     TransactionFailed(String),
+    #[error("Operation cancelled {0}")]
+    Cancelled(oneshot::Canceled),
 }
 
 impl UFE for OpaCtlError {}
@@ -68,7 +70,7 @@ async fn ambient_transactions<
     reader: R,
     goal_tx_id: OpaTransactionId,
     max_steps: u64,
-) -> impl Future<Output = Waited> {
+) -> impl Future<Output = Result<Waited, oneshot::Canceled>> {
     let span = span!(Level::DEBUG, "wait_for_opa_transaction");
     let _entered = span.enter();
 
@@ -77,26 +79,36 @@ async fn ambient_transactions<
 
     Handle::current().spawn(async move {
         // We can immediately return if we are not waiting
-
+        debug!(waiting_for=?goal_tx_id, max_steps=?max_steps);
         let goal_clone = goal_tx_id.clone();
 
-        let mut stream = reader.state_updates(None, Some(max_steps)).await.unwrap();
+        let stream = reader.state_updates(None, Some(max_steps)).await;
 
-        while let Some((op, tx, _, _)) = stream.next().await {
-            if tx == goal_clone {
-                if let OpaOperationEvent::Error(_) = op {
-                    notify_tx
-                        .send(Waited::WaitedAndOperationFailed(op))
-                        .unwrap();
-                    break;
+        match stream {
+            Ok(mut stream) => {
+                while let Some((op, tx, _, _)) = stream.next().await {
+                    debug!(tx=?tx, op=?op);
+                    if tx == goal_clone {
+                        if let OpaOperationEvent::Error(_) = op {
+                            debug!(not_found_tx=?tx, op=?op);
+                            notify_tx
+                                .send(Waited::WaitedAndOperationFailed(op))
+                                .unwrap();
+                            break;
+                        }
+                        debug!(found_tx=?tx, op=?op);
+                        notify_tx.send(Waited::WaitedAndFound(op)).unwrap();
+                        break;
+                    }
                 }
-                notify_tx.send(Waited::WaitedAndFound(op)).unwrap();
-                break;
+            }
+            Err(e) => {
+                error!(subscribe_to_events=?e);
             }
         }
     });
 
-    async move { notify_rx.await.unwrap() }
+    async move { notify_rx.await }
 }
 
 #[instrument(skip(reader, writer, matches))]
@@ -124,11 +136,12 @@ async fn handle_wait<
             writer.submit(tx, transactor_key).await?;
 
             match waiter.await {
-                Waited::WaitedAndDidNotFind => Err(OpaCtlError::TransactionNotFound(tx_id)),
-                Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e)) => {
+                Ok(Waited::WaitedAndDidNotFind) => Err(OpaCtlError::TransactionNotFound(tx_id)),
+                Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e))) => {
                     Err(OpaCtlError::TransactionFailed(e))
                 }
-                x => Ok(x),
+                Ok(x) => Ok(x),
+                Err(e) => Err(OpaCtlError::Cancelled(e)),
             }
         }
     }
@@ -199,14 +212,14 @@ async fn dispatch_args<
             let new_key: SigningKey = load_key_from_match("new-key", matches).into();
             let id = matches.get_one::<String>("id").unwrap();
             let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let rotate_key =
+            let register_key =
                 SubmissionBuilder::register_key(id, &new_key.verifying_key(), &current_root_key)
                     .build(span_id);
             Ok(handle_wait(
                 matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::rotate_root(rotate_key, &transactor_key),
+                OpaSubmitTransaction::register_key(id, register_key, &transactor_key),
                 &transactor_key,
             )
             .await?)
@@ -243,7 +256,7 @@ async fn dispatch_args<
                 matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::bootstrap_root(bootstrap, &transactor_key),
+                OpaSubmitTransaction::set_policy(id, bootstrap, &transactor_key),
                 &transactor_key,
             )
             .await?)
@@ -268,14 +281,15 @@ async fn dispatch_args<
 
             Ok(Waited::NoWait)
         }
-        Some(("get-policy", _matches)) => {
+        Some(("get-policy", matches)) => {
             let policy = reader
                 .get_state_entry(&policy_address(matches.get_one::<String>("id").unwrap()))
                 .await?;
 
-            let path = matches.get_one::<String>("output").unwrap();
-            let mut file = File::create(path)?;
-            file.write_all(&policy)?;
+            if let Some(path) = matches.get_one::<String>("output") {
+                let mut file = File::create(path).unwrap();
+                file.write_all(&policy).unwrap();
+            }
 
             Ok(Waited::NoWait)
         }
