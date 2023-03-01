@@ -25,6 +25,11 @@ A JSON pointer into the JSON Web Token claims, specifying the location of
 a string value corresponding to the external ID that should be used in
 constructing the authenticated user's Chronicle identity.
 
+#### `--unlock-cors`
+
+Unlocks using the GraphQL Playground on `http://127.0.0.1:9982/`. `--open`
+may also be used as an alias.
+
 ##### `--require-auth`
 
 Reject anonymous requests. Requires `--jwks-address` because identity for

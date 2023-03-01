@@ -340,19 +340,22 @@ where
 
         let opa = opa_executor().await?;
 
+        let open_cors = matches.is_present("unlock-cors");
+
         graphql_server(
             &api,
             &pool,
             gql,
             matches,
-            SecurityConf {
+            SecurityConf::new(
                 jwks_uri,
                 userinfo_uri,
                 id_pointer,
                 jwt_must_claim,
                 allow_anonymous,
                 opa,
-            },
+                open_cors,
+            ),
         )
         .await?;
 
