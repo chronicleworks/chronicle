@@ -35,7 +35,6 @@ pub struct ChronicleTransactionHandler {
 }
 
 impl ChronicleTransactionHandler {
-    // Bootstrap an embedded default allow policy
     pub fn new(policy: &str, entrypoint: &str) -> Result<ChronicleTransactionHandler, ApplyError> {
         Ok(ChronicleTransactionHandler {
             family_name: FAMILY.to_owned(),
@@ -43,11 +42,8 @@ impl ChronicleTransactionHandler {
             namespaces: vec![PREFIX.to_string()],
             opa_executor: {
                 ExecutorContext::from_loader(
-                    &CliPolicyLoader::from_embedded_policy(
-                        // Source: crates/common/src/policies/auth.rego
-                        policy, entrypoint,
-                    )
-                    .map_err(|e| ApplyError::InternalError(e.to_string()))?,
+                    &CliPolicyLoader::from_embedded_policy(policy, entrypoint)
+                        .map_err(|e| ApplyError::InternalError(e.to_string()))?,
                 )
                 .map_err(|e| ApplyError::InternalError(e.to_string()))?
             },
@@ -555,7 +551,7 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
-        let (policy, entrypoint) = ("default_allow.tar.gz", "default_allow.allow");
+        let (policy, entrypoint) = ("allow_transactions", "allow_transactions.allowed_users");
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
@@ -653,8 +649,19 @@ pub mod test {
         let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        // User identity is `Anonymous`
-        let signed_identity = AuthId::anonymous().signed_identity(&keystore).unwrap();
+        let user_identity = {
+            let claims = common::identity::JwtClaims(
+                serde_json::json!({
+                    "sub": "abcdef",
+                })
+                .as_object()
+                .unwrap()
+                .to_owned(),
+            );
+            AuthId::from_jwt_claims(&claims, "/sub").unwrap()
+        };
+
+        let signed_identity = user_identity.signed_identity(&keystore).unwrap();
 
         // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
@@ -681,8 +688,7 @@ pub mod test {
         request.set_payload(tx.payload);
         request.set_signature("TRANSACTION_SIGNATURE".to_string());
 
-        // The "auth" policy only allows access to identity "chronicle"
-        let (policy, entrypoint) = ("auth.tar.gz", "auth.is_authorized");
+        let (policy, entrypoint) = ("allow_transactions", "allow_transactions.allowed_users");
 
         tokio::task::spawn_blocking(move || {
             // Create a `TestTransactionContext` to pass to the `tp` function
