@@ -1,4 +1,5 @@
-site_name: "chronicle"
+site_name: chronicle
+site_author: BTP
 theme:
   name: material
   palette:
@@ -27,18 +28,18 @@ plugins:
       input_extensions: ""
 nav:
   - Overview: index.md
-  - Architecture: ./chronicle_architecture.md
+  - Architecture: chronicle_architecture.md
   - Installing:
-      - Building for your domain: ./building.md
-      - Installing with Sextant: ./sextant.md
+      - Building for your domain: building.md
+      - Installing with Sextant: sextant.md
   - Development:
-      - Provenance concepts: ./provenance_concepts.md
-      - Modeling a provenance domain: ./domain_modeling.md
-      - Recording provenance: ./recording_provenance.md
-      - Querying provenance: ./querying_provenance.md
-      - Untyped Chronicle: ./untyped_chronicle.md
-  - Upgrading: ./upgrading.md
+      - Provenance concepts: provenance_concepts.md
+      - Modeling a provenance domain: domain_modeling.md
+      - Recording provenance: recording_provenance.md
+      - Querying provenance: querying_provenance.md
+      - Untyped Chronicle: untyped_chronicle.md
+  - Upgrading: upgrading.md
   - Operating:
-      - CLI: ./cli.md
-      - Configuration options: ./config.md
-      - Authentication and authorization: ./authz.md
+      - CLI: cli.md
+      - Configuration options: config.md
+      - Authentication and authorization: authz.md
