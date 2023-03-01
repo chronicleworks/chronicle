@@ -1,10 +1,15 @@
-package allow_defines
+package common_rules
 
 import future.keywords.in
+import input
 
-default allow = false
+allowed := {"chronicle", "anonymous"}
 
-allow {
+allowed_users {
+  input.type in allowed
+}
+
+allow_defines {
   data.context.operation in ["Mutation", "Submission"]
   startswith(data.context.state[0], "define")
 }
