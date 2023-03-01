@@ -607,7 +607,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_yaml",
- "shellexpand 3.0.0",
+ "shellexpand",
  "tempfile",
  "thiserror",
  "tokio",
@@ -4004,7 +4004,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rust-embed-utils",
- "shellexpand 2.1.2",
  "syn",
  "walkdir",
 ]
@@ -4368,15 +4367,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shellexpand"
-version = "2.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ccc8076840c4da029af4f87e4e8daeb0fca6b87bbb02e10cb60b791450e11e4"
-dependencies = [
- "dirs 4.0.0",
 ]
 
 [[package]]

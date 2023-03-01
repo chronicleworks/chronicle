@@ -29,20 +29,5 @@ fn main() -> Result<()> {
         context.pretty(2),
     )?;
 
-    let policies = vec![
-        ("allow_defines", "allow"),
-        ("auth", "is_authorized"),
-        ("default_allow", "allow"),
-        ("default_deny", "allow"),
-    ];
-
-    for (policy_name, entrypoint) in policies {
-        opa::build::policy(policy_name)
-            .add_source(format!("src/policies/{policy_name}.rego"))
-            .add_entrypoint(format!("{policy_name}.{entrypoint}"))
-            .compile()
-            .unwrap();
-    }
-
     Ok(())
 }
