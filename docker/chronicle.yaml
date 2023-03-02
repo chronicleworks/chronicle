@@ -65,23 +65,10 @@ services:
   chronicle-sawtooth-tp:
     environment: &rustenv
       - &rustbacktrace RUST_BACKTRACE=full
-      - &rustlog RUST_LOG=debug
+      - &rustlog RUST_LOG=debug,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     image: &chronicleTpImage chronicle-tp-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
-      -C tcp://validator:4004
-      --console-logging pretty"
-    depends_on:
-      - validator
-    volumes: *rngVolumes
-
-  opa-tp:
-    environment:
-      - RUST_BACKTRACE=full
-      - RUST_LOG=trace
-    image: &chronicleOpaTpImage chronicle-opa-amd64:${ISOLATION_ID:-local}
-    entrypoint: >
-      /bin/bash -xc "/usr/local/bin/opa-tp
       -C tcp://validator:4004
       --console-logging pretty"
     depends_on:
@@ -158,11 +145,5 @@ services:
   chronicle-test:
     image: chronicle-test:${ISOLATION_ID}
     profiles: ["test"]
-    depends_on:
-      - chronicle-sawtooth-api
-
-  opa-test:
-    image: opa-test:${ISOLATION_ID}
-    profiles: ["test-opa"]
     depends_on:
       - chronicle-sawtooth-api

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use k256::{
     ecdsa::{Signature, SigningKey},
@@ -6,7 +9,6 @@ use k256::{
     sha2::{Digest, Sha256},
 };
 use openssl::sha::Sha512;
-use prost::Message;
 use protobuf::Message as ProtobufMessage;
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use sawtooth_sdk::messages::{
@@ -21,6 +23,21 @@ use sawtooth_sdk::messages::{
 use tracing::{debug, instrument};
 
 use crate::ledger::{BlockId, TransactionId};
+
+#[async_trait::async_trait]
+pub trait TransactionPayload {
+    type Error: Error;
+    async fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
+}
+
+#[async_trait::async_trait]
+impl<T: prost::Message> TransactionPayload for T {
+    type Error = prost::EncodeError;
+
+    async fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(self.encode_to_vec())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct MessageBuilder {
@@ -44,6 +61,7 @@ impl MessageBuilder {
             rng: Mutex::new(rng).into(),
         }
     }
+
     pub fn new_deterministic(family_name: &str, family_version: &str) -> Self {
         let mut sha = Sha256::new();
         sha.update(family_name.as_bytes());
@@ -56,6 +74,7 @@ impl MessageBuilder {
             rng: Mutex::new(rng).into(),
         }
     }
+
     fn generate_nonce(&self) -> String {
         let bytes = self.rng.lock().unwrap().gen::<[u8; 20]>();
         hex::encode(bytes)
@@ -118,11 +137,9 @@ impl MessageBuilder {
             ..Default::default()
         };
 
-        offset.map(|offset| {
+        if let Some(offset) = block_id {
             request.last_known_block_ids = vec![offset.to_string()].into();
-        });
-
-        operation_subscriptions.push(block_subscription);
+        }
 
         operation_subscriptions.push(block_subscription);
 
@@ -158,15 +175,15 @@ impl MessageBuilder {
     }
 
     #[instrument]
-    pub async fn make_sawtooth_transaction<M: Message>(
+    pub async fn make_sawtooth_transaction<P: TransactionPayload + std::fmt::Debug>(
         &self,
         input_addresses: Vec<String>,
         output_addresses: Vec<String>,
         dependencies: Vec<String>,
-        payload: &M,
+        payload: &P,
         signer: &SigningKey,
     ) -> (Transaction, TransactionId) {
-        let bytes = payload.encode_to_vec();
+        let bytes = payload.to_bytes().await.unwrap();
 
         let mut hasher = Sha512::new();
         hasher.update(&bytes);

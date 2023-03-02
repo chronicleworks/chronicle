@@ -9,6 +9,8 @@ pub mod state;
 pub mod submission;
 pub mod transaction;
 
+pub use async_sawtooth_sdk;
+
 static PROTOCOL_VERSION: &str = "1";
 
 pub type OpaLedger =

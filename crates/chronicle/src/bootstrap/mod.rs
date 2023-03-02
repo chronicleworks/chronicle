@@ -6,6 +6,11 @@ use api::{
     Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
 use async_graphql::{async_trait, ObjectType};
+use chronicle_protocol::{
+    address::{FAMILY, VERSION},
+    async_sawtooth_sdk::zmq_client::ZmqRequestResponseSawtoothChannel,
+    ChronicleLedger,
+};
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
@@ -28,7 +33,6 @@ use diesel::{
 };
 
 use chronicle_telemetry::{self, ConsoleLogging};
-use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use url::Url;
 
 use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
@@ -36,25 +40,26 @@ use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 use crate::codegen::ChronicleDomainDef;
 
 #[allow(dead_code)]
-fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
-    Ok(SawtoothSubmitter::new(
-        &options
-            .get_one::<String>("sawtooth")
-            .map(|s| Url::parse(s))
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
+#[cfg(not(feature = "inmem"))]
+fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, SignerError> {
+    Ok(ChronicleLedger::new(
+        ZmqRequestResponseSawtoothChannel::new(
+            &options
+                .get_one::<String>("sawtooth")
+                .map(|s| Url::parse(s))
+                .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
+        ),
+        FAMILY,
+        VERSION,
     ))
 }
 
 #[allow(dead_code)]
-fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
-    Ok(StateDelta::new(
-        &options
-            .get_one::<String>("sawtooth")
-            .map(|s| Url::parse(s))
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
-    ))
+fn in_mem_ledger(
+    _config: &Config,
+    _options: &ArgMatches,
+) -> Result<crate::api::inmem::EmbeddedChronicleTp, SignerError> {
+    Ok(crate::api::inmem::EmbeddedChronicleTp::new())
 }
 
 trait SetRuleOptions {
@@ -101,8 +106,9 @@ async fn opa_executor_from_embedded_policy(
 }
 
 #[cfg(feature = "inmem")]
-fn ledger() -> Result<common::ledger::InMemLedger, std::convert::Infallible> {
-    Ok(common::ledger::InMemLedger::new())
+#[allow(dead_code)]
+fn ledger() -> Result<EmbeddedChronicleTp, std::convert::Infallible> {
+    Ok(EmbeddedChronicleTp::new())
 }
 
 #[derive(Debug, Clone)]
@@ -177,13 +183,11 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
 ) -> Result<ApiDispatch, ApiError> {
-    let submitter = submitter(config, options)?;
-    let state = state_delta(config, options)?;
+    let ledger = ledger(config, options)?;
 
     Api::new(
         pool.clone(),
-        submitter,
-        state,
+        ledger,
         &config.secrets.path,
         UniqueUuid,
         config.namespace_bindings.clone(),
@@ -197,13 +201,11 @@ pub async fn api(
     _options: &ArgMatches,
     config: &Config,
 ) -> Result<api::ApiDispatch, ApiError> {
-    let mut ledger = ledger()?;
-    let state = ledger.reader();
+    let embedded_tp = in_mem_ledger(config, _options)?;
 
     Api::new(
         pool.clone(),
-        ledger,
-        state,
+        embedded_tp.ledger,
         &config.secrets.path,
         UniqueUuid,
         config.namespace_bindings.clone(),
@@ -389,13 +391,13 @@ where
                             break;
                         }
                     }
-                    SubmissionStage::Committed(Ok(commit)) => {
+                    SubmissionStage::Committed(commit) => {
                         if commit.tx_id == tx_id {
                             debug!("Transaction committed: {}", commit.tx_id);
                         }
                         println!("{subject}");
                     }
-                    SubmissionStage::Committed(Err((id, contradiction))) => {
+                    SubmissionStage::NotCommitted((id, contradiction)) => {
                         if id == tx_id {
                             eprintln!("Transaction rejected by ledger: {id} {contradiction}");
                             break;
@@ -508,12 +510,12 @@ pub async fn bootstrap<Query, Mutation>(
 /// configuration + server execution would get a little tricky in the context of a unit test.
 #[cfg(test)]
 pub mod test {
-    use api::{Api, ApiDispatch, ApiError, UuidGen};
+    use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::TemporaryDatabase,
         identity::AuthId,
-        ledger::{InMemLedger, SubmissionStage},
+        ledger::SubmissionStage,
         prov::{
             to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
@@ -530,6 +532,7 @@ pub mod test {
     struct TestDispatch<'a> {
         api: ApiDispatch,
         _db: TemporaryDatabase<'a>, // share lifetime
+        _tp: EmbeddedChronicleTp,
     }
 
     impl TestDispatch<'_> {
@@ -543,10 +546,10 @@ pub mod test {
                 loop {
                     let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
 
-                    if let SubmissionStage::Committed(Ok(commit)) = submission {
+                    if let SubmissionStage::Committed(commit) = submission {
                         break Ok(Some((commit.delta, commit.tx_id)));
                     }
-                    if let SubmissionStage::Committed(Err((_, contradiction))) = submission {
+                    if let SubmissionStage::NotCommitted((_, contradiction)) = submission {
                         panic!("Contradiction: {contradiction}");
                     }
                 }
@@ -574,16 +577,14 @@ pub mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let mut ledger = InMemLedger::new();
-        let reader = ledger.reader();
+        let embedded_tp = EmbeddedChronicleTp::new();
 
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
         let dispatch = Api::new(
             pool,
-            ledger,
-            reader,
+            embedded_tp.ledger.clone(),
             &secretpath,
             SameUuid,
             HashMap::default(),
@@ -593,7 +594,8 @@ pub mod test {
 
         TestDispatch {
             api: dispatch,
-            _db: database, // share the lifetime
+            _db: database,
+            _tp: embedded_tp,
         }
     }
 

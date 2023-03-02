@@ -3,12 +3,6 @@ use std::{env, fs, io::Result, path::PathBuf};
 include!("./src/context.rs");
 
 fn main() -> Result<()> {
-    let protos = glob::glob("./src/protos/*.proto")
-        .unwrap()
-        .map(|x| x.unwrap())
-        .collect::<Vec<_>>();
-    prost_build::compile_protos(&protos, &["./src/protos"])?;
-
     let out_str = env::var("OUT_DIR").unwrap();
     let out_path = PathBuf::from(&out_str);
     let mut out_path = out_path.ancestors().nth(3).unwrap().to_owned();

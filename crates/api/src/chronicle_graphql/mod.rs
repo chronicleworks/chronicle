@@ -378,7 +378,7 @@ impl Subscription {
                 match rx.recv().await {
                     Ok(SubmissionStage::Submitted(Ok(submission))) =>
                       yield CommitNotification::from_submission(&submission),
-                    Ok(SubmissionStage::Committed(Ok(commit))) => {
+                    Ok(SubmissionStage::Committed(commit)) => {
                       let notify = CommitNotification::from_committed(&commit.tx_id, commit.delta).await;
                       if let Ok(notify) = notify {
                         yield notify;
@@ -386,8 +386,8 @@ impl Subscription {
                         error!("Failed to convert commit to notification: {:?}", notify.err());
                       }
                     }
-                    Ok(SubmissionStage::Committed(Err((commit,contradiction)))) =>
-                      yield CommitNotification::from_contradiction(&commit, &*contradiction.to_string()),
+                    Ok(SubmissionStage::NotCommitted((commit,contradiction))) =>
+                      yield CommitNotification::from_contradiction(&commit, &contradiction.to_string()),
                     Ok(SubmissionStage::Submitted(Err(e))) => {
                       error!("Failed to submit: {:?}", e);
                       yield CommitNotification::from_submission_failed(&e);

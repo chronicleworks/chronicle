@@ -1,22 +1,19 @@
 use crate::identity::{AuthId, IdentityError, OpaData};
 use opa::{bundle::Bundle, wasm::Opa};
-use opa_tp_protocol::state::policy_address;
-use protobuf::{ProtobufEnum, ProtobufError};
-use rust_embed::RustEmbed;
-use sawtooth_sdk::{
-    messages::{
-        client_state::{ClientStateGetRequest, ClientStateGetResponse},
-        validator::Message_MessageType,
+use opa_tp_protocol::{
+    address::{FAMILY, VERSION},
+    async_sawtooth_sdk::{
+        error::SawtoothCommunicationError, ledger::LedgerReader,
+        zmq_client::ZmqRequestResponseSawtoothChannel,
     },
-    messaging::{
-        stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
-        zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
-    },
+    state::policy_address,
+    OpaLedger,
 };
+use rust_embed::RustEmbed;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::{runtime::Handle, sync::Mutex};
-use tracing::{debug, error, instrument, trace};
+use tokio::sync::Mutex;
+use tracing::{error, instrument};
 use url::Url;
 
 #[derive(Debug, Error)]
@@ -80,119 +77,39 @@ pub trait PolicyLoader {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum SawtoothCommunicationError {
-    #[error("Protobuf error: {0}")]
-    Protobuf(#[from] ProtobufError),
-
-    #[error("Receive error: {0}")]
-    Receive(#[from] ReceiveError),
-
-    #[error("Send error: {0}")]
-    Send(#[from] SendError),
-
-    #[error("Unexpected status: {0}")]
-    UnexpectedStatus(i32),
-
-    #[error("ZMQ error: {0}")]
-    ZMQ(#[from] zmq::Error),
-}
-
-pub struct ZmqRequestResponseSawtoothChannel {
-    tx: ZmqMessageSender,
-    _rx: MessageReceiver,
-}
-
-impl ZmqRequestResponseSawtoothChannel {
-    fn new(address: &Url) -> Self {
-        let (tx, _rx) = ZmqMessageConnection::new(address.as_str()).create();
-        Self { tx, _rx }
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-trait RequestResponseSawtoothChannel {
-    fn message_type() -> Message_MessageType;
-    async fn receive_one<RX: protobuf::Message, TX: protobuf::Message>(
-        &self,
-        tx: &TX,
-    ) -> Result<RX, SawtoothCommunicationError>;
-}
-
-#[async_trait::async_trait(?Send)]
-impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
-    fn message_type() -> Message_MessageType {
-        Message_MessageType::CLIENT_STATE_GET_REQUEST
-    }
-
-    #[instrument(level = "trace", skip(self), ret)]
-    async fn receive_one<RX: protobuf::Message, TX: protobuf::Message>(
-        &self,
-        tx: &TX,
-    ) -> Result<RX, SawtoothCommunicationError> {
-        let correlation_id = uuid::Uuid::new_v4().to_string();
-        let mut bytes = vec![];
-        tx.write_to_vec(&mut bytes)?;
-        let res = Handle::current().block_on(async move {
-            let mut future = self
-                .tx
-                .send(Self::message_type(), &correlation_id, &bytes)?;
-
-            debug!(send_message=%correlation_id);
-            trace!(body=?tx);
-
-            Ok(future.get_timeout(std::time::Duration::from_secs(10))?)
-        });
-
-        res.and_then(|res| {
-            RX::parse_from_bytes(&res.content).map_err(SawtoothCommunicationError::from)
-        })
-    }
-}
-
 #[derive(Clone)]
 pub struct SawtoothPolicyLoader {
-    messenger_address: Url,
     rule_name: String,
     address: String,
     policy: Vec<u8>,
     entrypoint: String,
+    ledger: OpaLedger,
 }
 
 impl SawtoothPolicyLoader {
     pub fn new(address: &Url) -> Self {
         Self {
-            messenger_address: address.to_owned(),
             rule_name: String::default(),
             address: String::default(),
             policy: Vec::default(),
             entrypoint: String::default(),
+            ledger: OpaLedger::new(
+                ZmqRequestResponseSawtoothChannel::new(address),
+                FAMILY,
+                VERSION,
+            ),
         }
     }
 
     fn sawtooth_address(&self, policy: impl AsRef<str>) -> String {
         policy_address(policy)
     }
+
     #[instrument(level = "trace", skip(self), ret)]
     async fn get_policy(&mut self) -> Result<Vec<u8>, SawtoothCommunicationError> {
-        Handle::current().block_on(async move {
-            let mut tx = ClientStateGetRequest::new();
-            let address = self.sawtooth_address(&self.address);
-            tx.set_address(address);
-
-            let messenger = ZmqRequestResponseSawtoothChannel::new(&self.messenger_address);
-            let response: ClientStateGetResponse = messenger.receive_one(&tx).await?;
-
-            debug!(validator_response=?response);
-
-            if response.status.value() == 1 {
-                Ok(response.value)
-            } else {
-                Err(SawtoothCommunicationError::UnexpectedStatus(
-                    response.status.value(),
-                ))
-            }
-        })
+        self.ledger
+            .get_state_entry(&self.sawtooth_address(&self.rule_name))
+            .await
     }
 }
 
@@ -382,7 +299,7 @@ impl WasmtimeOpaExecutor {
 
 #[async_trait::async_trait]
 impl OpaExecutor for WasmtimeOpaExecutor {
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     async fn evaluate(&mut self, id: &AuthId, context: &OpaData) -> Result<(), OpaExecutorError> {
         self.opa.set_data(context)?;
         let input = id.identity()?;

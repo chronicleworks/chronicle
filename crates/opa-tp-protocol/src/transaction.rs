@@ -51,6 +51,7 @@ impl OpaSubmitTransaction {
             name.as_ref().to_owned(),
         )
     }
+
     pub fn set_policy(
         name: impl AsRef<str>,
         submission: Submission,

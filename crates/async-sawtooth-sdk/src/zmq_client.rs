@@ -4,55 +4,20 @@ use std::{
 };
 
 use futures::{stream, stream::BoxStream, StreamExt};
-use protobuf::ProtobufError;
 
 use sawtooth_sdk::{
     messages::validator::Message_MessageType,
     messaging::{
-        stream::{MessageConnection, MessageReceiver, MessageSender, ReceiveError, SendError},
+        stream::{MessageConnection, MessageReceiver, MessageSender},
         zmq_stream::{ZmqMessageConnection, ZmqMessageSender},
     },
 };
-use thiserror::Error;
+
 use tokio::runtime::Handle;
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
-#[derive(Error, Debug)]
-pub enum SawtoothCommunicationError {
-    #[error("ZMQ error {0}")]
-    ZMQ(#[from] zmq::Error),
-
-    #[error("Send error {0}")]
-    Send(#[from] SendError),
-
-    #[error("Receive error {0}")]
-    Receive(#[from] ReceiveError),
-
-    #[error("Protobuf error {0}")]
-    Protobuf(#[from] ProtobufError),
-    #[error("Protobuf decode error {0}")]
-    ProtobufProst(#[from] prost::DecodeError),
-    #[error("Unexpected Status {status:?}")]
-    UnexpectedStatus { status: i32 },
-    #[error("No transaction id for event")]
-    MissingTransactionId,
-    #[error("Cannot determine block number for event")]
-    MissingBlockNum,
-    #[error("Unexpected message structure")]
-    MalformedMessage,
-    #[error("Json {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("Subscribe error {code}")]
-    SubscribeError { code: i32 },
-    #[error("Block number is not number {source}")]
-    BlockNumNotNumber {
-        #[from]
-        source: std::num::ParseIntError,
-    },
-    #[error("No blocks returned when searching for current block")]
-    NoBlocksReturned,
-}
+use crate::error::SawtoothCommunicationError;
 
 /// A trait representing a communication channel for sending request and receiving
 /// response messages to/from the Sawtooth network.

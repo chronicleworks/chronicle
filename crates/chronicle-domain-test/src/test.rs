@@ -66,6 +66,7 @@ mod test {
     use chronicle::{
         api::{
             chronicle_graphql::{OpaCheck, Store, Subscription},
+            inmem::EmbeddedChronicleTp,
             Api, UuidGen,
         },
         async_graphql::{Request, Response, Schema},
@@ -73,7 +74,6 @@ mod test {
         common::{
             database::TemporaryDatabase,
             identity::AuthId,
-            ledger::InMemLedger,
             opa::{CliPolicyLoader, ExecutorContext},
             signing::DirectoryStoredKeys,
         },
@@ -127,8 +127,8 @@ mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let mut ledger = InMemLedger::new();
-        let reader = ledger.reader();
+        let tp = EmbeddedChronicleTp::new();
+        let ledger = tp.ledger.clone();
 
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
@@ -136,7 +136,6 @@ mod test {
         let dispatch = Api::new(
             pool.clone(),
             ledger,
-            reader,
             &secretpath,
             SameUuid,
             HashMap::default(),
@@ -623,7 +622,7 @@ mod test {
                         .unwrap()
                         .chars()
                         .count(),
-                        36
+                        128
                     );
                       "[txId]"
                   }),

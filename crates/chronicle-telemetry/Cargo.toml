@@ -6,11 +6,11 @@ version = "0.6.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-opentelemetry.workspace         = true
-opentelemetry-jaeger.workspace  = true
-tracing.workspace               = true
-tracing-elastic-apm.workspace   = true
-tracing-log.workspace           = true
-tracing-opentelemetry.workspace = true
-tracing-subscriber.workspace    = true
-url                             = { workspace = true, features = ["serde"] }
+opentelemetry         = { workspace = true }
+opentelemetry-jaeger  = { workspace = true }
+tracing               = { workspace = true }
+tracing-elastic-apm   = { workspace = true }
+tracing-log           = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber    = { workspace = true }
+url                   = { workspace = true, features = ["serde"] }

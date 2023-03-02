@@ -11,11 +11,11 @@ path = "src/test.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chronicle             = { path = "../chronicle" }
-chronicle-telemetry   = { path = "../chronicle-telemetry" }
-tracing.workspace     = true
-tracing-log.workspace = true
-uuid.workspace        = true
+chronicle           = { path = "../chronicle" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
+tracing             = { workspace = true }
+tracing-log         = { workspace = true }
+uuid                = { workspace = true }
 
 [build-dependencies]
 chronicle = { path = "../chronicle" }
@@ -24,9 +24,9 @@ chronicle = { path = "../chronicle" }
 devmode = ["inmem"]
 strict  = []
 # Use an in-memory stub ledger
-inmem   = ["chronicle/inmem"]
+inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-futures.workspace  = true
-insta              = { workspace = true, features = ["json"] }
-tempfile.workspace = true
+futures  = { workspace = true }
+insta    = { workspace = true, features = ["json"] }
+tempfile = { workspace = true }

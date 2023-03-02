@@ -1,11 +1,10 @@
+use chronicle_protocol::{address::SawtoothAddress, protocol::messages::Submission};
 use common::{
     identity::SignedIdentity,
     ledger::OperationState,
     opa::ExecutorContext,
-    protocol::messages::Submission,
     prov::{operations::ChronicleOperation, ChronicleTransaction},
 };
-use sawtooth_protocol::address::SawtoothAddress;
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, ContextError, TransactionContext},
@@ -100,6 +99,12 @@ impl TPSideEffects {
         }
 
         Ok(())
+    }
+}
+
+impl Default for TPSideEffects {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

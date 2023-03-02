@@ -15,13 +15,13 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-sawtooth-sdk     = { path = "../async-sawtooth-sdk" }
-async-trait.workspace  = true
-bytes.workspace        = true
-chronicle-telemetry    = { path = "../chronicle-telemetry" }
-chrono.workspace       = true
-clap                   = { workspace = true, features = ["derive", "env"] }
-k256                   = { workspace = true, features = [
+async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+k256 = { workspace = true, features = [
   "default",
   "arithmetic",
   "ecdsa",
@@ -30,20 +30,19 @@ k256                   = { workspace = true, features = [
   "std",
   "pem",
 ] }
-opa-tp-protocol        = { path = "../opa-tp-protocol" }
-prost.workspace        = true
-proto                  = { path = "../sawtooth-protocol" }
-sawtooth-sdk.workspace = true
-serde_json.workspace   = true
-thiserror.workspace    = true
-tokio.workspace        = true
-tracing.workspace      = true
-url.workspace          = true
+opa-tp-protocol = { path = "../opa-tp-protocol" }
+prost = { workspace = true }
+sawtooth-sdk = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 insta               = { workspace = true, features = ["yaml"] }
-protobuf.workspace  = true
-rand.workspace      = true
-rand_core.workspace = true
-tempfile.workspace  = true
+protobuf            = { workspace = true }
+rand                = { workspace = true }
+rand_core           = { workspace = true }
+tempfile            = { workspace = true }

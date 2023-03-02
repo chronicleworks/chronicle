@@ -27,14 +27,14 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, instrument};
 
 use crate::{
-    sawtooth::MessageBuilder,
-    zmq_client::{RequestResponseSawtoothChannel, SawtoothCommunicationError},
+    error::SawtoothCommunicationError, sawtooth::MessageBuilder,
+    zmq_client::RequestResponseSawtoothChannel,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BlockId(String);
 
-impl std::fmt::Display for TransactionId {
+impl std::fmt::Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -71,6 +71,12 @@ pub enum Offset {
     Identity(u64),
 }
 
+impl From<u64> for Offset {
+    fn from(x: u64) -> Self {
+        Offset::Identity(x)
+    }
+}
+
 impl PartialOrd for Offset {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -97,39 +103,23 @@ impl Offset {
     pub fn distance(&self, other: &Self) -> u64 {
         match (self, other) {
             (Offset::Genesis, Offset::Genesis) => 0,
-            (Offset::Genesis, Offset::Identity(x)) => x,
-            (Offset::Identity(x), Offset::Genesis) => x,
+            (Offset::Genesis, Offset::Identity(x)) => *x,
+            (Offset::Identity(x), Offset::Genesis) => *x,
             (Offset::Identity(x), Offset::Identity(y)) => x.saturating_sub(*y),
         }
     }
 }
 
-impl From<u64> for Offset {
-    fn from(offset: u64) -> Self {
-        let x = offset;
-        Offset::Identity(x)
-    }
-}
-
-pub trait LedgerEvent {
-    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
-    where
-        Self: Sized;
-}
-
 // An application specific ledger event with its corresponding transaction id,
 // block height and trace span
 pub type LedgerEventContext<Event> = (Event, TransactionId, Offset, u64);
 
+#[async_trait::async_trait]
 pub trait LedgerEvent {
-    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    async fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
     where
         Self: Sized;
 }
-
-// An application specific ledger event with its corresponding transaction id,
-// block height and trace span
-pub type LedgerEventContext<Event> = (Event, TransactionId, Offset, u64);
 
 #[async_trait::async_trait]
 pub trait LedgerTransaction {
@@ -158,11 +148,49 @@ pub trait LedgerWriter {
     fn message_builder(&self) -> &MessageBuilder;
 }
 
+pub struct BlockingLedgerWriter<W>
+where
+    W: LedgerWriter + Send,
+{
+    writer: W,
+}
+
+impl<W> BlockingLedgerWriter<W>
+where
+    W: LedgerWriter + Send,
+{
+    pub fn new(writer: W) -> Self {
+        Self { writer }
+    }
+
+    pub fn pre_submit(
+        &self,
+        tx: &W::Transaction,
+    ) -> Result<(TransactionId, Transaction), W::Error> {
+        tokio::runtime::Handle::current().block_on(self.writer.pre_submit(tx))
+    }
+
+    pub fn submit(&self, tx: Transaction, signer: &SigningKey) -> Result<(), W::Error> {
+        tokio::runtime::Handle::current().block_on(self.writer.submit(tx, signer))
+    }
+
+    pub fn do_submit(
+        &self,
+        tx: &W::Transaction,
+        signer: &SigningKey,
+    ) -> Result<TransactionId, (Option<TransactionId>, W::Error)> {
+        let (tx_id, tx) = self.pre_submit(tx).map_err(|e| (None, e))?;
+        self.submit(tx, signer)
+            .map_err(|e| (Some(tx_id.clone()), e))?;
+        Ok(tx_id)
+    }
+}
+
 #[async_trait::async_trait]
 pub trait LedgerReader {
     type Error: std::error::Error;
     type Event: LedgerEvent;
-    type Event: LedgerEvent;
+    /// Get the state entry at `address`
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
 
     // Get the block height of the ledger, and the id of the highest block
@@ -171,8 +199,8 @@ pub trait LedgerReader {
     /// ending the stream after `number_of_blocks` blocks have been processed.
     async fn state_updates(
         &self,
-        // The application event types to subscribe to
-        event_types: Vec<String>,
+        // The application event type to subscribe to
+        event_type: &str,
         // The offset to start from, or `None` to start from the current block
         from_offset: Option<Offset>,
         // The number of blocks to process before ending the stream
@@ -252,7 +280,7 @@ impl<
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok(header.block_num)
+            Ok((header.block_num, header.previous_block_id))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -263,19 +291,18 @@ impl<
     #[instrument(skip(self))]
     async fn get_events_from(
         &self,
-        event_types: Vec<String>,
+        event_type: &str,
         offset: &Offset,
         offset_id: &Option<BlockId>,
-        event_types: Vec<String>,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
         let subscription_request = self
             .builder
-            .make_subscription_request(offset_id, event_types);
+            .make_subscription_request(offset_id, vec![event_type.into()]);
         debug!(?subscription_request);
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                request,
+                subscription_request,
                 Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                 Duration::from_secs(10),
             )
@@ -287,13 +314,15 @@ impl<
             });
         }
 
-        self.event_stream(*offset).await
+        self.event_stream(event_type, *offset).await
     }
 
     async fn event_stream(
         &self,
+        event_type: &str,
         block: Offset,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
+        let event_type = event_type.to_owned();
         #[derive(Debug)]
         enum ParsedEvent<Event> {
             Block(u64),
@@ -303,63 +332,73 @@ impl<
         let channel = self.channel.clone();
 
         let event_stream = channel.recv_stream::<EventList>().await?;
+        let event_stream = event_stream.then(move |events| {
+            let event_type = event_type.clone();
 
-        let event_stream = event_stream.map(move |events| {
-            debug!(?events, "Received events");
-            let mut updates = vec![];
-            for event in events.events {
-                updates.push(match &*event.event_type {
-                    "sawtooth/block-commit" => event
-                        .attributes
-                        .iter()
-                        .find(|attr| attr.key == "block_num")
-                        .ok_or(SawtoothCommunicationError::MissingBlockNum)
-                        .and_then(|attr| attr.value.parse().map_err(Into::into))
-                        .map(|attr| Some(ParsedEvent::Block(attr))),
-                    "opa/operation" => {
-                        let transaction_id = event
+            async move {
+                debug!(?events, "Received events");
+                let mut updates = vec![];
+                for event in events.events {
+                    updates.push(match &*event.event_type {
+                        "sawtooth/block-commit" => event
                             .attributes
                             .iter()
-                            .find(|attr| attr.key == "transaction_id")
-                            .ok_or(SawtoothCommunicationError::MissingTransactionId)
-                            .map(|attr| TransactionId::from(&*attr.value));
+                            .find(|attr| attr.key == "block_num")
+                            .ok_or(SawtoothCommunicationError::MissingBlockNum)
+                            .and_then(|attr| attr.value.parse().map_err(Into::into))
+                            .map(|attr| Some(ParsedEvent::Block(attr))),
+                        x if *x == *event_type => {
+                            let transaction_id = event
+                                .attributes
+                                .iter()
+                                .find(|attr| attr.key == "transaction_id")
+                                .ok_or(SawtoothCommunicationError::MissingTransactionId)
+                                .map(|attr| TransactionId::from(&*attr.value));
 
-                        let event = Event::deserialize(&event.data);
+                            let event = Event::deserialize(&event.data).await;
 
-                        transaction_id
-                            .map_err(SawtoothCommunicationError::from)
-                            .and_then(|transaction_id| {
-                                event.map(|event| {
-                                    let (operation, span) = event;
-                                    Some(ParsedEvent::Operation(operation, transaction_id, span))
+                            transaction_id
+                                .map_err(SawtoothCommunicationError::from)
+                                .and_then(|transaction_id| {
+                                    event.map(|event| {
+                                        let (operation, span) = event;
+                                        Some(ParsedEvent::Operation(
+                                            operation,
+                                            transaction_id,
+                                            span,
+                                        ))
+                                    })
                                 })
-                            })
-                    }
-                    _ => Ok(None),
-                });
+                        }
+                        _ => Ok(None),
+                    });
+                }
+
+                debug!(?updates, "Parsed events");
+
+                // Fold the updates into a vector of operations and their block num
+                updates
+                    .into_iter()
+                    .fold((vec![], block), |(mut operations, block), event| {
+                        match event {
+                            // Next block num
+                            Ok(Some(ParsedEvent::Block(next))) => (operations, Offset::from(next)),
+                            Ok(Some(ParsedEvent::Operation(
+                                next_operation,
+                                transaction_id,
+                                span,
+                            ))) => {
+                                operations.push((next_operation, transaction_id, span));
+                                (operations, block)
+                            }
+                            Err(e) => {
+                                error!(?e, "Parsing state update");
+                                (operations, block)
+                            }
+                            _ => (operations, block),
+                        }
+                    })
             }
-
-            debug!(?updates, "Parsed events");
-
-            // Fold the updates into a vector of operations and their block num
-
-            updates
-                .into_iter()
-                .fold((vec![], block), |(mut operations, block), event| {
-                    match event {
-                        // Next block num
-                        Ok(Some(ParsedEvent::Block(next))) => (operations, Offset::from(next)),
-                        Ok(Some(ParsedEvent::Operation(next_operation, transaction_id, span))) => {
-                            operations.push((next_operation, transaction_id, span));
-                            (operations, block)
-                        }
-                        Err(e) => {
-                            error!(?e, "Parsing state update");
-                            (operations, block)
-                        }
-                        _ => (operations, block),
-                    }
-                })
         });
 
         let events_with_block = event_stream
@@ -382,6 +421,7 @@ impl<
 {
     type Error = SawtoothCommunicationError;
     type Event = Event;
+
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error> {
         let request = self.builder.make_state_request(address);
 
@@ -403,27 +443,30 @@ impl<
         }
     }
 
-    async fn block_height(&self) -> Result<Offset, Self::Error> {
-        let block = self.get_block_height().await?;
-        Ok(Offset::from(block))
+    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
+        let (block, id) = self.get_block_height().await?;
+        Ok((Offset::from(block), BlockId(id)))
     }
 
     #[instrument(skip(self))]
     async fn state_updates(
         &self,
-        event_types: Vec<String>,
+        event_type: &str,
         from_offset: Option<Offset>,
         number_of_blocks: Option<u64>,
-    ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error> {
+    ) -> Result<BoxStream<LedgerEventContext<Event>>, Self::Error> {
         let self_clone = self.clone();
-        let from_offset = if let Some(offset) = from_offset {
-            offset
-        } else {
-            self_clone.block_height().await?
+
+        let (from_offset, from_block_id) = match from_offset {
+            None => (Offset::Genesis, None),
+            Some(from_offset) => {
+                let (_num, id) = self_clone.get_block_height().await?;
+                (from_offset, Some(BlockId(id)))
+            }
         };
 
         let subscribe = self
-            .get_state_from(&from_offset, &from_block_id, event_types)
+            .get_events_from(event_type, &from_offset, &from_block_id)
             .await?;
 
         Ok(subscribe
@@ -447,6 +490,7 @@ impl<
 {
     type Error = SawtoothCommunicationError;
     type Transaction = Transaction;
+
     fn message_builder(&self) -> &MessageBuilder {
         &self.builder
     }
