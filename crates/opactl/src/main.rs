@@ -16,10 +16,8 @@ use opa_tp_protocol::{
     },
     state::{key_address, policy_address, Keys, OpaOperationEvent},
     submission::SubmissionBuilder,
-    submission::SubmissionBuilder,
     transaction::OpaSubmitTransaction,
-    transaction::OpaSubmitTransaction,
-    OpaLedger, OpaLedger,
+    OpaLedger,
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
@@ -73,11 +71,6 @@ pub enum Waited {
 /// Collect incoming transaction ids before running submission, as there is the
 /// potential to miss transactions if we do not collect them 'before' submission
 async fn ambient_transactions<
-    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
     R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
         + Send
         + Sync

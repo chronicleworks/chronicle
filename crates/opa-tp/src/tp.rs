@@ -563,6 +563,7 @@ mod test {
         secret
     }
 
+    async fn submission_to_state(
     /// Apply a transaction to a transaction context
     async fn apply_tx(
         mut context: TestTransactionContext,

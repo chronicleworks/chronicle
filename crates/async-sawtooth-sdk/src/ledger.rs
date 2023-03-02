@@ -34,7 +34,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BlockId(String);
 
-impl std::fmt::Display for TransactionId {
+impl std::fmt::Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -280,7 +280,7 @@ impl<
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok(header.block_num)
+            Ok((header.block_num, header.previous_block_id))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -302,7 +302,7 @@ impl<
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                request,
+                subscription_request,
                 Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
                 Duration::from_secs(10),
             )
@@ -443,9 +443,9 @@ impl<
         }
     }
 
-    async fn block_height(&self) -> Result<Offset, Self::Error> {
-        let block = self.get_block_height().await?;
-        Ok(Offset::from(block))
+    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
+        let (block, id) = self.get_block_height().await?;
+        Ok((Offset::from(block), BlockId(id)))
     }
 
     #[instrument(skip(self))]
@@ -456,10 +456,13 @@ impl<
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, Self::Error> {
         let self_clone = self.clone();
-        let from_offset = if let Some(offset) = from_offset {
-            offset
-        } else {
-            self_clone.block_height().await?
+
+        let (from_offset, from_block_id) = match from_offset {
+            None => (Offset::Genesis, None),
+            Some(from_offset) => {
+                let (_num, id) = self_clone.get_block_height().await?;
+                (from_offset, Some(BlockId(id)))
+            }
         };
 
         let subscribe = self
