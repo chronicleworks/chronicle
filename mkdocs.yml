@@ -29,17 +29,19 @@ plugins:
 nav:
   - Overview: index.md
   - Architecture: chronicle_architecture.md
-  - Installing:
-      - Building for your domain: building.md
-      - Installing with Sextant: sextant.md
+  - Vocabulary: chronicle_vocabulary.md
   - Development:
       - Provenance concepts: provenance_concepts.md
       - Modeling a provenance domain: domain_modeling.md
       - Recording provenance: recording_provenance.md
       - Querying provenance: querying_provenance.md
       - Untyped Chronicle: untyped_chronicle.md
-  - Upgrading: upgrading.md
+  - Testing:
+      - Building your domain: building.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
       - Authentication and authorization: authz.md
+  - Installing:
+      - Installing with Sextant: sextant.md
+  - Upgrading: upgrading.md

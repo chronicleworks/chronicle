@@ -1,117 +1,47 @@
 # Chronicle
 
-A tool for recording and querying provenance onto distributed ledgers.
+A tool for recording and querying provenance data stored on distributed ledgers.
+
+## Getting Started
+
+We recommend you start by exploring the Chronicle examples repo, and trying
+to build and experiment with one of the runnable application domains there: <https://github.com/btpworks/chronicle-examples>
+
+## Documentation
+
+- Examples: <https://examples.btp.works/>
+- Chronicle: <https://docs.btp.works/chronicle/>
 
 ## Provenance
 
-![PROV-O](docs/images/starting-points.svg)
-Chronicle implements the
-[PROV-O starting point terms](https://www.w3.org/TR/2013/REC-prov-o-20130430/#description-starting-point-terms)
-, encoding them in
-[JSON-LD compact form](https://json-ld.org/spec/latest/json-ld-api/#compaction)
-onto a backend ledger - currently Sawtooth or an in-memory stub for testing
-purposes.
+Chronicle is built on W3C open standards:
 
-## Chronicle Vocabulary
+- [PROV-O - The PROV Ontology](https://www.w3.org/TR/prov-o/)
+- [JSON-LD](https://www.w3.org/TR/json-ld11/)
 
-As well as core prov, we have additional vocabulary to describe cryptographic
-processes, identities, and prevent conflict between multiple domains on-chain
-using namespaces.
+Chronicle implements the PROV-O
+[starting point terms](https://www.w3.org/TR/2013/REC-prov-o-20130430/#description-starting-point-terms)
+shown below, encoding them using the JSON-LD
+[compaction algorithm](https://json-ld.org/spec/latest/json-ld-api/#compaction)
+onto a backend ledger - currently Hyperledger Sawtooth - or an in-memory stub
+for testing purposes.
 
-### chronicle:Identity
+![PROV-O](https://www.w3.org/TR/prov-o/diagrams/starting-points.svg)
 
-Represents a cryptographic identity for an agent, supporting a single current
-signing identity via chronicle:hasIdentity and historical identities via
-chronicle:hadIdentity.
-
-### chronicle:publicKey
-
-A value containing a hex encoded ECDSA public key.
-
-Domain: Identity
-
-### chronicle:hasIdentity
-
-The current cryptographic identity of a prov:Agent.
-
-Domain: prov:Agent
-Range: chronicle:Identity
-
-### chronicle:hadIdentity
-
-A historical cryptographic identity for a prov:Agent.
-
-Domain: prov:Agent
-Range: chronicle:Identity
-
-### chronicle:Namespace
-
-An IRI containing an external id and uuid part, used for disambiguation. In order
-to work on the same namespace discrete Chronicle instances must share the uuid
-part.
-
-### chronicle:hasNamespace
-
-Allows disambiguation of potentially conflicting IRIs on the same chain, used
-as a component for address generation.
-
-Domain: All prov and Chronicle resources
-
-### chronicle:Attachment
-
-A resource describing an external resource, linked to a prov:Entity, and signed
-by an agent.
-
-### chronicle:hasAttachment
-
-The current attachment for a prov:Entity.
-
-Domain: prov:Entity
-Range: chronicle:Attachment
-
-### chronicle:hadAttachment
-
-A historical attachment for a prov:Entity.
-
-Domain: prov:Entity
-Range: chronicle:Attachment
-
-### chronicle:entitySignature
-
-A hex encoded ECDSA signature for the resource represented by an attachment.
-
-Domain: Attachment
-
-### chronicle:entityLocator
-
-An arbitrary value describing the attachment, likely an external IRI.
-
-Domain: Attachment
-
-### chronicle:signedAtTime
-
-The date / time when an attachment was created.
-
-Domain: chronicle:Attachment
-
-### chronicle:signedBy
-
-The chronicle:Identity (and by inference, prov:Agent) that signed an attachment.
-
-Domain: chronicle:Attachment
-Range: chronicle:Identity
+Chronicle extends the core PROV-O vocabulary as described
+[here](docs/chronicle_vocabulary.md).
 
 ## Deployment
 
 Chronicle is a self contained binary executable that can be used as an ephemeral
-command line interface for provenance recording and interrogation or as a GraphQL
-server to provide an interface for higher level services. It embeds PostgreSQL for
-local synchronization with a backend ledger and is capable of basic key
-management using a file system.
+command line interface for provenance recording and interrogation or as a
+GraphQL server to provide an interface for higher level services. It embeds
+PostgreSQL for local synchronization with a backend ledger and is capable of
+basic key management using a file system.
 
-Chronicle instances have individual data stores, so they do not share state directly
-and synchronize via ledger updates. The abstract transaction processor should process
-an API operation in under a millisecond.
+Chronicle instances have individual data stores, so they do not share state
+directly and synchronize via ledger updates. The abstract transaction processor
+should process an API operation in under a millisecond.
 
 ## Transaction Processing
 
