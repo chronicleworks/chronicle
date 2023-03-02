@@ -306,6 +306,11 @@ pub enum ApiCommand {
 pub enum ApiResponse {
     /// The api has successfully executed the operation, but has no useful output
     Unit,
+    /// The operation will not result in any data changes
+    AlreadyRecorded {
+        subject: ChronicleIri,
+        prov: Box<ProvModel>,
+    },
     /// The api has validated the command and submitted a transaction to a ledger
     Submission {
         subject: ChronicleIri,
@@ -335,6 +340,13 @@ impl ApiResponse {
 
     pub fn query_reply(prov: ProvModel) -> Self {
         ApiResponse::QueryReply {
+            prov: Box::new(prov),
+        }
+    }
+
+    pub fn already_recorded(subject: impl Into<ChronicleIri>, prov: ProvModel) -> Self {
+        ApiResponse::AlreadyRecorded {
+            subject: subject.into(),
             prov: Box::new(prov),
         }
     }

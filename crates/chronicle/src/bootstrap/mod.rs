@@ -436,6 +436,18 @@ where
             );
         }
         (ApiResponse::Unit, _api) => {}
+        (ApiResponse::AlreadyRecorded { subject, prov }, _api) => {
+            println!("Transaction will not result in any data changes: {subject}");
+            println!(
+                "{}",
+                prov.to_json()
+                    .compact()
+                    .await?
+                    .to_string()
+                    .to_colored_json_auto()
+                    .unwrap()
+            );
+        }
     };
     Ok(())
 }
