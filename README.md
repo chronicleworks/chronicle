@@ -49,3 +49,22 @@ Chronicle records provenance by running an abstract deterministic transaction
 processor both locally and as part of consensus. This transaction model is
 designed to be infallible - barring infrastructure issues, provenance will
 always be recorded for any operation that succeeds locally.
+
+## Call For Open-Source Contributions
+
+You can read all about our rationale for open sourcing Chronicle on Medium where
+our Chief Strategy Officer, Csilla Zsigri, published this article
+[Chronicle: You Say Provenance, We Say Open Source](https://medium.com/btpworks/chronicle-you-say-provenance-we-say-open-source-737c506dc9c0).
+
+We will be publishing a roadmap shortly at which point all developers are
+invited to contribute to our efforts to make assets trustworthy.
+
+You can participate in the following ways:
+
+1. Join our [Slack group](https://communityinviter.com/apps/chronicleworks/joinus)
+   to chat
+1. Submit an issue or PR on GitHub
+
+## License
+
+See the [LICENSE](LICENSE) file.
