@@ -29,7 +29,7 @@ for testing purposes.
 ![PROV-O](https://www.w3.org/TR/prov-o/diagrams/starting-points.svg)
 
 Chronicle extends the core PROV-O vocabulary as described
-[here](docs/chronicle_vocabulary.md).
+[here](docs/chronicle_vocabulary.md), except for `wasAttributedTo`.
 
 ## Deployment
 
