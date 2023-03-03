@@ -19,7 +19,7 @@ use sawtooth_sdk::messages::{
 };
 use tracing::{debug, instrument};
 
-use crate::{address::PREFIX, ledger::Offset, messages::Submission, submission::OpaTransactionId};
+use crate::{address::PREFIX, ledger::BlockId, messages::Submission, submission::OpaTransactionId};
 
 #[derive(Debug, Clone)]
 pub struct MessageBuilder {
@@ -63,6 +63,7 @@ impl MessageBuilder {
             })
             .into(),
             sorting: vec![ClientSortControls {
+                keys: vec!["block_num".to_owned()].into(),
                 reverse: true,
                 ..Default::default()
             }]
@@ -78,7 +79,10 @@ impl MessageBuilder {
         }
     }
 
-    pub fn make_subscription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
+    pub fn make_subscription_request(
+        &self,
+        block_id: &Option<BlockId>,
+    ) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
 
         let filter_address = EventFilter {
@@ -100,9 +104,9 @@ impl MessageBuilder {
             ..Default::default()
         };
 
-        offset.map(|offset| {
-            request.last_known_block_ids = vec![offset.to_string()].into();
-        });
+        if let Some(block_id) = block_id.as_ref() {
+            request.last_known_block_ids = vec![block_id.to_string()].into();
+        }
 
         request.subscriptions = vec![operation_subscription, block_subscription].into();
 

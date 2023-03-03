@@ -6,7 +6,7 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
 
-IMAGES := chronicle chronicle-tp chronicle-builder
+IMAGES := opa-tp opactl
 ARCHS := amd64 arm64
 COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
@@ -23,38 +23,38 @@ publish: gh-create-draft-release
 	mkdir -p target/arm64
 	mkdir -p target/amd64
 	container_id=$$(docker create chronicle-tp-amd64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/amd64/;  \
+		docker cp $$container_id:/usr/local/bin/opa-tp `pwd`/target/amd64/;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-amd64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/amd64/; \
+		docker cp $$container_id:/usr/local/bin/opctl `pwd`/target/amd64/; \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-tp-arm64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/arm64;  \
+		docker cp $$container_id:/usr/local/bin/opa-tp `pwd`/target/arm64;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-arm64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/arm64; \
+		docker cp $$container_id:/usr/local/bin/opactl `pwd`/target/arm64; \
 		docker rm $$container_id;
 	if [ "$(RELEASABLE)" = "yes" ]; then \
 		$(GH_RELEASE) upload $(VERSION) target/* ; \
 	fi
 
+
+
+
 .PHONY: build-end-to-end-test
 build-end-to-end-test:
-	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
-
-.PHONY: test-chronicle-e2e
-test-chronicle-e2e: build-end-to-end-test
-	COMPOSE_PROFILES=test $(COMPOSE) -f docker/chronicle.yaml up --exit-code-from chronicle-test
+	docker build -t opa-test:$(ISOLATION_ID) --build-arg TARGETARCH=$(HOST_ARCHITECTURE) --build-arg ISOLATION_ID=$(ISOLATION_ID) -f docker/opa-test/opa-test.dockerfile .
 
 .PHONY: test-e2e
-test-e2e: test-chronicle-e2e
+test-e2e: build-end-to-end-test
+	COMPOSE_PROFILES=test $(COMPOSE) -f docker/opa.yaml up --force-recreate --exit-code-from opa-test
 
 run:
-	$(COMPOSE) -f docker/chronicle.yaml up -d
+	$(COMPOSE) -f docker/opa.yaml up -d
 
 .PHONY: stop
 stop:
-	$(COMPOSE) -f docker/chronicle.yaml down || true
+	$(COMPOSE) -f docker/opa.yaml down || true
 
 $(MARKERS)/binfmt:
 	mkdir -p $(MARKERS)
@@ -65,9 +65,9 @@ $(MARKERS)/binfmt:
 
 # Run the compiler for host and target, then extract the binaries
 .PHONY: tested-$(ISOLATION_ID)
-tested-$(ISOLATION_ID): ensure-context-chronicle
+tested-$(ISOLATION_ID): ensure-context-opa-tp
 	docker buildx build $(DOCKER_PROGRESS)  \
-		-f./docker/unified-builder \
+		-f./docker/opa-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID) \
 		--platform linux/$(HOST_ARCHITECTURE) \
@@ -98,7 +98,7 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 .PHONY: $(1)-$(2)-build
 $(1)-$(2)-build: $(1)-$(2)-ensure-context tested-$(ISOLATION_ID)
 	docker buildx build $(DOCKER_PROGRESS)  \
-		-f./docker/unified-builder \
+		-f./docker/opa-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID) \
 		--build-arg TARGETARCH=$(2) \

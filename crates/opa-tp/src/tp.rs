@@ -1,12 +1,14 @@
 use std::str::from_utf8;
 
-use chrono::Utc;
 use k256::{ecdsa::signature::Verifier, pkcs8::DecodePublicKey};
 use opa_tp_protocol::{
     address::{HasSawtoothAddress, FAMILY, PREFIX, VERSION},
     events::opa_event,
     messages::Submission,
-    state::{key_address, policy_address, KeyRegistration, Keys, OpaOperationEvent, PolicyMeta},
+    state::{
+        key_address, policy_address, policy_meta_address, KeyRegistration, Keys, OpaOperationEvent,
+        PolicyMeta,
+    },
 };
 
 use k256::ecdsa::{Signature, VerifyingKey};
@@ -135,7 +137,7 @@ fn apply_signed_operation(
                 id: "root".to_string(),
                 current: KeyRegistration {
                     key: public_key,
-                    date: Utc::now(),
+                    version: 0,
                 },
                 expired: None,
             };
@@ -186,7 +188,6 @@ fn apply_signed_operation_payload(
             }
 
             let existing_key = context.get_state_entry(&key_address(id.clone()))?;
-
             if existing_key.is_some() {
                 error!("Key already registered");
                 return Err(OpaTpError::InvalidOperation);
@@ -196,7 +197,7 @@ fn apply_signed_operation_payload(
                 id,
                 current: KeyRegistration {
                     key: public_key,
-                    date: Utc::now(),
+                    version: 0,
                 },
                 expired: None,
             };
@@ -266,11 +267,11 @@ fn apply_signed_operation_payload(
                 id: payload.id,
                 current: KeyRegistration {
                     key: new_signing_key,
-                    date: Utc::now(),
+                    version: existing_key.current.version + 1,
                 },
                 expired: Some(KeyRegistration {
                     key: previous_signing_key,
-                    date: Utc::now(),
+                    version: existing_key.current.version,
                 }),
             };
 
@@ -290,9 +291,21 @@ fn apply_signed_operation_payload(
         opa_tp_protocol::messages::signed_operation::payload::Operation::SetPolicy(
             opa_tp_protocol::messages::SetPolicy { policy, id },
         ) => {
+            let existing_policy_meta = context.get_state_entry(&policy_meta_address(&*id))?;
+
+            let version = if existing_policy_meta.is_some() {
+                let existing_policy: PolicyMeta = serde_json::from_str(
+                    from_utf8(&existing_policy_meta.unwrap())
+                        .map_err(|_| OpaTpError::MalformedMessage)?,
+                )?;
+                existing_policy.version + 1
+            } else {
+                0
+            };
+
             let policy_meta = PolicyMeta {
                 id: id.clone(),
-                date: Utc::now(),
+                version,
                 policy_address: policy_address(&*id),
             };
 
@@ -590,8 +603,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         "###);
@@ -604,8 +617,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
               expired: ~
               id: root
         "###);
@@ -630,8 +643,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         "### );
@@ -646,8 +659,8 @@ mod test {
               - 3b8241d24ff6c90035ed8f64f3b6ffc64999670d9b8406a7fe717976ea650a164581fec952450e1284b36079748c794ddb8b5776b1db2384a38cd872d3f75737
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: root
         "###);
@@ -692,11 +705,11 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 1
             expired:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             id: root
         "### );
 
@@ -711,8 +724,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
@@ -720,11 +733,11 @@ mod test {
               - c9f05ca8c5f70d577707b2c547cc7ab75fdc7034f1484dab2658c1c2e2ef25461b1fe8df23d3949811cd78f9927aa4655a984e344299011e2d009e8638fb7eb8
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 1
               expired:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               id: root
         "### );
     }
@@ -749,14 +762,14 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: nonroot
         "### );
@@ -771,8 +784,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
@@ -780,8 +793,8 @@ mod test {
               - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: nonroot
         "###);
@@ -819,17 +832,17 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 1
             expired:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             id: nonroot
         "### );
         insta::assert_yaml_snapshot!(context.readable_events(), {
@@ -843,8 +856,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
@@ -852,8 +865,8 @@ mod test {
               - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               expired: ~
               id: nonroot
         - - opa/operation
@@ -861,11 +874,11 @@ mod test {
               - df0e2ce772a73cb8aab7591a05fdae10bdd169279925b94221091e662ff336a971d18175f98b67608e4fb08ac0bef3c0c5fece2ec1ab6d91765abcb4174f294b
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "[pem]"
+                version: 1
               expired:
-                date: "[date]"
                 key: "[pem]"
+                version: 0
               id: nonroot
         "###);
     }
@@ -890,8 +903,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         "### );
@@ -904,8 +917,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
@@ -945,14 +958,14 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: nonroot
         "### );
@@ -965,8 +978,8 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
@@ -974,8 +987,8 @@ mod test {
               - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEPpmlQdtpvTIEDf5QN/v1IQ2vqBUaceIc\r\nUgSwXZXOCmL7g7qGlvAO9WIdhMhAGBqtVoeU+dmwlpmdP5vsUhVHnQ==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
               expired: ~
               id: nonroot
         - - opa/operation
@@ -1005,8 +1018,8 @@ mod test {
         ---
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
-              date: "[date]"
               key: "[pem]"
+              version: 0
             expired: ~
             id: root
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
@@ -1025,17 +1038,17 @@ mod test {
               - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
           - KeyUpdate:
               current:
-                date: "[date]"
                 key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
               expired: ~
               id: root
         - - opa/operation
           - - - transaction_id
               - d97436915a49d3a37eb5b0615c9fd415fc7f79cd5cb1c8f45fcd2d948e9bff7029cb8351cb59a5d25aee9315158af8bed3be5416dd28975803d83465dfd189e1
           - PolicyUpdate:
-              date: "[date]"
               id: test
               policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
+              version: 0
         "###);
     }
 }

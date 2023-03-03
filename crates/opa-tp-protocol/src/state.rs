@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::address::{hash_and_append, HasSawtoothAddress};
@@ -7,7 +6,7 @@ use crate::address::{hash_and_append, HasSawtoothAddress};
 pub struct KeyRegistration {
     // Der encoded public key
     pub key: String,
-    pub date: DateTime<Utc>,
+    pub version: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +37,7 @@ pub fn key_address(id: impl AsRef<str>) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicyMeta {
     pub id: String,
-    pub date: DateTime<Utc>,
+    pub version: u64,
     pub policy_address: String,
 }
 
