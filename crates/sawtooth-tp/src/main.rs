@@ -63,14 +63,16 @@ async fn main() {
         },
     );
 
-    let (policy, entrypoint) = ("default_allow.tar.gz", "default_allow.allow");
+    let (bootstrap_policy, bootstrap_entrypoint) =
+        ("allow_transactions", "allow_transactions.allowed_users");
 
     Handle::current().spawn_blocking(move || {
         info!(
             "Starting Chronicle Transaction Processor on {:?}",
             matches.get_one::<String>("connect")
         );
-        let handler = match ChronicleTransactionHandler::new(policy, entrypoint) {
+        let handler = match ChronicleTransactionHandler::new(bootstrap_policy, bootstrap_entrypoint)
+        {
             Ok(handler) => handler,
             Err(e) => panic!("Error initializing TransactionHandler: {e}"),
         };

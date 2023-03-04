@@ -7,8 +7,8 @@ use serde_json::Value;
 use tokio::runtime::Runtime;
 
 fn load_wasm_from_file() -> Result<(), OpaExecutorError> {
-    let wasm = "auth.tar.gz";
-    let entrypoint = "auth.is_authorized";
+    let wasm = "allow_transactions";
+    let entrypoint = "allow_transactions/allowed_users";
     CliPolicyLoader::from_embedded_policy(wasm, entrypoint)?;
     Ok(())
 }
@@ -26,8 +26,8 @@ fn build_executor_from_loader(loader: &CliPolicyLoader) -> Result<(), OpaExecuto
 
 fn bench_build_opa_executor(c: &mut Criterion) {
     let input = {
-        let wasm = "auth.tar.gz";
-        let entrypoint = "auth.is_authorized";
+        let wasm = "allow_transactions";
+        let entrypoint = "allow_transactions.allowed_users";
         CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap()
     };
     c.bench_with_input(
@@ -52,8 +52,8 @@ fn bench_evaluate_policy(c: &mut Criterion) {
     c.bench_function("evaluate", |b| {
         b.iter_batched_ref(
             || {
-                let wasm = "auth.tar.gz";
-                let entrypoint = "auth.is_authorized";
+                let wasm = "allow_transactions";
+                let entrypoint = "allow_transactions.allowed_users";
                 let loader = CliPolicyLoader::from_embedded_policy(wasm, entrypoint).unwrap();
                 let id = AuthId::chronicle();
                 let data = OpaData::Operation(IdentityContext::new(

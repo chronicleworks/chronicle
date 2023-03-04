@@ -91,10 +91,12 @@ impl SetRuleOptions for CliPolicyLoader {
     }
 }
 
-async fn opa_executor() -> Result<ExecutorContext, CliError> {
+async fn opa_executor_from_embedded_policy(
+    policy_name: &str,
+    entrypoint: &str,
+) -> Result<ExecutorContext, CliError> {
     tracing::warn!("insecure operating mode");
-    let loader =
-        CliPolicyLoader::from_embedded_policy("default_allow.tar.gz", "default_allow.allow")?;
+    let loader = CliPolicyLoader::from_embedded_policy(policy_name, entrypoint)?;
     Ok(ExecutorContext::from_loader(&loader)?)
 }
 
@@ -338,7 +340,9 @@ where
             }
         }
 
-        let opa = opa_executor().await?;
+        let (default_policy_name, entrypoint) =
+            ("allow_transactions", "allow_transactions.allowed_users");
+        let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
 
         let open_cors = matches.is_present("unlock-cors");
 

@@ -24,7 +24,7 @@ pub enum PolicyLoaderError {
     #[error("Failed to read embedded OPA policies")]
     EmbeddedOpaPolicies,
 
-    #[error("Policy not found with entrypoint: {0}")]
+    #[error("Policy not found: {0}")]
     MissingPolicy(String),
 
     #[error("Io error: {0}")]
@@ -39,10 +39,15 @@ pub trait PolicyLoader {
     /// Set address of OPA policy
     fn set_address(&mut self, address: &str);
 
+    /// Set OPA policy
+    fn set_rule_name(&mut self, policy: &str);
+
     /// Set entrypoint for OPA policy
     fn set_entrypoint(&mut self, entrypoint: &str);
 
     fn get_address(&self) -> &str;
+
+    fn get_rule_name(&self) -> &str;
 
     fn get_entrypoint(&self) -> &str;
 
@@ -62,14 +67,14 @@ pub trait PolicyLoader {
 
     /// Load OPA policy from provided policy bundle
     fn load_policy_from_bundle(&mut self, bundle: &Bundle) -> Result<(), PolicyLoaderError> {
-        let entrypoint = self.get_entrypoint();
+        let rule = self.get_rule_name();
         self.load_policy_from_bytes(
             bundle
                 .wasm_policies
                 .iter()
-                .find(|p| p.entrypoint == entrypoint.replace('.', "/"))
+                .find(|p| p.entrypoint == rule)
                 .map(|p| p.bytes.as_ref())
-                .ok_or(PolicyLoaderError::MissingPolicy(entrypoint.to_string()))?,
+                .ok_or(PolicyLoaderError::MissingPolicy(rule.to_string()))?,
         );
         Ok(())
     }
@@ -148,6 +153,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
 #[derive(Clone)]
 pub struct SawtoothPolicyLoader {
     messenger_address: Url,
+    rule_name: String,
     address: String,
     policy: Vec<u8>,
     entrypoint: String,
@@ -157,6 +163,7 @@ impl SawtoothPolicyLoader {
     pub fn new(address: &Url) -> Self {
         Self {
             messenger_address: address.to_owned(),
+            rule_name: String::default(),
             address: String::default(),
             policy: Vec::default(),
             entrypoint: String::default(),
@@ -195,12 +202,20 @@ impl PolicyLoader for SawtoothPolicyLoader {
         self.address = address.to_owned()
     }
 
+    fn set_rule_name(&mut self, name: &str) {
+        self.rule_name = name.to_owned()
+    }
+
     fn set_entrypoint(&mut self, entrypoint: &str) {
         self.entrypoint = entrypoint.to_owned()
     }
 
     fn get_address(&self) -> &str {
         &self.address
+    }
+
+    fn get_rule_name(&self) -> &str {
+        &self.rule_name
     }
 
     fn get_entrypoint(&self) -> &str {
@@ -221,10 +236,11 @@ impl PolicyLoader for SawtoothPolicyLoader {
     }
 }
 
-/// OPA policy loader for policies passed via CLI or embedded in Chronicle for development
+/// OPA policy loader for policies passed via CLI or embedded in Chronicle
 #[derive(Clone, Default)]
 pub struct CliPolicyLoader {
     address: String,
+    rule_name: String,
     entrypoint: String,
     policy: Vec<u8>,
 }
@@ -245,13 +261,13 @@ impl CliPolicyLoader {
         Ok(self.get_policy().to_vec())
     }
 
-    /// Create a loaded [`CliPolicyLoader`] from the filename of an embedded dev policy
-    /// in tar.gz format and entrypoint
-    pub fn from_embedded_policy(wasm: &str, entrypoint: &str) -> Result<Self, PolicyLoaderError> {
-        if let Some(file) = EmbeddedOpaPolicies::get(wasm) {
+    /// Create a loaded [`CliPolicyLoader`] from name of an embedded dev policy and entrypoint
+    pub fn from_embedded_policy(policy: &str, entrypoint: &str) -> Result<Self, PolicyLoaderError> {
+        if let Some(file) = EmbeddedOpaPolicies::get("bundle.tar.gz") {
             let bytes = file.data.as_ref();
             let bundle = Bundle::from_bytes(bytes)?;
             let mut loader = CliPolicyLoader::new();
+            loader.set_rule_name(policy);
             loader.set_entrypoint(entrypoint);
             loader.load_policy_from_bundle(&bundle)?;
             Ok(loader)
@@ -275,12 +291,20 @@ impl PolicyLoader for CliPolicyLoader {
         self.address = address.to_owned()
     }
 
+    fn set_rule_name(&mut self, name: &str) {
+        self.rule_name = name.to_owned()
+    }
+
     fn set_entrypoint(&mut self, entrypoint: &str) {
         self.entrypoint = entrypoint.to_owned()
     }
 
     fn get_address(&self) -> &str {
         &self.address
+    }
+
+    fn get_rule_name(&self) -> &str {
+        &self.rule_name
     }
 
     fn get_entrypoint(&self) -> &str {
@@ -369,9 +393,9 @@ impl OpaExecutor for WasmtimeOpaExecutor {
     }
 }
 
-/// Embedded OPA development policies - See `crates/common/src/policies/` for source
 #[derive(RustEmbed)]
-#[folder = "$OUT_DIR/opa"]
+#[folder = "../../policies"]
+#[include = "bundle.tar.gz"]
 struct EmbeddedOpaPolicies;
 
 #[cfg(test)]
@@ -386,7 +410,25 @@ mod tests {
         AuthId::chronicle()
     }
 
-    fn opa_data() -> OpaData {
+    fn chronicle_user_opa_data() -> OpaData {
+        OpaData::Operation(IdentityContext::new(
+            AuthId::chronicle(),
+            Value::default(),
+            Value::default(),
+        ))
+    }
+
+    fn allow_chronicle_and_anonymous() -> (String, String) {
+        let policy_name = "allow_transactions".to_string();
+        let entrypoint = "allow_transactions/allowed_users".to_string();
+        (policy_name, entrypoint)
+    }
+
+    fn anonymous_user() -> AuthId {
+        AuthId::anonymous()
+    }
+
+    fn anonymous_user_opa_data() -> OpaData {
         OpaData::Operation(IdentityContext::new(
             AuthId::anonymous(),
             Value::default(),
@@ -394,82 +436,61 @@ mod tests {
         ))
     }
 
-    // Dev policy and entrypoints
-    fn auth_is_authorized() -> (String, String) {
-        ("auth.tar.gz".to_string(), "auth.is_authorized".to_string())
-    }
-    // '.' and '/' in policy entrypoint style both work
-    fn default_allow() -> (String, String) {
-        (
-            "default_allow.tar.gz".to_string(),
-            "default_allow/allow".to_string(),
-        )
-    }
-    fn default_deny() -> (String, String) {
-        (
-            "default_deny.tar.gz".to_string(),
-            "default_deny.allow".to_string(),
-        )
-    }
-
-    #[tokio::test]
-    async fn opa_executor_authorized_id() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = auth_is_authorized();
-        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        assert!(executor
-            .evaluate(&chronicle_id(), &opa_data())
-            .await
-            .is_ok());
-        Ok(())
-    }
-
-    fn unauthorized_agent() -> AuthId {
-        AuthId::anonymous()
-    }
-
-    #[tokio::test]
-    async fn opa_executor_unauthorized_id() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = auth_is_authorized();
-        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        match executor.evaluate(&unauthorized_agent(), &opa_data()).await {
-            Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
-            _ => panic!("expected error"),
-        }
-        Ok(())
-    }
-
     #[test]
-    fn policy_loader_invalid_entrypoint() {
-        let (wasm, _entrypoint) = auth_is_authorized();
-        let invalid_entrypoint = "x";
-        match CliPolicyLoader::from_embedded_policy(&wasm, invalid_entrypoint) {
+    fn policy_loader_invalid_rule() {
+        let (_policy, entrypoint) = allow_chronicle_and_anonymous();
+        let invalid_rule = "a_rule_that_does_not_exist";
+        match CliPolicyLoader::from_embedded_policy(invalid_rule, &entrypoint) {
             Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Policy not found with entrypoint: x")
+                insta::assert_snapshot!(e.to_string(), @"Policy not found: a_rule_that_does_not_exist")
             }
             _ => panic!("expected error"),
         }
     }
 
     #[tokio::test]
-    async fn opa_executor_default_allow() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = default_allow();
-        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
+    async fn opa_executor_allow_chronicle_and_anonymous() -> Result<(), OpaExecutorError> {
+        let (policy, entrypoint) = allow_chronicle_and_anonymous();
+        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
         assert!(executor
-            .evaluate(&chronicle_id(), &opa_data())
+            .evaluate(&chronicle_id(), &chronicle_user_opa_data())
+            .await
+            .is_ok());
+
+        assert!(executor
+            .evaluate(&anonymous_user(), &anonymous_user_opa_data())
             .await
             .is_ok());
         Ok(())
     }
 
+    fn jwt_user() -> AuthId {
+        let claims = crate::identity::JwtClaims(
+            serde_json::json!({
+                "sub": "abcdef",
+            })
+            .as_object()
+            .unwrap()
+            .to_owned(),
+        );
+        AuthId::from_jwt_claims(&claims, "/sub").unwrap()
+    }
+
+    fn jwt_user_opa_data() -> OpaData {
+        OpaData::Operation(IdentityContext::new(
+            jwt_user(),
+            Value::default(),
+            Value::default(),
+        ))
+    }
+
     #[tokio::test]
-    async fn opa_executor_default_deny() -> Result<(), OpaExecutorError> {
-        let (wasm, entrypoint) = default_deny();
-        let loader = CliPolicyLoader::from_embedded_policy(&wasm, &entrypoint)?;
+    async fn opa_executor_deny_unauthorized() -> Result<(), OpaExecutorError> {
+        let (policy, entrypoint) = allow_chronicle_and_anonymous();
+        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        match executor.evaluate(&chronicle_id(), &opa_data()).await {
+        match executor.evaluate(&jwt_user(), &jwt_user_opa_data()).await {
             Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
             _ => panic!("expected error"),
         }

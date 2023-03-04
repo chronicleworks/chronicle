@@ -94,18 +94,22 @@ mod test {
     }
 
     async fn test_schema() -> Schema<Query, Mutation, Subscription> {
-        let loader =
-            CliPolicyLoader::from_embedded_policy("default_allow.tar.gz", "default_allow.allow")
-                .unwrap();
+        let loader = CliPolicyLoader::from_embedded_policy(
+            "allow_transactions",
+            "allow_transactions.allowed_users",
+        )
+        .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
     }
 
     async fn test_schema_blocked_api() -> Schema<Query, Mutation, Subscription> {
-        let loader =
-            CliPolicyLoader::from_embedded_policy("default_deny.tar.gz", "default_deny.allow")
-                .unwrap();
+        let loader = CliPolicyLoader::from_embedded_policy(
+            "allow_transactions",
+            "allow_transactions.deny_all",
+        )
+        .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
         test_schema_with_opa(opa_executor).await
@@ -3761,9 +3765,11 @@ mod test {
 
     #[tokio::test]
     async fn subscribe_api_secured() {
-        let loader =
-            CliPolicyLoader::from_embedded_policy("allow_defines.tar.gz", "allow_defines.allow")
-                .unwrap();
+        let loader = CliPolicyLoader::from_embedded_policy(
+            "allow_transactions",
+            "allow_transactions.allow_defines",
+        )
+        .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
         let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
 
