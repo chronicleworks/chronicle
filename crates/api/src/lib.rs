@@ -3,7 +3,6 @@ pub mod chronicle_graphql;
 mod persistence;
 
 use chrono::{DateTime, Utc};
-use custom_error::*;
 use derivative::*;
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
@@ -38,6 +37,7 @@ use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
     path::Path, sync::Arc,
 };
+use thiserror::Error;
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
@@ -49,29 +49,70 @@ pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
 
-custom_error! {
-  pub ApiError
-    Store{source: persistence::StoreError}                      = "Storage {source:?}",
-    Transaction{source: diesel::result::Error}                  = "Transaction failed {source}",
-    Iri{source: iref::Error}                                    = "Invalid IRI {source}",
-    JsonLD{message: String}                                     = "Json LD processing {message}",
-    Ledger{source: SubmissionError}                             = "Ledger error {source}",
-    Signing{source: SignerError}                                = "Signing {source}",
-    NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
-    CannotFindAttachment{}                                      = "Cannot locate attachment file",
-    ApiShutdownRx                                               = "Api shut down before reply",
-    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
-    LedgerShutdownTx{source: SendError<LedgerSendWithReply>}    = "Ledger shut down before send",
-    AddressParse{source: AddrParseError}                        = "Invalid socket address {source}",
-    ConnectionPool{source: r2d2::Error}                         = "Connection pool {source}",
-    FileUpload{source: std::io::Error}                          = "File upload",
-    Join{source: JoinError}                                     = "Blocking thread pool",
-    Subscription{source: SubscriptionError}                     = "State update subscription {source}",
-    NotCurrentActivity{}                                        = "No appropriate activity to end",
-    EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
-    Contradiction{source: Contradiction}                        = "Contradiction {source}",
-    ProcessorError{source: ProcessorError}                      = "Processor {source}",
-    IdentityError{source: IdentityError}                        = "Identity {source}",
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("Storage: {0:?}")]
+    Store(#[from] persistence::StoreError),
+
+    #[error("Transaction failed: {0}")]
+    Transaction(#[from] diesel::result::Error),
+
+    #[error("Invalid IRI: {0}")]
+    Iri(#[from] iref::Error),
+
+    #[error("JSON-LD processing: {0}")]
+    JsonLD(String),
+
+    #[error("Ledger error: {0}")]
+    Ledger(#[from] SubmissionError),
+
+    #[error("Signing: {0}")]
+    Signing(#[from] SignerError),
+
+    #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
+    NoCurrentAgent,
+
+    #[error("Cannot locate attachment file")]
+    CannotFindAttachment,
+
+    #[error("Api shut down before reply")]
+    ApiShutdownRx,
+
+    #[error("Api shut down before send: {0}")]
+    ApiShutdownTx(#[from] SendError<ApiSendWithReply>),
+
+    #[error("Ledger shut down before send: {0}")]
+    LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
+
+    #[error("Invalid socket address: {0}")]
+    AddressParse(#[from] AddrParseError),
+
+    #[error("Connection pool: {0}")]
+    ConnectionPool(#[from] r2d2::Error),
+
+    #[error("File upload: {0}")]
+    FileUpload(#[from] std::io::Error),
+
+    #[error("Blocking thread pool: {0}")]
+    Join(#[from] JoinError),
+
+    #[error("State update subscription: {0}")]
+    Subscription(#[from] SubscriptionError),
+
+    #[error("No appropriate activity to end")]
+    NotCurrentActivity,
+
+    #[error("Could not sign message: {0}")]
+    EvidenceSigning(#[from] common::k256::ecdsa::Error),
+
+    #[error("Contradiction: {0}")]
+    Contradiction(#[from] Contradiction),
+
+    #[error("Processor: {0}")]
+    ProcessorError(#[from] ProcessorError),
+
+    #[error("Identity: {0}")]
+    IdentityError(#[from] IdentityError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -343,7 +384,7 @@ where
                 self.submit_tx.send(SubmissionStage::submitted(&tx_id)).ok();
                 Ok(tx_id)
             }
-            Err(ApiError::Ledger { ref source }) => {
+            Err(ApiError::Ledger(ref source)) => {
                 self.submit_tx
                     .send(SubmissionStage::submitted_error(source))
                     .ok();
@@ -970,7 +1011,7 @@ where
                     .unwrap()
                     .read_to_end(&mut buf)
                     .await
-                    .map_err(|e| ApiError::FileUpload { source: e })?;
+                    .map_err(ApiError::FileUpload)?;
 
                 Ok(buf)
             }
@@ -1812,7 +1853,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error: Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
     }
 
     #[tokio::test]
@@ -1943,7 +1984,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error: Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
@@ -2074,7 +2115,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error: Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
