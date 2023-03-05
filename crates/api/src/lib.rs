@@ -44,7 +44,7 @@ use tokio::{
     task::JoinError,
 };
 
-use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
@@ -409,6 +409,61 @@ where
         Ok(ApiResponse::submission(id, model, tx_id))
     }
 
+    /// Ensure that Chronicle API calls that will not result in any changes in state should not be dispatched
+    ///
+    /// # Arguments
+    /// * `state` - `ProvModel` for the operations' namespace
+    /// * `to_apply` - Chronicle operations resulting from an API call
+    #[instrument]
+    fn ensure_effects(
+        &mut self,
+        state: &mut ProvModel,
+        to_apply: &Vec<ChronicleOperation>,
+    ) -> Result<Option<Vec<ChronicleOperation>>, ApiError> {
+        let mut transactions = Vec::new();
+
+        for tx in to_apply {
+            let mut state_with_effects = state.clone();
+            state_with_effects.apply(tx)?;
+            if state_with_effects != *state {
+                transactions.push(tx.clone());
+                state.apply(tx)?;
+            }
+        }
+
+        if transactions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(transactions))
+        }
+    }
+
+    fn apply_effects_and_submit(
+        &mut self,
+        connection: &mut PgConnection,
+        id: impl Into<ChronicleIri>,
+        identity: AuthId,
+        to_apply: Vec<ChronicleOperation>,
+        namespace: NamespaceId,
+        applying_new_namespace: bool,
+    ) -> Result<ApiResponse, ApiError> {
+        if applying_new_namespace {
+            self.submit(id, identity, to_apply)
+        } else if let Some(to_apply) = {
+            let mut state = self
+                .store
+                .prov_model_for_namespace(connection, &namespace)?;
+            state.namespace_context(&namespace);
+            self.ensure_effects(&mut state, &to_apply)?
+        } {
+            self.submit(id, identity, to_apply)
+        } else {
+            info!("API call will not result in any data changes");
+            let model = ProvModel::from_tx(&to_apply)?;
+            Ok(ApiResponse::already_recorded(id, model))
+        }
+    }
+
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
     ///
     /// A namespace uri is of the form chronicle:ns:{external_id}:{uuid}
@@ -460,15 +515,24 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     activity: activity_id,
                 });
 
                 to_apply.push(create);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -490,9 +554,12 @@ where
 
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let (id, to_apply) = {
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
-                        namespace,
+                        namespace: namespace.clone(),
                         id: id.clone(),
                         activity: activity_id,
                     });
@@ -502,7 +569,14 @@ where
                     (id, to_apply)
                 };
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -525,9 +599,12 @@ where
 
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let (id, to_apply) = {
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
-                        namespace,
+                        namespace: namespace.clone(),
                         activity: id.clone(),
                         informing_activity: informing_activity_id,
                     });
@@ -537,7 +614,14 @@ where
                     (id, to_apply)
                 };
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -561,6 +645,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::EntityExists(EntityExists {
@@ -572,13 +658,20 @@ where
 
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
                     id: EntityId::from_external_id(&external_id),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -602,6 +695,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::ActivityExists(ActivityExists {
                     namespace: namespace.clone(),
                     external_id: external_id.clone(),
@@ -612,13 +707,20 @@ where
                 let id = ActivityId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -642,6 +744,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::AgentExists(AgentExists {
                     external_id: external_id.to_owned(),
                     namespace: namespace.clone(),
@@ -652,13 +756,20 @@ where
                 let id = AgentId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -872,6 +983,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
                     &namespace,
                     &responsible_id,
@@ -882,7 +995,14 @@ where
 
                 to_apply.push(tx);
 
-                api.submit(responsible_id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    responsible_id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -905,6 +1025,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
                     &namespace,
                     &activity_id,
@@ -914,7 +1036,14 @@ where
 
                 to_apply.push(tx);
 
-                api.submit(responsible_id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    responsible_id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -938,8 +1067,10 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::EntityDerive(EntityDerive {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     used_id: used_id.clone(),
                     activity_id: activity_id.clone(),
@@ -948,7 +1079,14 @@ where
 
                 to_apply.push(tx);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -989,8 +1127,10 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.build_transaction().run(|connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+            connection.build_transaction().run(|pg_connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(pg_connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
 
                 let mut connection = api.store.connection()?;
                 let agent = agent
@@ -1010,7 +1150,7 @@ where
                 let signature: Signature = signer.try_sign(&buf)?;
 
                 let tx = ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     agent: agent_id.clone(),
                     identityid: Some(IdentityId::from_external_id(
@@ -1024,7 +1164,14 @@ where
 
                 to_apply.push(tx);
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    pg_connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1078,6 +1225,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 match registration {
                     KeyRegistration::Generate => {
                         api.keystore.generate_agent(&id)?;
@@ -1098,11 +1247,18 @@ where
 
                 to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
                 }));
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1123,6 +1279,9 @@ where
             let mut connection = api.store.connection()?;
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let agent_id = {
                     if let Some(agent) = agent {
                         Some(agent)
@@ -1152,7 +1311,14 @@ where
                     ));
                 }
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1174,6 +1340,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let agent_id = {
                     if let Some(agent) = agent {
                         Some(agent)
@@ -1197,7 +1365,14 @@ where
                     ));
                 }
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1218,6 +1393,8 @@ where
             let mut connection = api.store.connection()?;
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
 
                 let agent_id = {
                     if let Some(agent) = agent {
@@ -1242,7 +1419,14 @@ where
                     ));
                 }
 
-                api.submit(id, identity, to_apply)
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
