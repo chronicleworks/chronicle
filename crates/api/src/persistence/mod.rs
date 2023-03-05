@@ -17,7 +17,6 @@ use common::{
         NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
     },
 };
-use custom_error::custom_error;
 use derivative::*;
 
 use diesel::{
@@ -26,6 +25,7 @@ use diesel::{
     PgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use thiserror::Error;
 use tracing::{debug, instrument, warn};
 use uuid::Uuid;
 
@@ -35,17 +35,37 @@ mod query;
 pub(crate) mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-custom_error! {pub StoreError
-    Db{source: diesel::result::Error}                           = "Database operation failed: {source}",
-    EmbeddedDb{message: String}                                 = "Embedded database failed: {message}",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed (maybe check PGPASSWORD): {source}",
-    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed: {migration}",
-    DbPool{source: r2d2::Error}                                 = "Connection pool error: {source}",
-    Uuid{source: uuid::Error}                                   = "Invalid UUID: {source}",
-    Json{source: serde_json::Error}                             = "Unreadable Attribute: {source}",
-    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction ID: {source}",
-    RecordNotFound{}                                            = "Could not locate record in store",
-    InvalidNamespace{}                                          = "Could not find namespace",
+#[derive(Error, Debug)]
+pub enum StoreError {
+    #[error("Database operation failed: {0}")]
+    Db(#[from] diesel::result::Error),
+
+    #[error("Embedded database failed: {0}")]
+    EmbeddedDb(String),
+
+    #[error("Database connection failed (maybe check PGPASSWORD): {0}")]
+    DbConnection(#[from] diesel::ConnectionError),
+
+    #[error("Database migration failed: {0}")]
+    DbMigration(#[from] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Connection pool error: {0}")]
+    DbPool(#[from] r2d2::Error),
+
+    #[error("Invalid UUID: {0}")]
+    Uuid(#[from] uuid::Error),
+
+    #[error("Unreadable Attribute: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("Invalid transaction ID: {0}")]
+    TransactionId(#[from] ChronicleTransactionIdError),
+
+    #[error("Could not locate record in store")]
+    RecordNotFound,
+
+    #[error("Could not find namespace")]
+    InvalidNamespace,
 }
 
 #[derive(Debug)]

@@ -115,9 +115,7 @@ type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError> {
     let (database, pool) = common::database::get_embedded_db_connection()
         .await
-        .map_err(|source| api::StoreError::EmbeddedDb {
-            message: source.to_string(),
-        })?;
+        .map_err(|source| api::StoreError::EmbeddedDb(source.to_string()))?;
     Ok((pool, Some(database)))
 }
 
@@ -139,9 +137,7 @@ impl DatabaseConnector<(), StoreError> for RemoteDatabaseConnector {
     fn should_retry(&self, error: &StoreError) -> bool {
         matches!(
             error,
-            StoreError::DbConnection {
-                source: diesel::ConnectionError::BadConnection(_),
-            }
+            StoreError::DbConnection(diesel::ConnectionError::BadConnection(_))
         )
     }
 }
