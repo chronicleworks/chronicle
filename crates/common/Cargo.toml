@@ -46,7 +46,7 @@ lazy_static = "1.4.0"
 opa = "0.9.0"
 opa-tp-protocol = { path = "../opa-tp-protocol" }
 percent-encoding = "2.1.0"
-pg-embed = "0.6.5"
+pg-embed = "0.7.1"
 pkcs8 = { version = "*", features = ["std", "alloc"] }
 portpicker = "0.1.1"
 prost = "0.10.0"
