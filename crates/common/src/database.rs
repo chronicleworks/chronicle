@@ -52,7 +52,7 @@ async fn get_embedded_db_connection_one_try(
     TEMP_DIRS.lock().await.push(temp_dir.clone());
     let settings = postgres::PgSettings {
         database_dir: temp_dir.path().to_path_buf(),
-        port: portpicker::pick_unused_port().unwrap() as i16,
+        port: portpicker::pick_unused_port().unwrap(),
         user: "chronicle".to_string(),
         password: "please".to_string(),
         auth_method: PgAuthMethod::MD5,

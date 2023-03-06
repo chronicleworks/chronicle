@@ -36,7 +36,7 @@ opentelemetry-jaeger = { version = "0.17.0", features = [
   "reqwest_collector_client",
 ] }
 percent-encoding = "2.1.0"
-pg-embed = "0.6.5"
+pg-embed = "0.7.1"
 proto = { path = "../sawtooth-protocol" }
 question = "0.2.2"
 rand = { version = "0.8.5", features = ["getrandom"] }
