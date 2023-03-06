@@ -24,8 +24,9 @@ use common::{
             WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleTransaction, ChronicleTransactionId, Contradiction, EntityId,
-        ExternalId, ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel, Role,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
+        Contradiction, EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId,
+        ProcessorError, ProvModel, Role,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -394,6 +395,20 @@ where
         }
     }
 
+    /// Generate and submit the signed identity to send to the Transaction Processor along with the transactions to be applied
+    fn submit(
+        &mut self,
+        id: impl Into<ChronicleIri>,
+        identity: AuthId,
+        to_apply: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        let identity = identity.signed_identity(&self.keystore)?;
+        let model = ProvModel::from_tx(&to_apply)?;
+        let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+
+        Ok(ApiResponse::submission(id, model, tx_id))
+    }
+
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
     ///
     /// A namespace uri is of the form chronicle:ns:{external_id}:{uuid}
@@ -453,12 +468,7 @@ where
 
                 to_apply.push(create);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -492,12 +502,7 @@ where
                     (id, to_apply)
                 };
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -532,12 +537,7 @@ where
                     (id, to_apply)
                 };
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -578,12 +578,7 @@ where
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -623,12 +618,7 @@ where
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -668,12 +658,7 @@ where
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -692,12 +677,7 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(namespace, model, tx_id))
+                api.submit(namespace, identity, to_apply)
             })
         })
         .await?
@@ -902,11 +882,7 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(responsible_id, model, tx_id))
+                api.submit(responsible_id, identity, to_apply)
             })
         })
         .await?
@@ -938,11 +914,7 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(responsible_id, model, tx_id))
+                api.submit(responsible_id, identity, to_apply)
             })
         })
         .await?
@@ -976,11 +948,7 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -1056,12 +1024,7 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -1139,12 +1102,7 @@ where
                     publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
                 }));
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -1194,12 +1152,7 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -1244,12 +1197,7 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
@@ -1294,12 +1242,7 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.submit(id, identity, to_apply)
             })
         })
         .await?
