@@ -29,8 +29,6 @@ use thiserror::Error;
 use tracing::{debug, instrument, warn};
 use uuid::Uuid;
 
-use crate::QueryCommand;
-
 mod query;
 pub(crate) mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -1002,11 +1000,11 @@ impl Store {
     pub(crate) fn prov_model_for_namespace(
         &self,
         connection: &mut PgConnection,
-        query: QueryCommand,
+        namespace: &NamespaceId,
     ) -> Result<ProvModel, StoreError> {
         let mut model = ProvModel::default();
         let (namespaceid, nsid) =
-            self.namespace_by_external_id(connection, &ExternalId::from(&query.namespace))?;
+            self.namespace_by_external_id(connection, namespace.external_id_part())?;
 
         let agents = schema::agent::table
             .filter(schema::agent::namespace_id.eq(&nsid))

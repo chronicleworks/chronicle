@@ -1035,11 +1035,11 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            let (_id, _) = api
+            let (id, _) = api
                 .store
                 .namespace_by_external_id(&mut connection, &ExternalId::from(&query.namespace))?;
             Ok(ApiResponse::query_reply(
-                api.store.prov_model_for_namespace(&mut connection, query)?,
+                api.store.prov_model_for_namespace(&mut connection, &id)?,
             ))
         })
         .await?
