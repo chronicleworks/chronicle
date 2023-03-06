@@ -1980,7 +1980,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error: Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
     }
 
     #[tokio::test]
@@ -2111,7 +2111,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error: Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
@@ -2242,7 +2242,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error: Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
