@@ -13,7 +13,7 @@ HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/a
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
-clean: clean_containers clean_target clean-opa
+clean: clean_containers clean_target
 
 distclean: clean_docker clean_markers
 
@@ -112,7 +112,7 @@ $(1)-manifest: $(1)-$(2)-build
 
 $(1): $(1)-$(2)-build
 
-build: build-opa $(1)
+build: $(1)
 
 build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
@@ -127,54 +127,3 @@ clean_docker: stop
 
 clean_target:
 	$(RM) -r target
-
-uname_S := $(shell uname -s)
-uname_M := $(shell uname -m)
-
-ifeq ($(uname_S), Linux)
-	OS = linux
-	OPA_SUFFIX = _static
-else ifeq ($(uname_S), Darwin)
-	OS = darwin
-else
-	OS = windows
-	ARCH = amd64
-endif
-
-ifeq ($(uname_M), x86_64)
-	ARCH = amd64
-else ifeq ($(uname_M), arm)
-	ARCH = arm64
-	OPA_SUFFIX = _static
-else ifeq ($(uname_M), arm64)
-	ARCH = arm64
-	OPA_SUFFIX = _static
-else ifeq ($(uname_M), aarch64)
-	ARCH = arm64
-	OPA_SUFFIX = _static
-endif
-
-OPA_VERSION=v0.49.2
-OPA_DOWNLOAD_URL=https://openpolicyagent.org/downloads/$(OPA_VERSION)/opa_$(OS)_$(ARCH)$(OPA_SUFFIX)
-
-.PHONY: download-opa
-download-opa:
-	if [ ! -r build/opa ]; then \
-		curl -sSL -o build/opa $(OPA_DOWNLOAD_URL); \
-		chmod 755 build/opa; \
-	fi
-
-build-opa: download-opa
-	build/opa build -t wasm -o policies/bundle.tar.gz -b policies -e "allow_transactions" -e "common_rules"
-
-.PHONY: opa-test
-opa-test: download-opa
-	build/opa test -b policies
-
-.PHONY: clean-opa
-clean-opa:
-	if [ -n "$(wildcard policies/*.tar.gz)" ]; then \
-		rm policies/*.tar.gz; \
-	else \
-		echo "No OPA policy archives to remove."; \
-	fi
