@@ -23,4 +23,4 @@ inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
 insta    = { version = "1.14.0", features = ["redactions", "toml"] }
-tempfile = "3.3.0"
+tempfile = "3.4.0"

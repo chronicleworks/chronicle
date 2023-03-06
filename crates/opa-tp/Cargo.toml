@@ -45,4 +45,4 @@ insta               = { version = "1.14.0", features = ["redactions", "toml", "y
 protobuf            = "2.27.1"
 rand                = { version = "0.8.5", features = ["getrandom"] }
 rand_core           = "0.6.3"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
