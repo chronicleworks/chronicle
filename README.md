@@ -45,10 +45,11 @@ should process an API operation in under a millisecond.
 
 ## Transaction Processing
 
-Chronicle records provenance by running an abstract deterministic transaction
-processor both locally and as part of consensus. This transaction model is
-designed to be infallible - barring infrastructure issues, provenance will
-always be recorded for any operation that succeeds locally.
+Chronicle records provenance by running a deterministic transaction
+processor both locally and as part of consensus. Local execution ensures that
+duplicated provenance will not waste resources in consensus and that most
+contradictions will also be caught early. Provenance will be sent to a validator
+and recorded on chain unless it contradicts previous provenance.
 
 ## Call For Open-Source Contributions
 
