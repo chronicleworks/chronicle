@@ -14,7 +14,7 @@ use common::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
         EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
-        NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
+        NamespaceId, ProvModel, PublicKeyPart, Role, SignaturePart, Usage,
     },
 };
 use derivative::*;
@@ -1040,6 +1040,44 @@ impl Store {
                         .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
+
+            for (responsible, activity, role) in schema::delegation::table
+                .filter(schema::delegation::responsible_id.eq(agent.id))
+                .inner_join(
+                    schema::agent::table.on(schema::delegation::delegate_id.eq(schema::agent::id)),
+                )
+                .inner_join(
+                    schema::activity::table
+                        .on(schema::delegation::activity_id.eq(schema::activity::id)),
+                )
+                .order(schema::agent::external_id)
+                .select((
+                    schema::agent::external_id,
+                    schema::activity::external_id,
+                    schema::delegation::role,
+                ))
+                .load::<(String, String, String)>(connection)?
+            {
+                model.qualified_delegation(
+                    &namespaceid,
+                    &AgentId::from_external_id(&agent.external_id),
+                    &AgentId::from_external_id(responsible),
+                    {
+                        if activity.contains("hidden entry for Option None") {
+                            None
+                        } else {
+                            Some(ActivityId::from_external_id(activity))
+                        }
+                    },
+                    {
+                        if role.is_empty() {
+                            None
+                        } else {
+                            Some(Role(role))
+                        }
+                    },
+                );
+            }
         }
 
         let activities = schema::activity::table
@@ -1118,6 +1156,27 @@ impl Store {
                     namespaceid.clone(),
                     &id,
                     &ActivityId::from_external_id(wasinformedby),
+                );
+            }
+
+            for (agent, role) in schema::association::table
+                .filter(schema::association::activity_id.eq(activity.id))
+                .order(schema::association::activity_id.asc())
+                .inner_join(schema::agent::table)
+                .select((schema::agent::external_id, schema::association::role))
+                .load::<(String, String)>(connection)?
+            {
+                model.qualified_association(
+                    &namespaceid,
+                    &id,
+                    &AgentId::from_external_id(agent),
+                    {
+                        if role.is_empty() {
+                            None
+                        } else {
+                            Some(Role(role))
+                        }
+                    },
                 );
             }
         }
