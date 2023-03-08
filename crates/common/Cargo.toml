@@ -27,11 +27,11 @@ diesel = { version = "2.0.0-rc.0", features = [
 ] }
 futures = "0.3.21"
 glob = "0.3.0"
+hashbrown = "0.13"
 hex = "0.4.3"
 iref = "2.1.2"
 iref-enum = "2.0.0"
-json = "0.12.4"
-json-ld = "0.4.0"
+json-ld = "0.14"
 k256 = { version = "0.11.3", features = [
   "default",
   "arithmetic",
@@ -43,6 +43,8 @@ k256 = { version = "0.11.3", features = [
   "pem",
 ] }
 lazy_static = "1.4.0"
+locspan = "0.7"
+mime = "0.3"
 opa = "0.9.0"
 opa-tp-protocol = { path = "../opa-tp-protocol" }
 percent-encoding = "2.1.0"
@@ -54,11 +56,12 @@ protobuf = "2.27.1"
 r2d2 = "0.8.9"
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
+rdf-types = "0.14"
 rust-embed = { version = "6.6.0", features = ["debug-embed", "include-exclude"] }
 sawtooth-sdk = "0.5.2"
 serde = "1.0.136"
 serde_derive = "1.0.136"
-serde_json = "1.0.79"
+serde_json = "1.0.93"
 static-iref = "2.0.0"
 temp-dir = "0.1.11"
 thiserror = "1.0.36"
@@ -70,9 +73,9 @@ zmq = "0.9.2"
 
 [build-dependencies]
 glob        = "0.3.0"
-json        = "0.12.4"
 lazy_static = "1.4.0"
 prost-build = "0.10.0"
+serde_json = "1.0.93"
 
 [dev-dependencies]
 api = { path = "../api" }

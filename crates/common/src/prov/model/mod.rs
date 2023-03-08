@@ -2,16 +2,17 @@ mod contradiction;
 pub use contradiction::Contradiction;
 
 use chrono::{DateTime, Utc};
-
-use json::JsonValue;
-use json_ld::{context::Local, Document, JsonContext, NoLoader};
-
+use iref::IriBuf;
+use json_ld::NoLoader;
+use lazy_static::lazy_static;
+use locspan::Meta;
+use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
-    fmt::Display,
+    fmt::{Debug, Display},
 };
 use tokio::task::JoinError;
 use tracing::{instrument, trace};
@@ -53,17 +54,18 @@ pub enum ProcessorError {
     Identity(#[from] IdentityError),
     #[error("Invalid IRI {0}")]
     IRef(#[from] iref::Error),
-    #[error("Malformed JSON {0}")]
-    Json(#[from] json::JsonError),
     #[error("Not a Chronicle IRI {0}")]
     NotAChronicleIri(#[from] id::ParseIriError),
     #[error("Missing @id {object:?}")]
-    MissingId { object: JsonValue },
+    MissingId { object: serde_json::Value },
     #[error("Missing property {iri}:{object:?}")]
-    MissingProperty { iri: String, object: JsonValue },
+    MissingProperty {
+        iri: String,
+        object: serde_json::Value,
+    },
     #[error("Json LD object is not a node")]
     NotANode,
-    #[error("Chronicle value is not a json object")]
+    #[error("Chronicle value is not a JSON object")]
     NotAnObject,
     #[error("OpaExecutorError: {0}")]
     OpaExecutor(#[from] OpaExecutorError),
@@ -1163,29 +1165,116 @@ impl ProvModel {
 }
 
 custom_error::custom_error! {pub CompactionError
-    JsonLd{inner: String}                  = "JsonLd {inner}", //TODO: contribute Send to the upstream JsonLD error type
-    Join{source : JoinError}               = "Tokio",
-    Serde{source: serde_json::Error }      = "Serde conversion {source}",
+    JsonLd{inner: String}                  = "JSON-LD: {inner}", //TODO: contribute Send to the upstream JsonLD error type
+    Join{source : JoinError}               = "Tokio: {source}",
+    Serde{source: serde_json::Error}       = "Serde conversion: {source}",
+    InvalidExpanded{message: String}       = "Expanded document invalid: {message}",
+    NoObject{document: Value}              = "Compacted document not a JSON object: {document}",
 }
-pub struct ExpandedJson(pub JsonValue);
+pub struct ExpandedJson(pub serde_json::Value);
+
+fn construct_context_definition<M>(
+    json: &serde_json::Value,
+    metadata: M,
+) -> json_ld::syntax::context::Definition<M>
+where
+    M: Clone + Debug,
+{
+    use json_ld::syntax::{
+        context::{
+            definition::{Bindings, Version},
+            Definition, TermDefinition,
+        },
+        Entry, Nullable, TryFromJson,
+    };
+    if let Value::Object(map) = json {
+        match map.get("@version") {
+            None => {}
+            Some(Value::Number(version)) if version.as_f64() == Some(1.1) => {}
+            Some(json_version) => panic!("unexpected JSON-LD context @version: {json_version}"),
+        };
+        let mut bindings = Bindings::new();
+        for (key, value) in map {
+            if key == "@version" {
+                // already handled above
+            } else if let Some('@') = key.chars().next() {
+                panic!("unexpected JSON-LD context key: {key}");
+            } else {
+                let value =
+                    json_ld::syntax::Value::from_serde_json(value.clone(), |_| metadata.clone());
+                let term: Meta<TermDefinition<M>, M> = TryFromJson::try_from_json(value)
+                    .expect("failed to convert {value} to term binding");
+                bindings.insert(
+                    Meta(key.clone().into(), metadata.clone()),
+                    Meta(Nullable::Some(term.value().clone()), metadata.clone()),
+                );
+            }
+        }
+        Definition {
+            base: None,
+            import: None,
+            language: None,
+            direction: None,
+            propagate: None,
+            protected: None,
+            type_: None,
+            version: Some(Entry::new(
+                metadata.clone(),
+                Meta::new(Version::V1_1, metadata),
+            )),
+            vocab: None,
+            bindings,
+        }
+    } else {
+        panic!("failed to convert JSON to LD context: {json:?}");
+    }
+}
+
+lazy_static! {
+    static ref JSON_LD_CONTEXT_DEFS: json_ld::syntax::context::Definition<()> =
+        construct_context_definition(&crate::context::PROV, ());
+}
 
 impl ExpandedJson {
     pub async fn compact(self) -> Result<CompactedJson, CompactionError> {
-        let processed_context = crate::context::PROV
-            .process::<JsonContext, _>(&mut NoLoader, None)
+        use json_ld::{
+            syntax::context, Compact, ExpandedDocument, Process, ProcessingMode, TryFromJson,
+        };
+        let vocabulary = no_vocabulary_mut();
+        let mut loader: NoLoader<IriBuf, (), json_ld::syntax::Value> = NoLoader::new();
+
+        // process context
+
+        let value = context::Value::One(Meta::new(
+            context::Context::Definition(JSON_LD_CONTEXT_DEFS.clone()),
+            (),
+        ));
+        let context_meta = Meta::new(value, ());
+        let processed_context = context_meta
+            .process(vocabulary, &mut loader, None)
             .await
             .map_err(|e| CompactionError::JsonLd {
-                inner: e.to_string(),
+                inner: format!("{:?}", e),
             })?;
 
-        let mut output = self
-            .0
-            .compact_with(
-                None,
-                &processed_context,
-                &mut NoLoader,
+        // compact document
+
+        let expanded_meta = json_ld::syntax::Value::from_serde_json(self.0, |_| ());
+
+        let expanded_doc: Meta<ExpandedDocument<IriBuf, BlankIdBuf, ()>, ()> =
+            TryFromJson::try_from_json_in(vocabulary, expanded_meta).map_err(|e| {
+                CompactionError::InvalidExpanded {
+                    message: format!("{:?}", e.into_value()),
+                }
+            })?;
+
+        let output = expanded_doc
+            .compact_full(
+                vocabulary,
+                processed_context.as_ref(),
+                &mut loader,
                 json_ld::compaction::Options {
-                    processing_mode: json_ld::ProcessingMode::JsonLd1_1,
+                    processing_mode: ProcessingMode::JsonLd1_1,
                     compact_to_relative: true,
                     compact_arrays: true,
                     ordered: true,
@@ -1196,11 +1285,18 @@ impl ExpandedJson {
                 inner: e.to_string(),
             })?;
 
-        output
-            .insert("@context", "https://btp.works/chr/1.0/c.jsonld")
-            .unwrap();
+        // reference context
 
-        Ok(CompactedJson(output))
+        let json = output.into_value().into();
+        if let Value::Object(mut map) = json {
+            map.insert(
+                "@context".to_string(),
+                Value::String("https://btp.works/chr/1.0/c.jsonld".to_string()),
+            );
+            Ok(CompactedJson(Value::Object(map)))
+        } else {
+            Err(CompactionError::NoObject { document: json })
+        }
     }
 
     pub async fn compact_stable_order(self) -> Result<Value, CompactionError> {
@@ -1221,10 +1317,10 @@ impl ExpandedJson {
 }
 pub mod from_json_ld;
 
-pub struct CompactedJson(pub JsonValue);
+pub struct CompactedJson(pub serde_json::Value);
 
 impl std::ops::Deref for CompactedJson {
-    type Target = JsonValue;
+    type Target = serde_json::Value;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -1233,7 +1329,7 @@ impl std::ops::Deref for CompactedJson {
 
 impl CompactedJson {
     pub fn pretty(&self) -> String {
-        self.0.pretty(2)
+        serde_json::to_string_pretty(&self.0).unwrap()
     }
 }
 

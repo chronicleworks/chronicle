@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
-use futures::{future::BoxFuture, FutureExt, TryFutureExt};
+use futures::{future::BoxFuture, FutureExt};
 use iref::{AsIri, Iri, IriBuf, IriRefBuf};
-use json::{object, JsonValue};
 use json_ld::{
-    syntax::Term, util::AsJson, Document, Indexed, JsonContext, Loader, Node, Reference,
-    RemoteDocument,
+    syntax::IntoJsonWithContextMeta, Indexed, Loader, Node, Profile, RemoteDocument, Term,
 };
+use locspan::Meta;
+use mime::Mime;
+use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf, IriVocabularyMut};
+use serde_json::json;
 use std::collections::BTreeMap;
 use tracing::{instrument, trace};
 
@@ -30,40 +32,67 @@ use super::{
 
 pub struct ContextLoader;
 
-impl Loader for ContextLoader {
-    type Document = json::JsonValue;
+impl Loader<IriBuf, ()> for ContextLoader {
+    type Error = ();
+    type Output = json_ld::syntax::Value<Self::Error>;
 
     // This is only used to load the context, so we can just return it directly
-    fn load<'a>(
-        &'a mut self,
-        url: Iri<'_>,
-    ) -> BoxFuture<'a, Result<RemoteDocument<Self::Document>, json_ld::Error>> {
-        let url = IriBuf::from(url);
+    fn load_with<'b>(
+        &'b mut self,
+        vocabulary: &'b mut (impl Sync + Send + IriVocabularyMut<Iri = IriBuf>),
+        url: IriBuf,
+    ) -> BoxFuture<Result<RemoteDocument<IriBuf, Self::Error, Self::Output>, Self::Error>>
+    where
+        IriBuf: 'b,
+    {
+        use hashbrown::HashSet;
+        use std::str::FromStr;
+        let mut profiles = HashSet::new();
+        profiles.insert(Profile::new(url.as_iri(), vocabulary));
         trace!("Loading context from {}", url);
         async move {
-            Ok(json_ld::RemoteDocument::new(
-                object! {
-                 "@context": crate::context::PROV.clone()
-                },
-                url.as_iri(),
+            let json = json!({
+             "@context": crate::context::PROV.clone()
+            });
+            let value = json_ld::syntax::Value::from_serde_json(json, |_| ());
+            Ok(json_ld::RemoteDocument::new_full(
+                Some(url),
+                Some(Mime::from_str("application/json").unwrap()),
+                None,
+                profiles,
+                value,
             ))
         }
         .boxed()
     }
 }
 
-fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, ProcessorError> {
+fn as_json(node: &Node<IriBuf, BlankIdBuf, ()>) -> serde_json::Value {
+    node.clone()
+        .into_json_meta_with((), no_vocabulary_mut())
+        .into_value()
+        .into()
+}
+
+fn id_from_iri(iri: &dyn AsIri) -> json_ld::Id {
+    json_ld::Id::Valid(json_ld::ValidId::Iri(iri.as_iri().into()))
+}
+
+fn extract_reference_ids(
+    iri: &dyn AsIri,
+    node: &Node<IriBuf, BlankIdBuf, ()>,
+) -> Result<Vec<IriBuf>, ProcessorError> {
     let ids: Result<Vec<_>, _> = node
-        .get(&Reference::Id(iri.as_iri().into()))
+        .get(&id_from_iri(iri))
         .map(|o| {
             o.id().ok_or_else(|| ProcessorError::MissingId {
-                object: node.as_json(),
+                object: as_json(node),
             })
         })
         .map(|id| {
             id.and_then(|id| {
                 id.as_iri().ok_or_else(|| ProcessorError::MissingId {
-                    object: node.as_json(),
+                    object: as_json(node),
                 })
             })
         })
@@ -75,21 +104,24 @@ fn extract_reference_ids(iri: &dyn AsIri, node: &Node) -> Result<Vec<IriBuf>, Pr
 
 fn extract_scalar_prop<'a>(
     iri: &dyn AsIri,
-    node: &'a Node,
-) -> Result<&'a Indexed<json_ld::object::Object>, ProcessorError> {
-    node.get_any(&Reference::Id(iri.as_iri().into()))
-        .ok_or_else(|| ProcessorError::MissingProperty {
+    node: &'a Node<IriBuf, BlankIdBuf, ()>,
+) -> Result<&'a Indexed<json_ld::object::Object<IriBuf, BlankIdBuf, ()>, ()>, ProcessorError> {
+    if let Some(object) = node.get_any(&id_from_iri(iri)) {
+        Ok(object)
+    } else {
+        Err(ProcessorError::MissingProperty {
             iri: iri.as_iri().as_str().to_string(),
-            object: node.as_json(),
+            object: as_json(node),
         })
+    }
 }
 
-fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
+fn extract_namespace(agent: &Node<IriBuf, BlankIdBuf, ()>) -> Result<NamespaceId, ProcessorError> {
     Ok(NamespaceId::try_from(Iri::from_str(
         extract_scalar_prop(&Chronicle::HasNamespace, agent)?
             .id()
             .ok_or(ProcessorError::MissingId {
-                object: agent.as_json(),
+                object: as_json(agent),
             })?
             .as_str(),
     )?)?)
@@ -97,14 +129,13 @@ fn extract_namespace(agent: &Node) -> Result<NamespaceId, ProcessorError> {
 
 impl ProvModel {
     pub async fn apply_json_ld_str(&mut self, buf: &str) -> Result<(), ProcessorError> {
-        self.apply_json_ld(json::parse(buf)?).await?;
+        self.apply_json_ld(serde_json::from_str(buf)?).await?;
 
         Ok(())
     }
 
     pub async fn apply_json_ld_bytes(&mut self, buf: &[u8]) -> Result<(), ProcessorError> {
-        self.apply_json_ld(json::parse(std::str::from_utf8(buf)?)?)
-            .await?;
+        self.apply_json_ld(serde_json::from_slice(buf)?).await?;
 
         Ok(())
     }
@@ -113,50 +144,61 @@ impl ProvModel {
     /// Replace @context with our resource context
     /// We rely on reified @types, so subclassing must also include supertypes
     #[instrument(level = "trace", skip(self, json))]
-    pub async fn apply_json_ld(&mut self, mut json: JsonValue) -> Result<(), ProcessorError> {
-        json.insert("@context", "https://btp.works/chr/1.0/c.jsonld")
-            .ok();
+    pub async fn apply_json_ld(&mut self, json: serde_json::Value) -> Result<(), ProcessorError> {
+        if let serde_json::Value::Object(mut map) = json {
+            map.insert(
+                "@context".to_string(),
+                serde_json::Value::String("https://btp.works/chr/1.0/c.jsonld".to_string()),
+            );
+            let json = serde_json::Value::Object(map);
 
-        trace!(to_apply_compact=%json.pretty(2));
+            trace!(to_apply_compact=%serde_json::to_string_pretty(&json)?);
 
-        let output = json
-            .expand::<JsonContext, _>(&mut ContextLoader)
-            .map_err(|e| ProcessorError::Expansion {
-                inner: e.to_string(),
-            })
-            .await?;
+            use json_ld::Expand;
+            let output = json_ld::syntax::Value::from_serde_json(json, |_| ())
+                .expand(&mut ContextLoader)
+                .await
+                .map_err(|e| ProcessorError::Expansion {
+                    inner: format!("{e:?}"),
+                })?;
 
-        for o in output {
-            let o = o
-                .try_cast::<Node>()
-                .map_err(|_| ProcessorError::NotANode {})?
-                .into_inner();
-            if o.has_type(&Reference::Id(Chronicle::Namespace.as_iri().into())) {
-                self.apply_node_as_namespace(&o)?;
+            for o in output.into_value().into_objects() {
+                let o = o
+                    .value()
+                    .inner()
+                    .as_node()
+                    .ok_or(ProcessorError::NotANode)?;
+
+                if o.has_type(&id_from_iri(&Chronicle::Namespace)) {
+                    self.apply_node_as_namespace(o)?;
+                }
+                if o.has_type(&id_from_iri(&Prov::Agent)) {
+                    self.apply_node_as_agent(o)?;
+                } else if o.has_type(&id_from_iri(&Prov::Activity)) {
+                    self.apply_node_as_activity(o)?;
+                } else if o.has_type(&id_from_iri(&Prov::Entity)) {
+                    self.apply_node_as_entity(o)?;
+                } else if o.has_type(&id_from_iri(&Chronicle::Identity)) {
+                    self.apply_node_as_identity(o)?;
+                } else if o.has_type(&id_from_iri(&Chronicle::HasEvidence)) {
+                    self.apply_node_as_attachment(o)?;
+                } else if o.has_type(&id_from_iri(&Prov::Delegation)) {
+                    self.apply_node_as_delegation(o)?;
+                } else if o.has_type(&id_from_iri(&Prov::Association)) {
+                    self.apply_node_as_association(o)?;
+                }
             }
-            if o.has_type(&Reference::Id(Prov::Agent.as_iri().into())) {
-                self.apply_node_as_agent(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Activity.as_iri().into())) {
-                self.apply_node_as_activity(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Entity.as_iri().into())) {
-                self.apply_node_as_entity(&o)?;
-            } else if o.has_type(&Reference::Id(Chronicle::Identity.as_iri().into())) {
-                self.apply_node_as_identity(&o)?;
-            } else if o.has_type(&Reference::Id(Chronicle::HasEvidence.as_iri().into())) {
-                self.apply_node_as_attachment(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Delegation.as_iri().into())) {
-                self.apply_node_as_delegation(&o)?;
-            } else if o.has_type(&Reference::Id(Prov::Association.as_iri().into())) {
-                self.apply_node_as_association(&o)?;
-            }
+            Ok(())
+        } else {
+            Err(ProcessorError::NotAnObject)
         }
-
-        Ok(())
     }
 
     /// Extract the types and find the first that is not prov::, as we currently only alow zero or one domain types
     /// this should be sufficient
-    fn extract_attributes(node: &Node) -> Result<Attributes, ProcessorError> {
+    fn extract_attributes(
+        node: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<Attributes, ProcessorError> {
         let typ = node
             .types()
             .iter()
@@ -165,33 +207,46 @@ impl ProvModel {
             .map(|iri| Ok::<_, ProcessorError>(DomaintypeId::try_from(iri.as_iri())?))
             .transpose();
 
-        Ok(Attributes {
-            typ: typ?,
-            attributes: node
-                .get(&Reference::Id(Chronicle::Value.as_iri().into()))
-                .map(|o| {
-                    let serde_object = serde_json::from_str(&o.as_json()["@value"].to_string())?;
+        if let serde_json::Value::Object(map) = as_json(node) {
+            if let Some(serde_json::Value::Array(array)) =
+                map.get(Chronicle::Value.as_iri().as_str())
+            {
+                if array.len() == 1 {
+                    let o = array.get(0).unwrap();
+                    let serde_object = &o["@value"];
 
                     if let serde_json::Value::Object(object) = serde_object {
-                        Ok(object
+                        let attributes = object
                             .into_iter()
-                            .map(|(typ, value)| Attribute { typ, value })
-                            .collect::<Vec<_>>())
-                    } else {
-                        Err(ProcessorError::NotAnObject {})
+                            .map(|(typ, value)| {
+                                (
+                                    typ.clone(),
+                                    Attribute {
+                                        typ: typ.clone(),
+                                        value: value.clone(),
+                                    },
+                                )
+                            })
+                            .collect();
+
+                        return Ok(Attributes {
+                            typ: typ?,
+                            attributes,
+                        });
                     }
-                })
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .flatten()
-                .map(|attr| (attr.typ.clone(), attr))
-                .collect(),
-        })
+                }
+            }
+        }
+
+        Err(ProcessorError::NotAnObject)
     }
 
-    fn apply_node_as_namespace(&mut self, ns: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_namespace(
+        &mut self,
+        ns: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let ns = ns.id().ok_or_else(|| ProcessorError::MissingId {
-            object: ns.as_json(),
+            object: as_json(ns),
         })?;
 
         self.namespace_context(&NamespaceId::try_from(Iri::from_str(ns.as_str())?)?);
@@ -199,7 +254,10 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_delegation(&mut self, delegation: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_delegation(
+        &mut self,
+        delegation: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let namespace_id = extract_namespace(delegation)?;
         self.namespace_context(&namespace_id);
 
@@ -211,7 +269,7 @@ impl ProvModel {
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingProperty {
-                object: delegation.as_json(),
+                object: as_json(delegation),
                 iri: Prov::Responsible.as_iri().to_string(),
             })
             .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
@@ -220,7 +278,7 @@ impl ProvModel {
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingProperty {
-                object: delegation.as_json(),
+                object: as_json(delegation),
                 iri: Prov::ActedOnBehalfOf.as_iri().to_string(),
             })
             .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
@@ -241,7 +299,10 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_association(&mut self, association: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_association(
+        &mut self,
+        association: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let namespace_id = extract_namespace(association)?;
         self.namespace_context(&namespace_id);
 
@@ -253,7 +314,7 @@ impl ProvModel {
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingProperty {
-                object: association.as_json(),
+                object: as_json(association),
                 iri: Prov::Responsible.as_iri().to_string(),
             })
             .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
@@ -262,7 +323,7 @@ impl ProvModel {
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingProperty {
-                object: association.as_json(),
+                object: as_json(association),
                 iri: Prov::HadActivity.as_iri().to_string(),
             })
             .and_then(|x| Ok(ActivityId::try_from(x.as_iri())?))?;
@@ -272,12 +333,15 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_agent(&mut self, agent: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_agent(
+        &mut self,
+        agent: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let id = AgentId::try_from(Iri::from_str(
             agent
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
-                    object: agent.as_json(),
+                    object: as_json(agent),
                 })?
                 .as_str(),
         )?)?;
@@ -308,12 +372,15 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_activity(&mut self, activity: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_activity(
+        &mut self,
+        activity: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let id = ActivityId::try_from(Iri::from_str(
             activity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
-                    object: activity.as_json(),
+                    object: as_json(activity),
                 })?
                 .as_str(),
         )?)?;
@@ -364,14 +431,17 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_identity(&mut self, identity: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_identity(
+        &mut self,
+        identity: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let namespaceid = extract_namespace(identity)?;
 
         let id = IdentityId::try_from(Iri::from_str(
             identity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
-                    object: identity.as_json(),
+                    object: as_json(identity),
                 })?
                 .as_str(),
         )?)?;
@@ -381,7 +451,7 @@ impl ProvModel {
             .and_then(|x| x.as_str().map(|x| x.to_string()))
             .ok_or_else(|| ProcessorError::MissingProperty {
                 iri: Chronicle::PublicKey.as_iri().to_string(),
-                object: identity.as_json(),
+                object: as_json(identity),
             })?;
 
         self.add_identity(Identity {
@@ -393,14 +463,17 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_attachment(&mut self, attachment: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_attachment(
+        &mut self,
+        attachment: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let namespaceid = extract_namespace(attachment)?;
 
         let id = EvidenceId::try_from(Iri::from_str(
             attachment
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
-                    object: attachment.as_json(),
+                    object: as_json(attachment),
                 })?
                 .as_str(),
         )?)?;
@@ -409,7 +482,7 @@ impl ProvModel {
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingId {
-                object: attachment.as_json(),
+                object: as_json(attachment),
             })
             .map(|id| IdentityId::try_from(id.as_iri()))??;
 
@@ -418,7 +491,7 @@ impl ProvModel {
             .and_then(|x| x.as_str())
             .ok_or_else(|| ProcessorError::MissingProperty {
                 iri: Chronicle::Signature.as_iri().to_string(),
-                object: attachment.as_json(),
+                object: as_json(attachment),
             })?
             .to_owned();
 
@@ -427,7 +500,7 @@ impl ProvModel {
             .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339))
             .ok_or_else(|| ProcessorError::MissingProperty {
                 iri: Chronicle::SignedAtTime.as_iri().to_string(),
-                object: attachment.as_json(),
+                object: as_json(attachment),
             })??;
 
         let locator = extract_scalar_prop(&Chronicle::Locator, attachment)
@@ -446,12 +519,15 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_entity(&mut self, entity: &Node) -> Result<(), ProcessorError> {
+    fn apply_node_as_entity(
+        &mut self,
+        entity: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
         let id = EntityId::try_from(Iri::from_str(
             entity
                 .id()
                 .ok_or_else(|| ProcessorError::MissingId {
-                    object: entity.as_json(),
+                    object: as_json(entity),
                 })?
                 .as_str(),
         )?)?;
@@ -558,40 +634,30 @@ trait Operation {
     fn informing_activity(&self) -> ActivityId;
 }
 
-impl Operation for Node {
+impl Operation for Node<IriBuf, BlankIdBuf, ()> {
     fn namespace(&self) -> NamespaceId {
-        let mut uuid_objects = self.get(&Reference::Id(
-            ChronicleOperations::NamespaceUuid.as_iri().into(),
-        ));
+        let mut uuid_objects = self.get(&id_from_iri(&ChronicleOperations::NamespaceUuid));
         let uuid = uuid_objects.next().unwrap().as_str().unwrap();
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::NamespaceName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::NamespaceName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         let uuid = uuid::Uuid::parse_str(uuid).unwrap();
         NamespaceId::from_external_id(external_id, uuid)
     }
 
     fn agent(&self) -> AgentId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::AgentName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::AgentName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         AgentId::from_external_id(external_id)
     }
 
     fn delegate(&self) -> AgentId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::DelegateId.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::DelegateId));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         AgentId::from_external_id(external_id)
     }
 
     fn optional_activity(&self) -> Option<ActivityId> {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::ActivityName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::ActivityName));
         let object = match name_objects.next() {
             Some(object) => object,
             None => return None,
@@ -600,48 +666,36 @@ impl Operation for Node {
     }
 
     fn key(&self) -> String {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::PublicKey.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::PublicKey));
         String::from(objects.next().unwrap().as_str().unwrap())
     }
 
     fn start_time(&self) -> String {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::StartActivityTime.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::StartActivityTime));
         let time = objects.next().unwrap().as_str().unwrap();
         time.to_owned()
     }
 
     fn end_time(&self) -> String {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::EndActivityTime.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::EndActivityTime));
         let time = objects.next().unwrap().as_str().unwrap();
         time.to_owned()
     }
 
     fn entity(&self) -> EntityId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::EntityName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::EntityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         EntityId::from_external_id(external_id)
     }
 
     fn used_entity(&self) -> EntityId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::UsedEntityName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::UsedEntityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         EntityId::from_external_id(external_id)
     }
 
     fn derivation(&self) -> Option<DerivationType> {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::DerivationType.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::DerivationType));
         let derivation = match objects.next() {
             Some(object) => object.as_str().unwrap(),
             None => return None,
@@ -657,9 +711,7 @@ impl Operation for Node {
     }
 
     fn domain(&self) -> Option<DomaintypeId> {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::DomaintypeId.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::DomaintypeId));
         let d = match objects.next() {
             Some(object) => object.as_str().unwrap(),
             None => return None,
@@ -668,39 +720,41 @@ impl Operation for Node {
     }
 
     fn attributes(&self) -> BTreeMap<String, Attribute> {
-        self.get(&Reference::Id(
-            ChronicleOperations::Attributes.as_iri().into(),
-        ))
-        .map(|o| {
-            let serde_object = serde_json::from_str(&o.as_json()["@value"].to_string()).unwrap();
+        self.get(&id_from_iri(&ChronicleOperations::Attributes))
+            .map(|o| {
+                let serde_object =
+                    if let Some(json_ld::object::Value::Json(Meta(json, _))) = o.as_value() {
+                        json.clone().into()
+                    } else {
+                        serde_json::from_str(&as_json(o.as_node().unwrap())["@value"].to_string())
+                            .unwrap()
+                    };
 
-            if let serde_json::Value::Object(object) = serde_object {
-                Ok(object
-                    .into_iter()
-                    .map(|(typ, value)| Attribute { typ, value })
-                    .collect::<Vec<_>>())
-            } else {
-                Err(ProcessorError::NotAnObject {})
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .into_iter()
-        .flatten()
-        .map(|attr| (attr.typ.clone(), attr))
-        .collect()
+                if let serde_json::Value::Object(object) = serde_object {
+                    Ok(object
+                        .into_iter()
+                        .map(|(typ, value)| Attribute { typ, value })
+                        .collect::<Vec<_>>())
+                } else {
+                    Err(ProcessorError::NotAnObject {})
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .flatten()
+            .map(|attr| (attr.typ.clone(), attr))
+            .collect()
     }
 
     fn responsible(&self) -> AgentId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::ResponsibleId.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::ResponsibleId));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         AgentId::from_external_id(external_id)
     }
 
     fn optional_role(&self) -> Option<Role> {
-        let mut name_objects = self.get(&Reference::Id(ChronicleOperations::Role.as_iri().into()));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::Role));
         let object = match name_objects.next() {
             Some(object) => object,
             None => return None,
@@ -709,17 +763,13 @@ impl Operation for Node {
     }
 
     fn activity(&self) -> ActivityId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::ActivityName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::ActivityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         ActivityId::from_external_id(external_id)
     }
 
     fn identity(&self) -> Option<IdentityId> {
-        let mut id_objects = self.get(&Reference::Id(
-            ChronicleOperations::Identity.as_iri().into(),
-        ));
+        let mut id_objects = self.get(&id_from_iri(&ChronicleOperations::Identity));
         let id = match id_objects.next() {
             Some(id) => id,
             None => return None,
@@ -736,7 +786,7 @@ impl Operation for Node {
     }
 
     fn locator(&self) -> Option<String> {
-        let mut objects = self.get(&Reference::Id(ChronicleOperations::Locator.as_iri().into()));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::Locator));
 
         let locator = match objects.next() {
             Some(object) => object,
@@ -747,9 +797,7 @@ impl Operation for Node {
     }
 
     fn signature(&self) -> Option<String> {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::Signature.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::Signature));
         let signature = match objects.next() {
             Some(object) => object,
             None => return None,
@@ -759,9 +807,7 @@ impl Operation for Node {
     }
 
     fn signature_time(&self) -> Option<String> {
-        let mut objects = self.get(&Reference::Id(
-            ChronicleOperations::SignatureTime.as_iri().into(),
-        ));
+        let mut objects = self.get(&id_from_iri(&ChronicleOperations::SignatureTime));
         let time = match objects.next() {
             Some(object) => object,
             None => return None,
@@ -771,9 +817,7 @@ impl Operation for Node {
     }
 
     fn informing_activity(&self) -> ActivityId {
-        let mut name_objects = self.get(&Reference::Id(
-            ChronicleOperations::InformingActivityName.as_iri().into(),
-        ));
+        let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::InformingActivityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         ActivityId::from_external_id(external_id)
     }
@@ -781,20 +825,20 @@ impl Operation for Node {
 
 impl ChronicleOperation {
     pub async fn from_json(ExpandedJson(json): ExpandedJson) -> Result<Self, ProcessorError> {
-        let output = json
-            .expand::<JsonContext, _>(&mut ContextLoader)
+        use json_ld::Expand;
+        let output = json_ld::syntax::Value::from_serde_json(json, |_| ())
+            .expand(&mut ContextLoader)
+            .await
             .map_err(|e| ProcessorError::Expansion {
-                inner: e.to_string(),
-            })
-            .await?;
-        if let Some(object) = output.into_iter().next() {
+                inner: format!("{e:?}"),
+            })?;
+        if let Some(object) = output.into_value().into_objects().into_iter().next() {
             let o = object
-                .try_cast::<Node>()
-                .map_err(|_| ProcessorError::NotANode {})?
-                .into_inner();
-            if o.has_type(&Reference::Id(
-                ChronicleOperations::CreateNamespace.as_iri().into(),
-            )) {
+                .value()
+                .inner()
+                .as_node()
+                .ok_or(ProcessorError::NotANode)?;
+            if o.has_type(&id_from_iri(&ChronicleOperations::CreateNamespace)) {
                 let namespace = o.namespace();
                 let external_id = namespace.external_id_part().to_owned();
                 let uuid = namespace.uuid_part().to_owned();
@@ -803,9 +847,7 @@ impl ChronicleOperation {
                     external_id,
                     uuid,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::AgentExists.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::AgentExists)) {
                 let namespace = o.namespace();
                 let agent = o.agent();
                 let external_id = agent.external_id_part();
@@ -813,9 +855,7 @@ impl ChronicleOperation {
                     namespace,
                     external_id: external_id.into(),
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::AgentActsOnBehalfOf.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::AgentActsOnBehalfOf)) {
                 let namespace = o.namespace();
                 let delegate_id = o.delegate();
                 let responsible_id = o.responsible();
@@ -830,9 +870,7 @@ impl ChronicleOperation {
                         o.optional_role(),
                     ),
                 ))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::RegisterKey.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::RegisterKey)) {
                 let namespace = o.namespace();
                 let id = o.agent();
                 let publickey = o.key();
@@ -841,9 +879,7 @@ impl ChronicleOperation {
                     id,
                     publickey,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::ActivityExists.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::ActivityExists)) {
                 let namespace = o.namespace();
                 let activity_id = o.optional_activity().unwrap();
                 let external_id = activity_id.external_id_part().to_owned();
@@ -851,9 +887,7 @@ impl ChronicleOperation {
                     namespace,
                     external_id,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::StartActivity.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::StartActivity)) {
                 let namespace = o.namespace();
                 let id = o.optional_activity().unwrap();
                 let time: DateTime<Utc> = o.start_time().parse().unwrap();
@@ -862,9 +896,7 @@ impl ChronicleOperation {
                     id,
                     time,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::EndActivity.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::EndActivity)) {
                 let namespace = o.namespace();
                 let id = o.optional_activity().unwrap();
                 let time: DateTime<Utc> = o.end_time().parse().unwrap();
@@ -873,9 +905,7 @@ impl ChronicleOperation {
                     id,
                     time,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::ActivityUses.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::ActivityUses)) {
                 let namespace = o.namespace();
                 let id = o.entity();
                 let activity = o.optional_activity().unwrap();
@@ -884,9 +914,7 @@ impl ChronicleOperation {
                     id,
                     activity,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::EntityExists.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityExists)) {
                 let namespace = o.namespace();
                 let entity = o.entity();
                 let id = entity.external_id_part().into();
@@ -894,9 +922,7 @@ impl ChronicleOperation {
                     namespace,
                     external_id: id,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::WasGeneratedBy.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasGeneratedBy)) {
                 let namespace = o.namespace();
                 let id = o.entity();
                 let activity = o.optional_activity().unwrap();
@@ -905,9 +931,7 @@ impl ChronicleOperation {
                     id,
                     activity,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::WasInformedBy.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasInformedBy)) {
                 let namespace = o.namespace();
                 let activity = o.activity();
                 let informing_activity = o.informing_activity();
@@ -916,9 +940,7 @@ impl ChronicleOperation {
                     activity,
                     informing_activity,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::EntityHasEvidence.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityHasEvidence)) {
                 let namespace = o.namespace();
                 let id = o.entity();
                 let agent = o.agent();
@@ -932,9 +954,7 @@ impl ChronicleOperation {
                     signature: o.signature(),
                     signature_time,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::EntityDerive.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityDerive)) {
                 let namespace = o.namespace();
                 let id = o.entity();
                 let used_id = o.used_entity();
@@ -947,9 +967,7 @@ impl ChronicleOperation {
                     activity_id,
                     typ,
                 }))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::SetAttributes.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::SetAttributes)) {
                 let namespace = o.namespace();
                 let domain = o.domain();
 
@@ -960,18 +978,14 @@ impl ChronicleOperation {
                     attributes: attrs,
                 };
                 let actor: SetAttributes = {
-                    if o.has_key(&Term::Ref(Reference::Id(
-                        ChronicleOperations::EntityName.as_iri().into(),
-                    ))) {
+                    if o.has_key(&Term::Id(id_from_iri(&ChronicleOperations::EntityName))) {
                         let id = o.entity();
                         SetAttributes::Entity {
                             namespace,
                             id,
                             attributes,
                         }
-                    } else if o.has_key(&Term::Ref(Reference::Id(
-                        ChronicleOperations::AgentName.as_iri().into(),
-                    ))) {
+                    } else if o.has_key(&Term::Id(id_from_iri(&ChronicleOperations::AgentName))) {
                         let id = o.agent();
                         SetAttributes::Agent {
                             namespace,
@@ -989,9 +1003,7 @@ impl ChronicleOperation {
                 };
 
                 Ok(ChronicleOperation::SetAttributes(actor))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::WasAssociatedWith.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasAssociatedWith)) {
                 Ok(ChronicleOperation::WasAssociatedWith(
                     WasAssociatedWith::new(
                         &o.namespace(),
@@ -1000,9 +1012,7 @@ impl ChronicleOperation {
                         o.optional_role(),
                     ),
                 ))
-            } else if o.has_type(&Reference::Id(
-                ChronicleOperations::WasInformedBy.as_iri().into(),
-            )) {
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasInformedBy)) {
                 let namespace = o.namespace();
                 let activity = o.activity();
                 let informing_activity = o.informing_activity();
