@@ -95,7 +95,11 @@ impl DatabaseConnector<Database, PgEmbedError> for EmbeddedDatabaseConnector {
     }
 
     fn should_retry(&self, error: &PgEmbedError) -> bool {
-        error.error_type == PgEmbedErrorType::PgStartFailure
+        vec![
+            PgEmbedErrorType::PgStartFailure,
+            PgEmbedErrorType::UnpackFailure,
+        ]
+        .contains(&error.error_type)
     }
 }
 
