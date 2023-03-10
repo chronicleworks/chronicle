@@ -14,10 +14,9 @@ use common::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
         ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
         EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
-        NamespaceId, ProvModel, PublicKeyPart, SignaturePart, Usage,
+        NamespaceId, ProvModel, PublicKeyPart, Role, SignaturePart, Usage,
     },
 };
-use custom_error::custom_error;
 use derivative::*;
 
 use diesel::{
@@ -26,26 +25,45 @@ use diesel::{
     PgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use thiserror::Error;
 use tracing::{debug, instrument, warn};
 use uuid::Uuid;
-
-use crate::QueryCommand;
 
 mod query;
 pub(crate) mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-custom_error! {pub StoreError
-    Db{source: diesel::result::Error}                           = "Database operation failed: {source}",
-    EmbeddedDb{message: String}                                 = "Embedded database failed: {message}",
-    DbConnection{source: diesel::ConnectionError}               = "Database connection failed (maybe check PGPASSWORD): {source}",
-    DbMigration{migration: Box<dyn custom_error::Error + Send + Sync>} = "Database migration failed: {migration}",
-    DbPool{source: r2d2::Error}                                 = "Connection pool error: {source}",
-    Uuid{source: uuid::Error}                                   = "Invalid UUID: {source}",
-    Json{source: serde_json::Error}                             = "Unreadable Attribute: {source}",
-    TransactionId{source: ChronicleTransactionIdError }         = "Invalid transaction ID: {source}",
-    RecordNotFound{}                                            = "Could not locate record in store",
-    InvalidNamespace{}                                          = "Could not find namespace",
+#[derive(Error, Debug)]
+pub enum StoreError {
+    #[error("Database operation failed: {0}")]
+    Db(#[from] diesel::result::Error),
+
+    #[error("Embedded database failed: {0}")]
+    EmbeddedDb(String),
+
+    #[error("Database connection failed (maybe check PGPASSWORD): {0}")]
+    DbConnection(#[from] diesel::ConnectionError),
+
+    #[error("Database migration failed: {0}")]
+    DbMigration(#[from] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Connection pool error: {0}")]
+    DbPool(#[from] r2d2::Error),
+
+    #[error("Invalid UUID: {0}")]
+    Uuid(#[from] uuid::Error),
+
+    #[error("Unreadable Attribute: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("Invalid transaction ID: {0}")]
+    TransactionId(#[from] ChronicleTransactionIdError),
+
+    #[error("Could not locate record in store")]
+    RecordNotFound,
+
+    #[error("Could not find namespace")]
+    InvalidNamespace,
 }
 
 #[derive(Debug)]
@@ -982,11 +1000,11 @@ impl Store {
     pub(crate) fn prov_model_for_namespace(
         &self,
         connection: &mut PgConnection,
-        query: QueryCommand,
+        namespace: &NamespaceId,
     ) -> Result<ProvModel, StoreError> {
         let mut model = ProvModel::default();
         let (namespaceid, nsid) =
-            self.namespace_by_external_id(connection, &ExternalId::from(&query.namespace))?;
+            self.namespace_by_external_id(connection, namespace.external_id_part())?;
 
         let agents = schema::agent::table
             .filter(schema::agent::namespace_id.eq(&nsid))
@@ -1022,6 +1040,44 @@ impl Store {
                         .collect::<Result<BTreeMap<_, _>, _>>()?,
                 },
             );
+
+            for (responsible, activity, role) in schema::delegation::table
+                .filter(schema::delegation::responsible_id.eq(agent.id))
+                .inner_join(
+                    schema::agent::table.on(schema::delegation::delegate_id.eq(schema::agent::id)),
+                )
+                .inner_join(
+                    schema::activity::table
+                        .on(schema::delegation::activity_id.eq(schema::activity::id)),
+                )
+                .order(schema::agent::external_id)
+                .select((
+                    schema::agent::external_id,
+                    schema::activity::external_id,
+                    schema::delegation::role,
+                ))
+                .load::<(String, String, String)>(connection)?
+            {
+                model.qualified_delegation(
+                    &namespaceid,
+                    &AgentId::from_external_id(&agent.external_id),
+                    &AgentId::from_external_id(responsible),
+                    {
+                        if activity.contains("hidden entry for Option None") {
+                            None
+                        } else {
+                            Some(ActivityId::from_external_id(activity))
+                        }
+                    },
+                    {
+                        if role.is_empty() {
+                            None
+                        } else {
+                            Some(Role(role))
+                        }
+                    },
+                );
+            }
         }
 
         let activities = schema::activity::table
@@ -1100,6 +1156,27 @@ impl Store {
                     namespaceid.clone(),
                     &id,
                     &ActivityId::from_external_id(wasinformedby),
+                );
+            }
+
+            for (agent, role) in schema::association::table
+                .filter(schema::association::activity_id.eq(activity.id))
+                .order(schema::association::activity_id.asc())
+                .inner_join(schema::agent::table)
+                .select((schema::agent::external_id, schema::association::role))
+                .load::<(String, String)>(connection)?
+            {
+                model.qualified_association(
+                    &namespaceid,
+                    &id,
+                    &AgentId::from_external_id(agent),
+                    {
+                        if role.is_empty() {
+                            None
+                        } else {
+                            Some(Role(role))
+                        }
+                    },
                 );
             }
         }

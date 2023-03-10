@@ -486,6 +486,553 @@ mod test {
     }
 
     #[tokio::test]
+    async fn api_calls_resulting_in_no_data_changes_return_null() {
+        let schema = test_schema().await;
+
+        let from = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(1968, 9, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        )
+        .checked_add_signed(chronicle::chrono::Duration::days(1))
+        .unwrap()
+        .to_rfc3339();
+
+        let id_one = chronicle::async_graphql::Name::new("1");
+        let id_two = chronicle::async_graphql::Name::new("2");
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+            r#"
+          mutation {{
+            defineContractorAgent(
+              externalId: "{id_one}",
+              attributes: {{ locationAttribute: "location" }}
+            ) {{
+              context
+              txId
+            }}
+            defineNCBAgent(
+              externalId: "{id_two}",
+              attributes: {{ manifestAttribute: "manifest" }}
+            ) {{
+              context
+              txId
+            }}
+            actedOnBehalfOf(
+              delegate: {{ externalId: "{id_one}", }}
+              responsible: {{ externalId: "{id_two}" }}
+              role: UNSPECIFIED
+            ) {{
+              context
+              txId
+            }}
+            defineItemEntity(
+              externalId: "{id_one}",
+              attributes: {{ partIdAttribute: "part"}}
+            ) {{
+              context
+              txId
+            }}
+            defineCertificateEntity(
+              externalId: "{id_two}",
+              attributes: {{ certIdAttribute: "cert" }}
+            ) {{
+              context
+              txId
+            }}
+            defineItemCertifiedActivity(
+              externalId: "{id_one}"
+              attributes: {{ certIdAttribute: "cert" }}
+            ) {{
+              context
+              txId
+            }}
+            defineItemManufacturedActivity(
+              externalId: "{id_two}"
+              attributes: {{ batchIdAttribute: "batch" }}
+            ) {{
+              context
+              txId
+            }}
+            instantActivity(
+              id: {{ externalId: "{id_one}" }}
+              time: "{from}"
+            ) {{
+              context
+              txId
+            }}
+            startActivity(
+              id: {{ externalId: "{id_two}" }}
+              time: "{from}"
+            ) {{
+              context
+              txId
+            }}
+            endActivity(
+              id: {{ externalId: "{id_two}" }}
+              time: "{from}"
+            ) {{
+              context
+              txId
+            }}
+            wasAssociatedWith(
+              responsible: {{ externalId: "{id_one}" }}
+              activity: {{ externalId: "{id_one}" }}
+              role: UNSPECIFIED
+            ) {{
+              context
+              txId
+            }}
+            used(
+              activity: {{ externalId: "{id_one}" }}
+              id: {{ externalId: "{id_one}" }}
+            ) {{
+              context
+              txId
+            }}
+            wasInformedBy(
+              informingActivity: {{ externalId: "{id_one}" }}
+              activity: {{ externalId: "{id_two}" }}
+            ) {{
+              context
+              txId
+            }}
+            wasGeneratedBy(
+              id: {{ externalId: "{id_one}" }}
+              activity: {{ externalId: "{id_one}" }}
+            ) {{
+              context
+              txId
+            }}
+          }}
+            "#
+                ),
+              ))
+                .await, {
+                  ".**.txId" => insta::dynamic_redaction(|value, _path| {
+                      // assert that the value looks like a txId, i.e. not null
+                      assert_eq!(value
+                        .as_str()
+                        .unwrap()
+                        .chars()
+                        .count(),
+                        36
+                    );
+                      "[txId]"
+                  }),
+              }, @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:1",
+              "txId": "[txId]"
+            },
+            "defineNCBAgent": {
+              "context": "chronicle:agent:2",
+              "txId": "[txId]"
+            },
+            "actedOnBehalfOf": {
+              "context": "chronicle:agent:2",
+              "txId": "[txId]"
+            },
+            "defineItemEntity": {
+              "context": "chronicle:entity:1",
+              "txId": "[txId]"
+            },
+            "defineCertificateEntity": {
+              "context": "chronicle:entity:2",
+              "txId": "[txId]"
+            },
+            "defineItemCertifiedActivity": {
+              "context": "chronicle:activity:1",
+              "txId": "[txId]"
+            },
+            "defineItemManufacturedActivity": {
+              "context": "chronicle:activity:2",
+              "txId": "[txId]"
+            },
+            "instantActivity": {
+              "context": "chronicle:activity:1",
+              "txId": "[txId]"
+            },
+            "startActivity": {
+              "context": "chronicle:activity:2",
+              "txId": "[txId]"
+            },
+            "endActivity": {
+              "context": "chronicle:activity:2",
+              "txId": "[txId]"
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:1",
+              "txId": "[txId]"
+            },
+            "used": {
+              "context": "chronicle:entity:1",
+              "txId": "[txId]"
+            },
+            "wasInformedBy": {
+              "context": "chronicle:activity:2",
+              "txId": "[txId]"
+            },
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:1",
+              "txId": "[txId]"
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+              r#"
+            mutation {{
+              defineContractorAgent(
+                externalId: "{id_one}",
+                attributes: {{ locationAttribute: "location" }}
+              ) {{
+                context
+                txId
+              }}
+              defineNCBAgent(
+                externalId: "{id_two}",
+                attributes: {{ manifestAttribute: "manifest" }}
+              ) {{
+                context
+                txId
+              }}
+              actedOnBehalfOf(
+                delegate: {{ externalId: "{id_one}", }}
+                responsible: {{ externalId: "{id_two}" }}
+                role: UNSPECIFIED
+              ) {{
+                context
+                txId
+              }}
+              defineItemEntity(
+                externalId: "{id_one}",
+                attributes: {{ partIdAttribute: "part"}}
+              ) {{
+                context
+                txId
+              }}
+              defineCertificateEntity(
+                externalId: "{id_two}",
+                attributes: {{ certIdAttribute: "cert" }}
+              ) {{
+                context
+                txId
+              }}
+              defineItemCertifiedActivity(
+                externalId: "{id_one}"
+                attributes: {{ certIdAttribute: "cert" }}
+              ) {{
+                context
+                txId
+              }}
+              defineItemManufacturedActivity(
+                externalId: "{id_two}"
+                attributes: {{ batchIdAttribute: "batch" }}
+              ) {{
+                context
+                txId
+              }}
+              instantActivity(
+                id: {{ externalId: "{id_one}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              startActivity(
+                id: {{ externalId: "{id_two}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              endActivity(
+                id: {{ externalId: "{id_two}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              wasAssociatedWith(
+                responsible: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_one}" }}
+                role: UNSPECIFIED
+              ) {{
+                context
+                txId
+              }}
+              used(
+                activity: {{ externalId: "{id_one}" }}
+                id: {{ externalId: "{id_one}" }}
+              ) {{
+                context
+                txId
+              }}
+              wasInformedBy(
+                informingActivity: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_two}" }}
+              ) {{
+                context
+                txId
+              }}
+              wasGeneratedBy(
+                id: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_one}" }}
+              ) {{
+                context
+                txId
+              }}
+            }}
+              "#
+              )))
+                .await,
+              @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:1",
+              "txId": null
+            },
+            "defineNCBAgent": {
+              "context": "chronicle:agent:2",
+              "txId": null
+            },
+            "actedOnBehalfOf": {
+              "context": "chronicle:agent:2",
+              "txId": null
+            },
+            "defineItemEntity": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            },
+            "defineCertificateEntity": {
+              "context": "chronicle:entity:2",
+              "txId": null
+            },
+            "defineItemCertifiedActivity": {
+              "context": "chronicle:activity:1",
+              "txId": null
+            },
+            "defineItemManufacturedActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "instantActivity": {
+              "context": "chronicle:activity:1",
+              "txId": null
+            },
+            "startActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "endActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:1",
+              "txId": null
+            },
+            "used": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            },
+            "wasInformedBy": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            }
+          }
+        }
+        "###);
+
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+              r#"
+            mutation {{
+              defineContractorAgent(
+                externalId: "{id_one}",
+                attributes: {{ locationAttribute: "location" }}
+              ) {{
+                context
+                txId
+              }}
+              defineNCBAgent(
+                externalId: "{id_two}",
+                attributes: {{ manifestAttribute: "manifest" }}
+              ) {{
+                context
+                txId
+              }}
+              actedOnBehalfOf(
+                delegate: {{ externalId: "{id_one}", }}
+                responsible: {{ externalId: "{id_two}" }}
+                role: UNSPECIFIED
+              ) {{
+                context
+                txId
+              }}
+              defineItemEntity(
+                externalId: "{id_one}",
+                attributes: {{ partIdAttribute: "part"}}
+              ) {{
+                context
+                txId
+              }}
+              defineCertificateEntity(
+                externalId: "{id_two}",
+                attributes: {{ certIdAttribute: "cert" }}
+              ) {{
+                context
+                txId
+              }}
+              defineItemCertifiedActivity(
+                externalId: "{id_one}"
+                attributes: {{ certIdAttribute: "cert" }}
+              ) {{
+                context
+                txId
+              }}
+              defineItemManufacturedActivity(
+                externalId: "{id_two}"
+                attributes: {{ batchIdAttribute: "batch" }}
+              ) {{
+                context
+                txId
+              }}
+              instantActivity(
+                id: {{ externalId: "{id_one}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              startActivity(
+                id: {{ externalId: "{id_two}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              endActivity(
+                id: {{ externalId: "{id_two}" }}
+                time: "{from}"
+              ) {{
+                context
+                txId
+              }}
+              wasAssociatedWith(
+                responsible: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_one}" }}
+                role: UNSPECIFIED
+              ) {{
+                context
+                txId
+              }}
+              used(
+                activity: {{ externalId: "{id_one}" }}
+                id: {{ externalId: "{id_one}" }}
+              ) {{
+                context
+                txId
+              }}
+              wasInformedBy(
+                informingActivity: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_two}" }}
+              ) {{
+                context
+                txId
+              }}
+              wasGeneratedBy(
+                id: {{ externalId: "{id_one}" }}
+                activity: {{ externalId: "{id_one}" }}
+              ) {{
+                context
+                txId
+              }}
+            }}
+              "#
+              )))
+                .await,
+              @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:1",
+              "txId": null
+            },
+            "defineNCBAgent": {
+              "context": "chronicle:agent:2",
+              "txId": null
+            },
+            "actedOnBehalfOf": {
+              "context": "chronicle:agent:2",
+              "txId": null
+            },
+            "defineItemEntity": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            },
+            "defineCertificateEntity": {
+              "context": "chronicle:entity:2",
+              "txId": null
+            },
+            "defineItemCertifiedActivity": {
+              "context": "chronicle:activity:1",
+              "txId": null
+            },
+            "defineItemManufacturedActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "instantActivity": {
+              "context": "chronicle:activity:1",
+              "txId": null
+            },
+            "startActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "endActivity": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:1",
+              "txId": null
+            },
+            "used": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            },
+            "wasInformedBy": {
+              "context": "chronicle:activity:2",
+              "txId": null
+            },
+            "wasGeneratedBy": {
+              "context": "chronicle:entity:1",
+              "txId": null
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn one_of_id_or_external() {
         let schema = test_schema().await;
 

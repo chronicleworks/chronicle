@@ -3,7 +3,6 @@ pub mod chronicle_graphql;
 mod persistence;
 
 use chrono::{DateTime, Utc};
-use custom_error::*;
 use derivative::*;
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
@@ -25,8 +24,9 @@ use common::{
             WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
-        ActivityId, AgentId, ChronicleTransaction, ChronicleTransactionId, Contradiction, EntityId,
-        ExternalId, ExternalIdPart, IdentityId, NamespaceId, ProcessorError, ProvModel, Role,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
+        Contradiction, EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId,
+        ProcessorError, ProvModel, Role,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -38,40 +38,82 @@ use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
     path::Path, sync::Arc,
 };
+use thiserror::Error;
 use tokio::{
     sync::mpsc::{self, error::SendError, Sender},
     task::JoinError,
 };
 
-use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
 
-custom_error! {
-  pub ApiError
-    Store{source: persistence::StoreError}                      = "Storage {source:?}",
-    Transaction{source: diesel::result::Error}                  = "Transaction failed {source}",
-    Iri{source: iref::Error}                                    = "Invalid IRI {source}",
-    JsonLD{message: String}                                     = "Json LD processing {message}",
-    Ledger{source: SubmissionError}                             = "Ledger error {source}",
-    Signing{source: SignerError}                                = "Signing {source}",
-    NoCurrentAgent{}                                            = "No agent is currently in use, please call agent use or supply an agent in your call",
-    CannotFindAttachment{}                                      = "Cannot locate attachment file",
-    ApiShutdownRx                                               = "Api shut down before reply",
-    ApiShutdownTx{source: SendError<ApiSendWithReply>}          = "Api shut down before send",
-    LedgerShutdownTx{source: SendError<LedgerSendWithReply>}    = "Ledger shut down before send",
-    AddressParse{source: AddrParseError}                        = "Invalid socket address {source}",
-    ConnectionPool{source: r2d2::Error}                         = "Connection pool {source}",
-    FileUpload{source: std::io::Error}                          = "File upload",
-    Join{source: JoinError}                                     = "Blocking thread pool",
-    Subscription{source: SubscriptionError}                     = "State update subscription {source}",
-    NotCurrentActivity{}                                        = "No appropriate activity to end",
-    EvidenceSigning{source: common::k256::ecdsa::Error}         = "Could not sign message",
-    Contradiction{source: Contradiction}                        = "Contradiction {source}",
-    ProcessorError{source: ProcessorError}                      = "Processor {source}",
-    IdentityError{source: IdentityError}                        = "Identity {source}",
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("Storage: {0:?}")]
+    Store(#[from] persistence::StoreError),
+
+    #[error("Transaction failed: {0}")]
+    Transaction(#[from] diesel::result::Error),
+
+    #[error("Invalid IRI: {0}")]
+    Iri(#[from] iref::Error),
+
+    #[error("JSON-LD processing: {0}")]
+    JsonLD(String),
+
+    #[error("Ledger error: {0}")]
+    Ledger(#[from] SubmissionError),
+
+    #[error("Signing: {0}")]
+    Signing(#[from] SignerError),
+
+    #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
+    NoCurrentAgent,
+
+    #[error("Cannot locate attachment file")]
+    CannotFindAttachment,
+
+    #[error("Api shut down before reply")]
+    ApiShutdownRx,
+
+    #[error("Api shut down before send: {0}")]
+    ApiShutdownTx(#[from] SendError<ApiSendWithReply>),
+
+    #[error("Ledger shut down before send: {0}")]
+    LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
+
+    #[error("Invalid socket address: {0}")]
+    AddressParse(#[from] AddrParseError),
+
+    #[error("Connection pool: {0}")]
+    ConnectionPool(#[from] r2d2::Error),
+
+    #[error("File upload: {0}")]
+    FileUpload(#[from] std::io::Error),
+
+    #[error("Blocking thread pool: {0}")]
+    Join(#[from] JoinError),
+
+    #[error("State update subscription: {0}")]
+    Subscription(#[from] SubscriptionError),
+
+    #[error("No appropriate activity to end")]
+    NotCurrentActivity,
+
+    #[error("Could not sign message: {0}")]
+    EvidenceSigning(#[from] common::k256::ecdsa::Error),
+
+    #[error("Contradiction: {0}")]
+    Contradiction(#[from] Contradiction),
+
+    #[error("Processor: {0}")]
+    ProcessorError(#[from] ProcessorError),
+
+    #[error("Identity: {0}")]
+    IdentityError(#[from] IdentityError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -237,7 +279,7 @@ where
         pool.get()?
             .build_transaction()
             .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
-            .map_err(|migration| StoreError::DbMigration { migration })?;
+            .map_err(|migration| StoreError::DbMigration(migration))?;
 
         for (ns, uuid) in namespace_bindings {
             store.namespace_binding(&ns, uuid)?
@@ -343,13 +385,82 @@ where
                 self.submit_tx.send(SubmissionStage::submitted(&tx_id)).ok();
                 Ok(tx_id)
             }
-            Err(ApiError::Ledger { ref source }) => {
+            Err(ApiError::Ledger(ref source)) => {
                 self.submit_tx
                     .send(SubmissionStage::submitted_error(source))
                     .ok();
                 Err(source.clone().into())
             }
             e => e,
+        }
+    }
+
+    /// Generate and submit the signed identity to send to the Transaction Processor along with the transactions to be applied
+    fn submit(
+        &mut self,
+        id: impl Into<ChronicleIri>,
+        identity: AuthId,
+        to_apply: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        let identity = identity.signed_identity(&self.keystore)?;
+        let model = ProvModel::from_tx(&to_apply)?;
+        let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+
+        Ok(ApiResponse::submission(id, model, tx_id))
+    }
+
+    /// Ensure that Chronicle API calls that will not result in any changes in state should not be dispatched
+    ///
+    /// # Arguments
+    /// * `state` - `ProvModel` for the operations' namespace
+    /// * `to_apply` - Chronicle operations resulting from an API call
+    #[instrument]
+    fn ensure_effects(
+        &mut self,
+        state: &mut ProvModel,
+        to_apply: &Vec<ChronicleOperation>,
+    ) -> Result<Option<Vec<ChronicleOperation>>, ApiError> {
+        let mut transactions = Vec::new();
+
+        for tx in to_apply {
+            let mut state_with_effects = state.clone();
+            state_with_effects.apply(tx)?;
+            if state_with_effects != *state {
+                transactions.push(tx.clone());
+                state.apply(tx)?;
+            }
+        }
+
+        if transactions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(transactions))
+        }
+    }
+
+    fn apply_effects_and_submit(
+        &mut self,
+        connection: &mut PgConnection,
+        id: impl Into<ChronicleIri>,
+        identity: AuthId,
+        to_apply: Vec<ChronicleOperation>,
+        namespace: NamespaceId,
+        applying_new_namespace: bool,
+    ) -> Result<ApiResponse, ApiError> {
+        if applying_new_namespace {
+            self.submit(id, identity, to_apply)
+        } else if let Some(to_apply) = {
+            let mut state = self
+                .store
+                .prov_model_for_namespace(connection, &namespace)?;
+            state.namespace_context(&namespace);
+            self.ensure_effects(&mut state, &to_apply)?
+        } {
+            self.submit(id, identity, to_apply)
+        } else {
+            info!("API call will not result in any data changes");
+            let model = ProvModel::from_tx(&to_apply)?;
+            Ok(ApiResponse::already_recorded(id, model))
         }
     }
 
@@ -404,20 +515,24 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     activity: activity_id,
                 });
 
                 to_apply.push(create);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -439,9 +554,12 @@ where
 
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let (id, to_apply) = {
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
-                        namespace,
+                        namespace: namespace.clone(),
                         id: id.clone(),
                         activity: activity_id,
                     });
@@ -451,12 +569,14 @@ where
                     (id, to_apply)
                 };
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -479,9 +599,12 @@ where
 
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let (id, to_apply) = {
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
-                        namespace,
+                        namespace: namespace.clone(),
                         activity: id.clone(),
                         informing_activity: informing_activity_id,
                     });
@@ -491,12 +614,14 @@ where
                     (id, to_apply)
                 };
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -520,6 +645,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let id = EntityId::from_external_id(&external_id);
 
                 let create = ChronicleOperation::EntityExists(EntityExists {
@@ -531,18 +658,20 @@ where
 
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
                     id: EntityId::from_external_id(&external_id),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -566,6 +695,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::ActivityExists(ActivityExists {
                     namespace: namespace.clone(),
                     external_id: external_id.clone(),
@@ -576,18 +707,20 @@ where
                 let id = ActivityId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -611,6 +744,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let create = ChronicleOperation::AgentExists(AgentExists {
                     external_id: external_id.to_owned(),
                     namespace: namespace.clone(),
@@ -621,18 +756,20 @@ where
                 let id = AgentId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     attributes,
                 });
 
                 to_apply.push(set_type);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -651,12 +788,7 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(namespace, model, tx_id))
+                api.submit(namespace, identity, to_apply)
             })
         })
         .await?
@@ -851,6 +983,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
                     &namespace,
                     &responsible_id,
@@ -861,11 +995,14 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(responsible_id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    responsible_id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -888,6 +1025,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
                     &namespace,
                     &activity_id,
@@ -897,11 +1036,14 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(responsible_id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    responsible_id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -925,8 +1067,10 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let tx = ChronicleOperation::EntityDerive(EntityDerive {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     used_id: used_id.clone(),
                     activity_id: activity_id.clone(),
@@ -935,11 +1079,14 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -970,7 +1117,7 @@ where
                     .unwrap()
                     .read_to_end(&mut buf)
                     .await
-                    .map_err(|e| ApiError::FileUpload { source: e })?;
+                    .map_err(ApiError::FileUpload)?;
 
                 Ok(buf)
             }
@@ -980,8 +1127,10 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            connection.build_transaction().run(|connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+            connection.build_transaction().run(|pg_connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(pg_connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
 
                 let mut connection = api.store.connection()?;
                 let agent = agent
@@ -1001,7 +1150,7 @@ where
                 let signature: Signature = signer.try_sign(&buf)?;
 
                 let tx = ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                    namespace,
+                    namespace: namespace.clone(),
                     id: id.clone(),
                     agent: agent_id.clone(),
                     identityid: Some(IdentityId::from_external_id(
@@ -1015,12 +1164,14 @@ where
 
                 to_apply.push(tx);
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    pg_connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1031,11 +1182,11 @@ where
         tokio::task::spawn_blocking(move || {
             let mut connection = api.store.connection()?;
 
-            let (_id, _) = api
+            let (id, _) = api
                 .store
                 .namespace_by_external_id(&mut connection, &ExternalId::from(&query.namespace))?;
             Ok(ApiResponse::query_reply(
-                api.store.prov_model_for_namespace(&mut connection, query)?,
+                api.store.prov_model_for_namespace(&mut connection, &id)?,
             ))
         })
         .await?
@@ -1074,6 +1225,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 match registration {
                     KeyRegistration::Generate => {
                         api.keystore.generate_agent(&id)?;
@@ -1094,16 +1247,18 @@ where
 
                 to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
                     id: id.clone(),
-                    namespace,
+                    namespace: namespace.clone(),
                     publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
                 }));
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1124,6 +1279,9 @@ where
             let mut connection = api.store.connection()?;
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let agent_id = {
                     if let Some(agent) = agent {
                         Some(agent)
@@ -1153,12 +1311,14 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1180,6 +1340,8 @@ where
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
 
+                let applying_new_namespace = !to_apply.is_empty();
+
                 let agent_id = {
                     if let Some(agent) = agent {
                         Some(agent)
@@ -1203,12 +1365,14 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1229,6 +1393,8 @@ where
             let mut connection = api.store.connection()?;
             connection.build_transaction().run(|connection| {
                 let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
 
                 let agent_id = {
                     if let Some(agent) = agent {
@@ -1253,12 +1419,14 @@ where
                     ));
                 }
 
-                let identity = identity.signed_identity(&api.keystore)?;
-
-                let model = ProvModel::from_tx(&to_apply)?;
-                let tx_id = api.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
-
-                Ok(ApiResponse::submission(id, model, tx_id))
+                api.apply_effects_and_submit(
+                    connection,
+                    id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
             })
         })
         .await?
@@ -1812,7 +1980,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Ledger error Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
     }
 
     #[tokio::test]
@@ -1943,7 +2111,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]
@@ -2074,7 +2242,7 @@ mod test {
             )
             .await;
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Ledger error Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
+        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
     }
 
     #[tokio::test]

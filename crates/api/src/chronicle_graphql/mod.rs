@@ -13,7 +13,7 @@ use common::{
     identity::{AuthId, JwtClaims, OpaData},
     ledger::{SubmissionError, SubmissionStage},
     opa::ExecutorContext,
-    prov::{to_json_ld::ToJson, ChronicleTransactionId, ProvModel},
+    prov::{to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, ProvModel},
 };
 use derivative::*;
 use diesel::{
@@ -144,20 +144,34 @@ impl Namespace {
     }
 }
 
-#[derive(Default, Queryable)]
+#[derive(Queryable, SimpleObject)]
 pub struct Submission {
     context: String,
-    tx_id: String,
+    submission_result: SubmissionResult,
+    tx_id: Option<String>,
 }
 
-#[Object]
+#[derive(Enum, PartialEq, Eq, Clone, Copy)]
+pub enum SubmissionResult {
+    Submission,
+    AlreadyRecorded,
+}
+
 impl Submission {
-    async fn context(&self) -> &str {
-        &self.context
+    pub fn from_submission(subject: &ChronicleIri, tx_id: &ChronicleTransactionId) -> Self {
+        Submission {
+            context: subject.to_string(),
+            submission_result: SubmissionResult::Submission,
+            tx_id: Some(tx_id.to_string()),
+        }
     }
 
-    async fn tx_id(&self) -> &str {
-        &self.tx_id
+    pub fn from_already_recorded(subject: &ChronicleIri) -> Self {
+        Submission {
+            context: subject.to_string(),
+            submission_result: SubmissionResult::AlreadyRecorded,
+            tx_id: None,
+        }
     }
 }
 

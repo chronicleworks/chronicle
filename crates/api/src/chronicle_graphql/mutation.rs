@@ -22,10 +22,12 @@ async fn transaction_context<'a>(
     _ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {
     match res {
-        ApiResponse::Submission { subject, tx_id, .. } => Ok(Submission {
-            context: subject.to_string(),
-            tx_id: tx_id.to_string(),
-        }),
+        ApiResponse::Submission { subject, tx_id, .. } => {
+            Ok(Submission::from_submission(&subject, &tx_id))
+        }
+        ApiResponse::AlreadyRecorded { subject, .. } => {
+            Ok(Submission::from_already_recorded(&subject))
+        }
         _ => unreachable!(),
     }
 }
