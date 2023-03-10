@@ -22,6 +22,11 @@
                             "description": "the type of the attribute's value",
                             "type": "string",
                             "enum": ["String", "Bool", "Int", "JSON"]
+                        },
+                        "doc": {
+                            "description": "optional documentation about an attribute",
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     "required": ["type"],
@@ -46,6 +51,11 @@
                                 "pattern": "^[A-Z][A-Za-z0-9]*$"
                             },
                             "uniqueItems": true
+                        },
+                        "doc": {
+                            "description": "optional documentation about an agent",
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     "required": ["attributes"],
@@ -70,6 +80,11 @@
                                 "pattern": "^[A-Z][A-Za-z0-9]*$"
                             },
                             "uniqueItems": true
+                        },
+                        "doc": {
+                            "description": "optional documentation about an entity",
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     "required": ["attributes"],
@@ -94,6 +109,11 @@
                                 "pattern": "^[A-Z][A-Za-z0-9]*$"
                             },
                             "uniqueItems": true
+                        },
+                        "doc": {
+                            "description": "optional documentation about an activity",
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     "required": ["attributes"],
@@ -101,6 +121,11 @@
                 }
             },
             "additionalProperties": false
+        },
+        "roles_doc": {
+            "description": "optional documentation about roles in this application domain",
+            "type": "string",
+            "minLength": 1
         },
         "roles": {
             "description": "roles, which are functions of agents or entities with respect to activities",

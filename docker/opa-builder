@@ -56,6 +56,7 @@ COPY Cargo.lock /app
 COPY .cargo /app/.cargo
 COPY Cargo.toml /app
 COPY crates /app/crates
+COPY domain_docs /app/domain_docs
 COPY policies /app/policies
 
 # Test on the host only

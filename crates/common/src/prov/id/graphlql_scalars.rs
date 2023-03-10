@@ -40,6 +40,8 @@ impl ScalarType for IdentityId {
 }
 
 #[Scalar(name = "DomaintypeID")]
+/// Derived from an `Activity`'s or `Agent`'s or `Entity`'s subtype.
+/// The built-in GraphQL field `__TypeName` should be used for union queries.
 impl ScalarType for DomaintypeId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
@@ -57,6 +59,8 @@ impl ScalarType for DomaintypeId {
 }
 
 #[Scalar(name = "EntityID")]
+/// This is derived from an `Entity`'s externalId, but clients
+/// should not attempt to synthesize it themselves.
 impl ScalarType for EntityId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
@@ -74,6 +78,8 @@ impl ScalarType for EntityId {
 }
 
 #[Scalar(name = "AgentID")]
+/// This is derived from an `Agent`'s externalId, but clients
+/// should not attempt to synthesize it themselves.
 impl ScalarType for AgentId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
@@ -91,6 +97,8 @@ impl ScalarType for AgentId {
 }
 
 #[Scalar(name = "ActivityID")]
+/// This is derived from an `Activity`'s externalId, but clients
+/// should not attempt to synthesize it themselves.
 impl ScalarType for ActivityId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {

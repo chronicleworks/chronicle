@@ -759,6 +759,8 @@ impl From<&EntityId> for IriRefBuf {
     }
 }
 
+/// Input either a short-form `externalId`, e.g. "agreement",
+/// or long-form Chronicle `id`, e.g. "chronicle:entity:agreement"
 #[derive(OneofObject)]
 pub enum EntityIdOrExternal {
     ExternalId(String),
@@ -816,6 +818,8 @@ impl From<&AgentId> for IriRefBuf {
     }
 }
 
+/// Input either a short-form `externalId`, e.g. "bob",
+/// or long-form Chronicle `id`, e.g. "chronicle:agent:bob"
 #[derive(OneofObject)]
 pub enum AgentIdOrExternal {
     ExternalId(String),
@@ -874,6 +878,8 @@ impl From<&ActivityId> for IriRefBuf {
     }
 }
 
+/// Input either a short-form `externalId`, e.g. "record",
+/// or long-form Chronicle `id`, e.g. "chronicle:activity:record"
 #[derive(OneofObject)]
 pub enum ActivityIdOrExternal {
     ExternalId(String),

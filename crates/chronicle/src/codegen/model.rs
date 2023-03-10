@@ -33,7 +33,8 @@ pub enum PrimitiveType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributeDef {
     typ: String,
-    pub primitive_type: PrimitiveType,
+    pub(crate) doc: Option<String>,
+    pub(crate) primitive_type: PrimitiveType,
 }
 
 impl TypeName for AttributeDef {
@@ -67,13 +68,14 @@ impl AttributeDef {
         }
     }
 
-    pub fn as_property(&self) -> String {
+    pub(crate) fn as_property(&self) -> String {
         to_snake_case(&format!("{}Attribute", self.typ))
     }
 
-    pub fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
+    pub(crate) fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
         AttributeDef {
             typ: external_id,
+            doc: attr.doc,
             primitive_type: attr.typ,
         }
     }
@@ -94,7 +96,7 @@ pub trait TypeName {
     }
 }
 
-/// Entities, Activites and Agents have a specific set of attributes.
+/// Entities, Activities and Agents have a specific set of attributes.
 pub trait AttributesTypeName {
     fn attributes_type_name(&self) -> String;
     fn attributes_type_name_preserve_inflection(&self) -> String;
@@ -138,7 +140,8 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentDef {
     pub(crate) external_id: String,
-    pub attributes: Vec<AttributeDef>,
+    pub(crate) doc: Option<String>,
+    pub(crate) attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &AgentDef {
@@ -152,20 +155,27 @@ impl TypeName for &AgentDef {
 }
 
 impl AgentDef {
-    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub fn new(
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+        attributes: Vec<AttributeDef>,
+    ) -> Self {
         Self {
             external_id: external_id.as_ref().to_string(),
+            doc,
             attributes,
         }
     }
 
     pub fn from_input<'a>(
         external_id: String,
+        doc: Option<String>,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
             external_id,
+            doc,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -175,6 +185,7 @@ impl AgentDef {
                         })
                         .map(|attr| AttributeDef {
                             typ: x.0.to_owned(),
+                            doc: attr.doc.to_owned(),
                             primitive_type: attr.typ,
                         })
                 })
@@ -186,7 +197,8 @@ impl AgentDef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityDef {
     pub(crate) external_id: String,
-    pub attributes: Vec<AttributeDef>,
+    pub(crate) doc: Option<String>,
+    pub(crate) attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &EntityDef {
@@ -200,20 +212,27 @@ impl TypeName for &EntityDef {
 }
 
 impl EntityDef {
-    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub(crate) fn new(
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+        attributes: Vec<AttributeDef>,
+    ) -> Self {
         Self {
             external_id: external_id.as_ref().to_string(),
+            doc,
             attributes,
         }
     }
 
-    pub fn from_input<'a>(
+    pub(crate) fn from_input<'a>(
         external_id: String,
+        doc: Option<String>,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
             external_id,
+            doc,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -223,6 +242,7 @@ impl EntityDef {
                         })
                         .map(|attr| AttributeDef {
                             typ: x.0.to_owned(),
+                            doc: attr.doc.to_owned(),
                             primitive_type: attr.typ,
                         })
                 })
@@ -234,7 +254,8 @@ impl EntityDef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityDef {
     pub(crate) external_id: String,
-    pub attributes: Vec<AttributeDef>,
+    pub(crate) doc: Option<String>,
+    pub(crate) attributes: Vec<AttributeDef>,
 }
 
 impl TypeName for &ActivityDef {
@@ -248,20 +269,27 @@ impl TypeName for &ActivityDef {
 }
 
 impl ActivityDef {
-    pub fn new(external_id: impl AsRef<str>, attributes: Vec<AttributeDef>) -> Self {
+    pub(crate) fn new(
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+        attributes: Vec<AttributeDef>,
+    ) -> Self {
         Self {
             external_id: external_id.as_ref().to_string(),
+            doc,
             attributes,
         }
     }
 
-    pub fn from_input<'a>(
+    pub(crate) fn from_input<'a>(
         external_id: String,
+        doc: Option<String>,
         attributes: &BTreeMap<String, AttributeFileInput>,
         attribute_references: impl Iterator<Item = &'a AttributeRef>,
     ) -> Result<Self, ModelError> {
         Ok(Self {
             external_id,
+            doc,
             attributes: attribute_references
                 .map(|x| {
                     attributes
@@ -271,6 +299,7 @@ impl ActivityDef {
                         })
                         .map(|attr| AttributeDef {
                             typ: x.0.to_owned(),
+                            doc: attr.doc.to_owned(),
                             primitive_type: attr.typ,
                         })
                 })
@@ -333,14 +362,19 @@ pub struct ChronicleDomainDef {
     pub(crate) agents: Vec<AgentDef>,
     pub(crate) entities: Vec<EntityDef>,
     pub(crate) activities: Vec<ActivityDef>,
+    pub(crate) roles_doc: Option<String>,
     pub(crate) roles: Vec<RoleDef>,
 }
 
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
 
 impl<'a> AgentBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
-        Self(domain, AgentDef::new(external_id, vec![]))
+    pub fn new(
+        domain: &'a ChronicleDomainDef,
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+    ) -> Self {
+        Self(domain, AgentDef::new(external_id, doc, vec![]))
     }
 
     pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
@@ -364,11 +398,15 @@ impl<'a> From<AgentBuilder<'a>> for AgentDef {
 pub struct EntityBuilder<'a>(&'a ChronicleDomainDef, EntityDef);
 
 impl<'a> EntityBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
-        Self(domain, EntityDef::new(external_id, vec![]))
+    pub(crate) fn new(
+        domain: &'a ChronicleDomainDef,
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+    ) -> Self {
+        Self(domain, EntityDef::new(external_id, doc, vec![]))
     }
 
-    pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
+    pub(crate) fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
         let attr = self
             .0
             .attribute(typ.as_ref())
@@ -389,11 +427,15 @@ impl<'a> From<EntityBuilder<'a>> for EntityDef {
 pub struct ActivityBuilder<'a>(&'a ChronicleDomainDef, ActivityDef);
 
 impl<'a> ActivityBuilder<'a> {
-    pub fn new(domain: &'a ChronicleDomainDef, external_id: impl AsRef<str>) -> Self {
-        Self(domain, ActivityDef::new(external_id, vec![]))
+    pub(crate) fn new(
+        domain: &'a ChronicleDomainDef,
+        external_id: impl AsRef<str>,
+        doc: Option<String>,
+    ) -> Self {
+        Self(domain, ActivityDef::new(external_id, doc, vec![]))
     }
 
-    pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
+    pub(crate) fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
         let attr = self
             .0
             .attribute(typ.as_ref())
@@ -414,57 +456,70 @@ impl<'a> From<ActivityBuilder<'a>> for ActivityDef {
 pub struct Builder(ChronicleDomainDef);
 
 impl Builder {
-    pub fn new(name: impl AsRef<str>) -> Self {
+    pub(crate) fn new(name: impl AsRef<str>) -> Self {
         Builder(ChronicleDomainDef {
             name: name.as_ref().to_string(),
             ..Default::default()
         })
     }
 
-    pub fn with_attribute_type(
+    pub(crate) fn with_attribute_type(
         mut self,
         external_id: impl AsRef<str>,
+        doc: Option<String>,
         typ: PrimitiveType,
     ) -> Result<Self, ModelError> {
         self.0.attributes.push(AttributeDef {
             typ: external_id.as_ref().to_string(),
+            doc,
             primitive_type: typ,
         });
 
         Ok(self)
     }
 
-    pub fn with_agent(
+    pub(crate) fn with_agent(
         mut self,
         external_id: impl AsRef<str>,
+        doc: Option<String>,
         b: impl FnOnce(AgentBuilder<'_>) -> Result<AgentBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
-        self.0
-            .agents
-            .push(b(AgentBuilder(&self.0, AgentDef::new(external_id, vec![])))?.into());
+        self.0.agents.push(
+            b(AgentBuilder(
+                &self.0,
+                AgentDef::new(external_id, doc, vec![]),
+            ))?
+            .into(),
+        );
         Ok(self)
     }
 
-    pub fn with_entity(
+    pub(crate) fn with_entity(
         mut self,
         external_id: impl AsRef<str>,
+        doc: Option<String>,
         b: impl FnOnce(EntityBuilder<'_>) -> Result<EntityBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
-        self.0
-            .entities
-            .push(b(EntityBuilder(&self.0, EntityDef::new(external_id, vec![])))?.into());
+        self.0.entities.push(
+            b(EntityBuilder(
+                &self.0,
+                EntityDef::new(external_id, doc, vec![]),
+            ))?
+            .into(),
+        );
         Ok(self)
     }
 
-    pub fn with_activity(
+    pub(crate) fn with_activity(
         mut self,
         external_id: impl AsRef<str>,
+        doc: Option<String>,
         b: impl FnOnce(ActivityBuilder<'_>) -> Result<ActivityBuilder<'_>, ModelError>,
     ) -> Result<Self, ModelError> {
         self.0.activities.push(
             b(ActivityBuilder(
                 &self.0,
-                ActivityDef::new(external_id, vec![]),
+                ActivityDef::new(external_id, doc, vec![]),
             ))?
             .into(),
         );
@@ -472,7 +527,7 @@ impl Builder {
         Ok(self)
     }
 
-    pub fn with_role(mut self, external_id: impl AsRef<str>) -> Result<Self, ModelError> {
+    pub(crate) fn with_role(mut self, external_id: impl AsRef<str>) -> Result<Self, ModelError> {
         self.0.roles.push(RoleDef::new(external_id));
 
         Ok(self)
@@ -485,6 +540,7 @@ impl Builder {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct AttributeFileInput {
+    doc: Option<String>,
     #[serde(rename = "type")]
     typ: PrimitiveType,
 }
@@ -492,6 +548,7 @@ pub struct AttributeFileInput {
 impl From<&AttributeDef> for AttributeFileInput {
     fn from(attr: &AttributeDef) -> Self {
         Self {
+            doc: attr.doc.to_owned(),
             typ: attr.primitive_type,
         }
     }
@@ -503,12 +560,14 @@ pub struct AttributeRef(pub String);
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ResourceDef {
-    pub attributes: Vec<AttributeRef>,
+    pub(crate) doc: Option<String>,
+    pub(crate) attributes: Vec<AttributeRef>,
 }
 
 impl From<&AgentDef> for ResourceDef {
     fn from(agent: &AgentDef) -> Self {
         Self {
+            doc: agent.doc.to_owned(),
             attributes: agent
                 .attributes
                 .iter()
@@ -521,6 +580,7 @@ impl From<&AgentDef> for ResourceDef {
 impl From<&EntityDef> for ResourceDef {
     fn from(entity: &EntityDef) -> Self {
         Self {
+            doc: entity.doc.to_owned(),
             attributes: entity
                 .attributes
                 .iter()
@@ -533,6 +593,7 @@ impl From<&EntityDef> for ResourceDef {
 impl From<&ActivityDef> for ResourceDef {
     fn from(activity: &ActivityDef) -> Self {
         Self {
+            doc: activity.doc.to_owned(),
             attributes: activity
                 .attributes
                 .iter()
@@ -544,16 +605,17 @@ impl From<&ActivityDef> for ResourceDef {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct DomainFileInput {
-    pub name: String,
-    pub attributes: BTreeMap<String, AttributeFileInput>,
-    pub agents: BTreeMap<String, ResourceDef>,
-    pub entities: BTreeMap<String, ResourceDef>,
-    pub activities: BTreeMap<String, ResourceDef>,
-    pub roles: Vec<String>,
+    pub(crate) name: String,
+    pub(crate) attributes: BTreeMap<String, AttributeFileInput>,
+    pub(crate) agents: BTreeMap<String, ResourceDef>,
+    pub(crate) entities: BTreeMap<String, ResourceDef>,
+    pub(crate) activities: BTreeMap<String, ResourceDef>,
+    pub(crate) roles_doc: Option<String>,
+    pub(crate) roles: Vec<String>,
 }
 
 impl DomainFileInput {
-    pub fn new(name: impl AsRef<str>) -> Self {
+    pub(crate) fn new(name: impl AsRef<str>) -> Self {
         DomainFileInput {
             name: name.as_ref().to_string(),
             ..Default::default()
@@ -566,10 +628,7 @@ impl FromStr for DomainFileInput {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match serde_json::from_str::<DomainFileInput>(s) {
-            Err(_) => match serde_yaml::from_str::<DomainFileInput>(s) {
-                Err(source) => Err(ModelError::ModelFileInvalidYaml(source)),
-                Ok(domain) => Ok(domain),
-            },
+            Err(_) => Ok(serde_yaml::from_str::<DomainFileInput>(s)?),
             Ok(domain) => Ok(domain),
         }
     }
@@ -602,6 +661,8 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
             .map(|x| (x.external_id.clone(), ResourceDef::from(x)))
             .collect();
 
+        file.roles_doc = domain.roles_doc.to_owned();
+
         file.roles = domain.roles.iter().map(|x| x.as_type_name()).collect();
 
         file
@@ -609,11 +670,11 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 }
 
 impl ChronicleDomainDef {
-    pub fn build(external_id: &str) -> Builder {
+    pub(crate) fn build(external_id: &str) -> Builder {
         Builder::new(external_id)
     }
 
-    pub fn attribute(&self, attr: &str) -> Option<AttributeDef> {
+    fn attribute(&self, attr: &str) -> Option<AttributeDef> {
         self.attributes.iter().find(|a| a.typ == attr).cloned()
     }
 
@@ -621,18 +682,14 @@ impl ChronicleDomainDef {
         ChronicleDomainDef::from_str(s)
     }
 
-    pub fn from_json(file: &str) -> Result<Self, ModelError> {
-        match serde_json::from_str::<DomainFileInput>(file) {
-            Err(source) => Err(ModelError::ModelFileInvalidJson(source)),
-            Ok(model) => Self::from_model(model),
-        }
+    fn from_json(file: &str) -> Result<Self, ModelError> {
+        let model = serde_json::from_str::<DomainFileInput>(file)?;
+        Self::from_model(model)
     }
 
-    pub fn from_yaml(file: &str) -> Result<Self, ModelError> {
-        match serde_yaml::from_str::<DomainFileInput>(file) {
-            Err(source) => Err(ModelError::ModelFileInvalidYaml(source)),
-            Ok(model) => Self::from_model(model),
-        }
+    fn from_yaml(file: &str) -> Result<Self, ModelError> {
+        let model = serde_yaml::from_str::<DomainFileInput>(file)?;
+        Self::from_model(model)
     }
 
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ModelError> {
@@ -650,12 +707,13 @@ impl ChronicleDomainDef {
         let mut builder = Builder::new(model.name);
 
         for (external_id, attr) in model.attributes.iter() {
-            builder = builder.with_attribute_type(external_id, attr.typ)?;
+            builder = builder.with_attribute_type(external_id, attr.doc.to_owned(), attr.typ)?;
         }
 
         for (external_id, def) in model.agents {
             builder.0.agents.push(AgentDef::from_input(
                 external_id,
+                def.doc,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
@@ -664,6 +722,7 @@ impl ChronicleDomainDef {
         for (external_id, def) in model.entities {
             builder.0.entities.push(EntityDef::from_input(
                 external_id,
+                def.doc,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
@@ -672,9 +731,14 @@ impl ChronicleDomainDef {
         for (external_id, def) in model.activities {
             builder.0.activities.push(ActivityDef::from_input(
                 external_id,
+                def.doc,
                 &model.attributes,
                 def.attributes.iter(),
             )?)
+        }
+
+        if model.roles_doc.is_some() {
+            builder.0.roles_doc = model.roles_doc;
         }
 
         for role in model.roles {
@@ -684,13 +748,13 @@ impl ChronicleDomainDef {
         Ok(builder.build())
     }
 
-    pub fn to_json_string(&self) -> Result<String, ModelError> {
+    pub(crate) fn to_json_string(&self) -> Result<String, ModelError> {
         let input: DomainFileInput = self.into();
         let json = serde_json::to_string(&input)?;
         Ok(json)
     }
 
-    pub fn to_yaml_string(&self) -> Result<String, ModelError> {
+    fn to_yaml_string(&self) -> Result<String, ModelError> {
         let input: DomainFileInput = self.into();
         let yaml = serde_yaml::to_string(&input)?;
         Ok(yaml)
@@ -866,26 +930,36 @@ pub mod test {
         name: chronicle
         attributes:
           - typ: String
+            doc: ~
             primitive_type: String
         agents:
           - external_id: friend
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         entities:
           - external_id: octopi
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
           - external_id: the sea
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         activities:
           - external_id: gardening
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
+        roles_doc: ~
         roles:
           - external_id: drummer
         "###);
@@ -906,54 +980,78 @@ pub mod test {
         name: chronicle
         attributes:
           - typ: Bool
+            doc: ~
             primitive_type: Bool
           - typ: Int
+            doc: ~
             primitive_type: Int
           - typ: String
+            doc: ~
             primitive_type: String
         agents:
           - external_id: friends
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
         entities:
           - external_id: octopi
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
           - external_id: the sea
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
         activities:
           - external_id: gardening
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
           - external_id: swim about
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
+        roles_doc: ~
         roles:
           - external_id: drummer
         "###);
@@ -974,54 +1072,78 @@ pub mod test {
         name: chronicle
         attributes:
           - typ: Bool
+            doc: ~
             primitive_type: Bool
           - typ: Int
+            doc: ~
             primitive_type: Int
           - typ: String
+            doc: ~
             primitive_type: String
         agents:
           - external_id: friends
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
         entities:
           - external_id: octopi
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
           - external_id: the sea
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
         activities:
           - external_id: gardening
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
           - external_id: swim about
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
               - typ: Int
+                doc: ~
                 primitive_type: Int
               - typ: Bool
+                doc: ~
                 primitive_type: Bool
+        roles_doc: ~
         roles:
           - external_id: drummer
         "###);
@@ -1041,19 +1163,24 @@ pub mod test {
         name: test
         attributes:
           String:
+            doc: ~
             type: String
         agents:
           friend:
+            doc: ~
             attributes:
               - String
         entities:
           octopi:
+            doc: ~
             attributes:
               - String
         activities:
           gardening:
+            doc: ~
             attributes:
               - String
+        roles_doc: ~
         roles:
           - Drummer
         "###);
@@ -1067,11 +1194,13 @@ pub mod test {
     fn test_from_attribute_def_for_attribute_file_input() {
         let attr = AttributeDef {
             typ: "string".to_string(),
+            doc: None,
             primitive_type: PrimitiveType::String,
         };
         let input = AttributeFileInput::from(&attr);
         insta::assert_yaml_snapshot!(input, @r###"
         ---
+        doc: ~
         type: String
         "###);
     }
@@ -1087,22 +1216,30 @@ pub mod test {
         name: test
         attributes:
           - typ: String
+            doc: ~
             primitive_type: String
         agents:
           - external_id: friend
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         entities:
           - external_id: octopi
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         activities:
           - external_id: gardening
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
+        roles_doc: ~
         roles:
           - external_id: drummer
         "###);
@@ -1121,22 +1258,30 @@ pub mod test {
         name: test
         attributes:
           - typ: String
+            doc: ~
             primitive_type: String
         agents:
           - external_id: friend
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         entities:
           - external_id: octopi
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
         activities:
           - external_id: gardening
+            doc: ~
             attributes:
               - typ: String
+                doc: ~
                 primitive_type: String
+        roles_doc: ~
         roles:
           - external_id: drummer
         "###);
@@ -1221,57 +1366,280 @@ pub mod test {
         name: evidence
         attributes:
           CMSId:
+            doc: ~
             type: String
           Content:
+            doc: ~
             type: String
           Reference:
+            doc: ~
             type: String
           SearchParameter:
+            doc: ~
             type: String
           Title:
+            doc: ~
             type: String
           Version:
+            doc: ~
             type: Int
         agents:
           Organization:
+            doc: ~
             attributes:
               - Title
           Person:
+            doc: ~
             attributes:
               - CMSId
         entities:
           EvidenceReference:
+            doc: ~
             attributes:
               - SearchParameter
               - Reference
           Guidance:
+            doc: ~
             attributes:
               - Title
               - Version
           PublishedGuidance:
+            doc: ~
             attributes: []
           Question:
+            doc: ~
             attributes:
               - CMSId
               - Content
         activities:
           Published:
+            doc: ~
             attributes:
               - Version
           QuestionAsked:
+            doc: ~
             attributes:
               - Content
           Researched:
+            doc: ~
             attributes: []
           Revised:
+            doc: ~
             attributes:
               - CMSId
               - Version
+        roles_doc: ~
         roles:
           - Stakeholder
           - Author
           - Researcher
           - Editor
+        "###);
+        Ok(())
+    }
+
+    fn create_test_yaml_file_with_docs(
+    ) -> Result<assert_fs::NamedTempFile, Box<dyn std::error::Error>> {
+        let file = assert_fs::NamedTempFile::new("test.yml")?;
+        file.write_str(
+            r#"
+            name: Artworld
+            attributes:
+              Title:
+                doc: |
+                  # `Title`
+
+                  `Title` can be the title attributed to
+
+                  * `Artwork`
+                  * `ArtworkDetails`
+                  * `Created`
+
+                type: String
+              Location:
+                type: String
+              PurchaseValue:
+                type: String
+              PurchaseValueCurrency:
+                type: String
+              Description:
+                type: String
+              Name:
+                type: String
+            agents:
+              Collector:
+                doc: |
+                  # `Collector`
+
+                  Collectors purchase and amass collections of art.
+
+                  Collectors might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.
+                attributes:
+                  - Name
+              Artist:
+                doc: |
+                  # `Artist`
+
+                  Artists create new works of art.
+
+                  Artists might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.
+                attributes:
+                  - Name
+            entities:
+              Artwork:
+                doc: |
+                  # `Artwork`
+
+                  Refers to the actual physical art piece.
+
+                  ## Examples
+
+                  This entity can be defined in Chronicle using GraphQL like so:
+
+                  ```graphql
+                  mutation {
+                    defineArtworkEntity(
+                      externalId: "salvatormundi"
+                      attributes: { titleAttribute: "Salvator Mundi" }
+                    ) {
+                      context
+                      txId
+                    }
+                  }
+                  ```
+
+                attributes:
+                  - Title
+              ArtworkDetails:
+                doc: |
+                  # `ArtworkDetails`
+
+                  Provides more information about the piece, such as its title and description
+
+                  ## Examples
+
+                  This entity can be defined in Chronicle using GraphQL like so:
+
+                  ```graphql
+                  mutation {
+                    defineArtworkDetailsEntity(
+                      externalId: "salvatormundidetails"
+                      attributes: {
+                        titleAttribute: "Salvator Mundi"
+                        descriptionAttribute: "Depiction of Christ holding a crystal orb and making the sign of the blessing."
+                      }
+                    ) {
+                      context
+                      txId
+                    }
+                  }
+                  ```
+
+                attributes:
+                  - Title
+                  - Description
+            activities:
+              Exhibited:
+                attributes:
+                  - Location
+              Created:
+                doc: |
+                  # `Created`
+
+                  `Created` refers to the act of creating a new piece of art
+                attributes:
+                  - Title
+              Sold:
+                attributes:
+                  - PurchaseValue
+                  - PurchaseValueCurrency
+            roles_doc: |
+              # Buyer, Seller, and Creator Roles
+
+              ## Examples
+
+              In the context of association with selling (`Sold`) of an `Artwork`,
+              an `Artist`'s function could be `SELLER`, and `CREATOR` in the context
+              of creation (`Created`).
+
+              A `Collector`'s function in the context of the sale (`Sold`) of an
+              `Artwork` could be `BUYER` or `SELLER`.
+            roles:
+              - BUYER
+              - SELLER
+              - CREATOR
+   "#,
+        )?;
+        Ok(file)
+    }
+
+    #[test]
+    fn test_from_domain_for_file_input_with_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let file = create_test_yaml_file_with_docs()?;
+        let s: String = std::fs::read_to_string(file.path())?;
+        let domain = ChronicleDomainDef::from_str(&s)?;
+        let input = DomainFileInput::from(&domain);
+
+        insta::assert_yaml_snapshot!(input, @r###"
+        ---
+        name: Artworld
+        attributes:
+          Description:
+            doc: ~
+            type: String
+          Location:
+            doc: ~
+            type: String
+          Name:
+            doc: ~
+            type: String
+          PurchaseValue:
+            doc: ~
+            type: String
+          PurchaseValueCurrency:
+            doc: ~
+            type: String
+          Title:
+            doc: "# `Title`\n\n`Title` can be the title attributed to\n\n* `Artwork`\n* `ArtworkDetails`\n* `Created`\n"
+            type: String
+        agents:
+          Artist:
+            doc: "# `Artist`\n\nArtists create new works of art.\n\nArtists might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.\n"
+            attributes:
+              - Name
+          Collector:
+            doc: "# `Collector`\n\nCollectors purchase and amass collections of art.\n\nCollectors might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.\n"
+            attributes:
+              - Name
+        entities:
+          Artwork:
+            doc: "# `Artwork`\n\nRefers to the actual physical art piece.\n\n## Examples\n\nThis entity can be defined in Chronicle using GraphQL like so:\n\n```graphql\nmutation {\n  defineArtworkEntity(\n    externalId: \"salvatormundi\"\n    attributes: { titleAttribute: \"Salvator Mundi\" }\n  ) {\n    context\n    txId\n  }\n}\n```\n"
+            attributes:
+              - Title
+          ArtworkDetails:
+            doc: "# `ArtworkDetails`\n\nProvides more information about the piece, such as its title and description\n\n## Examples\n\nThis entity can be defined in Chronicle using GraphQL like so:\n\n```graphql\nmutation {\n  defineArtworkDetailsEntity(\n    externalId: \"salvatormundidetails\"\n    attributes: {\n      titleAttribute: \"Salvator Mundi\"\n      descriptionAttribute: \"Depiction of Christ holding a crystal orb and making the sign of the blessing.\"\n    }\n  ) {\n    context\n    txId\n  }\n}\n```\n"
+            attributes:
+              - Title
+              - Description
+        activities:
+          Created:
+            doc: "# `Created`\n\n`Created` refers to the act of creating a new piece of art\n"
+            attributes:
+              - Title
+          Exhibited:
+            doc: ~
+            attributes:
+              - Location
+          Sold:
+            doc: ~
+            attributes:
+              - PurchaseValue
+              - PurchaseValueCurrency
+        roles_doc: "# Buyer, Seller, and Creator Roles\n\n## Examples\n\nIn the context of association with selling (`Sold`) of an `Artwork`,\nan `Artist`'s function could be `SELLER`, and `CREATOR` in the context\nof creation (`Created`).\n\nA `Collector`'s function in the context of the sale (`Sold`) of an\n`Artwork` could be `BUYER` or `SELLER`.\n"
+        roles:
+          - Buyer
+          - Seller
+          - Creator
         "###);
         Ok(())
     }

@@ -640,15 +640,15 @@ pub mod test {
     fn test_cli_model() -> CliModel {
         CliModel::from(
             ChronicleDomainDef::build("test")
-                .with_attribute_type("testString", crate::PrimitiveType::String)
+                .with_attribute_type("testString", None, crate::PrimitiveType::String)
                 .unwrap()
-                .with_attribute_type("testBool", crate::PrimitiveType::Bool)
+                .with_attribute_type("testBool", None, crate::PrimitiveType::Bool)
                 .unwrap()
-                .with_attribute_type("testInt", crate::PrimitiveType::Int)
+                .with_attribute_type("testInt", None, crate::PrimitiveType::Int)
                 .unwrap()
-                .with_attribute_type("testJSON", crate::PrimitiveType::JSON)
+                .with_attribute_type("testJSON", None, crate::PrimitiveType::JSON)
                 .unwrap()
-                .with_activity("testActivity", |b| {
+                .with_activity("testActivity", None, |b| {
                     b.with_attribute("testString")
                         .unwrap()
                         .with_attribute("testBool")
@@ -656,7 +656,7 @@ pub mod test {
                         .with_attribute("testInt")
                 })
                 .unwrap()
-                .with_agent("testAgent", |b| {
+                .with_agent("testAgent", None, |b| {
                     b.with_attribute("testString")
                         .unwrap()
                         .with_attribute("testBool")
@@ -664,7 +664,7 @@ pub mod test {
                         .with_attribute("testInt")
                 })
                 .unwrap()
-                .with_entity("testEntity", |b| {
+                .with_entity("testEntity", None, |b| {
                     b.with_attribute("testString")
                         .unwrap()
                         .with_attribute("testBool")

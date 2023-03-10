@@ -1,0 +1,3 @@
+# `ActivityType`
+
+Domain `Activity` subtypes
