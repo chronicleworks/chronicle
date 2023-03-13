@@ -98,6 +98,7 @@ impl DatabaseConnector<Database, PgEmbedError> for EmbeddedDatabaseConnector {
         vec![
             PgEmbedErrorType::PgCleanUpFailure,
             PgEmbedErrorType::PgStartFailure,
+            PgEmbedErrorType::ReadFileError,
             PgEmbedErrorType::UnpackFailure,
         ]
         .contains(&error.error_type)
