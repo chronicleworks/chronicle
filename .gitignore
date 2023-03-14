@@ -239,3 +239,6 @@ typings/
 # mkdocs
 site
 docs/diagrams/out
+
+# include helm chart dependencies
+!charts/chronicle/charts/*.tgz
