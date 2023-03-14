@@ -28,6 +28,9 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
         #(for attribute in attributes.iter() =>
         #[derive(Clone, #graphql_new_type)]
         #[graphql(name = #_(#(attribute.as_scalar_type())), visible=true)]
+        #(if attribute.doc.is_some() {
+            #[doc = #_(#(attribute.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+        })
         pub struct #(attribute.as_scalar_type())(#(match attribute.primitive_type {
                 PrimitiveType::String => String,
                 PrimitiveType::Bool => bool,
@@ -42,15 +45,19 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
 fn gen_association_unions() -> rust::Tokens {
     let simple_object = &rust::import("chronicle::async_graphql", "SimpleObject").qualified();
 
+    let agent_ref_doc = include_str!("../../../../domain_docs/agent_ref.md");
+    let association_doc = include_str!("../../../../domain_docs/association.md");
+
     quote! {
 
-
+    #[doc = #_(#agent_ref_doc)]
     #[derive(#simple_object)]
     pub struct AgentRef {
         pub role: RoleType,
         pub agent: Agent,
     }
 
+    #[doc = #_(#association_doc)]
     #[derive(#simple_object)]
     pub struct Association {
         pub responsible : AgentRef,
@@ -63,12 +70,26 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
     let graphql_enum = &rust::import("chronicle::async_graphql", "Enum");
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
     let prov_role = &rust::import("chronicle::common::prov", "Role").qualified();
+
+    let activity_type_doc = include_str!("../../../../domain_docs/activity_type.md");
+    let agent_type_doc = include_str!("../../../../domain_docs/agent_type.md");
+    let entity_type_doc = include_str!("../../../../domain_docs/entity_type.md");
+    let prov_activity_doc = include_str!("../../../../domain_docs/prov_activity.md");
+    let prov_agent_doc = include_str!("../../../../domain_docs/prov_agent.md");
+    let prov_entity_doc = include_str!("../../../../domain_docs/prov_entity.md");
+    let role_doc = include_str!("../../../../domain_docs/role.md");
+    let unspecified_doc = include_str!("../../../../domain_docs/unspecified.md");
+
     quote! {
-
-
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
         #[allow(clippy::upper_case_acronyms)]
+        #[doc = #_(#role_doc)]
+        #(if domain.roles_doc.is_some() {
+            #[doc = ""]
+            #[doc = #_(#(domain.roles_doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+        })
         pub enum RoleType {
+            #[doc = #_(#unspecified_doc)]
             Unspecified,
             #(for role in domain.roles.iter() =>
             #[graphql(name = #_(#(role.preserve_inflection())), visible=true)]
@@ -104,12 +125,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[doc = #_(#agent_type_doc)]
         #[allow(clippy::upper_case_acronyms)]
         #[allow(clippy::enum_variant_names)]
         pub enum AgentType {
+            #[doc = #_(#prov_agent_doc)]
             #[graphql(name = "ProvAgent", visible=true)]
             ProvAgent,
             #(for agent in domain.agents.iter() =>
+            #(if agent.doc.is_some() {
+                #[doc = #_(#(agent.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #[graphql(name = #_(#(agent.as_type_name())), visible=true)]
                 #(agent.as_type_name()),
             )
@@ -128,12 +154,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[doc = #_(#entity_type_doc)]
         #[allow(clippy::upper_case_acronyms)]
         #[allow(clippy::enum_variant_names)]
         pub enum EntityType {
+            #[doc = #_(#prov_entity_doc)]
             #[graphql(name = "ProvEntity", visible=true)]
             ProvEntity,
             #(for entity in domain.entities.iter() =>
+            #(if entity.doc.is_some() {
+                #[doc = #_(#(entity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #[graphql(name = #_(#(entity.as_type_name())), visible=true)]
                 #(entity.as_type_name()),
             )
@@ -152,12 +183,17 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #[derive(#graphql_enum, Copy, Clone, Eq, PartialEq)]
+        #[doc = #_(#activity_type_doc)]
         #[allow(clippy::upper_case_acronyms)]
         #[allow(clippy::enum_variant_names)]
         pub enum ActivityType {
+            #[doc = #_(#prov_activity_doc)]
             #[graphql(name = "ProvActivity", visible=true)]
             ProvActivity,
             #(for activity in domain.activities.iter() =>
+            #(if activity.doc.is_some() {
+                #[doc = #_(#(activity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #[graphql(name = #_(#(activity.as_type_name())), visible=true)]
                 #(activity.as_type_name()),
             )
@@ -179,13 +215,22 @@ fn gen_type_enums(domain: &ChronicleDomainDef) -> rust::Tokens {
 
 fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
+
+    let agent_doc = include_str!("../../../../domain_docs/agent.md");
+    let prov_agent_doc = include_str!("../../../../domain_docs/prov_agent.md");
+
     quote! {
+        #[doc = #_(#agent_doc)]
         #[allow(clippy::enum_variant_names)]
         #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Agent {
+            #[doc = #_(#prov_agent_doc)]
             ProvAgent(ProvAgent),
             #(for agent in agents =>
+                #(if agent.doc.is_some() {
+                    #[doc = #_(#(agent.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+                })
                 #(&agent.as_type_name())(#(&agent.as_type_name())),
             )
         }
@@ -194,13 +239,22 @@ fn gen_agent_union(agents: &[AgentDef]) -> rust::Tokens {
 
 fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
+
+    let entity_doc = include_str!("../../../../domain_docs/entity.md");
+    let prov_entity_doc = include_str!("../../../../domain_docs/prov_entity.md");
+
     quote! {
+        #[doc = #_(#entity_doc)]
         #[allow(clippy::enum_variant_names)]
         #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Entity {
+            #[doc = #_(#prov_entity_doc)]
             ProvEntity(ProvEntity),
             #(for entity in entities =>
+                #(if entity.doc.is_some() {
+                    #[doc = #_(#(entity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+                })
                 #(&entity.as_type_name())(#(&entity.as_type_name())),
             )
         }
@@ -209,13 +263,22 @@ fn gen_entity_union(entities: &[EntityDef]) -> rust::Tokens {
 
 fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
     let union_macro = rust::import("chronicle::async_graphql", "Union").qualified();
+
+    let activity_doc = include_str!("../../../../domain_docs/activity.md");
+    let prov_activity_doc = include_str!("../../../../domain_docs/prov_activity.md");
+
     quote! {
+        #[doc = #_(#activity_doc)]
         #[allow(clippy::enum_variant_names)]
         #[allow(clippy::upper_case_acronyms)]
         #[derive(#union_macro)]
         pub enum Activity {
+            #[doc = #_(#prov_activity_doc)]
             ProvActivity(ProvActivity),
             #(for activity in activities =>
+                #(if activity.doc.is_some() {
+                    #[doc = #_(#(activity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+                })
                 #(&activity.as_type_name())(#(&activity.as_type_name())),
             )
         }
@@ -238,6 +301,18 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     let date_time = &rust::import("chronicle::chrono", "DateTime");
     let utc = &rust::import("chronicle::chrono", "Utc");
     let chronicle_json = &rust::import("chronicle::common::prov", "ChronicleJSON");
+
+    let end_doc = include_str!("../../../../domain_docs/end.md");
+    let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
+    let generated_doc = include_str!("../../../../domain_docs/generated.md");
+    let id_doc = include_str!("../../../../domain_docs/id.md");
+    let namespace_doc = include_str!("../../../../domain_docs/namespace.md");
+    let start_doc = include_str!("../../../../domain_docs/start.md");
+    let type_doc = include_str!("../../../../domain_docs/type.md");
+    let used_doc = include_str!("../../../../domain_docs/used.md");
+    let was_associated_with_doc = include_str!("../../../../domain_docs/was_associated_with.md");
+    let was_informed_by_doc = include_str!("../../../../domain_docs/was_informed_by.md");
+
     quote! {
     #(register(activity_impl))
 
@@ -245,32 +320,42 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     pub struct #(&activity.as_type_name())(#abstract_activity);
 
     #[#object(name = #_(#(activity.as_type_name())))]
+    #(if activity.doc.is_some() {
+        #[doc = #_(#(activity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+    })
     impl #(&activity.as_type_name()) {
+        #[doc = #_(#id_doc)]
         async fn id(&self) -> #activity_id {
             #activity_id::from_external_id(&*self.0.external_id)
         }
 
+        #[doc = #_(#namespace_doc)]
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
             #activity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#external_id_doc)]
         async fn external_id(&self) -> &str {
             &self.0.external_id
         }
 
+        #[doc = #_(#start_doc)]
         async fn started(&self) -> Option<#date_time<#utc>> {
             self.0.started.map(|x| #date_time::from_utc(x, #utc))
         }
 
+        #[doc = #_(#end_doc)]
         async fn ended(&self) -> Option<#date_time<#utc>> {
             self.0.ended.map(|x| #date_time::from_utc(x, #utc))
         }
 
+        #[doc = #_(#type_doc)]
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
             self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
         }
 
+        #[doc = #_(#was_associated_with_doc)]
         async fn was_associated_with<'a>(
             &self,
             ctx: &#context<'a>,
@@ -285,6 +370,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
             )
         }
 
+        #[doc = #_(#used_doc)]
         async fn used<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
             Ok(#activity_impl::used(self.0.id, ctx)
                 .await
@@ -294,6 +380,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                 .collect())
         }
 
+        #[doc = #_(#was_informed_by_doc)]
         async fn was_informed_by<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(activity_union_type_name())>> {
             Ok(#activity_impl::was_informed_by(self.0.id, ctx)
                 .await
@@ -303,6 +390,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
                 .collect())
         }
 
+        #[doc = #_(#generated_doc)]
         async fn generated<'a>(
             &self,
             ctx: &#context<'a>,
@@ -317,6 +405,9 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 
         #(for attribute in &activity.attributes =>
         #[graphql(name = #_(#(attribute.preserve_inflection())))]
+        #(if attribute.doc.is_some() {
+            #[doc = #_(#(attribute.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+        })
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
               PrimitiveType::String =>
@@ -364,6 +455,17 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
+    let evidence_doc = include_str!("../../../../domain_docs/evidence.md");
+    let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
+    let had_primary_source_doc = include_str!("../../../../domain_docs/had_primary_source.md");
+    let id_doc = include_str!("../../../../domain_docs/id.md");
+    let namespace_doc = include_str!("../../../../domain_docs/namespace.md");
+    let type_doc = include_str!("../../../../domain_docs/type.md");
+    let was_derived_from_doc = include_str!("../../../../domain_docs/was_derived_from.md");
+    let was_generated_by_doc = include_str!("../../../../domain_docs/was_generated_by.md");
+    let was_quoted_from_doc = include_str!("../../../../domain_docs/was_quoted_from.md");
+    let was_revision_of_doc = include_str!("../../../../domain_docs/was_revision_of.md");
+
     quote! {
 
     #(register(entity_impl))
@@ -371,28 +473,37 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     pub struct #(&entity.as_type_name())(#abstract_entity);
 
     #[#object(name = #_(#(entity.as_type_name())))]
+    #(if entity.doc.is_some() {
+        #[doc = #_(#(entity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+    })
     impl #(&entity.as_type_name()){
+        #[doc = #_(#id_doc)]
         async fn id(&self) -> #entity_id {
             #entity_id::from_external_id(&*self.0.external_id)
         }
 
+        #[doc = #_(#namespace_doc)]
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
             #entity_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#external_id_doc)]
         async fn external_id(&self) -> &str {
             &self.0.external_id
         }
 
+        #[doc = #_(#type_doc)]
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
             self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
         }
 
+        #[doc = #_(#evidence_doc)]
         async fn evidence<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#evidence>> {
             #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_generated_by_doc)]
         async fn was_generated_by<'a>(
             &self,
             ctx: &#context<'a>,
@@ -405,6 +516,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                 .collect())
         }
 
+        #[doc = #_(#was_derived_from_doc)]
         async fn was_derived_from<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
             Ok(#entity_impl::was_derived_from(self.0.id, ctx)
                 .await
@@ -414,6 +526,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                 .collect())
         }
 
+        #[doc = #_(#had_primary_source_doc)]
         async fn had_primary_source<'a>(
             &self,
             ctx: &#context<'a>,
@@ -428,6 +541,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
             )
         }
 
+        #[doc = #_(#was_revision_of_doc)]
         async fn was_revision_of<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
             Ok(#entity_impl::was_revision_of(self.0.id, ctx)
                 .await
@@ -436,6 +550,8 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
                 .map(map_entity_to_domain_type)
                 .collect())
         }
+
+        #[doc = #_(#was_quoted_from_doc)]
         async fn was_quoted_from<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<#(entity_union_type_name())>> {
             Ok(#entity_impl::was_quoted_from(self.0.id, ctx)
                 .await
@@ -446,6 +562,9 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         }
 
         #(for attribute in &entity.attributes =>
+        #(if attribute.doc.is_some() {
+            #[doc = #_(#(attribute.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+        })
         #[graphql(name = #_(#(attribute.preserve_inflection())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
@@ -494,6 +613,13 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
+    let acted_on_behalf_of_doc = include_str!("../../../../domain_docs/acted_on_behalf_of.md");
+    let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
+    let id_doc = include_str!("../../../../domain_docs/id.md");
+    let identity_doc = include_str!("../../../../domain_docs/identity.md");
+    let namespace_doc = include_str!("../../../../domain_docs/namespace.md");
+    let type_doc = include_str!("../../../../domain_docs/type.md");
+
     quote! {
 
     #(register(agent_impl))
@@ -502,23 +628,31 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
     pub struct #(agent.as_type_name())(#abstract_agent);
 
     #[#object(name = #_(#(agent.as_type_name())))]
+    #(if agent.doc.is_some() {
+        #[doc = #_(#(agent.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+    })
     impl #(agent.as_type_name()) {
+        #[doc = #_(#id_doc)]
         async fn id(&self) -> #agent_id {
             #agent_id::from_external_id(&*self.0.external_id)
         }
 
+        #[doc = #_(#external_id_doc)]
         async fn external_id(&self) -> &str {
             &self.0.external_id
         }
 
+        #[doc = #_(#namespace_doc)]
         async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
             #agent_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#identity_doc)]
         async fn identity<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#identity>> {
             #agent_impl::identity(self.0.identity_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#acted_on_behalf_of_doc)]
         async fn acted_on_behalf_of<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<AgentRef>> {
             Ok(#agent_impl::acted_on_behalf_of(self.0.id, ctx)
                 .await
@@ -530,6 +664,9 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
         }
 
         #(for attribute in &agent.attributes =>
+        #(if attribute.doc.is_some() {
+            #[doc = #_(#(attribute.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+        })
         #[graphql(name = #_(#(attribute.preserve_inflection())))]
         async fn #(attribute.as_property())<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#(attribute.as_scalar_type())>> {
             Ok(#(match attribute.primitive_type {
@@ -560,6 +697,7 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
             }))
         })
 
+        #[doc = #_(#type_doc)]
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
             self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
@@ -573,6 +711,7 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
     let domain_type_id = &rust::import("chronicle::common::prov", "DomaintypeId");
+
     quote! {
     #[derive(#input_object, Clone)]
     pub struct ProvAgentAttributes {
@@ -690,7 +829,7 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
             _ => #(agent_union_type_name())::ProvAgent(ProvAgent(agent))
         }
     }
-    /// Maps to an association, missing roles, or ones that are no longer specifified in the domain will be returned as RoleType::Unspecified
+    /// Maps to an association, missing roles, or ones that are no longer specified in the domain will be returned as RoleType::Unspecified
     fn map_association_to_role(responsible: #agent_impl, delegate: Option<#agent_impl>, responsible_role: Option<#role>, delegate_role: Option<#role>) -> Association {
         Association {
             responsible: match responsible_role.as_ref().map(|x| x.as_str()) {
@@ -766,6 +905,14 @@ fn gen_query() -> rust::Tokens {
     let timeline_order =
         &rust::import("chronicle::api::chronicle_graphql", "TimelineOrder").qualified();
 
+    let activities_by_type_doc = include_str!("../../../../domain_docs/activities_by_type.md");
+    let activity_by_id_doc = include_str!("../../../../domain_docs/activity_by_id.md");
+    let activity_timeline_doc = include_str!("../../../../domain_docs/activity_timeline.md");
+    let agent_by_id_doc = include_str!("../../../../domain_docs/agent_by_id.md");
+    let agents_by_type_doc = include_str!("../../../../domain_docs/agents_by_type.md");
+    let entities_by_type_doc = include_str!("../../../../domain_docs/entities_by_type.md");
+    let entity_by_id_doc = include_str!("../../../../domain_docs/entity_by_id.md");
+
     quote! {
     #[derive(Copy, Clone)]
     pub struct Query;
@@ -773,6 +920,7 @@ fn gen_query() -> rust::Tokens {
     #[#graphql_object]
     impl Query {
 
+    #[doc = #_(#activity_timeline_doc)]
     #[allow(clippy::too_many_arguments)]
     pub async fn activity_timeline<'a>(
         &self,
@@ -829,6 +977,7 @@ fn gen_query() -> rust::Tokens {
             Ok(new_connection)
     }
 
+    #[doc = #_(#agents_by_type_doc)]
     #[allow(clippy::too_many_arguments)]
     pub async fn agents_by_type<'a>(
         &self,
@@ -866,6 +1015,7 @@ fn gen_query() -> rust::Tokens {
         Ok(new_connection)
     }
 
+    #[doc = #_(#activities_by_type_doc)]
     #[allow(clippy::too_many_arguments)]
     pub async fn activities_by_type<'a>(
         &self,
@@ -903,6 +1053,7 @@ fn gen_query() -> rust::Tokens {
         Ok(new_connection)
     }
 
+    #[doc = #_(#entities_by_type_doc)]
     #[allow(clippy::too_many_arguments)]
     pub async fn entities_by_type<'a>(
         &self,
@@ -940,6 +1091,7 @@ fn gen_query() -> rust::Tokens {
         Ok(new_connection)
     }
 
+    #[doc = #_(#agent_by_id_doc)]
     pub async fn agent_by_id<'a>(
         &self,
         ctx: &#graphql_context<'a>,
@@ -951,6 +1103,8 @@ fn gen_query() -> rust::Tokens {
             .map_err(|e| #async_graphql_error_extensions::extend(&e))?
             .map(map_agent_to_domain_type))
     }
+
+    #[doc = #_(#activity_by_id_doc)]
     pub async fn activity_by_id<'a>(
         &self,
         ctx: &#graphql_context<'a>,
@@ -963,6 +1117,7 @@ fn gen_query() -> rust::Tokens {
             .map(map_activity_to_domain_type))
     }
 
+    #[doc = #_(#entity_by_id_doc)]
     pub async fn entity_by_id<'a>(
         &self,
         ctx: &#graphql_context<'a>,
@@ -997,13 +1152,35 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 
     let abstract_attributes =
         &rust::import("chronicle::common::attributes", "Attributes").qualified();
+
+    let acted_on_behalf_of_doc = include_str!("../../../../domain_docs/acted_on_behalf_of.md");
+    let define_doc = include_str!("../../../../domain_docs/define.md");
+    let end_doc = include_str!("../../../../domain_docs/end_activity.md");
+    let generate_key_doc = include_str!("../../../../domain_docs/generate_key.md");
+    let had_primary_source_doc = include_str!("../../../../domain_docs/had_primary_source.md");
+    let has_attachment_doc = include_str!("../../../../domain_docs/has_attachment.md");
+    let instant_activity_doc = include_str!("../../../../domain_docs/instant_activity.md");
+    let prov_activity_doc = include_str!("../../../../domain_docs/prov_activity.md");
+    let prov_agent_doc = include_str!("../../../../domain_docs/prov_agent.md");
+    let prov_entity_doc = include_str!("../../../../domain_docs/prov_entity.md");
+    let start_doc = include_str!("../../../../domain_docs/start_activity.md");
+    let used_doc = include_str!("../../../../domain_docs/used.md");
+    let was_associated_with_doc = include_str!("../../../../domain_docs/was_associated_with.md");
+    let was_derived_from_doc = include_str!("../../../../domain_docs/was_derived_from.md");
+    let was_generated_by_doc = include_str!("../../../../domain_docs/was_generated_by.md");
+    let was_informed_by_doc = include_str!("../../../../domain_docs/was_informed_by.md");
+    let was_quoted_from_doc = include_str!("../../../../domain_docs/was_quoted_from.md");
+    let was_revision_of_doc = include_str!("../../../../domain_docs/was_revision_of.md");
+
     quote! {
     #[derive(Copy, Clone)]
     pub struct Mutation;
 
     #[#graphql_object]
     impl Mutation {
-
+        #[doc = #_(#define_doc)]
+        #[doc = ""]
+        #[doc = #_(#prov_agent_doc)]
         pub async fn define_agent<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1015,6 +1192,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #(for agent in domain.agents.iter() =>
+            #[doc = #_(#define_doc)]
+            #(if agent.doc.is_some() {
+                #[doc = ""]
+                #[doc = #_(#(agent.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #(if agent.attributes.is_empty() {
             #[graphql(name = #_(#(agent.as_method_name())))]
             pub async fn #(&agent.as_property())<'a>(
@@ -1044,6 +1226,9 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
         )
 
+        #[doc = #_(#define_doc)]
+        #[doc = ""]
+        #[doc = #_(#prov_activity_doc)]
         pub async fn define_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1055,6 +1240,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #(for activity in domain.activities.iter() =>
+            #[doc = #_(#define_doc)]
+            #(if activity.doc.is_some() {
+                #[doc = ""]
+                #[doc = #_(#(activity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #(if activity.attributes.is_empty() {
             #[graphql(name = #_(#(activity.as_method_name())))]
             pub async fn #(&activity.as_property())<'a>(
@@ -1084,6 +1274,9 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
         )
 
+        #[doc = #_(#define_doc)]
+        #[doc = ""]
+        #[doc = #_(#prov_entity_doc)]
         pub async fn define_entity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1095,6 +1288,11 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         }
 
         #(for entity in domain.entities.iter() =>
+            #[doc = #_(#define_doc)]
+            #(if entity.doc.is_some() {
+                #[doc = ""]
+                #[doc = #_(#(entity.doc.as_ref().map(|s| s.to_owned()).unwrap_or_default()))]
+            })
             #(if entity.attributes.is_empty() {
             #[graphql(name = #_(#(entity.as_method_name())))]
             pub async fn #(&entity.as_property())<'a>(
@@ -1124,6 +1322,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
         )
 
+        #[doc = #_(#acted_on_behalf_of_doc)]
         pub async fn acted_on_behalf_of<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1137,6 +1336,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::acted_on_behalf_of(ctx, namespace, responsible.into(), delegate.into(), activity, role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_derived_from_doc)]
         pub async fn was_derived_from<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1148,6 +1348,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_revision_of_doc)]
         pub async fn was_revision_of<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1158,6 +1359,8 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_revision_of(ctx, namespace, generated_entity.into(), used_entity.into())
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
+
+        #[doc = #_(#had_primary_source_doc)]
         pub async fn had_primary_source<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1173,6 +1376,8 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             )
             .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
+
+        #[doc = #_(#was_quoted_from_doc)]
         pub async fn was_quoted_from<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1184,6 +1389,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#generate_key_doc)]
         pub async fn generate_key<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1193,6 +1399,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::generate_key(ctx, id.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#instant_activity_doc)]
         pub async fn instant_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1205,6 +1412,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::instant_activity(ctx, id.into(), namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#start_doc)]
         pub async fn start_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1217,6 +1425,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::start_activity(ctx, id.into(), namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#end_doc)]
         pub async fn end_activity<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1229,6 +1438,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::end_activity(ctx, id.into(), namespace, agent, time).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_associated_with_doc)]
         pub async fn was_associated_with<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1240,7 +1450,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_associated_with(ctx, namespace, responsible.into(), activity.into(), role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
-
+        #[doc = #_(#used_doc)]
         pub async fn used<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1251,6 +1461,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::used(ctx, activity.into(), id.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_informed_by_doc)]
         pub async fn was_informed_by<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1261,6 +1472,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_informed_by(ctx, activity.into(), informing_activity.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_generated_by_doc)]
         pub async fn was_generated_by<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1271,6 +1483,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_generated_by(ctx, activity.into(), id.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#has_attachment_doc)]
         pub async fn has_attachment<'a>(
             &self,
             ctx: &#graphql_context<'a>,
@@ -1290,14 +1503,17 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
 fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     let prov_agent = AgentDef {
         external_id: "ProvAgent".to_owned(),
+        doc: Some(include_str!("../../../../domain_docs/prov_agent.md").to_string()),
         attributes: vec![],
     };
     let prov_activity = ActivityDef {
         external_id: "ProvActivity".to_owned(),
+        doc: Some(include_str!("../../../../domain_docs/prov_activity.md").to_string()),
         attributes: vec![],
     };
     let prov_entity = EntityDef {
         external_id: "ProvEntity".to_owned(),
+        doc: Some(include_str!("../../../../domain_docs/prov_entity.md").to_string()),
         attributes: vec![],
     };
 

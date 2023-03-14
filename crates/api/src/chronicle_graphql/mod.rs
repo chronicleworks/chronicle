@@ -72,6 +72,11 @@ pub struct Identity {
 }
 
 #[Object]
+/// # `chronicle:Identity`
+///
+/// Represents a cryptographic identity for an agent, supporting a single current
+/// signing identity via `chronicle:hasIdentity` and historical identities via
+/// `chronicle:hadIdentity`.
 impl Identity {
     async fn public_key(&self) -> &str {
         &self.public_key
@@ -112,6 +117,10 @@ pub struct Evidence {
 }
 
 #[Object]
+/// # `chronicle:Evidence`
+///
+/// `Evidence` is a Chronicle-specific provenance feature that simplifies the
+/// association of a cryptographic signature with an `Entity`.
 impl Evidence {
     async fn signature_time(&self) -> DateTime<Utc> {
         DateTime::from_utc(self.signature_time, Utc)
@@ -134,6 +143,11 @@ pub struct Namespace {
 }
 
 #[Object]
+/// # `chronicle:Namespace`
+///
+/// An IRI containing an external id and uuid part, used for disambiguation.
+/// In order to work on the same namespace discrete Chronicle instances must share
+/// the uuid part.
 impl Namespace {
     async fn external_id(&self) -> &str {
         &self.external_id
@@ -145,6 +159,16 @@ impl Namespace {
 }
 
 #[derive(Queryable, SimpleObject)]
+/// # `Submission`
+///
+/// ## Fields
+///
+/// * `context` - the activity, agent, or entity to which the operation relates
+///
+/// * `submission_result` - result type of an operation
+///
+/// * `tx_id` - transaction id for a submitted operation; returns `null` if `submission_result`
+/// is `SubmissionResult::AlreadyRecorded`
 pub struct Submission {
     context: String,
     submission_result: SubmissionResult,
@@ -152,6 +176,12 @@ pub struct Submission {
 }
 
 #[derive(Enum, PartialEq, Eq, Clone, Copy)]
+/// # `SubmissionResult` result types
+///
+/// ## Variants
+///
+/// * `Submission` - operation has been submitted
+/// * `AlreadyRecorded` - operation will not result in data changes and has not been submitted
 pub enum SubmissionResult {
     Submission,
     AlreadyRecorded,
@@ -175,6 +205,9 @@ impl Submission {
     }
 }
 
+/// # `TimelineOrder`
+///
+/// Specify the order in which multiple results of query data are returned
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum TimelineOrder {
     NewestFirst,
@@ -324,6 +357,10 @@ impl CommitNotification {
 pub struct Subscription;
 
 #[Subscription]
+/// GraphQL subscription[^note] to notify clients when a Chronicle operation has been sent to a
+/// backend ledger and when that operation has been applied to both the ledger and Chronicle.
+///
+/// [^note](https://graphql.org/blog/subscriptions-in-graphql-and-relay/)
 impl Subscription {
     async fn commit_notifications<'a>(
         &self,

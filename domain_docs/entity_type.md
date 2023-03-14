@@ -1,0 +1,3 @@
+# `EntityType`
+
+Domain `Entity` subtypes

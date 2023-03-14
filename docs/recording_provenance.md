@@ -629,7 +629,7 @@ role-based modeling.
 mutation {
   startActivity(
     id: {id: "chronicle:activity:september-2018-review"},
-    time:"2002-10-02T15:00:00Z"
+    time: "2002-10-02T15:00:00Z"
   )
 }
 ```
@@ -657,7 +657,7 @@ modeling.
 mutation {
   endActivity(
     id: {id: "chronicle:activity:september-2018-review" },
-    time:"2002-10-02T15:00:00Z"
+    time: "2002-10-02T15:00:00Z"
   )
 }
 ```
@@ -678,7 +678,7 @@ same operation.
 mutation {
   instantActivity(
     id: { id: "chronicle:activity:september-2018-review" },
-    time:"2002-10-02T15:00:00Z"
+    time: "2002-10-02T15:00:00Z"
   )
 }
 ```
@@ -770,10 +770,10 @@ from the usedEntity.
 
 ```graphql
 mutation {
-  wasDerivedFrom {
+  wasDerivedFrom(
     usedEntity: {id: "chronicle:entity:anaphylaxis-assessment-question" },
     generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
-  }
+  )
 }
 ```
 
@@ -791,10 +791,10 @@ of the usedEntity.
 
 ```graphql
 mutation {
-  hadPrimarySource {
+  hadPrimarySource(
     usedEntity: {id: "chronicle:entity:anaphylaxis-assessment-question" },
     generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
-  }
+  )
 }
 ```
 
@@ -807,10 +807,10 @@ takes two entities - the generatedEntity being a revision of the usedEntity.
 
 ```graphql
 mutation {
-  wasRevisionOf {
+  wasRevisionOf(
     usedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-1" },
     generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-2" },
-  }
+  )
 }
 ```
 
@@ -824,10 +824,10 @@ usedEntity.
 
 ```graphql
 mutation {
-  wasQuotedFrom {
+  wasQuotedFrom(
     usedEntity: {id: "chronicle:entity:evidence-2321231" },
     generatedEntity: {id: "chronicle:entity:anaphylaxis-guidance-revision-2" },
-  }
+  )
 }
 ```
 

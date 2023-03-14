@@ -1,0 +1,3 @@
+# `AgentType`
+
+Domain `Agent` subtypes

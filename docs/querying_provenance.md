@@ -87,7 +87,7 @@ return all activity types before the time specified in [to](#to).
 
 #### to
 
-The time in RFC3339 format to return activities until. Nor specifying this will
+The time in RFC3339 format to return activities until. Not specifying this will
 return all activity types after the time specified in [from](#from).
 
 #### after
@@ -102,37 +102,40 @@ argument - for reverse pagination.
 
 #### first
 
-An integer controlling page size for forward pagination. Defaults to 20
+An integer controlling page size for forward pagination. Defaults to 20.
 
 #### last
 
-An integer controlling page size for reverse pagination. Defaults to 20
+An integer controlling page size for reverse pagination. Defaults to 20.
 
 ## activitiesByType
 
 An activity could be defined like so:
 
 ```graphql
-  mutation {
-    defineItemCertifiedActivity(externalId:"certification1", attributes: { certIdAttribute: "123" }) {
-        context
-    }
+mutation {
+  defineItemCertifiedActivity(
+      externalId: "certification1",
+      attributes: { certIdAttribute: "123" }
+  ) {
+      context
   }
+}
 ```
 
 A user could query all activities of that type as in the following example:
 
 ```graphql
-  query {
-    activitiesByType(activityType: ItemCertifiedActivity) {
-      nodes {
-        ...on ItemCertifiedActivity {
-          id
-          certIdAttribute
-        }
+query {
+  activitiesByType(activityType: ItemCertifiedActivity) {
+    nodes {
+      ...on ItemCertifiedActivity {
+        id
+        certIdAttribute
       }
     }
   }
+}
 ```
 
 ## agentsByType
@@ -140,26 +143,29 @@ A user could query all activities of that type as in the following example:
 An agent could be defined like so:
 
 ```graphql
-  mutation {
-    defineContractorAgent(externalId:"contractor1", attributes: { locationAttribute: "Shenzhen" }) {
-        context
-    }
+mutation {
+  defineContractorAgent(
+      externalId: "contractor1",
+      attributes: { locationAttribute: "Shenzhen" }
+  ) {
+      context
   }
+}
 ```
 
 A user could query all agents of that type as in the following example:
 
 ```graphql
-  query {
-    agentsByType(agentType: ContractorAgent) {
-      nodes {
-        ...on ContractorAgent {
-          id
-          location
-        }
+query {
+  agentsByType(agentType: ContractorAgent) {
+    nodes {
+      ...on ContractorAgent {
+        id
+        location
       }
     }
   }
+}
 ```
 
 ## entitiesByType
@@ -168,23 +174,26 @@ An entity could be defined like so:
 
 ```graphql
 mutation {
-    defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "something" }) {
-        context
-    }
+  defineCertificateEntity(
+      externalId: "testentity1",
+      attributes: { certIdAttribute: "something" }
+  ) {
+      context
   }
+}
 ```
 
 A user could query all entities of that type as in the following example:
 
 ```graphql
 query {
-    entitiesByType(entityType: CertificateEntity) {
-      nodes {
-        ...on CertificateEntity {
-          id
-        }
+  entitiesByType(entityType: CertificateEntity) {
+    nodes {
+      ...on CertificateEntity {
+        id
       }
     }
+  }
 }
 ```
 
@@ -193,22 +202,28 @@ query {
 An activity could be defined like so:
 
 ```graphql
-defineItemCertifiedActivity(externalId: "externalid", attributes: { certIdAttribute: "234" }
+mutation {
+  defineItemCertifiedActivity(
+      externalId: "externalid",
+      attributes: { certIdAttribute: "234" }
   ) {
-    context
+      context
   }
+}
 ```
 
 A user could query that activity in the following way:
 
 ```graphql
-activityById(id: {externalId: "externalid" }) {
+query {
+  activityById(id: {externalId: "externalid" }) {
     ... on ItemCertifiedActivity {
       id
       externalId
       certIdAttribute
     }
   }
+}
 ```
 
 ## agentById
@@ -216,22 +231,28 @@ activityById(id: {externalId: "externalid" }) {
 An agent could be defined like so:
 
 ```graphql
-defineContractorAgent(externalId: "externalid", attributes: { locationAttribute: "location" }
+mutation {
+  defineContractorAgent(
+      externalId: "externalId",
+      attributes: { locationAttribute: "location" }
   ) {
-    context
+      context
   }
+}
 ```
 
 A user could query that agent in the following way:
 
 ```graphql
-agentById(id: {externalId: "externalid" }) {
+query {
+    agentById(id: {externalId: "externalid" }) {
     ... on ContractorAgent {
       id
       externalId
       locationAttribute
     }
   }
+}
 ```
 
 ## entityById
@@ -239,22 +260,28 @@ agentById(id: {externalId: "externalid" }) {
 An entity could be defined like so:
 
 ```graphql
-defineItemEntity(externalId: "externalid", attributes: { partIdAttribute: "432" }
+mutation {
+  defineItemEntity(
+      externalId: "externalid",
+      attributes: { partIdAttribute: "432" }
   ) {
-    context
+      context
   }
+}
 ```
 
-A user could query that entity in the following way:
+A user could query that activity in the following way:
 
 ```graphql
-entityById(id: {externalId: "externalid" }) {
+query {
+  entityById(id: {externalId: "externalid" }) {
     ... on ItemEntity {
       id
       externalId
       partIdAttribute
     }
   }
+}
 ```
 
 ## Returned Objects
