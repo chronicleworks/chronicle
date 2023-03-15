@@ -34,7 +34,7 @@ use poem::{
     Endpoint, EndpointExt, IntoResponse, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
@@ -420,7 +420,7 @@ pub struct SecurityConf {
     jwt_must_claim: HashMap<String, String>,
     allow_anonymous: bool,
     opa: ExecutorContext,
-    cors_open: bool,
+    open_cors: bool,
 }
 
 impl SecurityConf {
@@ -431,7 +431,7 @@ impl SecurityConf {
         jwt_must_claim: HashMap<String, String>,
         allow_anonymous: bool,
         opa: ExecutorContext,
-        cors_open: bool,
+        open_cors: bool,
     ) -> Self {
         Self {
             jwks_uri,
@@ -440,7 +440,7 @@ impl SecurityConf {
             jwt_must_claim,
             allow_anonymous,
             opa,
-            cors_open,
+            open_cors,
         }
     }
 }
@@ -787,15 +787,7 @@ where
             .data(AuthId::anonymous())
             .finish();
 
-        if sec.cors_open {
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                match open::that(format!("http://{}", address)) {
-                    Ok(()) => (),
-                    Err(err) => panic!("An error occurred when opening '{}': {}", address, err),
-                }
-            });
-
+        if sec.open_cors {
             let app = Route::new()
                 .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
                 .at("/ws", get(GraphQLSubscription::new(schema.clone())))
