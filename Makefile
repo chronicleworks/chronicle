@@ -66,11 +66,11 @@ $(MARKERS)/binfmt:
 # Run the compiler for host and target, then extract the binaries
 .PHONY: tested-$(ISOLATION_ID)
 test: tested-$(ISOLATION_ID)
-tested-$(ISOLATION_ID): ensure-context-chronicle
+tested-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
-		--builder ctx-$(ISOLATION_ID) \
+		--builder ctx-$(ISOLATION_ID)-$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--target test \
 		--load
@@ -84,22 +84,31 @@ tested-$(ISOLATION_ID): ensure-context-chronicle
 
 .PHONY: test-e2e
 test: test-e2e
+define arch-contexts =
+.PHONY: $(1)-ensure-context
+$(1)-ensure-context: $(MARKERS)/binfmt
+	docker buildx create --name ctx-$(ISOLATION_ID)-$(1) \
+		--driver docker-container \
+		--bootstrap || true
+	docker buildx use ctx-$(ISOLATION_ID)-$(1)
+
+.PHONY: clean-$(1)-ensure-context
+clean: clean-$(1)-ensure-context
+clean-$(1)-ensure-context:
+	@docker buildx rm ctx-$(ISOLATION_ID)-$(1) || true
+
+endef
+$(foreach arch,$(ARCHS),$(eval $(call arch-contexts,$(arch))))
+
 
 define multi-arch-docker =
 
-.PHONY: ensure-context-$(1)
-$(1)-$(2)-ensure-context: $(MARKERS)/binfmt
-	docker buildx create --name ctx-$(ISOLATION_ID) \
-		--driver docker-container \
-		--bootstrap || true
-	docker buildx use ctx-$(ISOLATION_ID)
-
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(1)-$(2)-ensure-context
+$(1)-$(2)-build: $(2)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
-		--builder ctx-$(ISOLATION_ID) \
+		--builder ctx-$(ISOLATION_ID)-$(2) \
 		--platform linux/$(2) \
 		--target $(1) \
 		--load
