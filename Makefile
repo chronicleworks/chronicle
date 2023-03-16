@@ -104,7 +104,8 @@ $(1)-$(2)-build: $(1)-$(2)-ensure-context
 		--target $(1) \
 		--load
 
-$(1)-manifest: $(1)-$(2)-build
+$(1)-manifest: $(1)-$(2)-manifest
+$(1)-$(2)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
