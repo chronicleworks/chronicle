@@ -65,23 +65,22 @@ $(MARKERS)/binfmt:
 
 # Run the compiler for host and target, then extract the binaries
 .PHONY: tested-$(ISOLATION_ID)
+test: tested-$(ISOLATION_ID)
 tested-$(ISOLATION_ID): ensure-context-chronicle
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID) \
 		--platform linux/$(HOST_ARCHITECTURE) \
-		--target tested-artifacts \
-	  --cache-to type=local,dest=.buildx-cache \
-    --cache-from type=local,src=.buildx-cache \
+		--target test \
 		--load
 
 	rm -rf .artifacts
 	mkdir -p .artifacts
 
 	container_id=$$(docker create tested-artifacts:${ISOLATION_ID}); \
-		docker cp $$container_id:/artifacts `pwd`/.artifacts/;  \
-		docker rm $$container_id;
+		docker cp $$container_id:/artifacts `pwd`/.artifacts/ \
+		&& docker rm $$container_id
 
 .PHONY: test-e2e
 test: test-e2e
@@ -96,12 +95,11 @@ $(1)-$(2)-ensure-context: $(MARKERS)/binfmt
 	docker buildx use ctx-$(ISOLATION_ID)
 
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(1)-$(2)-ensure-context tested-$(ISOLATION_ID)
+$(1)-$(2)-build: $(1)-$(2)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID) \
-		--build-arg TARGETARCH=$(2) \
 		--platform linux/$(2) \
 		--target $(1) \
 		--load
@@ -112,7 +110,7 @@ $(1)-manifest: $(1)-$(2)-build
 
 $(1): $(1)-$(2)-build
 
-build: build-opa $(1)
+build: $(1)
 
 build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
@@ -157,24 +155,22 @@ endif
 OPA_VERSION=v0.49.2
 OPA_DOWNLOAD_URL=https://openpolicyagent.org/downloads/$(OPA_VERSION)/opa_$(OS)_$(ARCH)$(OPA_SUFFIX)
 
-.PHONY: download-opa
-download-opa:
-	if [ ! -r build/opa ]; then \
-		curl -sSL -o build/opa $(OPA_DOWNLOAD_URL); \
-		chmod 755 build/opa; \
-	fi
+build/opa:
+	curl -sSL -o build/opa $(OPA_DOWNLOAD_URL)
+	chmod 755 build/opa
 
-build-opa: download-opa
+build: policies/bundle.tar.gz
+
+policies/bundle.tar.gz: build/opa
+	mkdir -p policies
 	build/opa build -t wasm -o policies/bundle.tar.gz -b policies -e "allow_transactions" -e "common_rules"
 
+test: opa-test
 .PHONY: opa-test
-opa-test: download-opa
+opa-test: build/opa
 	build/opa test -b policies
 
+clean: clean-opa
 .PHONY: clean-opa
 clean-opa:
-	if [ -n "$(wildcard policies/*.tar.gz)" ]; then \
-		rm policies/*.tar.gz; \
-	else \
-		echo "No OPA policy archives to remove."; \
-	fi
+	$(RM) policies/*.tar.gz
