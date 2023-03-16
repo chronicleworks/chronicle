@@ -413,9 +413,65 @@ where
     mutation: Mutation,
 }
 
+pub struct JwksUri {
+    uri: Url,
+}
+
+impl JwksUri {
+    pub fn new(uri: Url) -> Self {
+        Self { uri }
+    }
+}
+
+impl std::fmt::Debug for JwksUri {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            r#"JwksUri {{ uri: Url {{ scheme: {:?}, cannot_be_a_base: {:?}, username: {:?}, password: ***SECRET***, host: {:?}, port: {:?}, path: {:?}, query: {:?}, fragment: {:?} }} }}"#,
+            self.uri.scheme(),
+            self.uri.cannot_be_a_base(),
+            self.uri.username(),
+            self.uri.host(),
+            self.uri.port(),
+            self.uri.path(),
+            self.uri.query(),
+            self.uri.fragment(),
+        )?;
+        Ok(())
+    }
+}
+
+pub struct UserInfoUri {
+    uri: Url,
+}
+
+impl UserInfoUri {
+    pub fn new(uri: Url) -> Self {
+        Self { uri }
+    }
+}
+
+impl std::fmt::Debug for UserInfoUri {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            r#"UserInfoUri {{ uri: Url {{ scheme: {:?}, cannot_be_a_base: {:?}, username: {:?}, password: ***SECRET***, host: {:?}, port: {:?}, path: {:?}, query: {:?}, fragment: {:?} }} }}"#,
+            self.uri.scheme(),
+            self.uri.cannot_be_a_base(),
+            self.uri.username(),
+            self.uri.host(),
+            self.uri.port(),
+            self.uri.path(),
+            self.uri.query(),
+            self.uri.fragment(),
+        )?;
+        Ok(())
+    }
+}
+
 pub struct SecurityConf {
-    jwks_uri: Option<Url>,
-    userinfo_uri: Option<Url>,
+    jwks_uri: Option<JwksUri>,
+    userinfo_uri: Option<UserInfoUri>,
     id_pointer: Option<String>,
     jwt_must_claim: HashMap<String, String>,
     allow_anonymous: bool,
@@ -424,8 +480,8 @@ pub struct SecurityConf {
 
 impl SecurityConf {
     pub fn new(
-        jwks_uri: Option<Url>,
-        userinfo_uri: Option<Url>,
+        jwks_uri: Option<JwksUri>,
+        userinfo_uri: Option<UserInfoUri>,
         id_pointer: Option<String>,
         jwt_must_claim: HashMap<String, String>,
         allow_anonymous: bool,
@@ -787,7 +843,7 @@ where
         let app = match sec.jwks_uri {
             Some(jwks_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
-                tracing::debug!("API endpoint authentication uses {}", jwks_uri);
+                tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
                 Route::new()
                     .at(
                         "/",

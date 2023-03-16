@@ -2,7 +2,9 @@ mod cli;
 mod config;
 
 use api::{
-    chronicle_graphql::{ChronicleGraphQl, ChronicleGraphQlServer, SecurityConf},
+    chronicle_graphql::{
+        ChronicleGraphQl, ChronicleGraphQlServer, JwksUri, SecurityConf, UserInfoUri,
+    },
     Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
 use async_graphql::{async_trait, ObjectType};
@@ -306,13 +308,13 @@ where
 
     if let Some(matches) = matches.subcommand_matches("serve-graphql") {
         let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
-            Some(Url::from_str(uri)?)
+            Some(JwksUri::new(Url::from_str(uri)?))
         } else {
             None
         };
 
         let userinfo_uri = if let Some(uri) = matches.value_of("userinfo-address") {
-            Some(Url::from_str(uri)?)
+            Some(UserInfoUri::new(Url::from_str(uri)?))
         } else {
             None
         };
