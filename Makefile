@@ -6,7 +6,7 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
 
-IMAGES := chronicle chronicle-tp chronicle-builder
+IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl
 ARCHS := amd64 arm64
 COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
