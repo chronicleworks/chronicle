@@ -6,7 +6,7 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
 
-IMAGES := chronicle chronicle-tp chronicle-builder
+IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl
 ARCHS := amd64 arm64
 COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
@@ -65,54 +65,68 @@ $(MARKERS)/binfmt:
 
 # Run the compiler for host and target, then extract the binaries
 .PHONY: tested-$(ISOLATION_ID)
-tested-$(ISOLATION_ID): ensure-context-chronicle
+test: tested-$(ISOLATION_ID)
+tested-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
-		--builder ctx-$(ISOLATION_ID) \
+		--builder ctx-$(ISOLATION_ID)-$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
-		--target tested-artifacts \
-	  --cache-to type=local,dest=.buildx-cache \
-    --cache-from type=local,src=.buildx-cache \
+		--target test \
 		--load
 
 	rm -rf .artifacts
 	mkdir -p .artifacts
 
 	container_id=$$(docker create tested-artifacts:${ISOLATION_ID}); \
-		docker cp $$container_id:/artifacts `pwd`/.artifacts/;  \
-		docker rm $$container_id;
+		docker cp $$container_id:/artifacts `pwd`/.artifacts/ \
+		&& docker rm $$container_id
 
 .PHONY: test-e2e
 test: test-e2e
+define arch-contexts =
+.PHONY: $(1)-ensure-context
+$(1)-ensure-context: $(MARKERS)/binfmt
+	docker buildx create --name ctx-$(ISOLATION_ID)-$(1) \
+		--driver docker-container \
+		--bootstrap || true
+	docker buildx use ctx-$(ISOLATION_ID)-$(1)
+
+.PHONY: clean-$(1)-ensure-context
+clean: clean-$(1)-ensure-context
+clean-$(1)-ensure-context:
+	@docker buildx rm ctx-$(ISOLATION_ID)-$(1) || true
+
+endef
+$(foreach arch,$(ARCHS),$(eval $(call arch-contexts,$(arch))))
+
 
 define multi-arch-docker =
 
-.PHONY: ensure-context-$(1)
-$(1)-$(2)-ensure-context: $(MARKERS)/binfmt
-	docker buildx create --name ctx-$(ISOLATION_ID) \
-		--driver docker-container \
-		--bootstrap || true
-	docker buildx use ctx-$(ISOLATION_ID)
-
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(1)-$(2)-ensure-context tested-$(ISOLATION_ID)
+$(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
-		--builder ctx-$(ISOLATION_ID) \
-		--build-arg TARGETARCH=$(2) \
+		--builder ctx-$(ISOLATION_ID)-$(2) \
 		--platform linux/$(2) \
 		--target $(1) \
 		--load
 
-$(1)-manifest: $(1)-$(2)-build
+$(1)-manifest: $(1)-$(2)-manifest
+$(1)-$(2)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
+ifeq ($(RELEASABLE), yes)
 $(1): $(1)-$(2)-build
+else
+ifeq ($(2), $(HOST_ARCHITECTURE))
+$(1): $(1)-$(2)-build
+endif
+endif
 
-build: build-opa $(1)
+build: $(1)
 
 build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
@@ -157,24 +171,22 @@ endif
 OPA_VERSION=v0.49.2
 OPA_DOWNLOAD_URL=https://openpolicyagent.org/downloads/$(OPA_VERSION)/opa_$(OS)_$(ARCH)$(OPA_SUFFIX)
 
-.PHONY: download-opa
-download-opa:
-	if [ ! -r build/opa ]; then \
-		curl -sSL -o build/opa $(OPA_DOWNLOAD_URL); \
-		chmod 755 build/opa; \
-	fi
+build/opa:
+	curl -sSL -o build/opa $(OPA_DOWNLOAD_URL)
+	chmod 755 build/opa
 
-build-opa: download-opa
+build: policies/bundle.tar.gz
+
+policies/bundle.tar.gz: build/opa
+	mkdir -p policies
 	build/opa build -t wasm -o policies/bundle.tar.gz -b policies -e "allow_transactions" -e "common_rules"
 
+test: opa-test
 .PHONY: opa-test
-opa-test: download-opa
+opa-test: build/opa
 	build/opa test -b policies
 
+clean: clean-opa
 .PHONY: clean-opa
 clean-opa:
-	if [ -n "$(wildcard policies/*.tar.gz)" ]; then \
-		rm policies/*.tar.gz; \
-	else \
-		echo "No OPA policy archives to remove."; \
-	fi
+	$(RM) policies/*.tar.gz

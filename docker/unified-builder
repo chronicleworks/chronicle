@@ -12,168 +12,233 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM rust:1.65 as base
+ARG RUST_VERSION=1.68
+FROM --platform=${BUILDPLATFORM} rust:${RUST_VERSION} as hostbase
 
-ARG TARGETPLATFORM
-ENV TARGETPLATFORM=${TARGETPLATFORM}
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV OPENSSL_STATIC=true
 
-RUN --mount=type=cache,target=/var/cache/apt \
-  apt-get update && \
-  apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
   build-essential \
   cmake \
-  gcc-x86-64-linux-gnu \
   g++-x86-64-linux-gnu \
-  gcc-aarch64-linux-gnu \
   g++-aarch64-linux-gnu \
-  libssl-dev \
-  libzmq3-dev \
+  libpq5 \
   libpq-dev \
-  protobuf-compiler \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+  protobuf-compiler
 
-ENV VERSION=AUTO_STRICT
-
-ENV PATH=$PATH:/root/.cargo/bin
-
-RUN rustup target add x86_64-unknown-linux-gnu && rustup target add aarch64-unknown-linux-gnu
+RUN rustup target add aarch64-unknown-linux-gnu \
+  && rustup target add x86_64-unknown-linux-gnu
 
 WORKDIR /app
+RUN useradd -m tester \
+  && chown -R tester /app
 
-FROM base AS test
-
-ARG BUILD_ARGS
-COPY Cargo.lock /app
 COPY .cargo /app/.cargo
+COPY Cargo.lock /app
 COPY Cargo.toml /app
 COPY crates /app/crates
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
+
+
+FROM --platform=${BUILDPLATFORM} hostbase AS crossbuild
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG TARGETARCH
+ARG BUILD_ARGS
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  dpkg --add-architecture ${TARGETARCH} \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  liblzma-dev \
+  libpq-dev \
+  libssl-dev \
+  libzmq3-dev
+
+USER root
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  mkdir -p /artifacts/${TARGETARCH} \
+  && chown -R tester \
+  /usr/local/cargo/registry \
+  /app \
+  /artifacts
+
+# If we are doing a cross build, then build once on the host architecture
+# so we get the build script dependencies compiled and cached
+USER tester
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]; then \
+  if [ "${BUILDPLATFORM}" = "linux/arm64" ]; then \
+  export INITIAL_BUILD_TARGET=aarch64-unknown-linux-gnu; \
+  elif [ "${BUILDPLATFORM}" = "linux/amd64" ]; then \
+  export INITIAL_BUILD_TARGET=x86_64-unknown-linux-gnu; \
+  else \
+  echo "Unsupported architecture: ${TARGETPLATFORM}"; \
+  exit 1; \
+  fi \
+  && cargo build --locked --release --target ${INITIAL_BUILD_TARGET} ${BUILD_ARGS} ; \
+  fi
+
+# Now we shuffle out the target architecture dev libraries, but
+# only if we are targeting other than the host architecture
+USER root
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]; then \
+  apt-get remove -y \
+  liblzma-dev \
+  libpq-dev \
+  libssl-dev \
+  libzmq3-dev \
+  && apt-get install -y --no-install-recommends \
+  liblzma-dev:${TARGETARCH} \
+  libpq-dev:${TARGETARCH} \
+  libssl-dev:${TARGETARCH} \
+  libzmq3-dev:${TARGETARCH} ; \
+  fi
+
+# Finally we build the target architecture binaries
+# If our target is the host architecture, then this is the
+# first build, otherwise it is the second
+USER tester
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  mkdir -p /artifacts/${TARGETARCH} \
+  && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then \
+  export CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu; \
+  elif [ "${TARGETPLATFORM}" = "linux/amd64" ]; then \
+  export CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu; \
+  else \
+  echo "Unsupported architecture: ${TARGETPLATFORM}"; \
+  exit 1; \
+  fi \
+  && cargo build --locked --release --target ${CARGO_BUILD_TARGET} ${BUILD_ARGS} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle /artifacts/${TARGETARCH} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle_sawtooth_tp /artifacts/${TARGETARCH} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle-domain-lint /artifacts/${TARGETARCH} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/opactl /artifacts/${TARGETARCH} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/opa-tp /artifacts/${TARGETARCH}
+
+
+FROM --platform=${BUILDPLATFORM} crossbuild AS test
+ARG BUILDPLATFORM
+ARG BUILD_ARGS
 
 # Test on the host only
 # PostgreSQL will not run as root
-RUN useradd -m tester
-RUN chown -R tester .
-USER tester
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-  TARGET=aarch64-unknown-linux-gnu; \
-  elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-  TARGET=x86_64-unknown-linux-gnu; \
-  else \
-  echo "Unsupported architecture: $(TARGETPLATFORM)"; \
-  exit 1; \
-  fi &&\
-  cargo test --release --target $TARGET
+WORKDIR /app
+
 USER root
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  chown -R tester /usr/local/cargo/registry
+
+USER tester
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  if [ "$BUILDPLATFORM" = "linux/arm64" ]; then \
+  export CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu; \
+  elif [ "$BUILDPLATFORM" = "linux/amd64" ]; then \
+  export CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu; \
+  else \
+  echo "Unsupported architecture: $(BUILDPLATFORM)"; \
+  exit 1; \
+  fi \
+  && cargo test --locked --release --target ${CARGO_BUILD_TARGET}
 
 
-FROM test AS tested
-
-ARG BUILD_ARGS
-
-# Build for both target and host
-RUN dpkg --add-architecture amd64
-RUN dpkg --add-architecture arm64
-RUN --mount=type=cache,target=/var/cache/apt \
-  apt-get update && \
-  mkdir -p /artifacts/amd64 && \
-  mkdir -p /artifacts/arm64 && \
-  apt-get remove -y libpq-dev && \
-  apt-get install -y liblzma-dev:arm64 libpq-dev:arm64 && \
-  cargo build --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/opactl /artifacts/arm64 \
-  && mv -f target/aarch64-unknown-linux-gnu/release/opa-tp /artifacts/arm64 \
-  && apt-get remove -y libpq-dev \
-  && apt-get install -y liblzma-dev:amd64 libpq-dev:amd64 \
-  && cargo build --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle /artifacts/amd64 \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle_sawtooth_tp /artifacts/amd64 \
-  && mv -f target/x86_64-unknown-linux-gnu/release/chronicle-domain-lint /artifacts/amd64
+FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as artifacts
+COPY --from=crossbuild --link /artifacts /artifacts
 
 
-FROM  alpine:3.16.3 as tested-artifacts
-COPY --from=tested --link /artifacts /artifacts
-
-# Copy linter to a rustc image for the build platform
-FROM rust:1.65 as chronicle-builder
-
+FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as chronicle-builder
 ARG TARGETARCH
-ENV DEBIAN_FRONTEND=noninteractive
+
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV OPENSSL_STATIC=true
 
-RUN apt-get update && \
-  apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
   build-essential \
   cmake \
   libpq-dev \
   libssl-dev \
   libzmq3-dev \
-  protobuf-compiler \
-  && \
-  apt-get clean && rm -rf /var/lib/apt/lists/*
+  protobuf-compiler
 
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle-domain-lint /usr/local/bin
+COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle-domain-lint /usr/local/bin
 
-WORKDIR /app
 COPY .cargo /app/.cargo
 COPY Cargo.lock /app
 COPY Cargo.toml /app
 COPY crates /app/crates
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
+
+WORKDIR /app
 RUN cargo fetch --locked
 
 
-# Copy untyped chronicle to image
-FROM debian:bullseye-slim AS chronicle
+FROM --platform=${TARGETPLATFORM} debian:bullseye-slim AS final-base
 ARG TARGETARCH
-WORKDIR /
 
-RUN groupadd -g 999 chronicle && \
-  useradd -m -r -u 999 -g chronicle chronicle
-
-RUN apt-get update && \
-  apt-get install -y \
-  libpq5 \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
   ca-certificates \
-  && \
-  apt-get clean && rm -rf /var/lib/apt/lists/*
-
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
+  libpq5
 
 VOLUME /var/lib/chronicle
-
+RUN groupadd -g 999 chronicle && \
+  useradd -m -r -u 999 -g chronicle chronicle
 RUN mkdir -p /var/lib/chronicle \
-  && chown root:bin /usr/local/bin/chronicle \
   && chown -R chronicle:chronicle /var/lib/chronicle \
-  && chmod 755 /usr/local/bin/chronicle /var/lib/chronicle
+  && chmod 755 /var/lib/chronicle
+
+WORKDIR /
+
+
+# Copy untyped chronicle to image
+FROM --platform=${TARGETPLATFORM} final-base AS chronicle
+ARG TARGETARCH
+
+COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle /usr/local/bin
+RUN chmod 755 /usr/local/bin/chronicle \
+  && chown root:bin /usr/local/bin/chronicle
 
 USER chronicle
 
+
 # Copy tp to image
-FROM debian:bullseye-slim AS chronicle-tp
+FROM --platform=${TARGETPLATFORM} final-base AS chronicle-tp
 ARG TARGETARCH
-WORKDIR /
 
-RUN groupadd -g 999 chronicle && \
-  useradd -m -r -u 999 -g chronicle chronicle
+COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
+RUN chmod 755 /usr/local/bin/chronicle_sawtooth_tp \
+  && chown root:bin /usr/local/bin/chronicle_sawtooth_tp
 
-RUN apt-get update && \
-  apt-get install -y \
-  libpq5
+USER chronicle
 
-COPY .artifacts/artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
 
-RUN mkdir -p /var/lib/chronicle \
-  && chown root:bin /usr/local/bin/chronicle_sawtooth_tp \
-  && chown -R chronicle:chronicle /var/lib/chronicle \
-  && chmod 755 /usr/local/bin/chronicle_sawtooth_tp /var/lib/chronicle
+# Copy opa-tp to image
+FROM --platform=${TARGETPLATFORM} final-base AS opa-tp
+ARG TARGETARCH
+
+COPY --from=artifacts /artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
+
+USER chronicle
+
+
+# Copy opactl to image
+FROM --platform=${TARGETPLATFORM} final-base AS opactl
+ARG TARGETARCH
+
+COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
 
 USER chronicle

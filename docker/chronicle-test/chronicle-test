@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 
+HOST=chronicle-sawtooth-api
+PORT=9982
+TIMEOUT=300
 echo "Wait for stack"
+if ! wait-for-it -h $HOST -p $PORT -t $TIMEOUT; then
+  echo "Timed out waiting for $HOST"
+  exit 1
+fi
 sleep 20
 
 echo "Subscribe to commits"
-gq http://chronicle-sawtooth-api:9982/ws -q " \
+gq http://$HOST:$PORT/ws -q " \
 subscription { \
   commitNotifications { \
     stage \
@@ -17,7 +24,7 @@ subscription { \
 sleep 5
 
 echo "Issue query"
-gq http://chronicle-sawtooth-api:9982 -q " \
+gq http://$HOST:$PORT -q " \
 mutation{ \
         defineAgent( \
     externalId: \"test\",  \

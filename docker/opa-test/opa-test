@@ -4,6 +4,15 @@ echo "Create key material"
 RUST_LOG=trace /usr/local/bin/opactl generate --output ./root.pem
 
 echo "Wait for stack"
+HOST=validator
+PORT=4004
+TIMEOUT=300
+if ! wait-for-it -h $HOST -p $PORT -t $TIMEOUT; then
+  echo "Timed out waiting for $HOST"
+  exit 1
+fi
+
 sleep 20
 
-RUST_LOG=trace /usr/local/bin/opactl --sawtooth-address tcp://validator:4004 bootstrap --root-key ./root.pem
+RUST_LOG=trace /usr/local/bin/opactl --sawtooth-address tcp://$HOST:$PORT \
+  bootstrap --root-key ./root.pem
