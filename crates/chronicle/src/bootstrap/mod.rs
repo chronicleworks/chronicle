@@ -340,8 +340,6 @@ where
             ("allow_transactions", "allow_transactions.allowed_users");
         let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
 
-        let open_cors = matches.is_present("unlock-cors");
-
         graphql_server(
             &api,
             &pool,
@@ -354,7 +352,6 @@ where
                 jwt_must_claim,
                 allow_anonymous,
                 opa,
-                open_cors,
             ),
         )
         .await?;
