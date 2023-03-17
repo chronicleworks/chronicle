@@ -43,7 +43,7 @@ repos:
     rev: 3.0.0
     hooks:
       - id: forbid-binary
-        exclude: "^(.*.png|.*.jpg|.*.jpeg|charts/chronicle/charts/*)"
+        exclude: "^(.*.png|.*.jpg|.*.jpeg|charts/chronicle/charts/.*)"
       - id: shellcheck
         args:
           - -a
