@@ -29,7 +29,7 @@ pub enum IdentityError {
 }
 
 /// Contains the scalar ID and identity claims for a user established via JWT
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct JwtId {
     pub id: AgentId,
     pub claims: Value,
@@ -44,9 +44,28 @@ impl JwtId {
     }
 }
 
+impl std::fmt::Debug for JwtId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("JwtId")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Claims from a JWT, referenced in creating an AgentId for a Chronicle user
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct JwtClaims(pub Map<String, Value>);
+
+impl std::fmt::Debug for JwtClaims {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let claims = self
+            .0
+            .iter()
+            .map(|(k, _v)| (k, "***SECRET***"))
+            .collect::<std::collections::HashMap<_, _>>();
+        write!(f, "JwtClaims({:?})", claims)
+    }
+}
 
 /// Chronicle identity object for authorization
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -368,6 +387,41 @@ mod tests {
             ]
           }
         }
+        "###);
+    }
+
+    #[test]
+    fn test_jwt_claims_custom_debug() {
+        let claims = JwtClaims(
+            json!({
+                "key": "value",
+            })
+            .as_object()
+            .unwrap()
+            .to_owned(),
+        );
+        insta::assert_debug_snapshot!(claims, @r###"JwtClaims({"key": "***SECRET***"})"###);
+    }
+
+    #[test]
+    fn test_jwt_id_custom_debug() {
+        let jwt_id = AuthId::JWT(JwtId {
+            id: AgentId::from_external_id("abcdef"),
+            claims: json!({
+                "key": "value"
+            }),
+        });
+        insta::assert_debug_snapshot!(jwt_id, @r###"
+        JWT(
+            JwtId {
+                id: AgentId(
+                    ExternalId(
+                        "abcdef",
+                    ),
+                ),
+                ..
+            },
+        )
         "###);
     }
 }
