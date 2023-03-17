@@ -15,9 +15,27 @@ pub(crate) struct SecretConfig {
     pub path: PathBuf,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub(crate) struct ValidatorConfig {
     pub address: Url,
+}
+
+impl std::fmt::Debug for ValidatorConfig {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            r#"ValidatorConfig {{ address: Url {{ scheme: {:?}, cannot_be_a_base: {:?}, username: {:?}, password: ***SECRET***, host: {:?}, port: {:?}, path: {:?}, query: {:?}, fragment: {:?} }} }}"#,
+            self.address.scheme(),
+            self.address.cannot_be_a_base(),
+            self.address.username(),
+            self.address.host(),
+            self.address.port(),
+            self.address.path(),
+            self.address.query(),
+            self.address.fragment(),
+        )?;
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -126,4 +144,21 @@ address = "{}"
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::ValidatorConfig;
+
+    use url::Url;
+
+    #[test]
+    fn validator_config_custom_debug() {
+        let address = Url::parse("https://example.net").unwrap();
+
+        let validator_config = ValidatorConfig { address };
+
+        insta::assert_debug_snapshot!(validator_config, @r###"ValidatorConfig { address: Url { scheme: "https", cannot_be_a_base: false, username: "", password: ***SECRET***, host: Some(Domain("example.net")), port: None, path: "/", query: None, fragment: None } }"###);
+    }
 }
