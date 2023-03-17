@@ -104,7 +104,7 @@ $(foreach arch,$(ARCHS),$(eval $(call arch-contexts,$(arch))))
 define multi-arch-docker =
 
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(2)-ensure-context
+$(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
@@ -118,7 +118,13 @@ $(1)-$(2)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
+ifeq ($(RELEASABLE), yes)
 $(1): $(1)-$(2)-build
+else
+ifeq ($(2), $(HOST_ARCHITECTURE))
+$(1): $(1)-$(2)-build
+endif
+endif
 
 build: $(1)
 
