@@ -17,5 +17,8 @@ ARG TARGETARCH
 FROM opactl-${TARGETARCH}:${ISOLATION_ID}  AS opa-test
 
 COPY docker/opa-test/opa-test /usr/local/bin/opa-test.sh
+COPY docker/chronicle-test/wait-for-it /usr/local/bin/wait-for-it
+
+RUN chmod +rx /usr/local/bin/*
 
 ENTRYPOINT [ "/usr/local/bin/opa-test.sh" ]

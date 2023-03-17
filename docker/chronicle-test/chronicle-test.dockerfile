@@ -17,5 +17,8 @@ FROM node:18 AS chronicle-test
 RUN npm install -g -f graphqurl
 
 COPY docker/chronicle-test/chronicle-test /usr/local/bin/chronicle-test.sh
+COPY docker/chronicle-test/wait-for-it /usr/local/bin/wait-for-it
+
+RUN chmod +rx /usr/local/bin/*
 
 ENTRYPOINT [ "/usr/local/bin/chronicle-test.sh" ]
