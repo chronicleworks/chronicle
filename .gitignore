@@ -232,6 +232,7 @@ typings/
 
 # Project local
 
+**/*.tar.gz
 **/sqlite_test
 **/*.env
 **/*.sqlite
