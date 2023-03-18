@@ -1004,12 +1004,12 @@ impl SubCommand for CliModel {
                             .default_value("127.0.0.1:9982")
                             .help("The graphql server address (default 127.0.0.1:9982)"),
                     ).arg(
-                        Arg::new("unlock-cors")
-                            .long("unlock-cors")
+                        Arg::new("playground")
+                            .long("playground")
                             .alias("open")
                             .required(false)
                             .takes_value(false)
-                            .help("unlock CORS"),
+                            .help("Deprecated option (after v0.6.0) to make available the GraphQL Playground"),
                     ).arg(
                         Arg::new("require-auth")
                             .long("require-auth")

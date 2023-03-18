@@ -31,10 +31,10 @@ use poem::{
         headers::authorization::{Bearer, Credentials},
         Html,
     },
-    Endpoint, EndpointExt, IntoResponse, Route, Server,
+    Endpoint, IntoResponse, Route, Server,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
@@ -420,7 +420,6 @@ pub struct SecurityConf {
     jwt_must_claim: HashMap<String, String>,
     allow_anonymous: bool,
     opa: ExecutorContext,
-    cors_open: bool,
 }
 
 impl SecurityConf {
@@ -431,7 +430,6 @@ impl SecurityConf {
         jwt_must_claim: HashMap<String, String>,
         allow_anonymous: bool,
         opa: ExecutorContext,
-        cors_open: bool,
     ) -> Self {
         Self {
             jwks_uri,
@@ -440,7 +438,6 @@ impl SecurityConf {
             jwt_must_claim,
             allow_anonymous,
             opa,
-            cors_open,
         }
     }
 }
@@ -787,63 +784,46 @@ where
             .data(AuthId::anonymous())
             .finish();
 
-        if sec.cors_open {
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                match open::that(format!("http://{}", address)) {
-                    Ok(()) => (),
-                    Err(err) => panic!("An error occurred when opening '{}': {}", address, err),
-                }
-            });
+        let app = match sec.jwks_uri {
+            Some(jwks_uri) => {
+                const CACHE_EXPIRY_SECONDS: u32 = 100;
+                tracing::debug!("API endpoint authentication uses {}", jwks_uri);
+                Route::new()
+                    .at(
+                        "/",
+                        post(AuthorizationEndpointQuery {
+                            checker: JwtChecker::new(
+                                &jwks_uri,
+                                sec.userinfo_uri.as_ref(),
+                                CACHE_EXPIRY_SECONDS,
+                            ),
+                            must_claim: sec.jwt_must_claim.clone(),
+                            allow_anonymous: sec.allow_anonymous,
+                            schema: schema.clone(),
+                        }),
+                    )
+                    .at(
+                        "/ws",
+                        get(AuthorizationEndpointSubscription {
+                            checker: JwtChecker::new(
+                                &jwks_uri,
+                                sec.userinfo_uri.as_ref(),
+                                CACHE_EXPIRY_SECONDS,
+                            ),
+                            must_claim: sec.jwt_must_claim,
+                            allow_anonymous: sec.allow_anonymous,
+                            schema,
+                        }),
+                    )
+            }
+            None => {
+                tracing::warn!("API endpoint uses no authentication");
+                Route::new()
+                    .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
+                    .at("/ws", get(GraphQLSubscription::new(schema)))
+            }
+        };
 
-            let app = Route::new()
-                .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
-                .at("/ws", get(GraphQLSubscription::new(schema.clone())))
-                .data(schema);
-
-            Server::new(TcpListener::bind(address)).run(app).await.ok();
-        } else {
-            let app = match sec.jwks_uri {
-                Some(jwks_uri) => {
-                    const CACHE_EXPIRY_SECONDS: u32 = 100;
-                    tracing::debug!("API endpoint authentication uses {}", jwks_uri);
-                    Route::new()
-                        .at(
-                            "/",
-                            post(AuthorizationEndpointQuery {
-                                checker: JwtChecker::new(
-                                    &jwks_uri,
-                                    sec.userinfo_uri.as_ref(),
-                                    CACHE_EXPIRY_SECONDS,
-                                ),
-                                must_claim: sec.jwt_must_claim.clone(),
-                                allow_anonymous: sec.allow_anonymous,
-                                schema: schema.clone(),
-                            }),
-                        )
-                        .at(
-                            "/ws",
-                            get(AuthorizationEndpointSubscription {
-                                checker: JwtChecker::new(
-                                    &jwks_uri,
-                                    sec.userinfo_uri.as_ref(),
-                                    CACHE_EXPIRY_SECONDS,
-                                ),
-                                must_claim: sec.jwt_must_claim,
-                                allow_anonymous: sec.allow_anonymous,
-                                schema,
-                            }),
-                        )
-                }
-                None => {
-                    tracing::warn!("API endpoint uses no authentication");
-                    Route::new()
-                        .at("/", post(GraphQL::new(schema.clone())))
-                        .at("/ws", get(GraphQLSubscription::new(schema)))
-                }
-            };
-
-            Server::new(TcpListener::bind(address)).run(app).await.ok();
-        }
+        Server::new(TcpListener::bind(address)).run(app).await.ok();
     }
 }
