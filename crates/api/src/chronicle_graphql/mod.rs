@@ -539,7 +539,7 @@ fn check_required_claim(must_value: &str, actual_value: &serde_json::Value) -> b
     }
 }
 
-#[instrument(level = "debug", ret(Debug))]
+#[instrument(level = "trace", ret(Debug))]
 fn check_required_claims(
     must_claim: &HashMap<String, String>,
     actual_claims: &serde_json::Map<String, serde_json::Value>,
@@ -569,7 +569,7 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    #[instrument(level = "debug", skip(self, prepare_req), ret(Debug))]
+    #[instrument(level = "debug", skip_all, ret(Debug))]
     async fn respond(
         &self,
         req: poem::Request,
@@ -603,7 +603,7 @@ where
                     }
                 }
             }
-            tracing::warn!(
+            tracing::trace!(
                 "rejected authorization from {}: {:?}",
                 req.remote_addr(),
                 authorization
@@ -613,10 +613,10 @@ where
                 StatusCode::UNAUTHORIZED,
             ))
         } else if self.allow_anonymous {
-            tracing::debug!("anonymous access from {}", req.remote_addr());
+            tracing::trace!("anonymous access from {}", req.remote_addr());
             self.respond(req, |req| req.0).await
         } else {
-            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
             Err(poem::error::Error::from_string(
                 "required Authorization header not present",
                 StatusCode::UNAUTHORIZED,
@@ -638,7 +638,7 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    #[instrument(level = "debug", skip(self), ret(Debug))]
+    #[instrument(level = "trace", skip(self, req), ret(Debug))]
     async fn respond(
         &self,
         req: poem::Request,
@@ -683,7 +683,7 @@ where
                     }
                 }
             }
-            tracing::warn!(
+            tracing::trace!(
                 "rejected authorization from {}: {:?}",
                 req.remote_addr(),
                 authorization
@@ -695,7 +695,7 @@ where
         } else if self.allow_anonymous {
             self.respond(req, async_graphql::Data::default()).await
         } else {
-            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
             Err(poem::error::Error::from_string(
                 "required Authorization header not present",
                 StatusCode::UNAUTHORIZED,
@@ -749,7 +749,7 @@ pub struct OpaCheck {
 
 #[async_trait::async_trait]
 impl async_graphql::extensions::Extension for OpaCheck {
-    #[instrument(level = "debug", skip_all, ret(Debug))]
+    #[instrument(level = "trace", skip_all, ret(Debug))]
     async fn resolve(
         &self,
         ctx: &async_graphql::extensions::ExtensionContext<'_>,
