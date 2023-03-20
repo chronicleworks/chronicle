@@ -13,6 +13,7 @@ version = "0.6.0"
 async-trait = "0.1.53"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = "1.1.0"
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap = "3.2.1"
 clap_generate = "3.0.3"
 common = { path = "../common" }
@@ -40,7 +41,6 @@ serde = "1.0.136"
 serde_cbor = "0.11.2"
 serde_derive = "1.0.136"
 serde_json = "1.0.89"
-chronicle-telemetry = { path = "../chronicle-telemetry" }
 tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
 url = "2.2.2"

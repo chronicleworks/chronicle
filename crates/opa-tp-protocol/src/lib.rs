@@ -1,13 +1,18 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
+
+use async_sawtooth_sdk::{ledger::SawtoothLedger, zmq_client::ZmqRequestResponseSawtoothChannel};
+use state::OpaOperationEvent;
+use transaction::OpaSubmitTransaction;
 pub mod address;
 pub mod events;
-pub mod ledger;
-pub mod sawtooth;
 pub mod state;
 pub mod submission;
-pub mod zmq_client;
+pub mod transaction;
 
 static PROTOCOL_VERSION: &str = "1";
+
+pub type OpaLedger =
+    SawtoothLedger<ZmqRequestResponseSawtoothChannel, OpaOperationEvent, OpaSubmitTransaction>;
 
 // generated from ./protos/
 pub mod messages {

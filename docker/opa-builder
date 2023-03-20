@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM rust:1.65 as base
+FROM rust:latest as base
 
 ARG TARGETPLATFORM
 ENV TARGETPLATFORM=${TARGETPLATFORM}
@@ -30,7 +30,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
   gcc-aarch64-linux-gnu \
   g++-aarch64-linux-gnu \
   libssl-dev \
-  libzmq3-dev \
   protobuf-compiler \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -64,7 +63,8 @@ COPY policies /app/policies
 RUN useradd -m tester
 RUN chown -R tester .
 USER tester
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+RUN  --mount=type=cache,target=/app/target,uid=1000,gid=1000 \
+  RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
   TARGET=aarch64-unknown-linux-gnu; \
   elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
   TARGET=x86_64-unknown-linux-gnu; \
@@ -73,27 +73,22 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
   exit 1; \
   fi &&\
   cargo test -p opactl -p opa-tp -p opa-tp-protocol --release --target $TARGET
-USER root
-
 
 FROM test AS tested
 
+USER root
 ARG BUILD_ARGS
 
 # Build for both target and host
 RUN dpkg --add-architecture amd64
 RUN dpkg --add-architecture arm64
-RUN --mount=type=cache,target=/var/cache/apt \
-  apt-get update && \
+
+RUN  --mount=type=cache,target=/app/target,uid=1000,gid=1000 \
   mkdir -p /artifacts/amd64 && \
   mkdir -p /artifacts/arm64 && \
-  apt-get remove -y libpq-dev && \
-  apt-get install -y liblzma-dev:arm64 libpq-dev:arm64 && \
   cargo build -p opactl -p opa-tp --target aarch64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/aarch64-unknown-linux-gnu/release/opactl /artifacts/arm64 \
   && mv -f target/aarch64-unknown-linux-gnu/release/opa-tp /artifacts/arm64 \
-  && apt-get remove -y libpq-dev \
-  && apt-get install -y liblzma-dev:amd64 libpq-dev:amd64 \
   && cargo build -p opactl -p opa-tp --target x86_64-unknown-linux-gnu --release ${BUILD_ARGS} \
   && mv -f target/x86_64-unknown-linux-gnu/release/opactl /artifacts/amd64 \
   && mv -f target/x86_64-unknown-linux-gnu/release/opa-tp /artifacts/amd64

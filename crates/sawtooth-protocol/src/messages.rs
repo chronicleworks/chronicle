@@ -8,6 +8,7 @@ use custom_error::custom_error;
 use openssl::sha::Sha512;
 use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
+
 use tracing::{debug, instrument};
 
 use crate::{address::PREFIX, sawtooth::event_filter::FilterType};

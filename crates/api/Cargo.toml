@@ -18,6 +18,7 @@ async-stream = "0.3.3"
 async-trait = "0.1.53"
 base64 = "0.21"
 cached = "0.42"
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = "0.4.19"
 common = { path = "../common" }
 custom_error = "1.9.2"
@@ -50,7 +51,6 @@ serde = "1.0.136"
 serde_derive = "1.0.136"
 serde_json = "1.0.81"
 static-iref = "2.0.0"
-chronicle-telemetry = { path = "../chronicle-telemetry" }
 thiserror = "1.0.36"
 tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
 tracing = "0.1.32"
@@ -59,7 +59,12 @@ user-error = "1.2.8"
 uuid = { version = "0.8.2", features = ["v4"] }
 
 [dev-dependencies]
-insta    = { version = "1.14.0", features = ["json", "redactions", "toml", "yaml"] }
+insta = { version = "1.14.0", features = [
+  "json",
+  "redactions",
+  "toml",
+  "yaml",
+] }
 tempfile = "3.4.0"
 
 [build-dependencies]

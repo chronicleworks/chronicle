@@ -1,14 +1,16 @@
 [package]
-build   = "build.rs"
 edition = "2021"
-name    = "opa-tp-protocol"
+name    = "async-sawtooth-sdk"
 version = "0.1.0"
+
+[lib]
+name = "async_sawtooth_sdk"
+path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.68"
-async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
 async-trait = "0.1.61"
 chrono = { version = "0.4.19", features = ["serde"] }
 derivative = "2.2.0"

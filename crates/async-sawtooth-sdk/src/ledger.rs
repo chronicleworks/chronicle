@@ -27,12 +27,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, instrument};
 
 use crate::{
-    address::{FAMILY, VERSION},
-    events::deserialize_opa_event,
-    messages::Submission,
     sawtooth::MessageBuilder,
-    state::{key_address, policy_address, policy_meta_address, OpaOperationEvent},
-    submission::OpaTransactionId,
     zmq_client::{RequestResponseSawtoothChannel, SawtoothCommunicationError},
 };
 
@@ -40,6 +35,31 @@ use crate::{
 pub struct BlockId(String);
 
 impl std::fmt::Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TransactionId(String);
+
+impl TransactionId {
+    pub fn new(tx_id: String) -> Self {
+        Self(tx_id)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for TransactionId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl std::fmt::Display for TransactionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -77,8 +97,8 @@ impl Offset {
     pub fn distance(&self, other: &Self) -> u64 {
         match (self, other) {
             (Offset::Genesis, Offset::Genesis) => 0,
-            (Offset::Genesis, Offset::Identity(x)) => *x,
-            (Offset::Identity(x), Offset::Genesis) => *x,
+            (Offset::Genesis, Offset::Identity(_)) => 0,
+            (Offset::Identity(_), Offset::Genesis) => 0,
             (Offset::Identity(x), Offset::Identity(y)) => x.saturating_sub(*y),
         }
     }
@@ -91,21 +111,36 @@ impl From<u64> for Offset {
     }
 }
 
-#[async_trait::async_trait]
-pub trait LedgerTransaction {
-    type Id;
-
-    fn signer(&self) -> &SigningKey;
-    fn addresses(&self) -> Vec<String>;
-    async fn as_sawtooth_tx(&self, message_builder: &MessageBuilder) -> (Transaction, Self::Id);
+pub trait LedgerEvent {
+    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    where
+        Self: Sized;
 }
 
-#[async_trait::async_trait(?Send)]
-pub trait LedgerWriter<TX: LedgerTransaction> {
+// An application specific ledger event with its corresponding transaction id,
+// block height and trace span
+pub type LedgerEventContext<Event> = (Event, TransactionId, Offset, u64);
+
+#[async_trait::async_trait]
+pub trait LedgerTransaction {
+    fn signer(&self) -> &SigningKey;
+    fn addresses(&self) -> Vec<String>;
+    async fn as_sawtooth_tx(
+        &self,
+        message_builder: &MessageBuilder,
+    ) -> (Transaction, TransactionId);
+}
+
+#[async_trait::async_trait]
+pub trait LedgerWriter {
     type Error: std::error::Error;
+    type Transaction: LedgerTransaction;
 
     // Pre-submit is used to get the transaction id before submitting the transaction
-    async fn pre_submit(&self, tx: &TX) -> Result<(TX::Id, Transaction), Self::Error>;
+    async fn pre_submit(
+        &self,
+        tx: &Self::Transaction,
+    ) -> Result<(TransactionId, Transaction), Self::Error>;
 
     // Submit is used to submit a transaction to the ledger
     async fn submit(&self, tx: Transaction, signer: &SigningKey) -> Result<(), Self::Error>;
@@ -114,40 +149,59 @@ pub trait LedgerWriter<TX: LedgerTransaction> {
 }
 
 #[async_trait::async_trait]
-pub trait LedgerReader<EV> {
+pub trait LedgerReader {
     type Error: std::error::Error;
-
+    type Event: LedgerEvent;
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
 
+    // Get the block height of the ledger, and the id of the highest block
     async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error>;
     /// Subscribe to state updates from this ledger, starting at `offset`, and
     /// ending the stream after `number_of_blocks` blocks have been processed.
     async fn state_updates(
         &self,
+        // The application event types to subscribe to
+        event_types: Vec<String>,
         // The offset to start from, or `None` to start from the current block
         from_offset: Option<Offset>,
         // The number of blocks to process before ending the stream
         number_of_blocks: Option<u64>,
-    ) -> Result<BoxStream<EV>, Self::Error>;
+    ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error>;
 }
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
-pub struct OpaLedger<T: RequestResponseSawtoothChannel + Clone + Send + Sync> {
+pub struct SawtoothLedger<
+    Channel: RequestResponseSawtoothChannel + Clone + Send + Sync,
+    LedgerEvent,
+    Transaction,
+> where
+    LedgerEvent: std::fmt::Debug,
+{
     builder: MessageBuilder,
-    channel: T,
+    channel: Channel,
+    _e: std::marker::PhantomData<LedgerEvent>,
+    _t: std::marker::PhantomData<Transaction>,
 }
 
-pub type OpaEvent = (OpaOperationEvent, OpaTransactionId, Offset, u64);
-
-impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
-    pub fn new(channel: T) -> Self {
-        let builder = MessageBuilder::new(FAMILY, VERSION);
-        OpaLedger { builder, channel }
+impl<
+        Channel: RequestResponseSawtoothChannel + Clone + Send + Sync,
+        Event: LedgerEvent + Send + Sync + std::fmt::Debug,
+        Transaction: LedgerTransaction + Send + Sync,
+    > SawtoothLedger<Channel, Event, Transaction>
+{
+    pub fn new(channel: Channel, family: &str, version: &str) -> Self {
+        let builder = MessageBuilder::new(family, version);
+        SawtoothLedger {
+            builder,
+            channel,
+            _e: std::marker::PhantomData::default(),
+            _t: std::marker::PhantomData::default(),
+        }
     }
 
     #[instrument(skip(self))]
-    async fn submit_opa_operation(&self, batch: Batch) -> Result<(), SawtoothCommunicationError> {
+    async fn submit_batch(&self, batch: Batch) -> Result<(), SawtoothCommunicationError> {
         let request = ClientBatchSubmitRequest {
             batches: vec![batch].into(),
             ..Default::default()
@@ -169,7 +223,7 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
         }
     }
 
-    #[instrument(skip(self), ret(Debug))]
+    #[instrument(skip(self))]
     async fn get_block_height(&self) -> Result<(u64, String), SawtoothCommunicationError> {
         let request = self.builder.make_block_height_request();
         let response: ClientBlockListResponse = self
@@ -195,14 +249,16 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
         }
     }
 
-    /// Subscribe to state delta events and then set up the event stream
     #[instrument(skip(self))]
     async fn get_state_from(
         &self,
         offset: &Offset,
         offset_id: &Option<BlockId>,
-    ) -> Result<BoxStream<OpaEvent>, SawtoothCommunicationError> {
-        let subscription_request = self.builder.make_subscription_request(offset_id);
+        event_types: Vec<String>,
+    ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
+        let subscription_request = self
+            .builder
+            .make_subscription_request(offset_id, event_types);
         debug!(?subscription_request);
         let sub = self
             .channel
@@ -225,11 +281,11 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
     async fn event_stream(
         &self,
         block: Offset,
-    ) -> Result<BoxStream<OpaEvent>, SawtoothCommunicationError> {
+    ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
         #[derive(Debug)]
-        enum ParsedEvent {
+        enum ParsedEvent<Event> {
             Block(u64),
-            Operation(OpaOperationEvent, OpaTransactionId, u64),
+            Operation(Event, TransactionId, u64),
         }
 
         let channel = self.channel.clone();
@@ -254,10 +310,9 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
                             .iter()
                             .find(|attr| attr.key == "transaction_id")
                             .ok_or(SawtoothCommunicationError::MissingTransactionId)
-                            .map(|attr| OpaTransactionId::from(&*attr.value));
+                            .map(|attr| TransactionId::from(&*attr.value));
 
-                        let event = deserialize_opa_event(&event.data)
-                            .map_err(SawtoothCommunicationError::from);
+                        let event = Event::deserialize(&event.data);
 
                         transaction_id
                             .map_err(SawtoothCommunicationError::from)
@@ -307,11 +362,14 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> OpaLedger<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEvent>
-    for OpaLedger<T>
+impl<
+        Channel: RequestResponseSawtoothChannel + Clone + Send + Sync,
+        Event: LedgerEvent + Send + Sync + std::fmt::Debug,
+        Transaction: LedgerTransaction + Send + Sync,
+    > LedgerReader for SawtoothLedger<Channel, Event, Transaction>
 {
     type Error = SawtoothCommunicationError;
-
+    type Event = Event;
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error> {
         let request = self.builder.make_state_request(address);
 
@@ -341,9 +399,10 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEv
     #[instrument(skip(self))]
     async fn state_updates(
         &self,
+        event_types: Vec<String>,
         from_offset: Option<Offset>,
         number_of_blocks: Option<u64>,
-    ) -> Result<BoxStream<OpaEvent>, Self::Error> {
+    ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error> {
         let self_clone = self.clone();
 
         let (from_offset, from_block_id) = match from_offset {
@@ -354,7 +413,9 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEv
             }
         };
 
-        let subscribe = self.get_state_from(&from_offset, &from_block_id).await?;
+        let subscribe = self
+            .get_state_from(&from_offset, &from_block_id, event_types)
+            .await?;
 
         Ok(subscribe
             .take_while(move |(_, _, offset, _)| {
@@ -368,137 +429,41 @@ impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerReader<OpaEv
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum OpaSubmitTransaction {
-    BootstrapRoot(Submission, SigningKey),
-    RotateRoot(Submission, SigningKey),
-    RegisterKey(Submission, SigningKey, String),
-    RotateKey(Submission, SigningKey, String),
-    SetPolicy(Submission, SigningKey, String),
-}
-
-impl OpaSubmitTransaction {
-    pub fn bootstrap_root(submission: Submission, sawtooth_signer: &SigningKey) -> Self {
-        Self::BootstrapRoot(submission, sawtooth_signer.to_owned())
-    }
-
-    pub fn rotate_root(submission: Submission, sawtooth_signer: &SigningKey) -> Self {
-        Self::RotateRoot(submission, sawtooth_signer.to_owned())
-    }
-
-    pub fn register_key(
-        name: impl AsRef<str>,
-        submission: Submission,
-        sawtooth_signer: &SigningKey,
-    ) -> Self {
-        Self::RegisterKey(
-            submission,
-            sawtooth_signer.to_owned(),
-            name.as_ref().to_owned(),
-        )
-    }
-
-    pub fn rotate_key(
-        name: impl AsRef<str>,
-        submission: Submission,
-        sawtooth_signer: &SigningKey,
-    ) -> Self {
-        Self::RegisterKey(
-            submission,
-            sawtooth_signer.to_owned(),
-            name.as_ref().to_owned(),
-        )
-    }
-    pub fn set_policy(
-        name: impl AsRef<str>,
-        submission: Submission,
-        sawtooth_signer: &SigningKey,
-    ) -> Self {
-        Self::SetPolicy(
-            submission,
-            sawtooth_signer.to_owned(),
-            name.as_ref().to_owned(),
-        )
-    }
-}
-
 #[async_trait::async_trait]
-impl LedgerTransaction for OpaSubmitTransaction {
-    type Id = OpaTransactionId;
-
-    fn signer(&self) -> &SigningKey {
-        match self {
-            Self::BootstrapRoot(_, signer) => signer,
-            Self::RotateRoot(_, signer) => signer,
-            Self::RegisterKey(_, signer, _) => signer,
-            Self::RotateKey(_, signer, _) => signer,
-            Self::SetPolicy(_, signer, _) => signer,
-        }
-    }
-
-    fn addresses(&self) -> Vec<String> {
-        match self {
-            Self::BootstrapRoot(_, _) => {
-                vec![key_address("root")]
-            }
-            Self::RotateRoot(_, _) => {
-                vec![key_address("root")]
-            }
-            Self::RegisterKey(_, _, name) => {
-                vec![key_address("root"), key_address(name.clone())]
-            }
-            Self::RotateKey(_, _, name) => {
-                vec![key_address("root"), key_address(name.clone())]
-            }
-            Self::SetPolicy(_, _, name) => {
-                vec![
-                    key_address("root"),
-                    policy_meta_address(name.clone()),
-                    policy_address(name.clone()),
-                ]
-            }
-        }
-    }
-
-    async fn as_sawtooth_tx(&self, message_builder: &MessageBuilder) -> (Transaction, Self::Id) {
-        message_builder.make_sawtooth_transaction(
-            self.addresses(),
-            self.addresses(),
-            vec![],
-            match self {
-                Self::BootstrapRoot(submission, _) => submission,
-                Self::RotateRoot(submission, _) => submission,
-                Self::RegisterKey(submission, _, _) => submission,
-                Self::RotateKey(submission, _, _) => submission,
-                Self::SetPolicy(submission, _, _) => submission,
-            },
-            self.signer(),
-        )
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl<T: RequestResponseSawtoothChannel + Clone + Send + Sync> LedgerWriter<OpaSubmitTransaction>
-    for OpaLedger<T>
+impl<
+        Channel: RequestResponseSawtoothChannel + Clone + Send + Sync,
+        Event: LedgerEvent + Send + Sync + std::fmt::Debug,
+        Transaction: LedgerTransaction + Send + Sync,
+    > LedgerWriter for SawtoothLedger<Channel, Event, Transaction>
 {
     type Error = SawtoothCommunicationError;
-
+    type Transaction = Transaction;
     fn message_builder(&self) -> &MessageBuilder {
         &self.builder
     }
 
     async fn pre_submit(
         &self,
-        tx: &OpaSubmitTransaction,
-    ) -> Result<(OpaTransactionId, Transaction), Self::Error> {
+        tx: &Self::Transaction,
+    ) -> Result<
+        (
+            TransactionId,
+            sawtooth_sdk::messages::transaction::Transaction,
+        ),
+        Self::Error,
+    > {
         let (sawtooth_tx, id) = tx.as_sawtooth_tx(self.message_builder()).await;
         Ok((id, sawtooth_tx))
     }
 
     #[instrument(skip(self) ret(Debug))]
-    async fn submit(&self, tx: Transaction, signer: &SigningKey) -> Result<(), Self::Error> {
+    async fn submit(
+        &self,
+        tx: sawtooth_sdk::messages::transaction::Transaction,
+        signer: &SigningKey,
+    ) -> Result<(), Self::Error> {
         let batch = self.message_builder().wrap_tx_as_sawtooth_batch(tx, signer);
-        self.submit_opa_operation(batch).await?;
+        self.submit_batch(batch).await?;
         Ok(())
     }
 }

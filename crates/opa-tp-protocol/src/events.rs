@@ -1,11 +1,33 @@
+use async_sawtooth_sdk::{ledger::LedgerEvent, zmq_client::SawtoothCommunicationError};
 use prost::Message;
 use serde_json::json;
 
 use crate::{
     messages::{self, OpaEvent},
     state::OpaOperationEvent,
-    zmq_client::SawtoothCommunicationError,
 };
+
+impl LedgerEvent for OpaOperationEvent {
+    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    where
+        Self: Sized,
+    {
+        let ev = OpaEvent::decode(buf)?;
+        if let Some(payload) = ev.payload {
+            match payload {
+                messages::opa_event::Payload::Operation(value) => {
+                    let value = serde_json::from_str(&value)?;
+                    Ok((value, ev.span_id))
+                }
+                messages::opa_event::Payload::Error(value) => {
+                    Ok((OpaOperationEvent::Error(value), ev.span_id))
+                }
+            }
+        } else {
+            Err(SawtoothCommunicationError::MalformedMessage)
+        }
+    }
+}
 
 pub fn opa_event(span_id: u64, value: OpaOperationEvent) -> Result<Vec<u8>, serde_json::Error> {
     Ok(OpaEvent {
@@ -23,23 +45,4 @@ pub fn opa_event(span_id: u64, value: OpaOperationEvent) -> Result<Vec<u8>, serd
         },
     }
     .encode_to_vec())
-}
-
-pub fn deserialize_opa_event(
-    data: &[u8],
-) -> Result<(OpaOperationEvent, u64), SawtoothCommunicationError> {
-    let ev = OpaEvent::decode(data)?;
-    if let Some(payload) = ev.payload {
-        match payload {
-            messages::opa_event::Payload::Operation(value) => {
-                let value = serde_json::from_str(&value)?;
-                Ok((value, ev.span_id))
-            }
-            messages::opa_event::Payload::Error(value) => {
-                Ok((OpaOperationEvent::Error(value), ev.span_id))
-            }
-        }
-    } else {
-        Err(SawtoothCommunicationError::MalformedMessage)
-    }
 }
