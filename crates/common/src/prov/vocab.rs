@@ -2,7 +2,7 @@ use iref::IriBuf;
 use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
 use uuid::Uuid;
 
-use super::{ActivityId, AgentId, ExternalId, ExternalIdPart, Role};
+use super::{ActivityId, AgentId, EntityId, ExternalId, ExternalIdPart, Role};
 
 #[derive(IriEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[iri_prefix("chronicleop" = "http://btp.works/chronicleoperations/ns#")]
@@ -43,6 +43,8 @@ pub enum ChronicleOperations {
     EndActivityTime,
     #[iri("chronicleop:WasAssociatedWith")]
     WasAssociatedWith,
+    #[iri("chronicleop:WasAttributedTo")]
+    WasAttributedTo,
     #[iri("chronicleop:ActivityUses")]
     ActivityUses,
     #[iri("chronicleop:entityName")]
@@ -98,8 +100,12 @@ pub enum Prov {
     WasAssociatedWith,
     #[iri("prov:qualifiedAssociation")]
     QualifiedAssociation,
+    #[iri("prov:qualifiedAttribution")]
+    QualifiedAttribution,
     #[iri("prov:Association")]
     Association,
+    #[iri("prov:Attribution")]
+    Attribution,
     #[iri("prov:wasGeneratedBy")]
     WasGeneratedBy,
     #[iri("prov:used")]
@@ -130,6 +136,8 @@ pub enum Prov {
     HadRole,
     #[iri("prov:hadActivity")]
     HadActivity,
+    #[iri("prov:hadEntity")]
+    HadEntity,
     #[iri("prov:wasInformedBy")]
     WasInformedBy,
     #[iri("prov:generated")]
@@ -283,6 +291,22 @@ impl Chronicle {
                     .as_ref()
                     .map(|x| x.external_id_part().as_str())
                     .unwrap_or("")
+            ),
+        ))
+        .unwrap()
+    }
+
+    pub fn attribution(agent: &AgentId, entity: &EntityId, role: &Option<Role>) -> IriBuf {
+        IriBuf::new(&format!(
+            "{}attribution:{}:{}:role={}",
+            Self::PREFIX,
+            Self::encode(agent.external_id_part().as_str()),
+            Self::encode(entity.external_id_part().as_ref()),
+            Self::encode(
+                &role
+                    .as_ref()
+                    .map(|x| x.to_string())
+                    .unwrap_or_else(|| "".to_owned())
             ),
         ))
         .unwrap()

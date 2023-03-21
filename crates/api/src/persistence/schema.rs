@@ -58,6 +58,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    attribution (agent_id, entity_id, role) {
+        agent_id -> Int4,
+        entity_id -> Int4,
+        role -> Text,
+    }
+}
+
+diesel::table! {
     delegation (responsible_id, delegate_id, activity_id, role) {
         delegate_id -> Int4,
         responsible_id -> Int4,
@@ -162,6 +170,8 @@ diesel::joinable!(association -> activity (activity_id));
 diesel::joinable!(association -> agent (agent_id));
 diesel::joinable!(attachment -> identity (signer_id));
 diesel::joinable!(attachment -> namespace (namespace_id));
+diesel::joinable!(attribution -> agent (agent_id));
+diesel::joinable!(attribution -> entity (entity_id));
 diesel::joinable!(delegation -> activity (activity_id));
 diesel::joinable!(derivation -> activity (activity_id));
 diesel::joinable!(entity -> attachment (attachment_id));
@@ -184,6 +194,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     agent_attribute,
     association,
     attachment,
+    attribution,
     delegation,
     derivation,
     entity,

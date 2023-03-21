@@ -1,3 +1,5 @@
+use crate::chronicle_graphql::Entity;
+
 use super::{Agent, Identity, Namespace, Store};
 use async_graphql::Context;
 use common::prov::Role;
@@ -57,6 +59,31 @@ pub async fn acted_on_behalf_of<'a>(
         .load::<(Agent, Role)>(&mut connection)?
         .into_iter()
         .map(|(a, r)| (a, if r.0.is_empty() { None } else { Some(r) }))
+        .collect())
+}
+
+/// Return the entities an agent has attributed to it along with the roles in which they were attributed
+pub async fn attribution<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<(Entity, Option<Role>)>> {
+    use crate::persistence::schema::{
+        attribution::{self, dsl},
+        entity as entity_dsl,
+    };
+
+    let store = ctx.data_unchecked::<Store>();
+
+    let mut connection = store.pool.get()?;
+
+    Ok(attribution::table
+        .filter(dsl::agent_id.eq(id))
+        .inner_join(entity_dsl::table.on(dsl::entity_id.eq(entity_dsl::id)))
+        .order(entity_dsl::external_id)
+        .select((Entity::as_select(), dsl::role))
+        .load::<(Entity, Role)>(&mut connection)?
+        .into_iter()
+        .map(|(entity, role)| (entity, if role.0.is_empty() { None } else { Some(role) }))
         .collect())
 }
 

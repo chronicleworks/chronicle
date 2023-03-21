@@ -22,6 +22,7 @@ use crate::{
     attributes::{Attribute, Attributes},
     identity::{IdentityError, SignedIdentity},
     opa::OpaExecutorError,
+    prov::operations::WasAttributedTo,
 };
 
 use super::{
@@ -32,8 +33,9 @@ use super::{
         EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
         WasGeneratedBy, WasInformedBy,
     },
-    ActivityId, AgentId, AssociationId, ChronicleIri, DelegationId, DomaintypeId, EntityId,
-    EvidenceId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role, UuidPart,
+    ActivityId, AgentId, AssociationId, AttributionId, ChronicleIri, DelegationId, DomaintypeId,
+    EntityId, EvidenceId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role,
+    UuidPart,
 };
 
 pub mod to_json_ld;
@@ -404,6 +406,32 @@ pub struct GeneratedEntity {
     pub time: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Attribution {
+    pub namespace_id: NamespaceId,
+    pub id: AttributionId,
+    pub agent_id: AgentId,
+    pub entity_id: EntityId,
+    pub role: Option<Role>,
+}
+
+impl Attribution {
+    pub fn new(
+        namespace_id: &NamespaceId,
+        agent_id: &AgentId,
+        entity_id: &EntityId,
+        role: Option<Role>,
+    ) -> Self {
+        Self {
+            namespace_id: namespace_id.clone(),
+            id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
+            agent_id: agent_id.clone(),
+            entity_id: entity_id.clone(),
+            role,
+        }
+    }
+}
+
 type NamespacedId<T> = (NamespaceId, T);
 type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
@@ -430,6 +458,7 @@ pub struct ProvModel {
     pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
     pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
     pub generated: HashMap<NamespacedActivity, HashSet<GeneratedEntity>>,
+    pub attribution: HashMap<NamespacedEntity, HashSet<Attribution>>,
 }
 
 impl ProvModel {
@@ -565,6 +594,25 @@ impl ProvModel {
             .entry((namespace.clone(), activity.clone()))
             .or_insert_with(HashSet::new)
             .insert((namespace, informing_activity.clone()));
+    }
+
+    pub fn qualified_attribution(
+        &mut self,
+        namespace_id: &NamespaceId,
+        entity_id: &EntityId,
+        agent_id: &AgentId,
+        role: Option<Role>,
+    ) {
+        self.attribution
+            .entry((namespace_id.clone(), entity_id.clone()))
+            .or_insert_with(HashSet::new)
+            .insert(Attribution {
+                namespace_id: namespace_id.clone(),
+                id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
+                agent_id: agent_id.clone(),
+                entity_id: entity_id.clone(),
+                role,
+            });
     }
 
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
@@ -893,6 +941,20 @@ impl ProvModel {
                 self.agent_context(&namespace, &agent_id);
                 self.activity_context(&namespace, &activity_id);
                 self.qualified_association(&namespace, &activity_id, &agent_id, role);
+
+                Ok(())
+            }
+            ChronicleOperation::WasAttributedTo(WasAttributedTo {
+                id: _,
+                role,
+                namespace,
+                entity_id,
+                agent_id,
+            }) => {
+                self.namespace_context(&namespace);
+                self.agent_context(&namespace, &agent_id);
+                self.entity_context(&namespace, &entity_id);
+                self.qualified_attribution(&namespace, &entity_id, &agent_id, role);
 
                 Ok(())
             }

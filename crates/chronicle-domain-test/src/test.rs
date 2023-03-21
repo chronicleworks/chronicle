@@ -2290,6 +2290,537 @@ mod test {
     }
 
     #[tokio::test]
+    async fn was_attributed_to() {
+        let schema = test_schema().await;
+
+        let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
+
+        let from = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2023, 3, 20)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        )
+        .checked_add_signed(chronicle::chrono::Duration::days(1))
+        .unwrap()
+        .to_rfc3339();
+
+        let test_entity = chronicle::async_graphql::Name::new("Certificate");
+
+        let test_agent = chronicle::async_graphql::Name::new("Certifier");
+
+        let to = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2023, 3, 21)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        )
+        .checked_add_signed(chronicle::chrono::Duration::days(1))
+        .unwrap()
+        .to_rfc3339();
+
+        // create an activity that used an entity and was associated with an agent
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+            &format!(
+            r#"
+              mutation certifiedActivity {{
+                defineContractorAgent(externalId: "{test_agent}", attributes: {{ locationAttribute: "SomeLocation"}}) {{
+                  context
+                }}
+                defineItemCertifiedActivity(externalId: "{test_activity}", attributes: {{ certIdAttribute: "SomeCertId" }}) {{
+                  context
+                  }}
+                defineCertificateEntity(externalId: "{test_entity}", attributes: {{ certIdAttribute: "SomeCertId" }}) {{
+                  context
+                }}
+                startActivity(
+                  id: {{ externalId: "{test_activity}" }}
+                  time: "{from}"
+                ) {{
+                  context
+                }}
+                used(id: {{ id: "chronicle:entity:{test_entity}" }}, activity: {{ id: "chronicle:activity:{test_activity}" }}) {{
+                  context
+                }}
+                wasAssociatedWith( role: CERTIFIER, responsible: {{ id: "chronicle:agent:{test_agent}" }}, activity: {{id: "chronicle:activity:{test_activity}" }}) {{
+                  context
+                }}
+                endActivity(
+                  id: {{ externalId: "{test_activity}" }}
+                  time: "{to}"
+                ) {{
+                  context
+                }}
+              }}
+          "#,
+          )))
+          .await, @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:Certifier"
+            },
+            "defineItemCertifiedActivity": {
+              "context": "chronicle:activity:ItemCertified"
+            },
+            "defineCertificateEntity": {
+              "context": "chronicle:entity:Certificate"
+            },
+            "startActivity": {
+              "context": "chronicle:activity:ItemCertified"
+            },
+            "used": {
+              "context": "chronicle:entity:Certificate"
+            },
+            "wasAssociatedWith": {
+              "context": "chronicle:agent:Certifier"
+            },
+            "endActivity": {
+              "context": "chronicle:activity:ItemCertified"
+            }
+          }
+        }
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // attribute the entity to the agent
+        insta::assert_json_snapshot!(schema
+              .execute(Request::new(
+                &format!(
+                r#"
+                  mutation attribution {{
+                    wasAttributedTo( role: CERTIFIER, responsible: {{ id: "chronicle:agent:{test_agent}" }}, entity: {{id: "chronicle:entity:{test_entity}" }}) {{
+                      context
+                    }}
+                  }}
+              "#,
+              )))
+              .await, @r###"
+              {
+                "data": {
+                  "wasAttributedTo": {
+                    "context": "chronicle:agent:Certifier"
+                  }
+                }
+              }
+              "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query WasAttributedTo relationship
+        insta::assert_toml_snapshot!(schema
+                  .execute(Request::new(
+                    &format!(
+                r#"
+                  query queryWasAttributedTo {{
+                    entityById(id: {{ id: "chronicle:entity:{test_entity}" }}) {{
+                      ... on CertificateEntity {{
+                          id
+                          externalId
+                          wasAttributedTo {{
+                            responsible {{
+                              role
+                              agent {{
+                                ... on ContractorAgent {{
+                                  externalId
+                                  id
+                                  locationAttribute
+                                }}
+                              }}
+                            }}
+                          }}
+                      }}
+                    }}
+                  }}
+              "#,
+              )))
+              .await, @r###"
+        [data.entityById]
+        id = 'chronicle:entity:Certificate'
+        externalId = 'Certificate'
+
+        [[data.entityById.wasAttributedTo]]
+        [data.entityById.wasAttributedTo.responsible]
+        role = 'CERTIFIER'
+
+        [data.entityById.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier'
+        id = 'chronicle:agent:Certifier'
+        locationAttribute = 'SomeLocation'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+                  .execute(Request::new(
+                r#"
+                  query queryWasAttributedToAnotherWay {
+                    entitiesByType(entityType: CertificateEntity) {
+                      nodes {
+                        ... on CertificateEntity {
+                          id
+                          externalId
+                          wasAttributedTo {
+                            responsible {
+                              role
+                              agent {
+                                ... on ContractorAgent {
+                                  externalId
+                                  id
+                                  locationAttribute
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+              "#,
+                ))
+                .await, @r###"
+        [[data.entitiesByType.nodes]]
+        id = 'chronicle:entity:Certificate'
+        externalId = 'Certificate'
+
+        [[data.entitiesByType.nodes.wasAttributedTo]]
+        [data.entitiesByType.nodes.wasAttributedTo.responsible]
+        role = 'CERTIFIER'
+
+        [data.entitiesByType.nodes.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier'
+        id = 'chronicle:agent:Certifier'
+        locationAttribute = 'SomeLocation'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+                .execute(Request::new(
+                  &format!(
+                    r#"
+                query queryAgentAttribution {{
+                  agentById(id: {{externalId: "{test_agent}" }}) {{
+                    ... on ContractorAgent {{
+                      id
+                      externalId
+                      attribution {{
+                        attributed {{
+                          role
+                          entity {{
+                            ... on CertificateEntity {{
+                              externalId
+                              id
+                              certIdAttribute
+                            }}
+                          }}
+                        }}
+                      }}
+                    }}
+                  }}
+                }}
+            "#,
+                )))
+                .await, @r###"
+        [data.agentById]
+        id = 'chronicle:agent:Certifier'
+        externalId = 'Certifier'
+
+        [[data.agentById.attribution]]
+        [data.agentById.attribution.attributed]
+        role = 'CERTIFIER'
+
+        [data.agentById.attribution.attributed.entity]
+        externalId = 'Certificate'
+        id = 'chronicle:entity:Certificate'
+        certIdAttribute = 'SomeCertId'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+                .execute(Request::new(
+                    r#"
+                query queryAgentAttributionAnotherWay {
+                  agentsByType(agentType: ContractorAgent) {
+                    nodes {
+                      ... on ContractorAgent {
+                        id
+                        externalId
+                        attribution {
+                          attributed {
+                            role
+                            entity {
+                              ... on CertificateEntity {
+                                externalId
+                                id
+                                certIdAttribute
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            "#,
+                ))
+                .await, @r###"
+        [[data.agentsByType.nodes]]
+        id = 'chronicle:agent:Certifier'
+        externalId = 'Certifier'
+
+        [[data.agentsByType.nodes.attribution]]
+        [data.agentsByType.nodes.attribution.attributed]
+        role = 'CERTIFIER'
+
+        [data.agentsByType.nodes.attribution.attributed.entity]
+        externalId = 'Certificate'
+        id = 'chronicle:entity:Certificate'
+        certIdAttribute = 'SomeCertId'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // create another agent and attribute the entity to that other agent as well
+        insta::assert_json_snapshot!(schema
+              .execute(Request::new(
+                &format!(
+                r#"
+                  mutation anotherAgent {{
+                    defineContractorAgent(externalId: "Certifier2", attributes: {{ locationAttribute: "AnotherLocation"}}) {{
+                      context
+                    }}
+                    wasAttributedTo( role: UNSPECIFIED, responsible: {{ id: "chronicle:agent:Certifier2" }}, entity: {{id: "chronicle:entity:{test_entity}" }}) {{
+                      context
+                    }}
+                  }}
+              "#,
+              )))
+              .await, @r###"
+        {
+          "data": {
+            "defineContractorAgent": {
+              "context": "chronicle:agent:Certifier2"
+            },
+            "wasAttributedTo": {
+              "context": "chronicle:agent:Certifier2"
+            }
+          }
+        }
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // query WasAttributedTo relationship
+        insta::assert_toml_snapshot!(schema
+              .execute(Request::new(
+                &format!(
+                  r#"
+                query queryWasAttributedToSecondAgent {{
+                  entityById(id: {{id: "chronicle:entity:{test_entity}" }}) {{
+                    ... on CertificateEntity {{
+                      id
+                      externalId
+                      wasAttributedTo {{
+                        responsible {{
+                          role
+                          agent {{
+                            ... on ContractorAgent {{
+                              externalId
+                              id
+                              locationAttribute
+                            }}
+                          }}
+                        }}
+                      }}
+                    }}
+                  }}
+                }}
+            "#,
+              )))
+              .await, @r###"
+        [data.entityById]
+        id = 'chronicle:entity:Certificate'
+        externalId = 'Certificate'
+
+        [[data.entityById.wasAttributedTo]]
+        [data.entityById.wasAttributedTo.responsible]
+        role = 'CERTIFIER'
+
+        [data.entityById.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier'
+        id = 'chronicle:agent:Certifier'
+        locationAttribute = 'SomeLocation'
+
+        [[data.entityById.wasAttributedTo]]
+        [data.entityById.wasAttributedTo.responsible]
+        role = 'UNSPECIFIED'
+
+        [data.entityById.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier2'
+        id = 'chronicle:agent:Certifier2'
+        locationAttribute = 'AnotherLocation'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+            .execute(Request::new(
+                r#"
+            query queryWasAttributedToSecondAgentAnotherWay {
+                entitiesByType(entityType: CertificateEntity) {
+                  nodes {
+                    ... on CertificateEntity {
+                        id
+                        externalId
+                        wasAttributedTo {
+                          responsible {
+                            role
+                            agent {
+                              ... on ContractorAgent {
+                                externalId
+                                id
+                                locationAttribute
+                              }
+                            }
+                          }
+                        }
+                    }
+                }
+              }
+            }
+        "#,
+            ))
+            .await, @r###"
+        [[data.entitiesByType.nodes]]
+        id = 'chronicle:entity:Certificate'
+        externalId = 'Certificate'
+
+        [[data.entitiesByType.nodes.wasAttributedTo]]
+        [data.entitiesByType.nodes.wasAttributedTo.responsible]
+        role = 'CERTIFIER'
+
+        [data.entitiesByType.nodes.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier'
+        id = 'chronicle:agent:Certifier'
+        locationAttribute = 'SomeLocation'
+
+        [[data.entitiesByType.nodes.wasAttributedTo]]
+        [data.entitiesByType.nodes.wasAttributedTo.responsible]
+        role = 'UNSPECIFIED'
+
+        [data.entitiesByType.nodes.wasAttributedTo.responsible.agent]
+        externalId = 'Certifier2'
+        id = 'chronicle:agent:Certifier2'
+        locationAttribute = 'AnotherLocation'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+                .execute(Request::new(
+                    r#"
+                query querySecondAgentAttribution {
+                  agentById(id: {externalId: "Certifier2" }) {
+                    ... on ContractorAgent {
+                      id
+                      externalId
+                      attribution {
+                        attributed {
+                          role
+                          entity {
+                            ... on CertificateEntity {
+                              externalId
+                              id
+                              certIdAttribute
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            "#,
+              ))
+              .await, @r###"
+        [data.agentById]
+        id = 'chronicle:agent:Certifier2'
+        externalId = 'Certifier2'
+
+        [[data.agentById.attribution]]
+        [data.agentById.attribution.attributed]
+        role = 'UNSPECIFIED'
+
+        [data.agentById.attribution.attributed.entity]
+        externalId = 'Certificate'
+        id = 'chronicle:entity:Certificate'
+        certIdAttribute = 'SomeCertId'
+        "###);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insta::assert_toml_snapshot!(schema
+                .execute(Request::new(
+                    r#"
+                query querySecondAgentAttributionAnotherWay {
+                  agentsByType(agentType: ContractorAgent) {
+                    nodes {
+                      ... on ContractorAgent {
+                        id
+                        externalId
+                        attribution {
+                          attributed {
+                            role
+                            entity {
+                              ... on CertificateEntity {
+                                  externalId
+                                  id
+                                  certIdAttribute
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            "#,
+                ))
+                .await, @r###"
+        [[data.agentsByType.nodes]]
+        id = 'chronicle:agent:Certifier'
+        externalId = 'Certifier'
+
+        [[data.agentsByType.nodes.attribution]]
+        [data.agentsByType.nodes.attribution.attributed]
+        role = 'CERTIFIER'
+
+        [data.agentsByType.nodes.attribution.attributed.entity]
+        externalId = 'Certificate'
+        id = 'chronicle:entity:Certificate'
+        certIdAttribute = 'SomeCertId'
+
+        [[data.agentsByType.nodes]]
+        id = 'chronicle:agent:Certifier2'
+        externalId = 'Certifier2'
+
+        [[data.agentsByType.nodes.attribution]]
+        [data.agentsByType.nodes.attribution.attributed]
+        role = 'UNSPECIFIED'
+
+        [data.agentsByType.nodes.attribution.attributed.entity]
+        externalId = 'Certificate'
+        id = 'chronicle:entity:Certificate'
+        certIdAttribute = 'SomeCertId'
+        "###);
+    }
+
+    #[tokio::test]
     async fn generated() {
         let schema = test_schema().await;
 

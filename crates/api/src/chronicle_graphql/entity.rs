@@ -1,6 +1,6 @@
-use super::{Activity, Entity, Evidence, Namespace, Store};
+use super::{Activity, Agent, Entity, Evidence, Namespace, Store};
 use async_graphql::Context;
-use common::prov::operations::DerivationType;
+use common::prov::{operations::DerivationType, Role};
 use diesel::prelude::*;
 
 async fn typed_derivation<'a>(
@@ -60,6 +60,33 @@ pub async fn evidence<'a>(
         Ok(None)
     }
 }
+
+/// Return the agents to which an entity was attributed along with the roles in which it was attributed
+pub async fn was_attributed_to<'a>(
+    id: i32,
+    ctx: &Context<'a>,
+) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
+    use crate::persistence::schema::{agent, attribution};
+
+    let store = ctx.data_unchecked::<Store>();
+    let mut connection = store.pool.get()?;
+
+    let res = attribution::table
+        .filter(attribution::dsl::entity_id.eq(id))
+        .inner_join(agent::table)
+        .order(agent::external_id)
+        .select((Agent::as_select(), attribution::role))
+        .load::<(Agent, Role)>(&mut connection)?
+        .into_iter()
+        .map(|(agent, role)| {
+            let role = if role.0.is_empty() { None } else { Some(role) };
+            (agent, role)
+        })
+        .collect();
+
+    Ok(res)
+}
+
 pub async fn was_generated_by<'a>(
     id: i32,
     ctx: &Context<'a>,

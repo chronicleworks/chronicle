@@ -199,6 +199,53 @@ impl ToJson for ProvModel {
             }
         }
 
+        for (_, attributions) in self.attribution.iter() {
+            for attribution in attributions {
+                if let Value::Object(mut attribution_doc) = json!({
+                    "@id": attribution.id.de_compact(),
+                    "@type": [Iri::from(Prov::Attribution).as_str()],
+                }) {
+                    let mut values = Vec::new();
+
+                    values.push(json!({
+                        "@id": Value::String(attribution.agent_id.de_compact()),
+                    }));
+
+                    attribution_doc.insert(
+                        Iri::from(Prov::Responsible).to_string(),
+                        Value::Array(values),
+                    );
+
+                    attribution_doc.insert(
+                        Iri::from(Prov::HadEntity).to_string(),
+                        Value::Array(vec![json!({
+                            "@id": Value::String(attribution.entity_id.de_compact()),
+                        })]),
+                    );
+
+                    if let Some(role) = &attribution.role {
+                        attribution_doc.insert(
+                            Iri::from(Prov::HadRole).to_string(),
+                            json!([{ "@value": role.to_string()}]),
+                        );
+                    }
+
+                    let mut values = Vec::new();
+
+                    values.push(json!({
+                        "@id": Value::String(attribution.namespace_id.de_compact()),
+                    }));
+
+                    attribution_doc.insert(
+                        Iri::from(Chronicle::HasNamespace).to_string(),
+                        Value::Array(values),
+                    );
+
+                    doc.push(Value::Object(attribution_doc));
+                }
+            }
+        }
+
         for (_, delegations) in self.delegation.iter() {
             for delegation in delegations {
                 if let Value::Object(mut delegationdoc) = json!({
@@ -442,6 +489,26 @@ impl ToJson for ProvModel {
                     entitydoc.insert(
                         Iri::from(Chronicle::HadEvidence).to_string(),
                         Value::Array(values),
+                    );
+                }
+
+                if let Some(attributions) = self.attribution.get(&entity_key) {
+                    let mut ids = Vec::new();
+
+                    let mut qualified_ids = Vec::new();
+                    for attribution in attributions.iter() {
+                        ids.push(json!({"@id": attribution.agent_id.de_compact()}));
+                        qualified_ids.push(json!({"@id": attribution.id.de_compact()}));
+                    }
+
+                    entitydoc.insert(
+                        Iri::from(Prov::WasAttributedTo).de_compact(),
+                        Value::Array(ids),
+                    );
+
+                    entitydoc.insert(
+                        Iri::from(Prov::QualifiedAttribution).de_compact(),
+                        Value::Array(qualified_ids),
                     );
                 }
 
@@ -1008,6 +1075,41 @@ impl ToJson for ChronicleOperation {
                 o.has_value(
                     OperationValue::string(activity_id.external_id_part()),
                     ChronicleOperations::ActivityName,
+                );
+
+                o.has_value(
+                    OperationValue::string(agent_id.external_id_part()),
+                    ChronicleOperations::AgentName,
+                );
+
+                if let Some(role) = role {
+                    o.has_value(OperationValue::string(role), ChronicleOperations::Role);
+                }
+
+                o
+            }
+            ChronicleOperation::WasAttributedTo(WasAttributedTo {
+                id: _,
+                role,
+                namespace,
+                entity_id,
+                agent_id,
+            }) => {
+                let mut o = Value::new_operation(ChronicleOperations::WasAttributedTo);
+
+                o.has_value(
+                    OperationValue::string(namespace.external_id_part()),
+                    ChronicleOperations::NamespaceName,
+                );
+
+                o.has_value(
+                    OperationValue::string(namespace.uuid_part()),
+                    ChronicleOperations::NamespaceUuid,
+                );
+
+                o.has_value(
+                    OperationValue::string(entity_id.external_id_part()),
+                    ChronicleOperations::EntityName,
                 );
 
                 o.has_value(

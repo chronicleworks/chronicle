@@ -21,7 +21,7 @@ use common::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-            WasGeneratedBy, WasInformedBy,
+            WasAttributedTo, WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
@@ -914,6 +914,18 @@ where
                     .await
             }
             (
+                ApiCommand::Entity(EntityCommand::Attribute {
+                    id,
+                    namespace,
+                    responsible,
+                    role,
+                }),
+                identity,
+            ) => {
+                self.attribute(namespace, responsible, id, role, identity)
+                    .await
+            }
+            (
                 ApiCommand::Entity(EntityCommand::Create {
                     external_id,
                     namespace,
@@ -1030,6 +1042,47 @@ where
                 let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
                     &namespace,
                     &activity_id,
+                    &responsible_id,
+                    role,
+                ));
+
+                to_apply.push(tx);
+
+                api.apply_effects_and_submit(
+                    connection,
+                    responsible_id,
+                    identity,
+                    to_apply,
+                    namespace,
+                    applying_new_namespace,
+                )
+            })
+        })
+        .await?
+    }
+
+    #[instrument(skip(self))]
+    async fn attribute(
+        &self,
+        namespace: ExternalId,
+        responsible_id: AgentId,
+        entity_id: EntityId,
+        role: Option<Role>,
+        identity: AuthId,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+
+            connection.build_transaction().run(|connection| {
+                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+
+                let applying_new_namespace = !to_apply.is_empty();
+
+                let tx = ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
+                    &namespace,
+                    &entity_id,
                     &responsible_id,
                     role,
                 ));
@@ -1729,6 +1782,7 @@ mod test {
         usage: {}
         was_informed_by: {}
         generated: {}
+        attribution: {}
         "###);
     }
 
