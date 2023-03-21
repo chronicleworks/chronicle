@@ -7,7 +7,8 @@ use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::instrument;
-use url::Url;
+
+use super::{JwksUri, UserInfoUri};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -46,22 +47,26 @@ pub struct JwtChecker {
 
 impl JwtChecker {
     #[instrument(level = "debug")]
-    pub fn new(jwks_uri: &Url, userinfo_uri: Option<&Url>, cache_expiry_seconds: u32) -> Self {
+    pub fn new(
+        jwks_uri: &JwksUri,
+        userinfo_uri: Option<&UserInfoUri>,
+        cache_expiry_seconds: u32,
+    ) -> Self {
         Self {
             client: reqwest::Client::new(),
             verifier: RemoteJwksVerifier::new(
-                jwks_uri.to_string(),
+                jwks_uri.uri.to_string(),
                 None,
                 Duration::from_secs(cache_expiry_seconds.into()),
             ),
-            userinfo_uri: userinfo_uri.map(|s| s.to_string()),
+            userinfo_uri: userinfo_uri.map(|s| s.uri.to_string()),
             userinfo_cache: Arc::new(Mutex::new(TimedCache::with_lifespan(
                 cache_expiry_seconds.into(),
             ))),
         }
     }
 
-    #[instrument(level = "trace", skip(self), ret(Debug))]
+    #[instrument(level = "trace", skip_all, err)]
     async fn attempt_jwt(&self, token: &str) -> Result<Map<String, Value>, Error> {
         let base64_engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
@@ -87,7 +92,7 @@ impl JwtChecker {
         }
     }
 
-    #[instrument(level = "debug", skip(self), ret(Debug))]
+    #[instrument(level = "debug", skip_all, err)]
     pub async fn verify_jwt(&self, token: &str) -> Result<Map<String, Value>, Error> {
         let mut claims = Map::new();
         let mut error = None;

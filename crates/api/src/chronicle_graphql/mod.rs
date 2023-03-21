@@ -413,9 +413,65 @@ where
     mutation: Mutation,
 }
 
+pub struct JwksUri {
+    uri: Url,
+}
+
+impl JwksUri {
+    pub fn new(uri: Url) -> Self {
+        Self { uri }
+    }
+}
+
+impl std::fmt::Debug for JwksUri {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            r#"JwksUri {{ uri: Url {{ scheme: {:?}, cannot_be_a_base: {:?}, username: {:?}, password: ***SECRET***, host: {:?}, port: {:?}, path: {:?}, query: {:?}, fragment: {:?} }} }}"#,
+            self.uri.scheme(),
+            self.uri.cannot_be_a_base(),
+            self.uri.username(),
+            self.uri.host(),
+            self.uri.port(),
+            self.uri.path(),
+            self.uri.query(),
+            self.uri.fragment(),
+        )?;
+        Ok(())
+    }
+}
+
+pub struct UserInfoUri {
+    uri: Url,
+}
+
+impl UserInfoUri {
+    pub fn new(uri: Url) -> Self {
+        Self { uri }
+    }
+}
+
+impl std::fmt::Debug for UserInfoUri {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            r#"UserInfoUri {{ uri: Url {{ scheme: {:?}, cannot_be_a_base: {:?}, username: {:?}, password: ***SECRET***, host: {:?}, port: {:?}, path: {:?}, query: {:?}, fragment: {:?} }} }}"#,
+            self.uri.scheme(),
+            self.uri.cannot_be_a_base(),
+            self.uri.username(),
+            self.uri.host(),
+            self.uri.port(),
+            self.uri.path(),
+            self.uri.query(),
+            self.uri.fragment(),
+        )?;
+        Ok(())
+    }
+}
+
 pub struct SecurityConf {
-    jwks_uri: Option<Url>,
-    userinfo_uri: Option<Url>,
+    jwks_uri: Option<JwksUri>,
+    userinfo_uri: Option<UserInfoUri>,
     id_pointer: Option<String>,
     jwt_must_claim: HashMap<String, String>,
     allow_anonymous: bool,
@@ -424,8 +480,8 @@ pub struct SecurityConf {
 
 impl SecurityConf {
     pub fn new(
-        jwks_uri: Option<Url>,
-        userinfo_uri: Option<Url>,
+        jwks_uri: Option<JwksUri>,
+        userinfo_uri: Option<UserInfoUri>,
         id_pointer: Option<String>,
         jwt_must_claim: HashMap<String, String>,
         allow_anonymous: bool,
@@ -483,7 +539,7 @@ fn check_required_claim(must_value: &str, actual_value: &serde_json::Value) -> b
     }
 }
 
-#[instrument(level = "debug", ret(Debug))]
+#[instrument(level = "trace", ret(Debug))]
 fn check_required_claims(
     must_claim: &HashMap<String, String>,
     actual_claims: &serde_json::Map<String, serde_json::Value>,
@@ -513,7 +569,7 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    #[instrument(level = "debug", skip(self, prepare_req), ret(Debug))]
+    #[instrument(level = "debug", skip_all, ret(Debug))]
     async fn respond(
         &self,
         req: poem::Request,
@@ -547,7 +603,7 @@ where
                     }
                 }
             }
-            tracing::warn!(
+            tracing::trace!(
                 "rejected authorization from {}: {:?}",
                 req.remote_addr(),
                 authorization
@@ -557,10 +613,10 @@ where
                 StatusCode::UNAUTHORIZED,
             ))
         } else if self.allow_anonymous {
-            tracing::debug!("anonymous access from {}", req.remote_addr());
+            tracing::trace!("anonymous access from {}", req.remote_addr());
             self.respond(req, |req| req.0).await
         } else {
-            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
             Err(poem::error::Error::from_string(
                 "required Authorization header not present",
                 StatusCode::UNAUTHORIZED,
@@ -582,7 +638,7 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    #[instrument(level = "debug", skip(self), ret(Debug))]
+    #[instrument(level = "trace", skip(self, req), ret(Debug))]
     async fn respond(
         &self,
         req: poem::Request,
@@ -627,7 +683,7 @@ where
                     }
                 }
             }
-            tracing::warn!(
+            tracing::trace!(
                 "rejected authorization from {}: {:?}",
                 req.remote_addr(),
                 authorization
@@ -639,7 +695,7 @@ where
         } else if self.allow_anonymous {
             self.respond(req, async_graphql::Data::default()).await
         } else {
-            tracing::warn!("rejected anonymous access from {}", req.remote_addr());
+            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
             Err(poem::error::Error::from_string(
                 "required Authorization header not present",
                 StatusCode::UNAUTHORIZED,
@@ -693,7 +749,7 @@ pub struct OpaCheck {
 
 #[async_trait::async_trait]
 impl async_graphql::extensions::Extension for OpaCheck {
-    #[instrument(level = "debug", skip_all, ret(Debug))]
+    #[instrument(level = "trace", skip_all, ret(Debug))]
     async fn resolve(
         &self,
         ctx: &async_graphql::extensions::ExtensionContext<'_>,
@@ -787,7 +843,7 @@ where
         let app = match sec.jwks_uri {
             Some(jwks_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
-                tracing::debug!("API endpoint authentication uses {}", jwks_uri);
+                tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
                 Route::new()
                     .at(
                         "/",
