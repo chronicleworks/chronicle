@@ -1,5 +1,5 @@
 use iref::{AsIri, Iri};
-use json::{object, JsonValue};
+use serde_json::{json, Value};
 
 use crate::{
     attributes::{Attribute, Attributes},
@@ -19,58 +19,63 @@ pub trait ToJson {
 impl ToJson for ProvModel {
     /// Write the model out as a JSON-LD document in expanded form
     fn to_json(&self) -> ExpandedJson {
-        let mut doc = json::Array::new();
+        let mut doc = Vec::new();
 
         for (id, ns) in self.namespaces.iter() {
-            doc.push(object! {
+            doc.push(json!({
                 "@id": (*id.de_compact()),
-                "@type": Iri::from(Chronicle::Namespace).as_str(),
+                "@type": [Iri::from(Chronicle::Namespace).as_str()],
                 "http://btp.works/chronicle/ns#externalId": [{
                     "@value": ns.external_id.as_str(),
                 }]
-            })
+            }))
         }
 
         for ((ns, id), identity) in self.identities.iter() {
-            doc.push(object! {
+            doc.push(json!({
                 "@id": (*id.de_compact()),
-                "@type": Iri::from(Chronicle::Identity).as_str(),
+                "@type": [Iri::from(Chronicle::Identity).as_str()],
                 "http://btp.works/chronicle/ns#publicKey": [{
                     "@value": identity.public_key.to_string(),
                 }],
                 "http://btp.works/chronicle/ns#hasNamespace": [{
                     "@id": ns.de_compact()
                 }],
-            })
+            }))
         }
 
         for ((ns, id), attachment) in self.attachments.iter() {
-            let mut attachmentdoc = object! {
+            if let Value::Object(mut attachmentdoc) = json!({
                 "@id": (*id.de_compact()),
-                "@type": Iri::from(Chronicle::HasEvidence).as_str(),
-                "http://btp.works/chronicle/ns#entitySignature": attachment.signature.to_string(),
-                "http://btp.works/chronicle/ns#signedAtTime": attachment.signature_time.to_rfc3339(),
-                "http://btp.works/chronicle/ns#signedBy": {
+                "@type": [Iri::from(Chronicle::HasEvidence).as_str()],
+                "http://btp.works/chronicle/ns#entitySignature": [{
+                    "@value": attachment.signature.to_string()
+                }],
+                "http://btp.works/chronicle/ns#signedAtTime": [{
+                    "@value": attachment.signature_time.to_rfc3339()
+                }],
+                "http://btp.works/chronicle/ns#signedBy": [{
                     "@id": attachment.signer.de_compact()
-                },
+                }],
                 "http://btp.works/chronicle/ns#hasNamespace": [{
                     "@id": ns.de_compact()
                 }],
-            };
+            }) {
+                if let Some(locator) = attachment.locator.as_ref() {
+                    let mut values = Vec::new();
 
-            if let Some(locator) = attachment.locator.as_ref() {
-                let mut values = json::Array::new();
+                    values.push(json!({
+                        "@value": Value::String(locator.to_owned()),
+                    }));
 
-                values.push(object! {
-                    "@value": JsonValue::String(locator.to_owned()),
-                });
+                    attachmentdoc.insert(
+                        Iri::from(Chronicle::Locator).to_string(),
+                        Value::Array(values),
+                    );
+                }
 
-                attachmentdoc
-                    .insert(Iri::from(Chronicle::Locator).as_str(), values)
-                    .ok();
+                doc.push(Value::Object(attachmentdoc));
             }
-
-            doc.push(attachmentdoc);
         }
 
         for ((_, id), agent) in self.agents.iter() {
@@ -79,176 +84,175 @@ impl ToJson for ProvModel {
                 typ.push(x.de_compact())
             }
 
-            let mut agentdoc = object! {
+            if let Value::Object(mut agentdoc) = json!({
                 "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://btp.works/chronicle/ns#externalId": [{
                    "@value": agent.external_id.as_str(),
                 }]
-            };
+            }) {
+                let agent_key = (agent.namespaceid.clone(), agent.id.clone());
 
-            let agent_key = (agent.namespaceid.clone(), agent.id.clone());
-
-            if let Some((_, identity)) = self.has_identity.get(&agent_key) {
-                agentdoc
-                    .insert(
-                        Iri::from(Chronicle::HasIdentity).as_str(),
-                        object! {"@id": identity.de_compact()},
-                    )
-                    .ok();
-            }
-
-            if let Some(identities) = self.had_identity.get(&agent_key) {
-                let mut values = json::Array::new();
-
-                for (_, id) in identities {
-                    values.push(object! { "@id": id.de_compact()});
-                }
-                agentdoc
-                    .insert(Iri::from(Chronicle::HadIdentity).as_str(), values)
-                    .ok();
-            }
-
-            if let Some(delegation) = self
-                .delegation
-                .get(&(agent.namespaceid.to_owned(), id.to_owned()))
-            {
-                let mut ids = json::Array::new();
-                let mut qualified_ids = json::Array::new();
-
-                for delegation in delegation.iter() {
-                    ids.push(object! {"@id": delegation.delegate_id.de_compact()});
-                    qualified_ids.push(object! {"@id": delegation.id.de_compact()});
+                if let Some((_, identity)) = self.has_identity.get(&agent_key) {
+                    agentdoc.insert(
+                        Iri::from(Chronicle::HasIdentity).to_string(),
+                        json!([{"@id": identity.de_compact()}]),
+                    );
                 }
 
-                agentdoc
-                    .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), ids)
-                    .ok();
+                if let Some(identities) = self.had_identity.get(&agent_key) {
+                    let mut values = Vec::new();
 
-                agentdoc
-                    .insert(Iri::from(Prov::QualifiedDelegation).as_str(), qualified_ids)
-                    .ok();
+                    for (_, id) in identities {
+                        values.push(json!({ "@id": id.de_compact()}));
+                    }
+                    agentdoc.insert(
+                        Iri::from(Chronicle::HadIdentity).to_string(),
+                        Value::Array(values),
+                    );
+                }
+
+                if let Some(delegation) = self
+                    .delegation
+                    .get(&(agent.namespaceid.to_owned(), id.to_owned()))
+                {
+                    let mut ids = Vec::new();
+                    let mut qualified_ids = Vec::new();
+
+                    for delegation in delegation.iter() {
+                        ids.push(json!({"@id": delegation.delegate_id.de_compact()}));
+                        qualified_ids.push(json!({"@id": delegation.id.de_compact()}));
+                    }
+
+                    agentdoc.insert(
+                        Iri::from(Prov::ActedOnBehalfOf).to_string(),
+                        Value::Array(ids),
+                    );
+
+                    agentdoc.insert(
+                        Iri::from(Prov::QualifiedDelegation).to_string(),
+                        Value::Array(qualified_ids),
+                    );
+                }
+
+                let mut values = Vec::new();
+
+                values.push(json!({
+                    "@id": Value::String(agent.namespaceid.de_compact()),
+                }));
+
+                agentdoc.insert(
+                    Iri::from(Chronicle::HasNamespace).to_string(),
+                    Value::Array(values),
+                );
+
+                Self::write_attributes(&mut agentdoc, agent.attributes.values());
+
+                doc.push(Value::Object(agentdoc));
             }
-
-            let mut values = json::Array::new();
-
-            values.push(object! {
-                "@id": JsonValue::String(agent.namespaceid.de_compact()),
-            });
-
-            agentdoc
-                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                .ok();
-
-            Self::write_attributes(&mut agentdoc, agent.attributes.values());
-
-            doc.push(agentdoc);
         }
 
         for (_, associations) in self.association.iter() {
             for association in associations {
-                let mut associationdoc = object! {
+                if let Value::Object(mut associationdoc) = json!({
                     "@id": association.id.de_compact(),
-                    "@type": Iri::from(Prov::Association).as_str(),
-                };
+                    "@type": [Iri::from(Prov::Association).as_str()],
+                }) {
+                    let mut values = Vec::new();
 
-                let mut values = json::Array::new();
+                    values.push(json!({
+                        "@id": Value::String(association.agent_id.de_compact()),
+                    }));
 
-                values.push(object! {
-                    "@id": JsonValue::String(association.agent_id.de_compact()),
-                });
+                    associationdoc.insert(
+                        Iri::from(Prov::Responsible).to_string(),
+                        Value::Array(values),
+                    );
 
-                associationdoc
-                    .insert(Iri::from(Prov::Responsible).as_str(), values)
-                    .ok();
+                    associationdoc.insert(
+                        Iri::from(Prov::HadActivity).to_string(),
+                        Value::Array(vec![json!({
+                            "@id": Value::String(association.activity_id.de_compact()),
+                        })]),
+                    );
 
-                associationdoc
-                    .insert(
-                        Iri::from(Prov::HadActivity).as_str(),
-                        vec![object! {
-                            "@id": JsonValue::String(association.activity_id.de_compact()),
-                        }],
-                    )
-                    .ok();
+                    if let Some(role) = &association.role {
+                        associationdoc.insert(
+                            Iri::from(Prov::HadRole).to_string(),
+                            json!([{ "@value": role.to_string()}]),
+                        );
+                    }
 
-                if let Some(role) = &association.role {
-                    associationdoc
-                        .insert(
-                            Iri::from(Prov::HadRole).as_str(),
-                            vec![JsonValue::String(role.to_string())],
-                        )
-                        .ok();
+                    let mut values = Vec::new();
+
+                    values.push(json!({
+                        "@id": Value::String(association.namespace_id.de_compact()),
+                    }));
+
+                    associationdoc.insert(
+                        Iri::from(Chronicle::HasNamespace).to_string(),
+                        Value::Array(values),
+                    );
+
+                    doc.push(Value::Object(associationdoc));
                 }
-
-                let mut values = json::Array::new();
-
-                values.push(object! {
-                    "@id": JsonValue::String(association.namespace_id.de_compact()),
-                });
-
-                associationdoc
-                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                    .ok();
-
-                doc.push(associationdoc);
             }
         }
 
         for (_, delegations) in self.delegation.iter() {
             for delegation in delegations {
-                let mut delegationdoc = object! {
+                if let Value::Object(mut delegationdoc) = json!({
                     "@id": delegation.id.de_compact(),
-                    "@type": Iri::from(Prov::Delegation).as_str(),
-                };
+                    "@type": [Iri::from(Prov::Delegation).as_str()],
+                }) {
+                    if let Some(activity_id) = &delegation.activity_id {
+                        delegationdoc.insert(
+                            Iri::from(Prov::HadActivity).to_string(),
+                            Value::Array(vec![json!({
+                                "@id": Value::String(activity_id.de_compact()),
+                            })]),
+                        );
+                    }
 
-                if let Some(activity_id) = &delegation.activity_id {
-                    delegationdoc
-                        .insert(
-                            Iri::from(Prov::HadActivity).as_str(),
-                            vec![object! {
-                                "@id": JsonValue::String(activity_id.de_compact()),
-                            }],
-                        )
-                        .ok();
+                    if let Some(role) = &delegation.role {
+                        delegationdoc.insert(
+                            Iri::from(Prov::HadRole).to_string(),
+                            json!([{ "@value": role.to_string()}]),
+                        );
+                    }
+
+                    let mut responsible_ids = Vec::new();
+                    responsible_ids.push(
+                        json!({ "@id": Value::String(delegation.responsible_id.de_compact())}),
+                    );
+
+                    delegationdoc.insert(
+                        Iri::from(Prov::Responsible).to_string(),
+                        Value::Array(responsible_ids),
+                    );
+
+                    let mut delegate_ids = Vec::new();
+                    delegate_ids
+                        .push(json!({ "@id": Value::String(delegation.delegate_id.de_compact())}));
+
+                    delegationdoc.insert(
+                        Iri::from(Prov::ActedOnBehalfOf).to_string(),
+                        Value::Array(delegate_ids),
+                    );
+
+                    let mut values = Vec::new();
+
+                    values.push(json!({
+                        "@id": Value::String(delegation.namespace_id.de_compact()),
+                    }));
+
+                    delegationdoc.insert(
+                        Iri::from(Chronicle::HasNamespace).to_string(),
+                        Value::Array(values),
+                    );
+
+                    doc.push(Value::Object(delegationdoc));
                 }
-
-                if let Some(role) = &delegation.role {
-                    delegationdoc
-                        .insert(
-                            Iri::from(Prov::HadRole).as_str(),
-                            vec![JsonValue::String(role.to_string())],
-                        )
-                        .ok();
-                }
-
-                let mut responsible_ids = json::Array::new();
-                responsible_ids.push(
-                    object! { "@id": JsonValue::String(delegation.responsible_id.de_compact())},
-                );
-
-                delegationdoc
-                    .insert(Iri::from(Prov::Responsible).as_str(), responsible_ids)
-                    .ok();
-
-                let mut delegate_ids = json::Array::new();
-                delegate_ids
-                    .push(object! { "@id": JsonValue::String(delegation.delegate_id.de_compact())});
-
-                delegationdoc
-                    .insert(Iri::from(Prov::ActedOnBehalfOf).as_str(), delegate_ids)
-                    .ok();
-
-                let mut values = json::Array::new();
-
-                values.push(object! {
-                    "@id": JsonValue::String(delegation.namespace_id.de_compact()),
-                });
-
-                delegationdoc
-                    .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                    .ok();
-
-                doc.push(delegationdoc);
             }
         }
 
@@ -258,94 +262,95 @@ impl ToJson for ProvModel {
                 typ.push(x.de_compact())
             }
 
-            let mut activitydoc = object! {
+            if let Value::Object(mut activitydoc) = json!({
                 "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://btp.works/chronicle/ns#externalId": [{
                    "@value": activity.external_id.as_str(),
                 }]
-            };
+            }) {
+                if let Some(time) = activity.started {
+                    let mut values = Vec::new();
+                    values.push(json!({"@value": time.to_rfc3339()}));
 
-            if let Some(time) = activity.started {
-                let mut values = json::Array::new();
-                values.push(object! {"@value": time.to_rfc3339()});
-
-                activitydoc
-                    .insert("http://www.w3.org/ns/prov#startedAtTime", values)
-                    .ok();
-            }
-
-            if let Some(time) = activity.ended {
-                let mut values = json::Array::new();
-                values.push(object! {"@value": time.to_rfc3339()});
-
-                activitydoc
-                    .insert("http://www.w3.org/ns/prov#endedAtTime", values)
-                    .ok();
-            }
-
-            if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
-                let mut ids = json::Array::new();
-
-                let mut qualified_ids = json::Array::new();
-                for asoc in asoc.iter() {
-                    ids.push(object! {"@id": asoc.agent_id.de_compact()});
-                    qualified_ids.push(object! {"@id": asoc.id.de_compact()});
+                    activitydoc.insert(
+                        "http://www.w3.org/ns/prov#startedAtTime".to_string(),
+                        Value::Array(values),
+                    );
                 }
 
-                activitydoc
-                    .insert(&Iri::from(Prov::WasAssociatedWith).de_compact(), ids)
-                    .ok();
+                if let Some(time) = activity.ended {
+                    let mut values = Vec::new();
+                    values.push(json!({"@value": time.to_rfc3339()}));
 
-                activitydoc
-                    .insert(
-                        &Iri::from(Prov::QualifiedAssociation).de_compact(),
-                        qualified_ids,
-                    )
-                    .ok();
-            }
-
-            if let Some(usage) = self.usage.get(&(namespace.to_owned(), id.to_owned())) {
-                let mut ids = json::Array::new();
-
-                for usage in usage.iter() {
-                    ids.push(object! {"@id": usage.entity_id.de_compact()});
+                    activitydoc.insert(
+                        "http://www.w3.org/ns/prov#endedAtTime".to_string(),
+                        Value::Array(values),
+                    );
                 }
 
-                activitydoc
-                    .insert(&Iri::from(Prov::Used).de_compact(), ids)
-                    .ok();
-            }
+                if let Some(asoc) = self.association.get(&(namespace.to_owned(), id.to_owned())) {
+                    let mut ids = Vec::new();
 
-            let mut values = json::Array::new();
+                    let mut qualified_ids = Vec::new();
+                    for asoc in asoc.iter() {
+                        ids.push(json!({"@id": asoc.agent_id.de_compact()}));
+                        qualified_ids.push(json!({"@id": asoc.id.de_compact()}));
+                    }
 
-            values.push(object! {
-                "@id": JsonValue::String(activity.namespaceid.de_compact()),
-            });
+                    activitydoc.insert(
+                        Iri::from(Prov::WasAssociatedWith).de_compact(),
+                        Value::Array(ids),
+                    );
 
-            activitydoc
-                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                .ok();
-
-            if let Some(activities) = self
-                .was_informed_by
-                .get(&(namespace.to_owned(), id.to_owned()))
-            {
-                let mut values = json::Array::new();
-
-                for (_, activity) in activities {
-                    values.push(object! {
-                        "@id": JsonValue::String(activity.de_compact()),
-                    });
+                    activitydoc.insert(
+                        Iri::from(Prov::QualifiedAssociation).de_compact(),
+                        Value::Array(qualified_ids),
+                    );
                 }
-                activitydoc
-                    .insert(Iri::from(Prov::WasInformedBy).as_str(), values)
-                    .ok();
+
+                if let Some(usage) = self.usage.get(&(namespace.to_owned(), id.to_owned())) {
+                    let mut ids = Vec::new();
+
+                    for usage in usage.iter() {
+                        ids.push(json!({"@id": usage.entity_id.de_compact()}));
+                    }
+
+                    activitydoc.insert(Iri::from(Prov::Used).de_compact(), Value::Array(ids));
+                }
+
+                let mut values = Vec::new();
+
+                values.push(json!({
+                    "@id": Value::String(activity.namespaceid.de_compact()),
+                }));
+
+                activitydoc.insert(
+                    Iri::from(Chronicle::HasNamespace).to_string(),
+                    Value::Array(values),
+                );
+
+                if let Some(activities) = self
+                    .was_informed_by
+                    .get(&(namespace.to_owned(), id.to_owned()))
+                {
+                    let mut values = Vec::new();
+
+                    for (_, activity) in activities {
+                        values.push(json!({
+                            "@id": Value::String(activity.de_compact()),
+                        }));
+                    }
+                    activitydoc.insert(
+                        Iri::from(Prov::WasInformedBy).to_string(),
+                        Value::Array(values),
+                    );
+                }
+
+                Self::write_attributes(&mut activitydoc, activity.attributes.values());
+
+                doc.push(Value::Object(activitydoc));
             }
-
-            Self::write_attributes(&mut activitydoc, activity.attributes.values());
-
-            doc.push(activitydoc);
         }
 
         for ((namespace, id), entity) in self.entities.iter() {
@@ -354,140 +359,138 @@ impl ToJson for ProvModel {
                 typ.push(x.de_compact())
             }
 
-            let mut entitydoc = object! {
+            if let Value::Object(mut entitydoc) = json!({
                 "@id": (*id.de_compact()),
                 "@type": typ,
                 "http://btp.works/chronicle/ns#externalId": [{
                    "@value": entity.external_id.as_str()
                 }]
-            };
+            }) {
+                if let Some(derivation) =
+                    self.derivation.get(&(namespace.to_owned(), id.to_owned()))
+                {
+                    let mut derived_ids = Vec::new();
+                    let mut primary_ids = Vec::new();
+                    let mut quotation_ids = Vec::new();
+                    let mut revision_ids = Vec::new();
 
-            if let Some(derivation) = self.derivation.get(&(namespace.to_owned(), id.to_owned())) {
-                let mut derived_ids = json::Array::new();
-                let mut primary_ids = json::Array::new();
-                let mut quotation_ids = json::Array::new();
-                let mut revision_ids = json::Array::new();
-
-                for derivation in derivation.iter() {
-                    let id = object! {"@id": derivation.used_id.de_compact()};
-                    match derivation.typ {
-                        Some(DerivationType::PrimarySource) => primary_ids.push(id),
-                        Some(DerivationType::Quotation) => quotation_ids.push(id),
-                        Some(DerivationType::Revision) => revision_ids.push(id),
-                        _ => derived_ids.push(id),
+                    for derivation in derivation.iter() {
+                        let id = json!({"@id": derivation.used_id.de_compact()});
+                        match derivation.typ {
+                            Some(DerivationType::PrimarySource) => primary_ids.push(id),
+                            Some(DerivationType::Quotation) => quotation_ids.push(id),
+                            Some(DerivationType::Revision) => revision_ids.push(id),
+                            _ => derived_ids.push(id),
+                        }
+                    }
+                    if !derived_ids.is_empty() {
+                        entitydoc.insert(
+                            Iri::from(Prov::WasDerivedFrom).to_string(),
+                            Value::Array(derived_ids),
+                        );
+                    }
+                    if !primary_ids.is_empty() {
+                        entitydoc.insert(
+                            Iri::from(Prov::HadPrimarySource).to_string(),
+                            Value::Array(primary_ids),
+                        );
+                    }
+                    if !quotation_ids.is_empty() {
+                        entitydoc.insert(
+                            Iri::from(Prov::WasQuotedFrom).to_string(),
+                            Value::Array(quotation_ids),
+                        );
+                    }
+                    if !revision_ids.is_empty() {
+                        entitydoc.insert(
+                            Iri::from(Prov::WasRevisionOf).to_string(),
+                            Value::Array(revision_ids),
+                        );
                     }
                 }
-                if !derived_ids.is_empty() {
-                    entitydoc
-                        .insert(Iri::from(Prov::WasDerivedFrom).as_str(), derived_ids)
-                        .ok();
+
+                if let Some(generation) =
+                    self.generation.get(&(namespace.to_owned(), id.to_owned()))
+                {
+                    let mut ids = Vec::new();
+
+                    for generation in generation.iter() {
+                        ids.push(json!({"@id": generation.activity_id.de_compact()}));
+                    }
+
+                    entitydoc.insert(
+                        Iri::from(Prov::WasGeneratedBy).to_string(),
+                        Value::Array(ids),
+                    );
                 }
-                if !primary_ids.is_empty() {
-                    entitydoc
-                        .insert(Iri::from(Prov::HadPrimarySource).as_str(), primary_ids)
-                        .ok();
+
+                let entity_key = (entity.namespaceid.clone(), entity.id.clone());
+
+                if let Some((_, identity)) = self.has_evidence.get(&entity_key) {
+                    entitydoc.insert(
+                        Iri::from(Chronicle::HasEvidence).to_string(),
+                        json!([{"@id": identity.de_compact()}]),
+                    );
                 }
-                if !quotation_ids.is_empty() {
-                    entitydoc
-                        .insert(Iri::from(Prov::WasQuotedFrom).as_str(), quotation_ids)
-                        .ok();
+
+                if let Some(identities) = self.had_attachment.get(&entity_key) {
+                    let mut values = Vec::new();
+
+                    for (_, id) in identities {
+                        values.push(json!({ "@id": id.de_compact()}));
+                    }
+                    entitydoc.insert(
+                        Iri::from(Chronicle::HadEvidence).to_string(),
+                        Value::Array(values),
+                    );
                 }
-                if !revision_ids.is_empty() {
-                    entitydoc
-                        .insert(Iri::from(Prov::WasRevisionOf).as_str(), revision_ids)
-                        .ok();
-                }
+
+                let mut values = Vec::new();
+
+                values.push(json!({
+                    "@id": Value::String(entity.namespaceid.de_compact()),
+                }));
+
+                entitydoc.insert(
+                    Iri::from(Chronicle::HasNamespace).to_string(),
+                    Value::Array(values),
+                );
+
+                Self::write_attributes(&mut entitydoc, entity.attributes.values());
+
+                doc.push(Value::Object(entitydoc));
             }
-
-            if let Some(generation) = self.generation.get(&(namespace.to_owned(), id.to_owned())) {
-                let mut ids = json::Array::new();
-
-                for generation in generation.iter() {
-                    ids.push(object! {"@id": generation.activity_id.de_compact()});
-                }
-
-                entitydoc
-                    .insert(Iri::from(Prov::WasGeneratedBy).as_str(), ids)
-                    .ok();
-            }
-
-            let entity_key = (entity.namespaceid.clone(), entity.id.clone());
-
-            if let Some((_, identity)) = self.has_evidence.get(&entity_key) {
-                entitydoc
-                    .insert(
-                        Iri::from(Chronicle::HasEvidence).as_str(),
-                        object! {"@id": identity.de_compact()},
-                    )
-                    .ok();
-            }
-
-            if let Some(identities) = self.had_attachment.get(&entity_key) {
-                let mut values = json::Array::new();
-
-                for (_, id) in identities {
-                    values.push(object! { "@id": id.de_compact()});
-                }
-                entitydoc
-                    .insert(Iri::from(Chronicle::HadEvidence).as_str(), values)
-                    .ok();
-            }
-
-            let mut values = json::Array::new();
-
-            values.push(object! {
-                "@id": JsonValue::String(entity.namespaceid.de_compact()),
-            });
-
-            entitydoc
-                .insert(Iri::from(Chronicle::HasNamespace).as_str(), values)
-                .ok();
-
-            Self::write_attributes(&mut entitydoc, entity.attributes.values());
-
-            doc.push(entitydoc);
         }
 
-        ExpandedJson(doc.into())
+        ExpandedJson(Value::Array(doc))
     }
 }
 
-fn we_need_to_update_the_ld_library_to_a_version_that_supports_serde(
-    json: &serde_json::Value,
-) -> JsonValue {
-    json::parse(&json.to_string()).unwrap()
-}
-
 impl ProvModel {
-    fn write_attributes<'a, I: Iterator<Item = &'a Attribute>>(doc: &mut JsonValue, attributes: I) {
-        let mut attribute_node = object! {};
+    fn write_attributes<'a, I: Iterator<Item = &'a Attribute>>(
+        doc: &mut serde_json::Map<String, Value>,
+        attributes: I,
+    ) {
+        let mut attribute_node = serde_json::Map::new();
 
         for attribute in attributes {
-            attribute_node
-                .insert(
-                    &attribute.typ,
-                    we_need_to_update_the_ld_library_to_a_version_that_supports_serde(
-                        &attribute.value,
-                    ),
-                )
-                .ok();
+            attribute_node.insert(attribute.typ.clone(), attribute.value.clone());
         }
 
         doc.insert(
-            Chronicle::Value.as_iri().as_ref(),
-            object! {"@value" : attribute_node, "@type": "@json"},
-        )
-        .ok();
+            Chronicle::Value.as_iri().to_string(),
+            json!([{"@value" : Value::Object(attribute_node), "@type": "@json"}]),
+        );
     }
 }
 
 impl ToJson for ChronicleOperation {
     fn to_json(&self) -> ExpandedJson {
-        let mut operation: Vec<JsonValue> = json::Array::new();
+        let mut operation: Vec<Value> = Vec::new();
 
         let o = match self {
             ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::CreateNamespace);
+                let mut o = Value::new_operation(ChronicleOperations::CreateNamespace);
 
                 o.has_value(
                     OperationValue::string(id.external_id_part()),
@@ -505,7 +508,7 @@ impl ToJson for ChronicleOperation {
                 namespace,
                 external_id,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::AgentExists);
+                let mut o = Value::new_operation(ChronicleOperations::AgentExists);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -532,7 +535,7 @@ impl ToJson for ChronicleOperation {
                 role,
                 responsible_id,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::AgentActsOnBehalfOf);
+                let mut o = Value::new_operation(ChronicleOperations::AgentActsOnBehalfOf);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -572,7 +575,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 publickey,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::RegisterKey);
+                let mut o = Value::new_operation(ChronicleOperations::RegisterKey);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -600,7 +603,7 @@ impl ToJson for ChronicleOperation {
                 namespace,
                 external_id,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::ActivityExists);
+                let mut o = Value::new_operation(ChronicleOperations::ActivityExists);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -624,7 +627,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 time,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::StartActivity);
+                let mut o = Value::new_operation(ChronicleOperations::StartActivity);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -653,7 +656,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 time,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::EndActivity);
+                let mut o = Value::new_operation(ChronicleOperations::EndActivity);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -682,7 +685,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 activity,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::ActivityUses);
+                let mut o = Value::new_operation(ChronicleOperations::ActivityUses);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -710,7 +713,7 @@ impl ToJson for ChronicleOperation {
                 namespace,
                 external_id,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::EntityExists);
+                let mut o = Value::new_operation(ChronicleOperations::EntityExists);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -734,7 +737,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 activity,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::WasGeneratedBy);
+                let mut o = Value::new_operation(ChronicleOperations::WasGeneratedBy);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -763,7 +766,7 @@ impl ToJson for ChronicleOperation {
                 activity,
                 informing_activity,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::WasInformedBy);
+                let mut o = Value::new_operation(ChronicleOperations::WasInformedBy);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -796,7 +799,7 @@ impl ToJson for ChronicleOperation {
                 signature,
                 signature_time,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::EntityHasEvidence);
+                let mut o = Value::new_operation(ChronicleOperations::EntityHasEvidence);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -855,7 +858,7 @@ impl ToJson for ChronicleOperation {
                 activity_id,
                 typ,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::EntityDerive);
+                let mut o = Value::new_operation(ChronicleOperations::EntityDerive);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -895,7 +898,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 attributes,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
+                let mut o = Value::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -926,7 +929,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 attributes,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
+                let mut o = Value::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -957,7 +960,7 @@ impl ToJson for ChronicleOperation {
                 id,
                 attributes,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::SetAttributes);
+                let mut o = Value::new_operation(ChronicleOperations::SetAttributes);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -990,7 +993,7 @@ impl ToJson for ChronicleOperation {
                 activity_id,
                 agent_id,
             }) => {
-                let mut o = JsonValue::new_operation(ChronicleOperations::WasAssociatedWith);
+                let mut o = Value::new_operation(ChronicleOperations::WasAssociatedWith);
 
                 o.has_value(
                     OperationValue::string(namespace.external_id_part()),
@@ -1047,40 +1050,48 @@ trait Operate {
     fn derivation(&mut self, typ: &DerivationType);
 }
 
-impl Operate for JsonValue {
+impl Operate for Value {
     fn new_type(id: OperationValue, op: ChronicleOperations) -> Self {
-        object! {
+        json!({
             "@id": id.0,
-            "@type": iref::Iri::from(op).as_str(),
-        }
+            "@type": [iref::Iri::from(op).as_str()],
+        })
     }
 
     fn new_value(id: OperationValue) -> Self {
-        object! {
+        json!({
             "@value": id.0
-        }
+        })
     }
 
     fn new_id(id: OperationValue) -> Self {
-        object! {
+        json!({
             "@id": id.0
-        }
+        })
     }
 
     fn has_value(&mut self, value: OperationValue, op: ChronicleOperations) {
-        let key = iref::Iri::from(op).to_string();
-        let mut values: Vec<JsonValue> = json::Array::new();
-        let object = Self::new_value(value);
-        values.push(object);
-        self.insert(&key, values).ok();
+        if let Value::Object(map) = self {
+            let key = iref::Iri::from(op).to_string();
+            let mut values: Vec<Value> = Vec::new();
+            let object = Self::new_value(value);
+            values.push(object);
+            map.insert(key, Value::Array(values));
+        } else {
+            panic!("use on JSON objects only");
+        }
     }
 
     fn has_id(&mut self, id: OperationValue, op: ChronicleOperations) {
-        let key = iref::Iri::from(op).to_string();
-        let mut value: Vec<JsonValue> = json::Array::new();
-        let object = Self::new_id(id);
-        value.push(object);
-        self.insert(&key, value).ok();
+        if let Value::Object(map) = self {
+            let key = iref::Iri::from(op).to_string();
+            let mut value: Vec<Value> = Vec::new();
+            let object = Self::new_id(id);
+            value.push(object);
+            map.insert(key, Value::Array(value));
+        } else {
+            panic!("use on JSON objects only");
+        }
     }
 
     fn new_operation(op: ChronicleOperations) -> Self {
@@ -1089,23 +1100,18 @@ impl Operate for JsonValue {
     }
 
     fn attributes_object(&mut self, attributes: &Attributes) {
-        let mut attribute_node = object! {};
-        for attribute in attributes.attributes.values() {
-            attribute_node
-                .insert(
-                    &attribute.typ,
-                    we_need_to_update_the_ld_library_to_a_version_that_supports_serde(
-                        &attribute.value,
-                    ),
-                )
-                .ok();
+        if let Value::Object(map) = self {
+            let mut attribute_node = serde_json::Map::new();
+            for attribute in attributes.attributes.values() {
+                attribute_node.insert(attribute.typ.clone(), attribute.value.clone());
+            }
+            map.insert(
+                iref::Iri::from(ChronicleOperations::Attributes).to_string(),
+                json!([{"@value" : attribute_node, "@type": "@json"}]),
+            );
+        } else {
+            panic!("use on JSON objects only");
         }
-
-        self.insert(
-            iref::Iri::from(ChronicleOperations::Attributes).as_ref(),
-            object! {"@value" : attribute_node, "@type": "@json"},
-        )
-        .ok();
     }
 
     fn derivation(&mut self, typ: &DerivationType) {

@@ -1,5 +1,4 @@
 use chrono::Utc;
-use json::JsonValue;
 use proptest::{option, prelude::*};
 
 use uuid::Uuid;
@@ -366,7 +365,7 @@ fn compact_json(prov: &ProvModel) -> CompactedJson {
         .unwrap()
 }
 
-fn prov_from_json_ld(json: JsonValue) -> ProvModel {
+fn prov_from_json_ld(json: serde_json::Value) -> ProvModel {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -405,7 +404,7 @@ proptest! {
             let op_json = op.to_json().0;
             prop_assert_eq!(op,
                 &rt.block_on(ChronicleOperation::from_json(op.to_json())).unwrap(),
-                "Serialized operation {}",json::stringify_pretty(op_json,2));
+                "Serialized operation {}", serde_json::to_string_pretty(&op_json).unwrap());
 
             let res = prov.apply(op);
             if let Err(raised) = res {
@@ -678,6 +677,7 @@ proptest! {
 
         let serialized_prov = prov_from_json_ld(lhs_json.clone());
 
-        prop_assert_eq!(&prov,&serialized_prov,"Prov reserialisation compact: \n{} expanded \n {}",json::stringify_pretty(lhs_json, 2), json::stringify_pretty(lhs_json_expanded, 2));
+        prop_assert_eq!(&prov, &serialized_prov, "Prov reserialisation compact: \n{} expanded \n {}",
+            serde_json::to_string_pretty(&lhs_json).unwrap(), serde_json::to_string_pretty(&lhs_json_expanded).unwrap());
     }
 }

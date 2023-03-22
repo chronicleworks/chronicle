@@ -18,14 +18,14 @@ fn main() -> Result<()> {
         fs::create_dir(&out_path).expect("Could not create assets dir");
     }
 
-    let context = &PROV;
+    let context = &*PROV;
 
     std::fs::write(
         std::path::Path::new(&format!(
             "{}/context.json",
             out_path.as_os_str().to_string_lossy(),
         )),
-        context.pretty(2),
+        serde_json::to_string_pretty(context)?,
     )?;
 
     Ok(())

@@ -1,8 +1,8 @@
-use json::{object, JsonValue};
 use lazy_static::lazy_static;
+use serde_json::{json, Value};
 
 lazy_static! {
-    pub static ref PROV: JsonValue = object! {
+    pub static ref PROV: Value = json!({
         "@version": 1.1,
         "prov": "http://www.w3.org/ns/prov#",
         "provext": "https://openprovenance.org/ns/provext#",
@@ -131,5 +131,5 @@ lazy_static! {
             "@id": "chronicle:value",
             "@type" : "@json",
         },
-    };
+    });
 }

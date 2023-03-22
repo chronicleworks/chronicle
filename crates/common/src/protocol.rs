@@ -170,7 +170,7 @@ pub async fn chronicle_operations_from_submission(
 ) -> Result<Vec<ChronicleOperation>, ProcessorError> {
     let mut ops = Vec::with_capacity(submission_body.len());
     for op in submission_body.iter() {
-        let json = json::parse(op)?;
+        let json = serde_json::from_str(op)?;
         // The inner json value should be in compacted form,
         // wrapping in `ExpandedJson`, as required by `ChronicleOperation::from_json`
         let op = ChronicleOperation::from_json(ExpandedJson(json)).await?;

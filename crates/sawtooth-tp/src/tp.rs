@@ -207,8 +207,9 @@ impl TP for ChronicleTransactionHandler {
             .into_iter()
             .flat_map(|v: Vec<StateOutput<SawtoothAddress>>| v.into_iter())
         {
-            let state =
-                json::parse(&output.data).map_err(|e| ApplyError::InternalError(e.to_string()))?;
+            let state: serde_json::Value = serde_json::from_str(&output.data)
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+
             delta
                 .apply_json_ld_str(&output.data)
                 .await
@@ -216,7 +217,7 @@ impl TP for ChronicleTransactionHandler {
 
             effects.set_state_entry(
                 output.address.to_string(),
-                json::stringify(state).as_bytes().to_vec(),
+                serde_json::to_vec(&state).map_err(|e| ApplyError::InternalError(e.to_string()))?,
             )
         }
 
@@ -247,14 +248,12 @@ impl TP for ChronicleTransactionHandler {
             .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
 
         // Set up Context for OPA rule check
-        let operation = serde_json::to_value(
-            tx.to_json()
-                .compact()
-                .await
-                .map_err(|e| ApplyError::InternalError(ProcessorError::Compaction(e).to_string()))?
-                .dump(),
-        )
-        .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
+        let operation = tx
+            .to_json()
+            .compact()
+            .await
+            .map_err(|e| ApplyError::InternalError(ProcessorError::Compaction(e).to_string()))?
+            .0;
 
         // Get the dependencies
         let deps = tx

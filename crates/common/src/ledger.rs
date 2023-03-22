@@ -1,7 +1,6 @@
 use derivative::Derivative;
 use futures::{stream, SinkExt, Stream, StreamExt};
 
-use json::JsonValue;
 use serde::ser::SerializeSeq;
 use tracing::{debug, instrument, trace};
 use uuid::Uuid;
@@ -222,7 +221,7 @@ pub trait LedgerReader {
 /// An in memory ledger implementation for development and testing purposes
 #[derive(Debug, Clone)]
 pub struct InMemLedger {
-    kv: RefCell<HashMap<LedgerAddress, JsonValue>>,
+    kv: RefCell<HashMap<LedgerAddress, serde_json::Value>>,
     chan: UnboundedSender<CommitResult>,
     reader: Option<InMemLedgerReader>,
     head: u64,
@@ -256,7 +255,12 @@ impl Default for InMemLedger {
 impl std::fmt::Display for InMemLedger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (k, v) in self.kv.borrow().iter() {
-            writeln!(f, "{}: {}", k, v.pretty(2))?;
+            writeln!(
+                f,
+                "{}: {}",
+                k,
+                serde_json::to_string_pretty(v).map_err(|_| std::fmt::Error)?
+            )?;
         }
         Ok(())
     }
@@ -379,7 +383,7 @@ impl LedgerWriter for InMemLedger {
             .into_iter()
             .flat_map(|v: Vec<StateOutput<LedgerAddress>>| v.into_iter())
         {
-            let state = json::parse(&output.data).unwrap();
+            let state = serde_json::from_str(&output.data).unwrap();
             delta
                 .apply_json_ld_str(&output.data)
                 .await
@@ -794,11 +798,11 @@ impl ChronicleOperation {
         input: Vec<StateInput>,
     ) -> Result<serde_json::Value, ProcessorError> {
         for input in input {
-            let graph = json::parse(&input.data)?;
-            debug!(input_model=%graph.pretty(2));
-            let resource = json::object! {
+            let graph: serde_json::Value = serde_json::from_str(&input.data)?;
+            debug!(input_model=%serde_json::to_string_pretty(&graph).map_or_else(|e| format!("error: {e}"), |x| x));
+            let resource = serde_json::json!({
                 "@graph": [graph],
-            };
+            });
             model.apply_json_ld(resource).await?;
         }
 
