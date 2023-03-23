@@ -939,17 +939,10 @@ impl SubCommand for CliModel {
                 .help(
                     "Instrument using RUST_LOG environment, writing in either human readable format or structured json to stdio",
              ))
-             .arg(
-                Arg::new("embedded-database")
-                    .long("embedded-database")
-                    .help("use an embedded PostgreSQL")
-                    .conflicts_with("remote-database")
-                // no conflict with database_* because they may be set in environment but not used for this invocation
-            )
             .arg(
                 Arg::new("remote-database")
                     .long("remote-database")
-                    .help("connect to a provided PostgreSQL")
+                    .help("connect to a provided PostgreSQL (option is ignored and deprecated)")
             )
              .arg(
                 Arg::new("database-host")

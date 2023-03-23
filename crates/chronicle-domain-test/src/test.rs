@@ -71,7 +71,7 @@ mod test {
         async_graphql::{Request, Response, Schema},
         chrono::{DateTime, NaiveDate, Utc},
         common::{
-            database::get_embedded_db_connection,
+            database::TemporaryDatabase,
             identity::AuthId,
             ledger::InMemLedger,
             opa::{CliPolicyLoader, ExecutorContext},
@@ -93,7 +93,7 @@ mod test {
         }
     }
 
-    async fn test_schema() -> Schema<Query, Mutation, Subscription> {
+    async fn test_schema<'a>() -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
         let loader = CliPolicyLoader::from_embedded_policy(
             "allow_transactions",
             "allow_transactions.allowed_users",
@@ -104,7 +104,8 @@ mod test {
         test_schema_with_opa(opa_executor).await
     }
 
-    async fn test_schema_blocked_api() -> Schema<Query, Mutation, Subscription> {
+    async fn test_schema_blocked_api<'a>(
+    ) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
         let loader = CliPolicyLoader::from_embedded_policy(
             "allow_transactions",
             "allow_transactions.deny_all",
@@ -115,9 +116,9 @@ mod test {
         test_schema_with_opa(opa_executor).await
     }
 
-    async fn test_schema_with_opa(
+    async fn test_schema_with_opa<'a>(
         opa_executor: ExecutorContext,
-    ) -> Schema<Query, Mutation, Subscription> {
+    ) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
@@ -129,7 +130,8 @@ mod test {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let (database, pool) = get_embedded_db_connection().await.unwrap();
+        let database = TemporaryDatabase::default();
+        let pool = database.connection_pool().unwrap();
 
         let dispatch = Api::new(
             pool.clone(),
@@ -142,19 +144,20 @@ mod test {
         .await
         .unwrap();
 
-        Schema::build(Query, Mutation, Subscription)
+        let schema = Schema::build(Query, Mutation, Subscription)
             .extension(OpaCheck { claim_parser: None })
             .data(Store::new(pool))
             .data(dispatch)
-            .data(database) // share the lifetime
             .data(AuthId::chronicle())
             .data(opa_executor)
-            .finish()
+            .finish();
+
+        (schema, database)
     }
 
     #[tokio::test]
     async fn accept_long_form_including_original_name_iris() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -218,7 +221,7 @@ mod test {
 
     #[tokio::test]
     async fn activity_timeline_no_duplicates() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_json_snapshot!(schema
         .execute(Request::new(
@@ -487,7 +490,7 @@ mod test {
 
     #[tokio::test]
     async fn api_calls_resulting_in_no_data_changes_return_null() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         let from = DateTime::<Utc>::from_utc(
             NaiveDate::from_ymd_opt(1968, 9, 1)
@@ -1034,7 +1037,7 @@ mod test {
 
     #[tokio::test]
     async fn one_of_id_or_external() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         let external_id_input = chronicle::async_graphql::Name::new("withexternalid");
 
@@ -1258,7 +1261,7 @@ mod test {
 
     #[tokio::test]
     async fn generic_json_object_attribute() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         // We doctor the test JSON input data as done in the `async_graphql` library JSON tests
         // https://docs.rs/async-graphql/latest/src/async_graphql/types/json.rs.html#20.
@@ -1325,7 +1328,7 @@ mod test {
 
     #[tokio::test]
     async fn agent_delegation() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1389,7 +1392,7 @@ mod test {
 
     #[tokio::test]
     async fn agent_delegation_for_activity() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         // create contractors
 
@@ -1756,7 +1759,7 @@ mod test {
 
     #[tokio::test]
     async fn untyped_derivation() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1806,7 +1809,7 @@ mod test {
 
     #[tokio::test]
     async fn primary_source() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1865,7 +1868,7 @@ mod test {
 
     #[tokio::test]
     async fn revision() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1923,7 +1926,7 @@ mod test {
 
     #[tokio::test]
     async fn quotation() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1981,7 +1984,7 @@ mod test {
 
     #[tokio::test]
     async fn agent_can_be_created() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2001,7 +2004,7 @@ mod test {
 
     #[tokio::test]
     async fn agent_by_type() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2041,7 +2044,7 @@ mod test {
 
     #[tokio::test]
     async fn activity_by_type() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2081,7 +2084,7 @@ mod test {
 
     #[tokio::test]
     async fn entity_by_type() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2123,7 +2126,7 @@ mod test {
 
     #[tokio::test]
     async fn was_informed_by() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         // create an activity
         insta::assert_toml_snapshot!(schema
@@ -2291,7 +2294,7 @@ mod test {
 
     #[tokio::test]
     async fn was_attributed_to() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
 
@@ -2822,7 +2825,7 @@ mod test {
 
     #[tokio::test]
     async fn generated() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         // create an activity
         insta::assert_toml_snapshot!(schema
@@ -2987,7 +2990,7 @@ mod test {
 
     #[tokio::test]
     async fn query_activity_timeline() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         let res = schema
                 .execute(Request::new(
@@ -4106,7 +4109,7 @@ mod test {
 
     #[tokio::test]
     async fn query_agents_by_cursor() {
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         for i in 0..100 {
             let res = schema
@@ -4626,7 +4629,7 @@ mod test {
     async fn subscribe_commit_notification() {
         use chronicle::async_graphql::futures_util::StreamExt;
 
-        let schema = test_schema().await;
+        let (schema, _database) = test_schema().await;
 
         let mut stream = schema.execute_stream(Request::new(
             r#"
@@ -4687,12 +4690,30 @@ mod test {
         stream.next().await.unwrap()
     }
 
-    struct SchemaPair {
+    struct SchemaPair<'a> {
         schema_allow: Schema<Query, Mutation, Subscription>,
         schema_deny: Schema<Query, Mutation, Subscription>,
+        _databases: (TemporaryDatabase<'a>, TemporaryDatabase<'a>),
     }
 
-    impl SchemaPair {
+    impl<'a> SchemaPair<'a> {
+        fn new(
+            (schema_allow, database_allow): (
+                Schema<Query, Mutation, Subscription>,
+                TemporaryDatabase<'a>,
+            ),
+            (schema_deny, database_deny): (
+                Schema<Query, Mutation, Subscription>,
+                TemporaryDatabase<'a>,
+            ),
+        ) -> Self {
+            Self {
+                schema_allow,
+                schema_deny,
+                _databases: (database_allow, database_deny),
+            }
+        }
+
         async fn check_responses(
             res_allow: impl Future<Output = Response>,
             res_deny: impl Future<Output = Response>,
@@ -4728,10 +4749,7 @@ mod test {
 
     #[tokio::test]
     async fn query_api_secured() {
-        let schemas = SchemaPair {
-            schema_allow: test_schema().await,
-            schema_deny: test_schema_blocked_api().await,
-        };
+        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
         schemas
             .check_responses_qm(
@@ -4850,11 +4868,7 @@ mod test {
         .unwrap();
         let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
         let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
-
-        let schemas = SchemaPair {
-            schema_allow: test_schema().await,
-            schema_deny: test_schema_allow_defines,
-        };
+        let schemas = SchemaPair::new(test_schema().await, test_schema_allow_defines);
 
         schemas
             .check_responses_s(
@@ -4879,10 +4893,7 @@ mod test {
 
     #[tokio::test]
     async fn mutation_api_secured() {
-        let schemas = SchemaPair {
-            schema_allow: test_schema().await,
-            schema_deny: test_schema_blocked_api().await,
-        };
+        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
         schemas
             .check_responses_qm(
@@ -5078,10 +5089,7 @@ mod test {
 
     #[tokio::test]
     async fn mutation_generated_api_secured() {
-        let schemas = SchemaPair {
-            schema_allow: test_schema().await,
-            schema_deny: test_schema_blocked_api().await,
-        };
+        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
         schemas
             .check_responses_qm(

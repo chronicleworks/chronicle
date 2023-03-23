@@ -13,7 +13,7 @@ use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
 use common::{
     commands::ApiResponse,
-    database::{get_connection_with_retry, Database, DatabaseConnector},
+    database::{get_connection_with_retry, DatabaseConnector},
     identity::AuthId,
     ledger::SubmissionStage,
     opa::{CliPolicyLoader, ExecutorContext, PolicyLoader},
@@ -114,13 +114,6 @@ impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
-async fn pool_embedded() -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    let (database, pool) = common::database::get_embedded_db_connection()
-        .await
-        .map_err(|source| api::StoreError::EmbeddedDb(source.to_string()))?;
-    Ok((pool, Some(database)))
-}
-
 struct RemoteDatabaseConnector {
     db_uri: String,
 }
@@ -144,14 +137,12 @@ impl DatabaseConnector<(), StoreError> for RemoteDatabaseConnector {
     }
 }
 
-async fn pool_remote(
-    db_uri: impl ToString,
-) -> Result<(ConnectionPool, Option<Database>), ApiError> {
+async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> {
     let (_, pool) = get_connection_with_retry(RemoteDatabaseConnector {
         db_uri: db_uri.to_string(),
     })
     .await?;
-    Ok((pool, None::<Database>))
+    Ok(pool)
 }
 
 fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
@@ -264,29 +255,6 @@ fn construct_db_uri(matches: &ArgMatches) -> String {
     )
 }
 
-async fn pool(matches: &ArgMatches) -> Result<(ConnectionPool, Option<Database>), ApiError> {
-    let mut relevant_error = None;
-    if !matches.is_present("embedded-database") {
-        debug!("connecting to remote DB");
-        match pool_remote(&construct_db_uri(matches)).await {
-            success @ Ok(_) => return success,
-            Err(error) => relevant_error = Some(error),
-        }
-    };
-    if !matches.is_present("remote-database") {
-        debug!("connecting to embedded DB");
-        match pool_embedded().await {
-            success @ Ok(_) => return success,
-            Err(error) => {
-                if relevant_error.is_none() {
-                    relevant_error = Some(error)
-                }
-            }
-        }
-    };
-    Err(relevant_error.unwrap())
-}
-
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
@@ -300,11 +268,12 @@ where
     dotenvy::dotenv().ok();
 
     let matches = cli.as_cmd().get_matches();
-    let (pool, _pool_scope) = pool(&matches).await?;
+
+    debug!("connecting to remote DB");
+    let pool = pool_remote(&construct_db_uri(&matches)).await?;
+
     let api = api(&pool, &matches, &config).await?;
     let ret_api = api.clone();
-
-    let api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-graphql") {
         let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
@@ -530,7 +499,7 @@ pub mod test {
     use api::{Api, ApiDispatch, ApiError, UuidGen};
     use common::{
         commands::{ApiCommand, ApiResponse},
-        database::{get_embedded_db_connection, Database},
+        database::TemporaryDatabase,
         identity::AuthId,
         ledger::{InMemLedger, SubmissionStage},
         prov::{
@@ -546,12 +515,12 @@ pub mod test {
     use super::{CliModel, SubCommand};
     use crate::codegen::ChronicleDomainDef;
 
-    struct TestDispatch {
+    struct TestDispatch<'a> {
         api: ApiDispatch,
-        _db: Database, // share lifetime
+        _db: TemporaryDatabase<'a>, // share lifetime
     }
 
-    impl TestDispatch {
+    impl TestDispatch<'_> {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
@@ -584,7 +553,7 @@ pub mod test {
         }
     }
 
-    async fn test_api() -> TestDispatch {
+    async fn test_api<'a>() -> TestDispatch<'a> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
@@ -596,7 +565,9 @@ pub mod test {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let (database, pool) = get_embedded_db_connection().await.unwrap();
+        let database = TemporaryDatabase::default();
+        let pool = database.connection_pool().unwrap();
+
         let dispatch = Api::new(
             pool,
             ledger,

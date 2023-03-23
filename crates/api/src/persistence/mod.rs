@@ -38,9 +38,6 @@ pub enum StoreError {
     #[error("Database operation failed: {0}")]
     Db(#[from] diesel::result::Error),
 
-    #[error("Embedded database failed: {0}")]
-    EmbeddedDb(String),
-
     #[error("Database connection failed (maybe check PGPASSWORD): {0}")]
     DbConnection(#[from] diesel::ConnectionError),
 
