@@ -191,8 +191,14 @@ the result of an operation should await the
 [Submission](#graphql-mutation-result---submission) and the corresponding
  `txId` from a commit notification.
 
- Chronicle will notify commit completion in 2 stages, the first will be a submit
- notification like:
+Chronicle can detect that submitted operations do not add to or contradict the
+state of the provenance objects. If the submission would not have any effect
+then a `null` value for `txId` is returned because the operations were not
+submitted to the transaction processor. The distributed ledger was not written
+to because there was nothing further with which to update it.
+
+Chronicle will notify commit completion in two stages. The first will be a
+submit notification like:
 
 ```json
 {
@@ -244,6 +250,11 @@ The delta field will be set to a JSON-LD object representing the provenance
 objects that have been affected by the transaction. Advanced integrations can
 use this as an update mechanism for reporting and other features that require
 asynchronous updates of Chronicle provenance.
+
+If a submission would not change any provenance objects then, not only would a
+`null` value of `txId` be returned to the submitter, but also there would be no
+notification of completion: nothing needed recording on the blockchain because,
+effectively, there was no `delta`.
 
 If error is set on either SUBMIT or COMMIT notifications, then the
 transaction can be assumed to have failed. If the failure is on submission then
