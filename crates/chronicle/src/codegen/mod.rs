@@ -42,11 +42,13 @@ fn gen_attribute_scalars(attributes: &[AttributeDef]) -> rust::Tokens {
     }
 }
 
-fn gen_association_unions() -> rust::Tokens {
+fn gen_association_and_attribution_unions() -> rust::Tokens {
     let simple_object = &rust::import("chronicle::async_graphql", "SimpleObject").qualified();
 
     let agent_ref_doc = include_str!("../../../../domain_docs/agent_ref.md");
     let association_doc = include_str!("../../../../domain_docs/association.md");
+    let attribution_doc = include_str!("../../../../domain_docs/attribution.md");
+    let entity_ref_doc = include_str!("../../../../domain_docs/entity_ref.md");
 
     quote! {
 
@@ -57,11 +59,30 @@ fn gen_association_unions() -> rust::Tokens {
         pub agent: Agent,
     }
 
+    #[doc = #_(#entity_ref_doc)]
+    #[derive(#simple_object)]
+    pub struct EntityRef {
+        pub role: RoleType,
+        pub entity: Entity,
+    }
+
     #[doc = #_(#association_doc)]
     #[derive(#simple_object)]
     pub struct Association {
         pub responsible : AgentRef,
         pub delegate: Option<AgentRef>,
+    }
+
+    #[doc = #_(#attribution_doc)]
+    #[derive(#simple_object)]
+    pub struct Attribution {
+        pub responsible : AgentRef,
+    }
+
+    #[doc = #_(#attribution_doc)]
+    #[derive(#simple_object)]
+    pub struct Attributed {
+        pub attributed : EntityRef,
     }
     }
 }
@@ -461,6 +482,7 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let id_doc = include_str!("../../../../domain_docs/id.md");
     let namespace_doc = include_str!("../../../../domain_docs/namespace.md");
     let type_doc = include_str!("../../../../domain_docs/type.md");
+    let was_attributed_to_doc = include_str!("../../../../domain_docs/was_attributed_to.md");
     let was_derived_from_doc = include_str!("../../../../domain_docs/was_derived_from.md");
     let was_generated_by_doc = include_str!("../../../../domain_docs/was_generated_by.md");
     let was_quoted_from_doc = include_str!("../../../../domain_docs/was_quoted_from.md");
@@ -501,6 +523,21 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         #[doc = #_(#evidence_doc)]
         async fn evidence<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#evidence>> {
             #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+        }
+
+        #[doc = #_(#was_attributed_to_doc)]
+        async fn was_attributed_to<'a>(
+            &self,
+            ctx: &#context<'a>,
+        ) -> #async_result<Vec<Attribution>> {
+            Ok(
+                #entity_impl::was_attributed_to(self.0.id, ctx)
+                    .await
+                    .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                    .into_iter()
+                    .map(|(agent, role)| map_attribution_to_role(agent, role))
+                    .collect(),
+            )
         }
 
         #[doc = #_(#was_generated_by_doc)]
@@ -614,6 +651,7 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
     let acted_on_behalf_of_doc = include_str!("../../../../domain_docs/acted_on_behalf_of.md");
+    let attribution_doc = include_str!("../../../../domain_docs/attribution.md");
     let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
     let id_doc = include_str!("../../../../domain_docs/id.md");
     let identity_doc = include_str!("../../../../domain_docs/identity.md");
@@ -660,6 +698,18 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
                 .into_iter()
                 .map(|(agent,role)|(Self(agent),role))
                 .map(|(agent,role)| AgentRef {agent : #agent_union_type::from(agent), role: role.into()})
+                .collect())
+        }
+
+        #[doc = #_(#attribution_doc)]
+        async fn attribution<'a>(&self, ctx: &#context<'a>) -> #async_result<Vec<Attributed>> {
+            Ok(#agent_impl::attribution(self.0.id, ctx)
+                .await
+                .map_err(|e| #async_graphql_error_extensions::extend(&e))?
+                .into_iter()
+                .map(|(entity, role)| {
+                    map_attributed_to_role(entity, role)
+                })
                 .collect())
         }
 
@@ -858,6 +908,42 @@ fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
                 (Some(delegate), Some(&_)) => {
                     Some(AgentRef{ role: RoleType::Unspecified, agent: map_agent_to_domain_type(delegate)})
                 },
+            }
+        }
+    }
+    /// Maps an `Agent` and, if applicable, `Role` to an attribution. Missing roles, or ones that are no longer specified in the domain, will be returned as `RoleType::Unspecified`
+    fn map_attribution_to_role(responsible: #agent_impl, responsible_role: Option<#role>) -> Attribution {
+        Attribution {
+            responsible: match responsible_role.as_ref().map(|x| x.as_str()) {
+                None => {
+                    AgentRef{ agent: map_agent_to_domain_type(responsible), role: RoleType::Unspecified }
+                },
+                #(for role in domain.roles.iter() =>
+                Some(#_(#(&role.preserve_inflection()))) => {AgentRef { role: RoleType::#(role.as_type_name()),
+                    agent: map_agent_to_domain_type(responsible)
+                }}
+                )
+                Some(&_) => {
+                    AgentRef{ agent: map_agent_to_domain_type(responsible), role: RoleType::Unspecified }
+                }
+            }
+        }
+    }
+    /// Maps to an attribution. Missing roles, or ones that are no longer specified in the domain, will be returned as `RoleType::Unspecified`
+    fn map_attributed_to_role(entity: #entity_impl, attributed_role: Option<#role>) -> Attributed {
+        Attributed {
+            attributed: match attributed_role.as_ref().map(|x| x.as_str()) {
+                None => {
+                    EntityRef{ entity: map_entity_to_domain_type(entity), role: RoleType::Unspecified }
+                },
+                #(for role in domain.roles.iter() =>
+                Some(#_(#(&role.preserve_inflection()))) => {EntityRef { role: RoleType::#(role.as_type_name()),
+                    entity: map_entity_to_domain_type(entity)
+                }}
+                )
+                Some(&_) => {
+                    EntityRef{ entity: map_entity_to_domain_type(entity), role: RoleType::Unspecified }
+                }
             }
         }
     }
@@ -1166,6 +1252,7 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     let start_doc = include_str!("../../../../domain_docs/start_activity.md");
     let used_doc = include_str!("../../../../domain_docs/used.md");
     let was_associated_with_doc = include_str!("../../../../domain_docs/was_associated_with.md");
+    let was_attributed_to_doc = include_str!("../../../../domain_docs/was_attributed_to.md");
     let was_derived_from_doc = include_str!("../../../../domain_docs/was_derived_from.md");
     let was_generated_by_doc = include_str!("../../../../domain_docs/was_generated_by.md");
     let was_informed_by_doc = include_str!("../../../../domain_docs/was_informed_by.md");
@@ -1450,6 +1537,18 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             #impls::was_associated_with(ctx, namespace, responsible.into(), activity.into(), role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
+        #[doc = #_(#was_attributed_to_doc)]
+        pub async fn was_attributed_to<'a>(
+            &self,
+            ctx: &#graphql_context<'a>,
+            namespace: Option<String>,
+            responsible: #agent_id,
+            entity: #entity_id,
+            role: RoleType
+        ) -> async_graphql::#graphql_result<#submission> {
+            #impls::was_attributed_to(ctx, namespace, responsible.into(), entity.into(), role.into()).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
+        }
+
         #[doc = #_(#used_doc)]
         pub async fn used<'a>(
             &self,
@@ -1526,7 +1625,7 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
     quote! {
     #(gen_attribute_scalars(&domain.attributes))
     #(gen_type_enums(domain))
-    #(gen_association_unions())
+    #(gen_association_and_attribution_unions())
     #(gen_abstract_prov_attributes())
     #(for agent in domain.agents.iter() => #(gen_attribute_definition(agent, &agent.attributes)))
     #(for activity in domain.activities.iter() => #(gen_attribute_definition(activity, &activity.attributes)))

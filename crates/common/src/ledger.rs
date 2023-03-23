@@ -9,7 +9,8 @@ use crate::prov::{
     operations::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
         CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence, RegisterKey,
-        SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
+        SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
+        WasInformedBy,
     },
     to_json_ld::ToJson,
     ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId, Contradiction,
@@ -669,6 +670,18 @@ impl ChronicleOperation {
                 LedgerAddress::namespace(namespace),
                 LedgerAddress::in_namespace(namespace, id.clone()),
                 LedgerAddress::in_namespace(namespace, activity_id.clone()),
+                LedgerAddress::in_namespace(namespace, agent_id.clone()),
+            ],
+            ChronicleOperation::WasAttributedTo(WasAttributedTo {
+                id,
+                namespace,
+                entity_id,
+                agent_id,
+                ..
+            }) => vec![
+                LedgerAddress::namespace(namespace),
+                LedgerAddress::in_namespace(namespace, id.clone()),
+                LedgerAddress::in_namespace(namespace, entity_id.clone()),
                 LedgerAddress::in_namespace(namespace, agent_id.clone()),
             ],
             ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {

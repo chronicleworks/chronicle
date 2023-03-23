@@ -361,6 +361,34 @@ pub async fn was_associated_with<'a>(
     transaction_context(res, ctx).await
 }
 
+pub async fn was_attributed_to<'a>(
+    ctx: &Context<'a>,
+    namespace: Option<String>,
+    responsible: AgentId,
+    id: EntityId,
+    role: Option<Role>,
+) -> async_graphql::Result<Submission> {
+    let api = ctx.data_unchecked::<ApiDispatch>();
+
+    let identity = ctx.data_unchecked::<AuthId>().to_owned();
+
+    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
+
+    let res = api
+        .dispatch(
+            ApiCommand::Entity(EntityCommand::Attribute {
+                id,
+                namespace,
+                responsible,
+                role,
+            }),
+            identity,
+        )
+        .await?;
+
+    transaction_context(res, ctx).await
+}
+
 pub async fn used<'a>(
     ctx: &Context<'a>,
     activity: ActivityId,

@@ -78,6 +78,12 @@ lazy_static! {
             "@container": "@set"
         },
 
+        "wasAttributedTo": {
+            "@id": "prov:wasAttributedTo",
+            "@type" : "@id",
+            "@container": "@set"
+        },
+
         "wasDerivedFrom": {
             "@id": "prov:wasDerivedFrom",
             "@type" : "@id",

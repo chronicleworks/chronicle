@@ -7,8 +7,9 @@ use crate::{
     attributes::{Attribute, Attributes},
     prov::{
         operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
-        Contradiction, Delegation, DelegationId, Derivation, DomaintypeId, EntityId, ExternalId,
-        ExternalIdPart, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage, UuidPart,
+        Attribution, Contradiction, Delegation, DelegationId, Derivation, DomaintypeId, EntityId,
+        ExternalId, ExternalIdPart, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage,
+        UuidPart,
     },
 };
 
@@ -524,6 +525,18 @@ proptest! {
                         );
 
                     prop_assert!(has_asoc);
+                }
+                ChronicleOperation::WasAttributedTo(WasAttributedTo { id : _, role, namespace, entity_id, agent_id }) => {
+                    let has_attribution = prov.attribution.get(&(namespace.to_owned(), entity_id.to_owned()))
+                        .unwrap()
+                        .contains(&Attribution::new(
+                            namespace,
+                            agent_id,
+                            entity_id,
+                            role.clone())
+                        );
+
+                    prop_assert!(has_attribution);
                 }
                 ChronicleOperation::ActivityUses(
                     ActivityUses { namespace, id, activity }) => {

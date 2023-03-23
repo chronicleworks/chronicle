@@ -202,6 +202,7 @@ pub enum ChronicleIri {
     Agent(AgentId),
     Activity(ActivityId),
     Association(AssociationId),
+    Attribution(AttributionId),
     Delegation(DelegationId),
 }
 
@@ -216,6 +217,7 @@ impl Display for ChronicleIri {
             ChronicleIri::Agent(id) => write!(f, "{id}"),
             ChronicleIri::Activity(id) => write!(f, "{id}"),
             ChronicleIri::Association(id) => write!(f, "{id}"),
+            ChronicleIri::Attribution(id) => write!(f, "{id}"),
             ChronicleIri::Delegation(id) => write!(f, "{id}"),
         }
     }
@@ -269,6 +271,12 @@ impl From<AssociationId> for ChronicleIri {
     }
 }
 
+impl From<AttributionId> for ChronicleIri {
+    fn from(val: AttributionId) -> Self {
+        ChronicleIri::Attribution(val)
+    }
+}
+
 impl From<DelegationId> for ChronicleIri {
     fn from(val: DelegationId) -> Self {
         ChronicleIri::Delegation(val)
@@ -305,6 +313,7 @@ impl FromStr for ChronicleIri {
             ["evidence", ..] => Ok(EvidenceId::try_from(iri.as_iri()?)?.into()),
             ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
             ["association", ..] => Ok(AssociationId::try_from(iri.as_iri()?)?.into()),
+            ["attribution", ..] => Ok(AttributionId::try_from(iri.as_iri()?)?.into()),
             ["delegation", ..] => Ok(DelegationId::try_from(iri.as_iri()?)?.into()),
             _ => Err(ParseIriError::UnparsableIri { iri }),
         }
@@ -552,6 +561,73 @@ impl From<&AssociationId> for IriRefBuf {
         Chronicle::association(
             &AgentId::from_external_id(&val.agent),
             &ActivityId::from_external_id(&val.activity),
+            &val.role,
+        )
+        .into()
+    }
+}
+
+// A composite identifier of agent, entity, and role
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+pub struct AttributionId {
+    agent: ExternalId,
+    entity: ExternalId,
+    role: Option<Role>,
+}
+
+impl Display for AttributionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(Into::<IriRefBuf>::into(self).as_str())
+    }
+}
+
+impl AttributionId {
+    pub fn from_component_ids(
+        agent: &AgentId,
+        entity: &EntityId,
+        role: Option<impl AsRef<str>>,
+    ) -> Self {
+        Self {
+            agent: agent.external_id_part().clone(),
+            entity: entity.external_id_part().clone(),
+            role: role.map(|x| Role::from(x.as_ref())),
+        }
+    }
+
+    pub fn agent(&self) -> AgentId {
+        AgentId::from_external_id(&self.agent)
+    }
+
+    pub fn entity(&self) -> EntityId {
+        EntityId::from_external_id(&self.entity)
+    }
+}
+
+impl<'a> TryFrom<Iri<'a>> for AttributionId {
+    type Error = ParseIriError;
+
+    fn try_from(value: Iri) -> Result<Self, Self::Error> {
+        let de_compacted = value.de_compact();
+
+        let value = Iri::from_str(&de_compacted)?;
+
+        match fragment_components(value).as_slice() {
+            [_, agent, entity, role] => Ok(Self {
+                agent: ExternalId::from(agent),
+                entity: ExternalId::from(entity),
+                role: optional_component("role", role)?.map(Role::from),
+            }),
+
+            _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
+        }
+    }
+}
+
+impl From<&AttributionId> for IriRefBuf {
+    fn from(val: &AttributionId) -> Self {
+        Chronicle::attribution(
+            &AgentId::from_external_id(&val.agent),
+            &EntityId::from_external_id(&val.entity),
             &val.role,
         )
         .into()

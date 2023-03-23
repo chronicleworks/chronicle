@@ -7,6 +7,7 @@ drop table hadidentity;
 drop table wasinformedby;
 drop table usage;
 drop table association;
+drop table attribution;
 drop table generation;
 drop table derivation;
 drop table delegation;

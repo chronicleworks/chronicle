@@ -18,7 +18,7 @@ use crate::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
             CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-            WasGeneratedBy, WasInformedBy,
+            WasAttributedTo, WasGeneratedBy, WasInformedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
         ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, ExternalIdPart, IdentityId,
@@ -186,6 +186,8 @@ impl ProvModel {
                     self.apply_node_as_delegation(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Association)) {
                     self.apply_node_as_association(o)?;
+                } else if o.has_type(&id_from_iri(&Prov::Attribution)) {
+                    self.apply_node_as_attribution(o)?;
                 }
             }
             Ok(())
@@ -329,6 +331,40 @@ impl ProvModel {
             .and_then(|x| Ok(ActivityId::try_from(x.as_iri())?))?;
 
         self.qualified_association(&namespace_id, &activity_id, &agent_id, role);
+
+        Ok(())
+    }
+
+    fn apply_node_as_attribution(
+        &mut self,
+        attribution: &Node<IriBuf, BlankIdBuf, ()>,
+    ) -> Result<(), ProcessorError> {
+        let namespace_id = extract_namespace(attribution)?;
+        self.namespace_context(&namespace_id);
+
+        let role = extract_scalar_prop(&Prov::HadRole, attribution)
+            .ok()
+            .and_then(|x| x.as_str().map(Role::from));
+
+        let agent_id = extract_reference_ids(&Prov::Responsible, attribution)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: as_json(attribution),
+                iri: Prov::Responsible.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
+
+        let entity_id = extract_reference_ids(&Prov::HadEntity, attribution)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: as_json(attribution),
+                iri: Prov::HadEntity.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(EntityId::try_from(x.as_iri())?))?;
+
+        self.qualified_attribution(&namespace_id, &entity_id, &agent_id, role);
 
         Ok(())
     }
@@ -1012,6 +1048,13 @@ impl ChronicleOperation {
                         o.optional_role(),
                     ),
                 ))
+            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasAttributedTo)) {
+                Ok(ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
+                    &o.namespace(),
+                    &o.entity(),
+                    &o.agent(),
+                    o.optional_role(),
+                )))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::WasInformedBy)) {
                 let namespace = o.namespace();
                 let activity = o.activity();

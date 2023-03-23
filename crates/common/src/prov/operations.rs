@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::attributes::Attributes;
 
 use super::{
-    ActivityId, AgentId, AssociationId, DelegationId, EntityId, ExternalId, IdentityId,
-    NamespaceId, Role,
+    ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, ExternalId,
+    IdentityId, NamespaceId, Role,
 };
 
 #[derive(
@@ -221,6 +221,32 @@ impl WasAssociatedWith {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct WasAttributedTo {
+    pub id: AttributionId,
+    pub role: Option<Role>,
+    pub namespace: NamespaceId,
+    pub entity_id: EntityId,
+    pub agent_id: AgentId,
+}
+
+impl WasAttributedTo {
+    pub fn new(
+        namespace: &NamespaceId,
+        entity_id: &EntityId,
+        agent_id: &AgentId,
+        role: Option<Role>,
+    ) -> Self {
+        Self {
+            id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
+            role,
+            namespace: namespace.clone(),
+            entity_id: entity_id.clone(),
+            agent_id: agent_id.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct EntityHasEvidence {
     pub namespace: NamespaceId,
@@ -288,6 +314,7 @@ pub enum ChronicleOperation {
     EntityHasEvidence(EntityHasEvidence),
     SetAttributes(SetAttributes),
     WasAssociatedWith(WasAssociatedWith),
+    WasAttributedTo(WasAttributedTo),
     WasInformedBy(WasInformedBy),
 }
 

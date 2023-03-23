@@ -11,10 +11,10 @@ use common::{
     attributes::Attribute,
     ledger::Offset,
     prov::{
-        Activity, ActivityId, Agent, AgentId, Association, Attachment, ChronicleTransactionId,
-        ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId, Entity, EntityId,
-        EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
-        NamespaceId, ProvModel, PublicKeyPart, Role, SignaturePart, Usage,
+        Activity, ActivityId, Agent, AgentId, Association, Attachment, Attribution,
+        ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
+        Entity, EntityId, EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId,
+        Namespace, NamespaceId, ProvModel, PublicKeyPart, Role, SignaturePart, Usage,
     },
 };
 use derivative::*;
@@ -642,6 +642,12 @@ impl Store {
             }
         }
 
+        for ((namespace_id, _), attribution) in model.attribution.iter() {
+            for attribution in attribution.iter() {
+                self.apply_was_attributed_to(connection, namespace_id, attribution)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -890,6 +896,39 @@ impl Store {
             .values((
                 &link::activity_id.eq(storedactivity.id),
                 &link::generated_entity_id.eq(storedentity.id),
+            ))
+            .on_conflict_do_nothing()
+            .execute(connection)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, connection))]
+    fn apply_was_attributed_to(
+        &self,
+        connection: &mut PgConnection,
+        namespace_id: &common::prov::NamespaceId,
+        attribution: &Attribution,
+    ) -> Result<(), StoreError> {
+        let stored_entity = self.entity_by_entity_external_id_and_namespace(
+            connection,
+            attribution.entity_id.external_id_part(),
+            namespace_id,
+        )?;
+
+        let stored_agent = self.agent_by_agent_external_id_and_namespace(
+            connection,
+            attribution.agent_id.external_id_part(),
+            namespace_id,
+        )?;
+
+        use schema::attribution::dsl as attr;
+        let no_role = common::prov::Role("".to_string());
+        diesel::insert_into(schema::attribution::table)
+            .values((
+                &attr::entity_id.eq(stored_entity.id),
+                &attr::agent_id.eq(stored_agent.id),
+                &attr::role.eq(attribution.role.as_ref().unwrap_or(&no_role)),
             ))
             .on_conflict_do_nothing()
             .execute(connection)?;
@@ -1193,15 +1232,37 @@ impl Store {
             attachment_id: _,
         } in entities
         {
+            let entity_id: EntityId = EntityId::from_external_id(&external_id);
+
+            for (agent, role) in schema::attribution::table
+                .filter(schema::attribution::entity_id.eq(&id))
+                .order(schema::attribution::entity_id.asc())
+                .inner_join(schema::agent::table)
+                .select((schema::agent::external_id, schema::attribution::role))
+                .load::<(String, String)>(connection)?
+            {
+                model.qualified_attribution(
+                    &namespaceid,
+                    &entity_id,
+                    &AgentId::from_external_id(agent),
+                    {
+                        if role.is_empty() {
+                            None
+                        } else {
+                            Some(Role(role))
+                        }
+                    },
+                );
+            }
+
             let attributes = schema::entity_attribute::table
                 .filter(schema::entity_attribute::entity_id.eq(&id))
                 .load::<query::EntityAttribute>(connection)?;
 
-            let id: EntityId = EntityId::from_external_id(&external_id);
             model.entities.insert(
-                (namespaceid.clone(), id.clone()),
+                (namespaceid.clone(), entity_id.clone()),
                 Entity {
-                    id,
+                    id: entity_id,
                     namespaceid: namespaceid.clone(),
                     external_id: external_id.into(),
                     domaintypeid: domaintype.map(DomaintypeId::from_external_id),

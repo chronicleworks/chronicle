@@ -244,6 +244,12 @@ pub enum EntityCommand {
         locator: Option<String>,
         agent: Option<AgentId>,
     },
+    Attribute {
+        id: EntityId,
+        namespace: ExternalId,
+        responsible: AgentId,
+        role: Option<Role>,
+    },
     Derive {
         id: EntityId,
         namespace: ExternalId,
