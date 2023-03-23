@@ -10,38 +10,30 @@ path = "src/lib.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.68"
-async-trait = "0.1.61"
-chrono = { version = "0.4.19", features = ["serde"] }
-derivative = "2.2.0"
-futures = "0.3.21"
-hex = "0.4.3"
-k256 = { version = "0.11.3", features = [
-  "default",
-  "arithmetic",
-  "ecdsa",
-  "pkcs8",
-  "sha256",
-  "std",
-  "pem",
-] }
-lazy_static = "1.4.0"
-openssl = "0.10.38"
-prost = "0.11.3"
-prost-types = "0.11.2"
-protobuf = "2.27.1"
-rand = { version = "0.8.5", features = ["getrandom"] }
-rand_core = "0.6.3"
-sawtooth-sdk = "0.5.2"
-serde = { version = "1.0.150", features = ["derive"] }
-serde_json = "1.0.89"
-thiserror = "1.0.38"
-tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
-tracing = "0.1.37"
-url = "2.3.1"
-uuid = { version = "1.2.2", features = ["v4", "serde", "std"] }
-zmq = "0.9.2"
+anyhow.workspace       = true
+async-trait.workspace  = true
+chrono                 = { workspace = true, features = ["serde"] }
+derivative.workspace   = true
+futures.workspace      = true
+hex.workspace          = true
+k256.workspace         = true
+lazy_static.workspace  = true
+openssl.workspace      = true
+prost.workspace        = true
+prost-types.workspace  = true
+protobuf.workspace     = true
+rand.workspace         = true
+rand_core.workspace    = true
+sawtooth-sdk.workspace = true
+serde                  = { workspace = true, features = ["derive"] }
+serde_json.workspace   = true
+thiserror.workspace    = true
+tokio.workspace        = true
+tracing.workspace      = true
+url.workspace          = true
+uuid.workspace         = true
+zmq.workspace          = true
 
 [build-dependencies]
-glob        = "0.3.0"
-prost-build = "0.10.0"
+glob.workspace        = true
+prost-build.workspace = true
