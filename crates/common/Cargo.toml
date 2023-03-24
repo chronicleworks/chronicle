@@ -7,85 +7,71 @@ version = "0.6.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.68"
-async-graphql = { features = [
+anyhow.workspace           = true
+async-graphql              = { workspace = true, features = [
   "opentelemetry",
   "chrono",
   "unblock",
   "default",
   "uuid",
-], version = "4.0.9" }
-async-trait = "0.1.53"
-chrono = { version = "0.4.19", features = ["serde"] }
-custom_error = "1.9.2"
-derivative = "2.2.0"
-diesel = { version = "2.0.0-rc.0", features = [
-  "postgres",
-  "uuid",
-  "chrono",
-  "r2d2",
 ] }
-futures = "0.3.21"
-glob = "0.3.0"
-hashbrown = "0.13"
-hex = "0.4.3"
-iref = "2.1.2"
-iref-enum = "2.0.0"
-json-ld = "0.14"
-k256 = { version = "0.11.3", features = [
-  "default",
-  "arithmetic",
-  "ecdsa",
-  "pkcs8",
-  "serde",
-  "sha256",
-  "std",
-  "pem",
-] }
-lazy_static = "1.4.0"
-locspan = "0.7"
-mime = "0.3"
-opa = "0.9.0"
-opa-tp-protocol = { path = "../opa-tp-protocol" }
-percent-encoding = "2.1.0"
-pg-embed = "0.7.1"
-pkcs8 = { version = "*", features = ["std", "alloc"] }
-portpicker = "0.1.1"
-prost = "0.10.0"
-protobuf = "2.27.1"
-r2d2 = "0.8.9"
-rand = { version = "0.8.5", features = ["getrandom"] }
-rand_core = "0.6.3"
-rdf-types = "0.14"
-rust-embed = { version = "6.6.0", features = ["debug-embed", "include-exclude"] }
-sawtooth-sdk = "0.5.2"
-serde = "1.0.136"
-serde_derive = "1.0.136"
-serde_json = "1.0.93"
-static-iref = "2.0.0"
-temp-dir = "0.1.11"
-thiserror = "1.0.36"
-tokio = { version = "1.20.3", features = ["time", "macros", "rt-multi-thread"] }
-tracing = "0.1.32"
-url = { version = "2.2.2", features = ["serde"] }
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
-zmq = "0.9.2"
+async-trait.workspace      = true
+chrono                     = { workspace = true, features = ["serde"] }
+custom_error.workspace     = true
+derivative.workspace       = true
+diesel.workspace           = true
+futures.workspace          = true
+glob.workspace             = true
+hashbrown.workspace        = true
+hex.workspace              = true
+iref.workspace             = true
+iref-enum.workspace        = true
+json-ld.workspace          = true
+k256                       = { workspace = true, features = ["serde"] }
+lazy_static.workspace      = true
+locspan.workspace          = true
+mime.workspace             = true
+opa.workspace              = true
+opa-tp-protocol            = { path = "../opa-tp-protocol" }
+percent-encoding.workspace = true
+pg-embed.workspace         = true
+pkcs8.workspace            = true
+portpicker.workspace       = true
+prost                      = "0.10.0"
+protobuf.workspace         = true
+r2d2.workspace             = true
+rand.workspace             = true
+rand_core.workspace        = true
+rdf-types.workspace        = true
+rust-embed.workspace       = true
+sawtooth-sdk.workspace     = true
+serde.workspace            = true
+serde_derive.workspace     = true
+serde_json.workspace       = true
+static-iref.workspace      = true
+temp-dir.workspace         = true
+thiserror.workspace        = true
+tokio.workspace            = true
+tracing.workspace          = true
+url                        = { workspace = true, features = ["serde"] }
+uuid.workspace             = true
+zmq.workspace              = true
 
 [build-dependencies]
-glob        = "0.3.0"
-lazy_static = "1.4.0"
-prost-build = "0.10.0"
-serde_json = "1.0.93"
+glob.workspace        = true
+lazy_static.workspace = true
+prost-build.workspace = true
+serde_json.workspace  = true
 
 [dev-dependencies]
-api = { path = "../api" }
-criterion = { version = "0.4.0", features = ["async_futures", "async_tokio"] }
-insta = { version = "1.14.0", features = ["json", "redactions", "toml"] }
-proptest = "1.0.0"
-sawtooth-sdk = "0.5.2"
+api                    = { path = "../api" }
+criterion.workspace    = true
+insta                  = { workspace = true, features = ["json"] }
+proptest.workspace     = true
+sawtooth-sdk.workspace = true
 
 [[bench]]
-name = "opa_executor"
+name    = "opa_executor"
 harness = false
 
 [features]

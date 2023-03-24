@@ -19,8 +19,8 @@ chronicle = { path = "../chronicle" }
 [features]
 strict = []
 # Use an in memory stub ledger
-inmem = ["chronicle/inmem"]
+inmem  = ["chronicle/inmem"]
 
 [dev-dependencies]
-insta    = { version = "1.14.0", features = ["redactions", "toml"] }
-tempfile = "3.4.0"
+insta.workspace    = true
+tempfile.workspace = true

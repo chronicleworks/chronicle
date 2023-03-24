@@ -4,5 +4,5 @@ name    = "chronicle-domain-lint"
 version = "0.6.0"
 
 [dependencies]
-chronicle = { path = "../chronicle" }
-clap      = "3.2.1"
+chronicle      = { path = "../chronicle" }
+clap.workspace = true
