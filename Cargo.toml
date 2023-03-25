@@ -56,7 +56,7 @@ lazy_static           = "1.4.0"
 locspan               = "0.7"
 mime                  = "0.3"
 opa                   = "0.9.0"
-openssl               = "0.10.38"
+openssl               = "0.10.48"
 opentelemetry         = { version = "0.18.0", features = ["rt-tokio"] }
 opentelemetry-jaeger  = { version = "0.17.0", features = [
   "rt-tokio",
