@@ -74,6 +74,8 @@ test-prep-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 		--builder ctx-$(ISOLATION_ID)-$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--target test \
+		--build-arg DOCKER_GID=$(DOCKER_GID) \
+		--build-arg TESTER_UID=$(TESTER_UID) \
 		--load
 
 .PHONY: tested-$(ISOLATION_ID)
@@ -123,6 +125,8 @@ $(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
 		--builder ctx-$(ISOLATION_ID)-$(2) \
 		--platform linux/$(2) \
 		--target $(1) \
+		--build-arg DOCKER_GID=$(DOCKER_GID) \
+		--build-arg TESTER_UID=$(TESTER_UID) \
 		--load
 
 $(1)-manifest: $(1)-$(2)-manifest
