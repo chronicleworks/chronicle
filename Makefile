@@ -13,6 +13,8 @@ HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/a
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
+DOCKER_GID := $(shell getent group docker | cut -f 3 -d :)
+
 clean: clean_containers clean_target clean-opa
 
 distclean: clean_docker clean_markers
@@ -64,9 +66,8 @@ $(MARKERS)/binfmt:
 	touch $@
 
 # Run the compiler for host and target, then extract the binaries
-.PHONY: tested-$(ISOLATION_ID)
-test: tested-$(ISOLATION_ID)
-tested-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
+.PHONY: test-prep-$(ISOLATION_ID)
+test-prep-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
@@ -74,6 +75,17 @@ tested-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--target test \
 		--load
+
+.PHONY: tested-$(ISOLATION_ID)
+test: tested-$(ISOLATION_ID)
+tested-$(ISOLATION_ID): test-prep-$(ISOLATION_ID)
+	container_id=$$(docker run -d \
+		-v $(DOCKER_SOCK):/var/run/docker.sock \
+		tested-artifacts:${ISOLATION_ID} sleep 1d); \
+		docker exec --user root $$container_id groupadd -g $(DOCKER_GID) docker \
+		&& docker exec --user root $$container_id usermod -aG docker tester \
+		&& docker exec $$container_id cargo test --locked --release \
+		&& docker rm -f $$container_id
 
 	rm -rf .artifacts
 	mkdir -p .artifacts
