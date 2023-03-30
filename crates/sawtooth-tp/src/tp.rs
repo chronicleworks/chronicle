@@ -22,14 +22,17 @@ use sawtooth_sdk::{
 };
 use tracing::{debug, error, info, instrument};
 
-use crate::abstract_tp::{TPSideEffects, TP};
+use crate::{
+    abstract_tp::{TPSideEffects, TP},
+    opa::TpOpa,
+};
 
 #[derive(Debug)]
 pub struct ChronicleTransactionHandler {
     family_name: String,
     family_versions: Vec<String>,
     namespaces: Vec<String>,
-    opa_executor: ExecutorContext,
+    opa_executor: TpOpa,
 }
 
 impl ChronicleTransactionHandler {
@@ -38,13 +41,7 @@ impl ChronicleTransactionHandler {
             family_name: FAMILY.to_owned(),
             family_versions: vec![VERSION.to_owned()],
             namespaces: vec![PREFIX.to_string()],
-            opa_executor: {
-                ExecutorContext::from_loader(
-                    &CliPolicyLoader::from_embedded_policy(policy, entrypoint)
-                        .map_err(|e| ApplyError::InternalError(e.to_string()))?,
-                )
-                .map_err(|e| ApplyError::InternalError(e.to_string()))?
-            },
+            opa_executor: TpOpa::new(policy, entrypoint)?,
         })
     }
 }
@@ -114,7 +111,7 @@ impl TP for ChronicleTransactionHandler {
     }
 
     async fn tp(
-        opa_executor: &ExecutorContext,
+        opa_executor: ExecutorContext,
         request: &TpProcessRequest,
         submission: Submission,
         operations: ChronicleTransaction,
@@ -146,7 +143,13 @@ impl TP for ChronicleTransactionHandler {
 
         // Now apply operations to the model
         for operation in operations.tx {
-            Self::enforce_opa(opa_executor, &operations.identity, &operation, &state).await?;
+            Self::enforce_opa(
+                opa_executor.clone(),
+                &operations.identity,
+                &operation,
+                &state,
+            )
+            .await?;
 
             let res = operation.process(model, state.input()).await;
             match res {
@@ -237,7 +240,7 @@ impl TP for ChronicleTransactionHandler {
     /// readable serialization of the @graph from a provmodel containing the operation's dependencies and then
     /// pass them as the context to an OPA rule check, returning an error upon OPA policy failure
     async fn enforce_opa(
-        opa_executor: &ExecutorContext,
+        opa_executor: ExecutorContext,
         identity: &SignedIdentity,
         tx: &ChronicleOperation,
         state: &OperationState<SawtoothAddress>,
@@ -311,6 +314,11 @@ impl TransactionHandler for ChronicleTransactionHandler {
     ) -> Result<(), ApplyError> {
         let submission = Self::tp_parse(request)?;
         let submission_clone = submission.clone();
+
+        let opa_exec_context = self
+            .opa_executor
+            .executor_context_from_submission(submission.policy.clone(), context)?;
+
         let operations =
             futures::executor::block_on(
                 async move { Self::tp_operations(submission.clone()).await },
@@ -319,7 +327,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
         let state = Self::tp_state(context, &operations)?;
         let effects = futures::executor::block_on(async move {
             Self::tp(
-                &self.opa_executor,
+                opa_exec_context,
                 request,
                 submission_clone,
                 operations,
@@ -555,6 +563,7 @@ pub mod test {
         let submit_tx = ChronicleSubmitTransaction {
             tx,
             signer: secret.clone(),
+            on_chain_opa_policy: None,
         };
 
         let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
@@ -697,6 +706,7 @@ pub mod test {
         let submit_tx = ChronicleSubmitTransaction {
             tx,
             signer: secret.clone(),
+            on_chain_opa_policy: None,
         };
 
         let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");

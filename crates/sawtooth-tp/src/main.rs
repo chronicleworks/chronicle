@@ -1,10 +1,10 @@
 mod abstract_tp;
 mod tp;
-use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
-use sawtooth_sdk::processor::TransactionProcessor;
-
 use ::chronicle_telemetry::ConsoleLogging;
 use chronicle_telemetry::telemetry;
+use clap::{builder::PossibleValuesParser, Arg, Command, ValueHint};
+mod opa;
+use sawtooth_sdk::processor::TransactionProcessor;
 use tokio::runtime::Handle;
 use tp::ChronicleTransactionHandler;
 use tracing::info;

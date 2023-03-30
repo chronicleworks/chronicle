@@ -17,6 +17,7 @@ use sawtooth_sdk::messages::transaction::Transaction;
 pub struct ChronicleSubmitTransaction {
     pub tx: ChronicleTransaction,
     pub signer: SigningKey,
+    pub on_chain_opa_policy: Option<(String, String)>,
 }
 #[async_trait::async_trait]
 impl TransactionPayload for ChronicleSubmitTransaction {
@@ -44,13 +45,29 @@ impl TransactionPayload for ChronicleSubmitTransaction {
         let identity = serde_json::to_string(&self.tx.identity)?;
         submission.identity = identity;
 
+        if let Some((policy_id, policy_entrypoint)) = &self.on_chain_opa_policy {
+            submission.policy = Some(OpaPolicy {
+                id: policy_id.clone(),
+                entrypoint: policy_entrypoint.clone(),
+                ..Default::default()
+            });
+        }
+
         Ok(submission.encode_to_vec())
     }
 }
 
 impl ChronicleSubmitTransaction {
-    pub fn new(tx: ChronicleTransaction, signer: SigningKey) -> Self {
-        Self { tx, signer }
+    pub fn new(
+        tx: ChronicleTransaction,
+        signer: SigningKey,
+        on_chain_opa_policy: Option<(String, String)>,
+    ) -> Self {
+        Self {
+            tx,
+            signer,
+            on_chain_opa_policy,
+        }
     }
 }
 
@@ -75,14 +92,25 @@ impl LedgerTransaction for ChronicleSubmitTransaction {
         &self,
         message_builder: &MessageBuilder,
     ) -> (Transaction, TransactionId) {
-        message_builder
-            .make_sawtooth_transaction(
-                self.addresses(),
-                self.addresses(),
-                vec![],
-                self,
-                self.signer(),
+        //Ensure we append any opa policy binary address and meta address to the list of addresses
+        let addresses: Vec<_> = self
+            .addresses()
+            .into_iter()
+            .chain(
+                self.on_chain_opa_policy
+                    .as_ref()
+                    .map(|x| &x.0)
+                    .map(|x| {
+                        vec![
+                            opa_tp_protocol::state::policy_address(x),
+                            opa_tp_protocol::state::policy_meta_address(x),
+                        ]
+                    })
+                    .unwrap_or_default(),
             )
+            .collect();
+        message_builder
+            .make_sawtooth_transaction(addresses.clone(), addresses, vec![], self, self.signer())
             .await
     }
 }

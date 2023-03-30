@@ -334,11 +334,13 @@ where
     fn submit_blocking(
         &mut self,
         tx: &ChronicleTransaction,
+        opa_policy: Option<(String, String)>,
     ) -> Result<ChronicleTransactionId, ApiError> {
         let res = self.ledger_writer.do_submit(
             &ChronicleSubmitTransaction {
                 tx: tx.clone(),
                 signer: self.signer.clone(),
+                on_chain_opa_policy: opa_policy,
             },
             &self.signer,
         );
@@ -369,11 +371,13 @@ where
         &mut self,
         id: impl Into<ChronicleIri>,
         identity: AuthId,
+        opa_policy: Option<(String, String)>,
         to_apply: Vec<ChronicleOperation>,
     ) -> Result<ApiResponse, ApiError> {
         let identity = identity.signed_identity(&self.keystore)?;
         let model = ProvModel::from_tx(&to_apply)?;
-        let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+        let tx_id =
+            self.submit_blocking(&ChronicleTransaction::new(to_apply, identity), opa_policy)?;
 
         Ok(ApiResponse::submission(id, model, tx_id))
     }
