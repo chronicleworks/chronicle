@@ -74,7 +74,6 @@ test-prep-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
 		--builder ctx-$(ISOLATION_ID)-$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
 		--target test \
-		--build-arg DOCKER_GID=$(DOCKER_GID) \
 		--load
 
 .PHONY: tested-$(ISOLATION_ID)
