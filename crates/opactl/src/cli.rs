@@ -31,7 +31,7 @@ fn wait_args(command: Command) -> Command {
     )
 }
 
-pub fn bootstrap() -> Command {
+fn bootstrap() -> Command {
     wait_args(
         Command::new("bootstrap")
             .about("Initialize the OPA transaction processor with a root key")
@@ -49,7 +49,7 @@ pub fn bootstrap() -> Command {
     )
 }
 
-pub fn generate() -> Command {
+fn generate() -> Command {
     Command::new("generate")
         .arg(
             Arg::new("output")
@@ -63,7 +63,7 @@ pub fn generate() -> Command {
         .about("Generate a new private key and write it to stdout")
 }
 
-pub fn rotate_root() -> Command {
+fn rotate_root() -> Command {
     wait_args(
         Command::new("rotate-root")
             .about("Rotate the root key for the OPA transaction processor")
@@ -91,7 +91,7 @@ pub fn rotate_root() -> Command {
     )
 }
 
-pub fn register_key() -> Command {
+fn register_key() -> Command {
     wait_args(
         Command::new("register-key")
             .about("Register a new non root key with the OPA transaction processor")
@@ -129,7 +129,7 @@ pub fn register_key() -> Command {
     )
 }
 
-pub fn rotate_key() -> Command {
+fn rotate_key() -> Command {
     wait_args(
         Command::new("rotate-key")
             .about("Rotate the key with the specified id for the OPA transaction processor")
@@ -177,7 +177,7 @@ pub fn rotate_key() -> Command {
     )
 }
 
-pub fn set_policy() -> Command {
+fn set_policy() -> Command {
     wait_args(
         Command::new("set-policy")
             .about("Set policy with id, requires access to root private key")
@@ -216,7 +216,7 @@ pub fn set_policy() -> Command {
     )
 }
 
-pub fn get_key() -> Command {
+fn get_key() -> Command {
     Command::new("get-key")
         .about("Get the currently registered public key")
         .arg(
@@ -240,7 +240,7 @@ pub fn get_key() -> Command {
         )
 }
 
-pub fn get_policy() -> Command {
+fn get_policy() -> Command {
     Command::new("get-policy")
         .about("Get the currently registered policy")
         .arg(
@@ -269,7 +269,7 @@ pub fn get_policy() -> Command {
 pub fn cli() -> Command {
     Command::new("opactl")
         .version(env!("CARGO_PKG_VERSION"))
-        .author("BTP.works TODO WHAT IS THIS NOW")
+        .author("BTPWorks")
         .about("A command line tool for interacting with the OPA transaction processor")
         .arg(
             Arg::new("sawtooth-address")
@@ -293,7 +293,7 @@ pub fn cli() -> Command {
 
 // Keys are either file paths to a PEM encoded key or a PEM encoded key supplied
 // as an environment variable, so we need to load them based on the input type
-pub fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
+pub(crate) fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
     if name == "transactor-key" && matches.value_source(name).is_none() {
         return SecretKey::random(StdRng::from_entropy());
     }
@@ -315,13 +315,13 @@ pub fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Wait {
+pub(crate) enum Wait {
     NoWait,
     NumberOfBlocks(u64),
 }
 
 impl Wait {
-    pub fn from_matches(matches: &ArgMatches) -> Self {
+    pub(crate) fn from_matches(matches: &ArgMatches) -> Self {
         if matches.get_one::<u64>("wait").is_some() {
             let blocks = matches.get_one::<u64>("wait").unwrap();
             Wait::NumberOfBlocks(*blocks)

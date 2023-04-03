@@ -63,7 +63,7 @@ pub enum SawtoothCommunicationError {
 ///
 #[async_trait::async_trait]
 pub trait RequestResponseSawtoothChannel {
-    // Send a message and wait for a response, decoding the response as a
+    /// Send a message and wait for a response, decoding the response as a
     /// protobuf message of type RX.
     ///
     /// # Arguments
