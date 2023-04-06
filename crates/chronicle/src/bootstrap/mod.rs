@@ -175,7 +175,7 @@ where
 {
     if let Some(addr) = graphql_addr(options)? {
         gql.serve_graphql(pool.clone(), api.clone(), addr, security_conf)
-            .await
+            .await?
     }
 
     Ok(())
