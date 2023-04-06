@@ -120,7 +120,7 @@ impl ToJson for ProvModel {
                     let mut qualified_ids = Vec::new();
 
                     for delegation in delegation.iter() {
-                        ids.push(json!({"@id": delegation.delegate_id.de_compact()}));
+                        ids.push(json!({"@id": delegation.responsible_id.de_compact()}));
                         qualified_ids.push(json!({"@id": delegation.id.de_compact()}));
                     }
 
