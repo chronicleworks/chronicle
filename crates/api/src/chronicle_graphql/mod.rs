@@ -41,7 +41,7 @@ use tracing::{error, instrument};
 use url::Url;
 
 use self::authorization::JwtChecker;
-use crate::ApiDispatch;
+use crate::{ApiDispatch, ApiError};
 
 #[macro_use]
 pub mod activity;
@@ -506,7 +506,7 @@ pub trait ChronicleGraphQlServer {
         api: ApiDispatch,
         address: SocketAddr,
         security_conf: SecurityConf,
-    );
+    ) -> Result<(), ApiError>;
 }
 
 impl<Query, Mutation> ChronicleGraphQl<Query, Mutation>
@@ -819,7 +819,7 @@ where
         api: ApiDispatch,
         address: SocketAddr,
         sec: SecurityConf,
-    ) {
+    ) -> Result<(), ApiError> {
         let claim_parser = sec
             .id_pointer
             .map(|json_pointer| AuthFromJwt { json_pointer });
@@ -880,6 +880,7 @@ where
             }
         };
 
-        Server::new(TcpListener::bind(address)).run(app).await.ok();
+        Server::new(TcpListener::bind(address)).run(app).await?;
+        Ok(())
     }
 }
