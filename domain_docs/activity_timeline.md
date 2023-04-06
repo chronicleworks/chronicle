@@ -10,9 +10,11 @@ activity timeline query.
     The `ProvActivity` activity type can be used to return activities
     that are not currently specified in the Chronicle domain.
 
-* `EntityIdOrExternal` - A list of EntityIDs or externalIds to
-    filter activities by - leaving this empty will return all activity
-    types.
+* `forEntity` - A list of EntityIDs or externalIds to filter
+    activities by, leaving this empty allows activities for any entity.
+
+* `forAgent` - A list of AgentIDs or externalIds to filter
+    activities by, leaving this empty allows activities for any agent.
 
 * from - The time in RFC3339 format to return activities from.
     Not specifying this will return all activity types before the time
