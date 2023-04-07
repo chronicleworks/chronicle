@@ -1031,6 +1031,257 @@ impl Store {
         Ok(Store { pool })
     }
 
+    pub(crate) fn prov_model_for_agent(
+        &self,
+        agent: query::Agent,
+        namespaceid: &NamespaceId,
+        model: &mut ProvModel,
+        connection: &mut PgConnection,
+    ) -> Result<(), StoreError> {
+        debug!(?agent, "Map agent to prov");
+
+        let attributes = schema::agent_attribute::table
+            .filter(schema::agent_attribute::agent_id.eq(&agent.id))
+            .load::<query::AgentAttribute>(connection)?;
+
+        let agentid: AgentId = AgentId::from_external_id(&agent.external_id);
+        model.agents.insert(
+            (namespaceid.clone(), agentid.clone()),
+            Agent {
+                id: agentid,
+                namespaceid: namespaceid.clone(),
+                external_id: ExternalId::from(&agent.external_id),
+                domaintypeid: agent.domaintype.map(DomaintypeId::from_external_id),
+                attributes: attributes
+                    .into_iter()
+                    .map(|attr| {
+                        serde_json::from_str(&attr.value).map(|value| {
+                            (
+                                attr.typename.clone(),
+                                Attribute {
+                                    typ: attr.typename,
+                                    value,
+                                },
+                            )
+                        })
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?,
+            },
+        );
+
+        for (responsible, activity, role) in schema::delegation::table
+            .filter(schema::delegation::responsible_id.eq(agent.id))
+            .inner_join(
+                schema::agent::table.on(schema::delegation::delegate_id.eq(schema::agent::id)),
+            )
+            .inner_join(
+                schema::activity::table
+                    .on(schema::delegation::activity_id.eq(schema::activity::id)),
+            )
+            .order(schema::agent::external_id)
+            .select((
+                schema::agent::external_id,
+                schema::activity::external_id,
+                schema::delegation::role,
+            ))
+            .load::<(String, String, String)>(connection)?
+        {
+            model.qualified_delegation(
+                namespaceid,
+                &AgentId::from_external_id(&agent.external_id),
+                &AgentId::from_external_id(responsible),
+                {
+                    if activity.contains("hidden entry for Option None") {
+                        None
+                    } else {
+                        Some(ActivityId::from_external_id(activity))
+                    }
+                },
+                {
+                    if role.is_empty() {
+                        None
+                    } else {
+                        Some(Role(role))
+                    }
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn prov_model_for_activity(
+        &self,
+        activity: query::Activity,
+        namespaceid: &NamespaceId,
+        model: &mut ProvModel,
+        connection: &mut PgConnection,
+    ) -> Result<(), StoreError> {
+        debug!(?activity, "Map activity to prov");
+
+        let attributes = schema::activity_attribute::table
+            .filter(schema::activity_attribute::activity_id.eq(&activity.id))
+            .load::<query::ActivityAttribute>(connection)?;
+
+        let id: ActivityId = ActivityId::from_external_id(&activity.external_id);
+        model.activities.insert(
+            (namespaceid.clone(), id.clone()),
+            Activity {
+                id: id.clone(),
+                namespaceid: namespaceid.clone(),
+                external_id: activity.external_id.into(),
+                started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
+                ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
+                domaintypeid: activity.domaintype.map(DomaintypeId::from_external_id),
+                attributes: attributes
+                    .into_iter()
+                    .map(|attr| {
+                        serde_json::from_str(&attr.value).map(|value| {
+                            (
+                                attr.typename.clone(),
+                                Attribute {
+                                    typ: attr.typename,
+                                    value,
+                                },
+                            )
+                        })
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?,
+            },
+        );
+
+        for generation in schema::generation::table
+            .filter(schema::generation::activity_id.eq(activity.id))
+            .order(schema::generation::activity_id.asc())
+            .inner_join(schema::entity::table)
+            .select(schema::entity::external_id)
+            .load::<String>(connection)?
+        {
+            model.was_generated_by(
+                namespaceid.clone(),
+                &EntityId::from_external_id(generation),
+                &id,
+            );
+        }
+
+        for used in schema::usage::table
+            .filter(schema::usage::activity_id.eq(activity.id))
+            .order(schema::usage::activity_id.asc())
+            .inner_join(schema::entity::table)
+            .select(schema::entity::external_id)
+            .load::<String>(connection)?
+        {
+            let used = used;
+            model.used(namespaceid.clone(), &id, &EntityId::from_external_id(used));
+        }
+
+        for wasinformedby in schema::wasinformedby::table
+            .filter(schema::wasinformedby::activity_id.eq(activity.id))
+            .inner_join(
+                schema::activity::table
+                    .on(schema::wasinformedby::informing_activity_id.eq(schema::activity::id)),
+            )
+            .select(schema::activity::external_id)
+            .load::<String>(connection)?
+        {
+            let wasinformedby = wasinformedby;
+            model.was_informed_by(
+                namespaceid.clone(),
+                &id,
+                &ActivityId::from_external_id(wasinformedby),
+            );
+        }
+
+        for (agent, role) in schema::association::table
+            .filter(schema::association::activity_id.eq(activity.id))
+            .order(schema::association::activity_id.asc())
+            .inner_join(schema::agent::table)
+            .select((schema::agent::external_id, schema::association::role))
+            .load::<(String, String)>(connection)?
+        {
+            model.qualified_association(namespaceid, &id, &AgentId::from_external_id(agent), {
+                if role.is_empty() {
+                    None
+                } else {
+                    Some(Role(role))
+                }
+            });
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn prov_model_for_entity(
+        &self,
+        entity: query::Entity,
+        namespaceid: &NamespaceId,
+        model: &mut ProvModel,
+        connection: &mut PgConnection,
+    ) -> Result<(), StoreError> {
+        debug!(?entity, "Map entity to prov");
+
+        let query::Entity {
+            id,
+            namespace_id: _,
+            domaintype,
+            external_id,
+            attachment_id: _,
+        } = entity;
+
+        let entity_id: EntityId = EntityId::from_external_id(&external_id);
+
+        for (agent, role) in schema::attribution::table
+            .filter(schema::attribution::entity_id.eq(&id))
+            .order(schema::attribution::entity_id.asc())
+            .inner_join(schema::agent::table)
+            .select((schema::agent::external_id, schema::attribution::role))
+            .load::<(String, String)>(connection)?
+        {
+            model.qualified_attribution(
+                namespaceid,
+                &entity_id,
+                &AgentId::from_external_id(agent),
+                {
+                    if role.is_empty() {
+                        None
+                    } else {
+                        Some(Role(role))
+                    }
+                },
+            );
+        }
+
+        let attributes = schema::entity_attribute::table
+            .filter(schema::entity_attribute::entity_id.eq(&id))
+            .load::<query::EntityAttribute>(connection)?;
+
+        model.entities.insert(
+            (namespaceid.clone(), entity_id.clone()),
+            Entity {
+                id: entity_id,
+                namespaceid: namespaceid.clone(),
+                external_id: external_id.into(),
+                domaintypeid: domaintype.map(DomaintypeId::from_external_id),
+                attributes: attributes
+                    .into_iter()
+                    .map(|attr| {
+                        serde_json::from_str(&attr.value).map(|value| {
+                            (
+                                attr.typename.clone(),
+                                Attribute {
+                                    typ: attr.typename,
+                                    value,
+                                },
+                            )
+                        })
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?,
+            },
+        );
+
+        Ok(())
+    }
+
     #[instrument(skip(connection))]
     pub(crate) fn prov_model_for_namespace(
         &self,
@@ -1046,73 +1297,7 @@ impl Store {
             .load::<query::Agent>(connection)?;
 
         for agent in agents {
-            let attributes = schema::agent_attribute::table
-                .filter(schema::agent_attribute::agent_id.eq(&agent.id))
-                .load::<query::AgentAttribute>(connection)?;
-
-            debug!(?agent, "Map agent to prov");
-            let agentid: AgentId = AgentId::from_external_id(&agent.external_id);
-            model.agents.insert(
-                (namespaceid.clone(), agentid.clone()),
-                Agent {
-                    id: agentid.clone(),
-                    namespaceid: namespaceid.clone(),
-                    external_id: ExternalId::from(&agent.external_id),
-                    domaintypeid: agent.domaintype.map(DomaintypeId::from_external_id),
-                    attributes: attributes
-                        .into_iter()
-                        .map(|attr| {
-                            serde_json::from_str(&attr.value).map(|value| {
-                                (
-                                    attr.typename.clone(),
-                                    Attribute {
-                                        typ: attr.typename,
-                                        value,
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<BTreeMap<_, _>, _>>()?,
-                },
-            );
-
-            for (responsible, activity, role) in schema::delegation::table
-                .filter(schema::delegation::responsible_id.eq(agent.id))
-                .inner_join(
-                    schema::agent::table.on(schema::delegation::delegate_id.eq(schema::agent::id)),
-                )
-                .inner_join(
-                    schema::activity::table
-                        .on(schema::delegation::activity_id.eq(schema::activity::id)),
-                )
-                .order(schema::agent::external_id)
-                .select((
-                    schema::agent::external_id,
-                    schema::activity::external_id,
-                    schema::delegation::role,
-                ))
-                .load::<(String, String, String)>(connection)?
-            {
-                model.qualified_delegation(
-                    &namespaceid,
-                    &AgentId::from_external_id(&agent.external_id),
-                    &AgentId::from_external_id(responsible),
-                    {
-                        if activity.contains("hidden entry for Option None") {
-                            None
-                        } else {
-                            Some(ActivityId::from_external_id(activity))
-                        }
-                    },
-                    {
-                        if role.is_empty() {
-                            None
-                        } else {
-                            Some(Role(role))
-                        }
-                    },
-                );
-            }
+            self.prov_model_for_agent(agent, &namespaceid, &mut model, connection)?;
         }
 
         let activities = schema::activity::table
@@ -1120,164 +1305,15 @@ impl Store {
             .load::<query::Activity>(connection)?;
 
         for activity in activities {
-            debug!(?activity, "Map activity to prov");
-            let attributes = schema::activity_attribute::table
-                .filter(schema::activity_attribute::activity_id.eq(&activity.id))
-                .load::<query::ActivityAttribute>(connection)?;
-
-            let id: ActivityId = ActivityId::from_external_id(&activity.external_id);
-            model.activities.insert(
-                (namespaceid.clone(), id.clone()),
-                Activity {
-                    id: id.clone(),
-                    namespaceid: namespaceid.clone(),
-                    external_id: activity.external_id.into(),
-                    started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
-                    ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
-                    domaintypeid: activity.domaintype.map(DomaintypeId::from_external_id),
-                    attributes: attributes
-                        .into_iter()
-                        .map(|attr| {
-                            serde_json::from_str(&attr.value).map(|value| {
-                                (
-                                    attr.typename.clone(),
-                                    Attribute {
-                                        typ: attr.typename,
-                                        value,
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<BTreeMap<_, _>, _>>()?,
-                },
-            );
-
-            for generation in schema::generation::table
-                .filter(schema::generation::activity_id.eq(activity.id))
-                .order(schema::generation::activity_id.asc())
-                .inner_join(schema::entity::table)
-                .select(schema::entity::external_id)
-                .load::<String>(connection)?
-            {
-                model.was_generated_by(
-                    namespaceid.clone(),
-                    &EntityId::from_external_id(generation),
-                    &id,
-                );
-            }
-
-            for used in schema::usage::table
-                .filter(schema::usage::activity_id.eq(activity.id))
-                .order(schema::usage::activity_id.asc())
-                .inner_join(schema::entity::table)
-                .select(schema::entity::external_id)
-                .load::<String>(connection)?
-            {
-                let used = used;
-                model.used(namespaceid.clone(), &id, &EntityId::from_external_id(used));
-            }
-
-            for wasinformedby in schema::wasinformedby::table
-                .filter(schema::wasinformedby::activity_id.eq(activity.id))
-                .inner_join(
-                    schema::activity::table
-                        .on(schema::wasinformedby::informing_activity_id.eq(schema::activity::id)),
-                )
-                .select(schema::activity::external_id)
-                .load::<String>(connection)?
-            {
-                let wasinformedby = wasinformedby;
-                model.was_informed_by(
-                    namespaceid.clone(),
-                    &id,
-                    &ActivityId::from_external_id(wasinformedby),
-                );
-            }
-
-            for (agent, role) in schema::association::table
-                .filter(schema::association::activity_id.eq(activity.id))
-                .order(schema::association::activity_id.asc())
-                .inner_join(schema::agent::table)
-                .select((schema::agent::external_id, schema::association::role))
-                .load::<(String, String)>(connection)?
-            {
-                model.qualified_association(
-                    &namespaceid,
-                    &id,
-                    &AgentId::from_external_id(agent),
-                    {
-                        if role.is_empty() {
-                            None
-                        } else {
-                            Some(Role(role))
-                        }
-                    },
-                );
-            }
+            self.prov_model_for_activity(activity, &namespaceid, &mut model, connection)?;
         }
 
         let entities = schema::entity::table
             .filter(schema::entity::namespace_id.eq(nsid))
             .load::<query::Entity>(connection)?;
 
-        for query::Entity {
-            id,
-            namespace_id: _,
-            domaintype,
-            external_id,
-            attachment_id: _,
-        } in entities
-        {
-            let entity_id: EntityId = EntityId::from_external_id(&external_id);
-
-            for (agent, role) in schema::attribution::table
-                .filter(schema::attribution::entity_id.eq(&id))
-                .order(schema::attribution::entity_id.asc())
-                .inner_join(schema::agent::table)
-                .select((schema::agent::external_id, schema::attribution::role))
-                .load::<(String, String)>(connection)?
-            {
-                model.qualified_attribution(
-                    &namespaceid,
-                    &entity_id,
-                    &AgentId::from_external_id(agent),
-                    {
-                        if role.is_empty() {
-                            None
-                        } else {
-                            Some(Role(role))
-                        }
-                    },
-                );
-            }
-
-            let attributes = schema::entity_attribute::table
-                .filter(schema::entity_attribute::entity_id.eq(&id))
-                .load::<query::EntityAttribute>(connection)?;
-
-            model.entities.insert(
-                (namespaceid.clone(), entity_id.clone()),
-                Entity {
-                    id: entity_id,
-                    namespaceid: namespaceid.clone(),
-                    external_id: external_id.into(),
-                    domaintypeid: domaintype.map(DomaintypeId::from_external_id),
-                    attributes: attributes
-                        .into_iter()
-                        .map(|attr| {
-                            serde_json::from_str(&attr.value).map(|value| {
-                                (
-                                    attr.typename.clone(),
-                                    Attribute {
-                                        typ: attr.typename,
-                                        value,
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<BTreeMap<_, _>, _>>()?,
-                },
-            );
+        for entity in entities {
+            self.prov_model_for_entity(entity, &namespaceid, &mut model, connection)?;
         }
 
         Ok(model)
@@ -1336,5 +1372,71 @@ impl Store {
         .execute(connection)?;
 
         Ok(())
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn prov_model_for_agent_id(
+        &self,
+        connection: &mut PgConnection,
+        id: &AgentId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        let agent = schema::agent::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::agent::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Agent::as_select())
+            .first(connection)?;
+
+        let namespace = self.namespace_by_external_id(connection, ns)?.0;
+
+        let mut model = ProvModel::default();
+        self.prov_model_for_agent(agent, &namespace, &mut model, connection)
+            .unwrap();
+        Ok(model)
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn prov_model_for_activity_id(
+        &self,
+        connection: &mut PgConnection,
+        id: &ActivityId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        let activity = schema::activity::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::activity::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Activity::as_select())
+            .first(connection)?;
+
+        let namespace = self.namespace_by_external_id(connection, ns)?.0;
+
+        let mut model = ProvModel::default();
+        self.prov_model_for_activity(activity, &namespace, &mut model, connection)
+            .unwrap();
+        Ok(model)
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn prov_model_for_entity_id(
+        &self,
+        connection: &mut PgConnection,
+        id: &EntityId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        let entity = schema::entity::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::entity::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Entity::as_select())
+            .first(connection)?;
+
+        let namespace = self.namespace_by_external_id(connection, ns)?.0;
+
+        let mut model = ProvModel::default();
+        self.prov_model_for_entity(entity, &namespace, &mut model, connection)
+            .unwrap();
+        Ok(model)
     }
 }

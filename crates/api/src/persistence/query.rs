@@ -80,7 +80,8 @@ pub struct Identity {
     pub public_key: String,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = activity)]
 pub struct Activity {
     pub id: i32,
     pub external_id: String,

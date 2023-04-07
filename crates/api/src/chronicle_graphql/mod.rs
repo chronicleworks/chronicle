@@ -12,8 +12,11 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
     identity::{AuthId, JwtClaims, OpaData},
     ledger::{SubmissionError, SubmissionStage},
-    opa::ExecutorContext,
-    prov::{to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, ProvModel},
+    opa::{ExecutorContext, OpaExecutorError},
+    prov::{
+        to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, CompactedJson, ExternalId,
+        ExternalIdPart, ProvModel,
+    },
 };
 use derivative::*;
 use diesel::{
@@ -33,15 +36,17 @@ use poem::{
     },
     Endpoint, IntoResponse, Route, Server,
 };
+use r2d2::PooledConnection;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use serde_json::json;
+use std::{collections::HashMap, fmt::Display, net::SocketAddr, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
 
 use self::authorization::JwtChecker;
-use crate::{ApiDispatch, ApiError};
+use crate::{ApiDispatch, ApiError, StoreError};
 
 #[macro_use]
 pub mod activity;
@@ -556,14 +561,97 @@ fn check_required_claims(
     true
 }
 
-struct AuthorizationEndpointQuery<Q, M, S> {
+async fn check_claims(
+    secconf: &EndpointSecurityConfiguration,
+    req: &poem::Request,
+) -> Result<Option<JwtClaims>, poem::Error> {
+    if let Some(authorization) = req.header("Authorization") {
+        if let Ok(authorization) = HeaderValue::from_str(authorization) {
+            let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
+            if let Some(bearer_token) = bearer_token_maybe {
+                if let Ok(claims) = secconf.checker.verify_jwt(bearer_token.token()).await {
+                    if check_required_claims(&secconf.must_claim, &claims) {
+                        return Ok(Some(JwtClaims(claims)));
+                    }
+                }
+            }
+        }
+        tracing::trace!(
+            "rejected authorization from {}: {:?}",
+            req.remote_addr(),
+            authorization
+        );
+        Err(poem::error::Error::from_string(
+            "Authorization header present but without a satisfactory bearer token",
+            StatusCode::UNAUTHORIZED,
+        ))
+    } else if secconf.allow_anonymous {
+        tracing::trace!("anonymous access from {}", req.remote_addr());
+        Ok(None)
+    } else {
+        tracing::trace!("rejected anonymous access from {}", req.remote_addr());
+        Err(poem::error::Error::from_string(
+            "required Authorization header not present",
+            StatusCode::UNAUTHORIZED,
+        ))
+    }
+}
+
+async fn execute_opa_check(
+    opa_executor: &ExecutorContext,
+    claim_parser: &Option<AuthFromJwt>,
+    claims: Option<&JwtClaims>,
+    construct_data: impl FnOnce(&AuthId) -> OpaData,
+) -> Result<(), OpaExecutorError> {
+    // If unable to get an external_id from the JwtClaims or no claims found,
+    // identity will be `Anonymous`
+    let identity = match (claims, claim_parser) {
+        (Some(claims), Some(parser)) => parser.identity(claims).unwrap_or(AuthId::anonymous()),
+        _ => AuthId::anonymous(),
+    };
+
+    // Create OPA context data for the user identity
+    let opa_data = construct_data(&identity);
+
+    // Execute OPA check
+    match opa_executor.evaluate(&identity, &opa_data).await {
+        Err(error) => {
+            tracing::warn!(
+                        "{error}: attempt to violate policy rules by identity: {identity}, in context: {:#?}",
+                        opa_data
+                    );
+            Err(error)
+        }
+        ok => ok,
+    }
+}
+
+struct EndpointSecurityConfiguration {
     checker: JwtChecker,
     must_claim: HashMap<String, String>,
     allow_anonymous: bool,
+}
+
+impl EndpointSecurityConfiguration {
+    fn new(
+        checker: JwtChecker,
+        must_claim: HashMap<String, String>,
+        allow_anonymous: bool,
+    ) -> Self {
+        Self {
+            checker,
+            must_claim,
+            allow_anonymous,
+        }
+    }
+}
+
+struct QueryEndpoint<Q, M, S> {
+    secconf: EndpointSecurityConfiguration,
     schema: Schema<Q, M, S>,
 }
 
-impl<Q, M, S> AuthorizationEndpointQuery<Q, M, S>
+impl<Q, M, S> QueryEndpoint<Q, M, S>
 where
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
@@ -583,7 +671,7 @@ where
 }
 
 #[poem::async_trait]
-impl<Q, M, S> Endpoint for AuthorizationEndpointQuery<Q, M, S>
+impl<Q, M, S> Endpoint for QueryEndpoint<Q, M, S>
 where
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
@@ -592,47 +680,24 @@ where
     type Output = poem::Response;
 
     async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
-        if let Some(authorization) = req.header("Authorization") {
-            if let Ok(authorization) = HeaderValue::from_str(authorization) {
-                let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
-                if let Some(bearer_token) = bearer_token_maybe {
-                    if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        if check_required_claims(&self.must_claim, &claims) {
-                            return self.respond(req, |req| req.0.data(JwtClaims(claims))).await;
-                        }
-                    }
-                }
+        let checked_claims = check_claims(&self.secconf, &req).await?;
+        self.respond(req, |api_req| {
+            if let Some(claims) = checked_claims {
+                api_req.0.data(claims)
+            } else {
+                api_req.0
             }
-            tracing::trace!(
-                "rejected authorization from {}: {:?}",
-                req.remote_addr(),
-                authorization
-            );
-            Err(poem::error::Error::from_string(
-                "Authorization header present but without a satisfactory bearer token",
-                StatusCode::UNAUTHORIZED,
-            ))
-        } else if self.allow_anonymous {
-            tracing::trace!("anonymous access from {}", req.remote_addr());
-            self.respond(req, |req| req.0).await
-        } else {
-            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
-            Err(poem::error::Error::from_string(
-                "required Authorization header not present",
-                StatusCode::UNAUTHORIZED,
-            ))
-        }
+        })
+        .await
     }
 }
 
-struct AuthorizationEndpointSubscription<Q, M, S> {
-    checker: JwtChecker,
-    must_claim: HashMap<String, String>,
-    allow_anonymous: bool,
+struct SubscriptionEndpoint<Q, M, S> {
+    secconf: EndpointSecurityConfiguration,
     schema: Schema<Q, M, S>,
 }
 
-impl<Q, M, S> AuthorizationEndpointSubscription<Q, M, S>
+impl<Q, M, S> SubscriptionEndpoint<Q, M, S>
 where
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
@@ -661,7 +726,7 @@ where
 }
 
 #[poem::async_trait]
-impl<Q, M, S> Endpoint for AuthorizationEndpointSubscription<Q, M, S>
+impl<Q, M, S> Endpoint for SubscriptionEndpoint<Q, M, S>
 where
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
@@ -670,37 +735,185 @@ where
     type Output = poem::Response;
 
     async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
-        if let Some(authorization) = req.header("Authorization") {
-            if let Ok(authorization) = HeaderValue::from_str(authorization) {
-                let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
-                if let Some(bearer_token) = bearer_token_maybe {
-                    if let Ok(claims) = self.checker.verify_jwt(bearer_token.token()).await {
-                        if check_required_claims(&self.must_claim, &claims) {
-                            let mut data = async_graphql::Data::default();
-                            data.insert(JwtClaims(claims));
-                            return self.respond(req, data).await;
+        let checked_claims = check_claims(&self.secconf, &req).await?;
+        self.respond(
+            req,
+            if let Some(claims) = checked_claims {
+                let mut data = async_graphql::Data::default();
+                data.insert(claims);
+                data
+            } else {
+                async_graphql::Data::default()
+            },
+        )
+        .await
+    }
+}
+
+struct IriEndpoint {
+    secconf: Option<EndpointSecurityConfiguration>,
+    store: super::persistence::Store,
+    opa_executor: ExecutorContext,
+    claim_parser: Option<AuthFromJwt>,
+}
+
+impl IriEndpoint {
+    async fn response_for_query<ID: Display + ExternalIdPart, X: ToJson>(
+        &self,
+        claims: Option<&JwtClaims>,
+        prov_type: &str,
+        id: &ID,
+        ns: &ExternalId,
+        retrieve: impl FnOnce(
+            PooledConnection<ConnectionManager<PgConnection>>,
+            &ID,
+            &ExternalId,
+        ) -> Result<X, StoreError>,
+    ) -> poem::Result<poem::Response> {
+        match execute_opa_check(&self.opa_executor, &self.claim_parser, claims, |identity| {
+            OpaData::operation(
+                identity,
+                &json!("ReadData"),
+                &json!({
+                        "type": prov_type,
+                        "id": id.external_id_part(),
+                        "namespace": ns
+                }),
+            )
+        })
+        .await
+        {
+            Ok(()) => match self.store.connection() {
+                Ok(connection) => match retrieve(connection, id, ns) {
+                    Ok(data) => match data.to_json().compact().await {
+                        Ok(CompactedJson(json)) => {
+                            Ok(IntoResponse::into_response(poem::web::Json(json)))
                         }
+                        Err(error) => {
+                            tracing::error!("JSON failed compaction: {error}");
+                            Ok(poem::Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body("failed to compact JSON response"))
+                        }
+                    },
+                    Err(StoreError::Db(diesel::result::Error::NotFound))
+                    | Err(StoreError::RecordNotFound) => {
+                        tracing::debug!("not found: {prov_type} {} in {ns}", id.external_id_part());
+                        Ok(poem::Response::builder()
+                            .status(StatusCode::NOT_FOUND)
+                            .body(format!("the specified {prov_type} does not exist")))
                     }
+                    Err(error) => {
+                        tracing::error!("failed to retrieve from database: {error}");
+                        Ok(poem::Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body("failed to fetch from backend storage"))
+                    }
+                },
+                Err(error) => {
+                    tracing::error!("failed to connect to database: {error}");
+                    Ok(poem::Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body("failed to access backend storage"))
+                }
+            },
+            Err(_) => Ok(poem::Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body("violation of policy rules")),
+        }
+    }
+
+    async fn parse_ns_iri_from_uri_path(
+        &self,
+        req: poem::Request,
+    ) -> poem::Result<Result<(ExternalId, ChronicleIri), poem::Response>> {
+        use poem::{web::Path, FromRequest, Response};
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct NamespacedIri {
+            ns: String,
+            iri: String,
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct Iri {
+            iri: String,
+        }
+
+        impl From<Iri> for NamespacedIri {
+            fn from(value: Iri) -> Self {
+                NamespacedIri {
+                    ns: "default".to_string(),
+                    iri: value.iri,
                 }
             }
-            tracing::trace!(
-                "rejected authorization from {}: {:?}",
-                req.remote_addr(),
-                authorization
-            );
-            Err(poem::error::Error::from_string(
-                "Authorization header present but without a satisfactory bearer token",
-                StatusCode::UNAUTHORIZED,
-            ))
-        } else if self.allow_anonymous {
-            self.respond(req, async_graphql::Data::default()).await
-        } else {
-            tracing::trace!("rejected anonymous access from {}", req.remote_addr());
-            Err(poem::error::Error::from_string(
-                "required Authorization header not present",
-                StatusCode::UNAUTHORIZED,
-            ))
         }
+
+        let (req, mut body) = req.split();
+
+        let ns_iri: poem::Result<Path<NamespacedIri>> =
+            FromRequest::from_request(&req, &mut body).await;
+
+        let ns_iri: NamespacedIri = match ns_iri {
+            Ok(Path(nsi)) => nsi,
+            Err(_) => {
+                let path: Path<Iri> = FromRequest::from_request(&req, &mut body).await?;
+                path.0.into()
+            }
+        };
+
+        match ChronicleIri::from_str(&ns_iri.iri) {
+            Ok(iri) => Ok(Ok((ns_iri.ns.into(), iri))),
+            Err(error) => Ok(Err(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(error.to_string()))),
+        }
+    }
+
+    #[instrument(level = "trace", skip(self, req), ret(Debug))]
+    async fn respond(
+        &self,
+        req: poem::Request,
+        claims: Option<&JwtClaims>,
+    ) -> poem::Result<poem::Response> {
+        match self.parse_ns_iri_from_uri_path(req).await? {
+            Ok((ns, ChronicleIri::Activity(id))) => {
+                self.response_for_query(claims, "activity", &id, &ns, |mut conn, id, ns| {
+                    self.store.prov_model_for_activity_id(&mut conn, id, ns)
+                })
+                .await
+            }
+            Ok((ns, ChronicleIri::Agent(id))) => {
+                self.response_for_query(claims, "agent", &id, &ns, |mut conn, id, ns| {
+                    self.store.prov_model_for_agent_id(&mut conn, id, ns)
+                })
+                .await
+            }
+            Ok((ns, ChronicleIri::Entity(id))) => {
+                self.response_for_query(claims, "entity", &id, &ns, |mut conn, id, ns| {
+                    self.store.prov_model_for_entity_id(&mut conn, id, ns)
+                })
+                .await
+            }
+            Ok(_) => Ok(poem::Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("may query only: activity, agent, entity")),
+            Err(rsp) => Ok(rsp),
+        }
+    }
+}
+
+#[poem::async_trait]
+impl Endpoint for IriEndpoint {
+    type Output = poem::Response;
+
+    async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+        let checked_claims = if let Some(secconf) = &self.secconf {
+            check_claims(secconf, &req).await?
+        } else {
+            None
+        };
+        self.respond(req, checked_claims.as_ref()).await
     }
 }
 
@@ -759,38 +972,28 @@ impl async_graphql::extensions::Extension for OpaCheck {
         use async_graphql::ServerError;
         use serde_json::Value;
         if let Some(opa_executor) = ctx.data_opt::<ExecutorContext>() {
-            // If unable to get an external_id from the JwtClaims or no claims found,
-            // identity will be `Anonymous`
-            let identity = match (ctx.data_opt::<JwtClaims>(), &self.claim_parser) {
-                (Some(claims), Some(parser)) => {
-                    parser.identity(claims).unwrap_or(AuthId::anonymous())
-                }
-                _ => AuthId::anonymous(),
-            };
-
-            // Create OPA context data for the user identity
-            let opa_data = OpaData::graphql(
-                &identity,
-                &Value::String(info.parent_type.to_string()),
-                &Value::Array(
-                    info.path_node
-                        .to_string_vec()
-                        .into_iter()
-                        .map(Value::String)
-                        .collect(),
-                ),
-            );
-
-            // Execute OPA check
-            match opa_executor.evaluate(&identity, &opa_data).await {
+            match execute_opa_check(
+                opa_executor,
+                &self.claim_parser,
+                ctx.data_opt::<JwtClaims>(),
+                |identity| {
+                    OpaData::graphql(
+                        identity,
+                        &Value::String(info.parent_type.to_string()),
+                        &Value::Array(
+                            info.path_node
+                                .to_string_vec()
+                                .into_iter()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )
+                },
+            )
+            .await
+            {
                 Ok(()) => next.run(ctx, info).await,
-                Err(error) => {
-                    tracing::warn!(
-                        "{error}: attempt to violate policy rules by identity: {identity}, in context: {:#?}",
-                        opa_data
-                    );
-                    Err(ServerError::new("violation of policy rules", None))
-                }
+                Err(_) => Err(ServerError::new("violation of policy rules", None)),
             }
         } else {
             Err(ServerError::new("cannot check policy rules", None))
@@ -830,53 +1033,61 @@ where
             .extension(OpaCheck {
                 claim_parser: claim_parser.clone(),
             });
-        if let Some(claim_parser) = claim_parser {
-            schema = schema.extension(claim_parser);
+        if let Some(claim_parser) = &claim_parser {
+            schema = schema.extension(claim_parser.clone());
         }
         let schema = schema
             .data(Store::new(pool.clone()))
             .data(api)
-            .data(sec.opa)
+            .data(sec.opa.clone())
             .data(AuthId::anonymous())
             .finish();
+
+        let iri_endpoint = |secconf| IriEndpoint {
+            secconf,
+            store: super::persistence::Store::new(pool.clone()).unwrap(),
+            opa_executor: sec.opa.clone(),
+            claim_parser: claim_parser.clone(),
+        };
 
         let app = match sec.jwks_uri {
             Some(jwks_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
                 tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
+
+                let secconf = || {
+                    EndpointSecurityConfiguration::new(
+                        JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref(), CACHE_EXPIRY_SECONDS),
+                        sec.jwt_must_claim.clone(),
+                        sec.allow_anonymous,
+                    )
+                };
+
                 Route::new()
                     .at(
                         "/",
-                        post(AuthorizationEndpointQuery {
-                            checker: JwtChecker::new(
-                                &jwks_uri,
-                                sec.userinfo_uri.as_ref(),
-                                CACHE_EXPIRY_SECONDS,
-                            ),
-                            must_claim: sec.jwt_must_claim.clone(),
-                            allow_anonymous: sec.allow_anonymous,
+                        post(QueryEndpoint {
+                            secconf: secconf(),
                             schema: schema.clone(),
                         }),
                     )
                     .at(
                         "/ws",
-                        get(AuthorizationEndpointSubscription {
-                            checker: JwtChecker::new(
-                                &jwks_uri,
-                                sec.userinfo_uri.as_ref(),
-                                CACHE_EXPIRY_SECONDS,
-                            ),
-                            must_claim: sec.jwt_must_claim,
-                            allow_anonymous: sec.allow_anonymous,
+                        get(SubscriptionEndpoint {
+                            secconf: secconf(),
                             schema,
                         }),
                     )
+                    .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
+                    .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
             }
             None => {
                 tracing::warn!("API endpoint uses no authentication");
                 Route::new()
                     .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
                     .at("/ws", get(GraphQLSubscription::new(schema)))
+                    .at("/data/:iri", get(iri_endpoint(None)))
+                    .at("/data/:ns/:iri", get(iri_endpoint(None)))
             }
         };
 

@@ -20,9 +20,9 @@ use super::vocab::Chronicle;
 
 custom_error::custom_error! {pub ParseIriError
     NotAnIri {source: iref::Error } = "Invalid IRI",
-    UnparsableIri {iri: IriRefBuf} = "Unparsable chronicle IRI",
+    UnparsableIri {iri: IriRefBuf} = "Unparsable Chronicle IRI",
     UnparsableUuid {source: uuid::Error } = "Unparsable UUID",
-    IncorrectIriKind = "Unexpected Iri type",
+    IncorrectIriKind = "Unexpected IRI type",
     MissingComponent{component: String} = "Expected {component}",
 }
 
