@@ -437,6 +437,8 @@ mod test {
     use super::OpaTransactionHandler;
 
     type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
+
+    #[derive(Clone)]
     pub struct TestTransactionContext {
         pub state: RefCell<BTreeMap<String, Vec<u8>>>,
         pub events: RefCell<TestTxEvents>,
@@ -453,24 +455,26 @@ mod test {
             }
         }
 
+        /// Returns a list of tuples representing the readable state of this `TestTransactionContext`.
+        ///
+        /// The method first converts raw byte strings into JSON objects for meta data and keys.
         pub fn readable_state(&self) -> Vec<(String, Value)> {
             // Deal with the fact that policies are raw bytes, but meta data and
             // keys are json
-
             self.state
                 .borrow()
                 .iter()
                 .map(|(k, v)| {
                     let as_string = String::from_utf8(v.clone()).unwrap();
-                    if serde_json::from_str::<Value>(&as_string).is_ok() {
-                        (k.clone(), serde_json::from_str(&as_string).unwrap())
-                    } else {
-                        (k.clone(), serde_json::to_value(v.clone()).unwrap())
+                    match serde_json::from_str(&as_string) {
+                        Ok(json) => (k.clone(), json),
+                        Err(_) => (k.clone(), serde_json::to_value(v.clone()).unwrap()),
                     }
                 })
                 .collect()
         }
 
+        /// Returns the events as a vector of PrintableEvent structs.
         pub fn readable_events(&self) -> PrintableEvent {
             self.events
                 .borrow()
@@ -551,49 +555,103 @@ mod test {
         secret
     }
 
-    fn submission_to_state(
+    /// Apply a transaction to a transaction context
+    async fn apply_tx(
         mut context: TestTransactionContext,
-        transactor_key: SigningKey,
-        addresses: Vec<String>,
-        submission: Submission,
+        addresses: &[String],
+        submission: &Submission,
+        transactor_key: &SigningKey,
     ) -> TestTransactionContext {
         let message_builder = MessageBuilder::new_deterministic(address::FAMILY, address::VERSION);
-
-        let input_addresses = addresses.clone();
-        let output_addresses = addresses;
-        let dependencies = vec![];
-
-        let (tx, id) = message_builder.make_sawtooth_transaction(
-            input_addresses,
-            output_addresses,
-            dependencies,
-            &submission,
-            &transactor_key,
-        );
-
+        let (tx, id) = message_builder
+            .make_sawtooth_transaction(
+                addresses.to_vec(),
+                addresses.to_vec(),
+                vec![],
+                submission,
+                transactor_key,
+            )
+            .await;
         let processor = OpaTransactionHandler::new();
-
         let header =
             <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();
-
         let mut request = TpProcessRequest::default();
         request.set_header(header);
         request.set_payload(tx.payload);
         request.set_signature(id.as_str().to_owned());
-
         processor.apply(&request, &mut context).unwrap();
-
         context
     }
 
-    #[test]
-    fn bootstrap_from_initial_state() {
+    /// Assert that all contexts in the given slice are equal
+    fn assert_contexts_are_equal(contexts: &[TestTransactionContext]) {
+        // get the first context in the slice
+        let first_context = &contexts[0];
+
+        // check that all contexts have the same readable state and events
+        assert!(
+            contexts.iter().all(|context| {
+                (
+                    first_context.readable_state(),
+                    first_context.readable_events(),
+                ) == (context.readable_state(), context.readable_events())
+            }),
+            "All contexts must be the same"
+        );
+    }
+
+    /// Applies a transaction `submission` to `context` using `transactor_key`,
+    /// `number_of_determinism_checking_cycles` times, checking for determinism between
+    /// each cycle.
+    async fn submission_to_state(
+        context: TestTransactionContext,
+        transactor_key: SigningKey,
+        addresses: &[String],
+        submission: Submission,
+    ) -> TestTransactionContext {
+        // Set the number of determinism checking cycles
+        let number_of_determinism_checking_cycles = 5;
+
+        // Get the current state and events before applying the transactions.
+        let preprocessing_state_and_events =
+            { (context.readable_state(), context.readable_events()) };
+
+        // Create a vector of `number_of_determinism_checking_cycles` contexts
+        let contexts = vec![context; number_of_determinism_checking_cycles];
+
+        let mut results = Vec::with_capacity(number_of_determinism_checking_cycles);
+
+        for context in contexts {
+            let result = apply_tx(context, addresses, &submission, &transactor_key).await;
+            results.push(result);
+        }
+
+        // Check that the context has been updated after running `apply_tx`
+        let updated_readable_state_and_events = {
+            let context = results.last().unwrap();
+            (context.readable_state(), context.readable_events())
+        };
+        assert_ne!(
+            preprocessing_state_and_events, updated_readable_state_and_events,
+            "Context must be updated after running apply"
+        );
+
+        // Check if all contexts are the same after running `apply_tx`
+        assert_contexts_are_equal(&results);
+
+        // Return the last context from the vector of contexts
+        results.pop().unwrap()
+    }
+
+    #[tokio::test]
+    async fn bootstrap_from_initial_state() {
         let root_key = key_from_seed(0);
         let context = TestTransactionContext::new();
         let builder = SubmissionBuilder::bootstrap_root(root_key.verifying_key());
         let submission = builder.build(0xffff);
 
-        let context = submission_to_state(context, root_key, vec![key_address("root")], submission);
+        let context =
+            submission_to_state(context, root_key, &[key_address("root")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(), {
             ".**.date" => "[date]",
@@ -624,8 +682,8 @@ mod test {
         "###);
     }
 
-    #[test]
-    fn bootstrap_from_initial_state_does_not_require_transactor_key() {
+    #[tokio::test]
+    async fn bootstrap_from_initial_state_does_not_require_transactor_key() {
         let root_key = key_from_seed(0);
         let context = TestTransactionContext::new();
         let another_key = key_from_seed(1);
@@ -633,7 +691,7 @@ mod test {
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, another_key, vec![key_address("root")], submission);
+            submission_to_state(context, another_key, &[key_address("root")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -667,7 +725,7 @@ mod test {
     }
 
     /// Needed for further tests
-    fn bootstrap_root() -> (TestTransactionContext, SigningKey) {
+    async fn bootstrap_root() -> (TestTransactionContext, SigningKey) {
         let root_key = key_from_seed(0);
 
         let context = TestTransactionContext::new();
@@ -678,23 +736,25 @@ mod test {
             submission_to_state(
                 context,
                 root_key.clone(),
-                vec![key_address("root")],
+                &[key_address("root")],
                 submission,
-            ),
+            )
+            .await,
             root_key,
         )
     }
 
-    #[test]
-    fn rotate_root() {
+    #[tokio::test]
+    async fn rotate_root() {
         let old_key = key_from_seed(0);
 
-        let (context, root_key) = bootstrap_root();
+        let (context, root_key) = bootstrap_root().await;
         let new_root = key_from_seed(1);
         let builder = SubmissionBuilder::rotate_key("root", &old_key, &new_root, &root_key);
         let submission = builder.build(0xffff);
 
-        let context = submission_to_state(context, old_key, vec![key_address("root")], submission);
+        let context =
+            submission_to_state(context, old_key, &[key_address("root")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -742,9 +802,9 @@ mod test {
         "### );
     }
 
-    #[test]
-    fn register_valid_key() {
-        let (context, root_key) = bootstrap_root();
+    #[tokio::test]
+    async fn register_valid_key() {
+        let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
         let builder =
@@ -752,7 +812,7 @@ mod test {
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, root_key, vec![key_address("nonroot")], submission);
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -800,9 +860,9 @@ mod test {
         "###);
     }
 
-    #[test]
-    fn rotate_valid_key() {
-        let (context, root_key) = bootstrap_root();
+    #[tokio::test]
+    async fn rotate_valid_key() {
+        let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
         let builder =
@@ -812,9 +872,10 @@ mod test {
         let context = submission_to_state(
             context,
             root_key.clone(),
-            vec![key_address("nonroot")],
+            &[key_address("nonroot")],
             submission,
-        );
+        )
+        .await;
 
         let new_non_root = key_from_seed(2);
         let builder =
@@ -822,7 +883,7 @@ mod test {
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, root_key, vec![key_address("nonroot")], submission);
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -883,9 +944,9 @@ mod test {
         "###);
     }
 
-    #[test]
-    fn cannot_register_key_as_root() {
-        let (context, root_key) = bootstrap_root();
+    #[tokio::test]
+    async fn cannot_register_key_as_root() {
+        let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
         let builder =
@@ -893,7 +954,7 @@ mod test {
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, root_key, vec![key_address("nonroot")], submission);
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -927,9 +988,10 @@ mod test {
           - error: Invalid operation
         "###);
     }
-    #[test]
-    fn cannot_register_existing_key() {
-        let (context, root_key) = bootstrap_root();
+
+    #[tokio::test]
+    async fn cannot_register_existing_key() {
+        let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
         let builder =
@@ -939,16 +1001,17 @@ mod test {
         let context = submission_to_state(
             context,
             root_key.clone(),
-            vec![key_address("nonroot")],
+            &[key_address("nonroot")],
             submission,
-        );
+        )
+        .await;
 
         let builder =
             SubmissionBuilder::register_key("nonroot", &non_root_key.verifying_key(), &root_key);
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, root_key, vec![key_address("nonroot")], submission);
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",
@@ -998,9 +1061,9 @@ mod test {
         "###);
     }
 
-    #[test]
-    fn set_a_policy() {
-        let (context, root_key) = bootstrap_root();
+    #[tokio::test]
+    async fn set_a_policy() {
+        let (context, root_key) = bootstrap_root().await;
 
         // Policies can only be set by the root key owner
         let builder = SubmissionBuilder::set_policy("test", vec![0, 1, 2, 3], root_key.clone());
@@ -1008,7 +1071,7 @@ mod test {
         let submission = builder.build(0xffff);
 
         let context =
-            submission_to_state(context, root_key, vec![key_address("nonroot")], submission);
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
 
         insta::assert_yaml_snapshot!(context.readable_state(),{
             ".**.date" => "[date]",

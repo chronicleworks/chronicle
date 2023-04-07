@@ -155,7 +155,7 @@ impl MessageBuilder {
     }
 
     #[instrument]
-    pub fn make_sawtooth_transaction<M: Message>(
+    pub async fn make_sawtooth_transaction<M: Message>(
         &self,
         input_addresses: Vec<String>,
         output_addresses: Vec<String>,
