@@ -354,6 +354,7 @@ pub mod test {
     use futures::{Stream, StreamExt};
     use opa_tp_protocol::{
         address::{FAMILY, VERSION},
+        messages::OpaEvent,
         state::OpaOperationEvent,
         transaction::OpaSubmitTransaction,
     };
@@ -385,9 +386,7 @@ pub mod test {
         },
         processor::handler::{ContextError, TransactionContext},
     };
-    use serde_json::{
-        Value, {self},
-    };
+    use serde_json::{self, Value};
 
     use std::{
         cell::RefCell,
@@ -463,6 +462,9 @@ pub mod test {
     pub type OpaLedger =
         SawtoothLedger<SimulatedSubmissionChannel, OpaOperationEvent, OpaSubmitTransaction>;
 
+    type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
+
+    #[derive(Clone)]
     pub struct TestTransactionContext {
         pub state: RefCell<BTreeMap<String, Vec<u8>>>,
         pub events: RefCell<TestTxEvents>,
@@ -492,7 +494,6 @@ pub mod test {
         pub fn readable_state(&self) -> Vec<(String, Value)> {
             // Deal with the fact that policies are raw bytes, but meta data and
             // keys are json
-
             self.state
                 .borrow()
                 .iter()
@@ -503,6 +504,31 @@ pub mod test {
                     } else {
                         (k.clone(), serde_json::to_value(v.clone()).unwrap())
                     }
+                })
+                .collect()
+        }
+
+        pub fn readable_events(&self) -> PrintableEvent {
+            self.events
+                .borrow()
+                .iter()
+                .map(|(k, attr, data)| {
+                    (
+                        k.clone(),
+                        attr.clone(),
+                        match &<OpaEvent as prost::Message>::decode(&**data)
+                            .unwrap()
+                            .payload
+                            .unwrap()
+                        {
+                            opa_tp_protocol::messages::opa_event::Payload::Operation(operation) => {
+                                serde_json::from_str(operation).unwrap()
+                            }
+                            opa_tp_protocol::messages::opa_event::Payload::Error(error) => {
+                                serde_json::from_str(error).unwrap()
+                            }
+                        },
+                    )
                 })
                 .collect()
         }
@@ -583,9 +609,126 @@ pub mod test {
         }
     }
 
+    fn apply_transactions(
+        handler: &OpaTransactionHandler,
+        context: &mut TestTransactionContext,
+        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+    ) {
+        for tx in transactions {
+            let req = TpProcessRequest {
+                payload: tx.get_payload().to_vec(),
+                header: Some(TransactionHeader::parse_from_bytes(tx.get_header()).unwrap()).into(),
+                signature: tx.get_header_signature().to_string(),
+                ..Default::default()
+            };
+            handler.apply(&req, context).unwrap();
+        }
+    }
+
+    fn get_sorted_transactions(
+        batch: &mut sawtooth_sdk::messages::batch::Batch,
+    ) -> Vec<sawtooth_sdk::messages::transaction::Transaction> {
+        let mut transactions = batch.take_transactions().into_vec();
+        transactions.sort_by_key(|tx| tx.write_to_bytes().unwrap());
+        transactions
+    }
+
+    fn process_transactions(
+        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+        context: &mut TestTransactionContext,
+        handler: &OpaTransactionHandler,
+    ) -> (Vec<(String, Value)>, PrintableEvent) {
+        apply_transactions(handler, context, transactions);
+        (context.readable_state(), context.readable_events())
+    }
+
+    fn test_determinism(
+        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+        context: &TestTransactionContext,
+        number_of_determinism_checking_cycles: usize,
+    ) -> Vec<(Vec<(String, Value)>, PrintableEvent)> {
+        let handler = OpaTransactionHandler::new();
+
+        let contexts = (0..number_of_determinism_checking_cycles)
+            .map(|_| {
+                let mut context = context.clone();
+                process_transactions(transactions, &mut context, &handler)
+            })
+            .collect::<Vec<_>>();
+
+        // Check if the contexts are the same after running apply
+        assert!(
+            contexts.iter().all(|context| contexts[0] == *context),
+            "All contexts must be the same after running apply. Contexts: {:?}",
+            contexts,
+        );
+
+        contexts
+    }
+
+    fn assert_output_determinism(
+        expected_contexts: &[(Vec<(String, Value)>, PrintableEvent)],
+        readable_state_and_events: &(Vec<(String, Value)>, PrintableEvent),
+    ) {
+        // Check if the updated context is the same as the determinism check results
+        assert!(
+            expected_contexts
+                .iter()
+                .all(|context| readable_state_and_events == context),
+            "Updated context must be the same as previously run tests"
+        );
+    }
+
+    #[derive(Clone)]
     struct WellBehavedBehavior {
         handler: Arc<OpaTransactionHandler>,
         context: Arc<Mutex<TestTransactionContext>>,
+    }
+
+    impl WellBehavedBehavior {
+        /// Submits a batch of transactions to the validator and performs determinism checks.
+        fn submit_batch(&self, request: &[u8]) -> Result<Vec<u8>, SawtoothCommunicationError> {
+            // Parse the request into a `ClientBatchSubmitRequest` object and extract the first batch.
+            let mut req = ClientBatchSubmitRequest::parse_from_bytes(request).unwrap();
+            let mut batch = req.take_batches().into_iter().next().unwrap();
+
+            // Log some debug information about the batch and sort its transactions.
+            debug!(received_batch = ?batch, transactions = ?batch.transactions);
+            let transactions = get_sorted_transactions(&mut batch);
+
+            // Get the current state and events before applying the transactions.
+            let preprocessing_state_and_events = {
+                let context = self.context.lock().unwrap();
+                (context.readable_state(), context.readable_events())
+            };
+
+            // Perform determinism checking and get the expected contexts
+            let number_of_determinism_checking_cycles = 5;
+            let context = { TestTransactionContext::clone(&self.context.lock().unwrap()) };
+            let expected_contexts = test_determinism(
+                &transactions,
+                &context,
+                number_of_determinism_checking_cycles,
+            );
+
+            // Update the context and perform an output determinism check.
+            let mut context = self.context.lock().unwrap();
+            apply_transactions(&self.handler, &mut context, &transactions);
+            let updated_readable_state_and_events =
+                (context.readable_state(), context.readable_events());
+            assert_ne!(
+                preprocessing_state_and_events, updated_readable_state_and_events,
+                "Context must be updated after running apply"
+            );
+            assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
+
+            // Create a response with an "OK" status and write it to a byte vector.
+            let mut response = ClientBatchSubmitResponse::new();
+            response.set_status(ClientBatchSubmitResponse_Status::OK);
+            let mut buf = vec![];
+            response.write_to_vec(&mut buf)?;
+            Ok(buf)
+        }
     }
 
     impl SimulatedSawtoothBehavior for WellBehavedBehavior {
@@ -599,32 +742,7 @@ pub mod test {
                 // Batch submit request, decode and apply the transactions
                 // in the batch
                 Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST => {
-                    let mut req = ClientBatchSubmitRequest::parse_from_bytes(&request).unwrap();
-                    let batch = req.take_batches().into_iter().next().unwrap();
-
-                    debug!(received_batch = ?batch, transactions = ?batch.transactions);
-
-                    // Convert transaction into TpProcessRequest
-                    for tx in batch.transactions {
-                        let req = TpProcessRequest {
-                            payload: tx.get_payload().to_vec(),
-                            header: Some(
-                                TransactionHeader::parse_from_bytes(tx.get_header()).unwrap(),
-                            )
-                            .into(),
-                            signature: tx.get_header_signature().to_string(),
-                            ..Default::default()
-                        };
-
-                        self.handler
-                            .as_ref()
-                            .apply(&req, &mut *self.context.lock().unwrap())
-                            .unwrap();
-                    }
-                    let mut response = ClientBatchSubmitResponse::new();
-                    response.set_status(ClientBatchSubmitResponse_Status::OK);
-                    let mut buf = vec![];
-                    response.write_to_vec(&mut buf).unwrap();
+                    let buf = self.submit_batch(&request)?;
                     Ok(buf)
                 }
                 // Always respond with a block height of one

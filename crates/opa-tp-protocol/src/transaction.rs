@@ -104,18 +104,20 @@ impl LedgerTransaction for OpaSubmitTransaction {
         &self,
         message_builder: &MessageBuilder,
     ) -> (Transaction, TransactionId) {
-        message_builder.make_sawtooth_transaction(
-            self.addresses(),
-            self.addresses(),
-            vec![],
-            match self {
-                Self::BootstrapRoot(submission, _) => submission,
-                Self::RotateRoot(submission, _) => submission,
-                Self::RegisterKey(submission, _, _) => submission,
-                Self::RotateKey(submission, _, _) => submission,
-                Self::SetPolicy(submission, _, _) => submission,
-            },
-            self.signer(),
-        )
+        message_builder
+            .make_sawtooth_transaction(
+                self.addresses(),
+                self.addresses(),
+                vec![],
+                match self {
+                    Self::BootstrapRoot(submission, _) => submission,
+                    Self::RotateRoot(submission, _) => submission,
+                    Self::RegisterKey(submission, _, _) => submission,
+                    Self::RotateKey(submission, _, _) => submission,
+                    Self::SetPolicy(submission, _, _) => submission,
+                },
+                self.signer(),
+            )
+            .await
     }
 }

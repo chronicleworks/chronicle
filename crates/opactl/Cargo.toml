@@ -30,6 +30,7 @@ user-error.workspace   = true
 [dev-dependencies]
 insta                = { workspace = true, features = ["yaml"] }
 opa-tp               = { path = "../opa-tp" }
+prost.workspace      = true
 protobuf.workspace   = true
 serde_json.workspace = true
 tempfile.workspace   = true
