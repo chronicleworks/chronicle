@@ -192,7 +192,7 @@ pub struct EntityDerive {
     pub id: EntityId,
     pub used_id: EntityId,
     pub activity_id: Option<ActivityId>,
-    pub typ: Option<DerivationType>,
+    pub typ: DerivationType,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]

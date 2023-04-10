@@ -424,10 +424,10 @@ impl ToJson for ProvModel {
                     for derivation in derivation.iter() {
                         let id = json!({"@id": derivation.used_id.de_compact()});
                         match derivation.typ {
-                            Some(DerivationType::PrimarySource) => primary_ids.push(id),
-                            Some(DerivationType::Quotation) => quotation_ids.push(id),
-                            Some(DerivationType::Revision) => revision_ids.push(id),
-                            _ => derived_ids.push(id),
+                            DerivationType::PrimarySource => primary_ids.push(id),
+                            DerivationType::Quotation => quotation_ids.push(id),
+                            DerivationType::Revision => revision_ids.push(id),
+                            DerivationType::None => derived_ids.push(id),
                         }
                     }
                     if !derived_ids.is_empty() {
@@ -954,7 +954,7 @@ impl ToJson for ChronicleOperation {
                     );
                 }
 
-                if let Some(typ) = typ {
+                if *typ != DerivationType::None {
                     o.derivation(typ);
                 }
 

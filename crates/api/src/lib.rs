@@ -1109,7 +1109,7 @@ where
         namespace: ExternalId,
         activity_id: Option<ActivityId>,
         used_id: EntityId,
-        typ: Option<DerivationType>,
+        typ: DerivationType,
         identity: AuthId,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
@@ -2778,7 +2778,7 @@ mod test {
             namespace: "testns".into(),
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: None,
+            derivation: DerivationType::None,
         }), identity)
         .await
         .unwrap()
@@ -2829,7 +2829,7 @@ mod test {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
             activity: None,
-            derivation: Some(DerivationType::PrimarySource),
+            derivation: DerivationType::PrimarySource,
             used_entity: EntityId::from_external_id("testusedentity"),
         }), identity)
         .await
@@ -2882,7 +2882,7 @@ mod test {
             namespace: "testns".into(),
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: Some(DerivationType::Revision),
+            derivation: DerivationType::Revision,
         }), identity)
         .await
         .unwrap()
@@ -2934,7 +2934,7 @@ mod test {
             namespace: "testns".into(),
             activity: None,
             used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: Some(DerivationType::Quotation),
+            derivation: DerivationType::Quotation,
         }), identity)
         .await
         .unwrap()

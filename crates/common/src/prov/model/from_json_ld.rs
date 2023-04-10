@@ -594,7 +594,13 @@ impl ProvModel {
             .into_iter()
             .map(|id| EntityId::try_from(id.as_iri()))
         {
-            self.was_derived_from(namespaceid.clone(), None, derived?, id.clone(), None);
+            self.was_derived_from(
+                namespaceid.clone(),
+                DerivationType::None,
+                derived?,
+                id.clone(),
+                None,
+            );
         }
 
         for derived in extract_reference_ids(&Prov::WasQuotedFrom, entity)?
@@ -603,7 +609,7 @@ impl ProvModel {
         {
             self.was_derived_from(
                 namespaceid.clone(),
-                Some(DerivationType::quotation()),
+                DerivationType::quotation(),
                 derived?,
                 id.clone(),
                 None,
@@ -616,7 +622,7 @@ impl ProvModel {
         {
             self.was_derived_from(
                 namespaceid.clone(),
-                Some(DerivationType::revision()),
+                DerivationType::revision(),
                 derived?,
                 id.clone(),
                 None,
@@ -629,7 +635,7 @@ impl ProvModel {
         {
             self.was_derived_from(
                 namespaceid.clone(),
-                Some(DerivationType::primary_source()),
+                DerivationType::primary_source(),
                 derived?,
                 id.clone(),
                 None,
@@ -664,7 +670,7 @@ trait Operation {
     fn end_time(&self) -> String;
     fn entity(&self) -> EntityId;
     fn used_entity(&self) -> EntityId;
-    fn derivation(&self) -> Option<DerivationType>;
+    fn derivation(&self) -> DerivationType;
     fn domain(&self) -> Option<DomaintypeId>;
     fn attributes(&self) -> BTreeMap<String, Attribute>;
     fn informing_activity(&self) -> ActivityId;
@@ -730,20 +736,19 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
         EntityId::from_external_id(external_id)
     }
 
-    fn derivation(&self) -> Option<DerivationType> {
+    fn derivation(&self) -> DerivationType {
         let mut objects = self.get(&id_from_iri(&ChronicleOperations::DerivationType));
         let derivation = match objects.next() {
             Some(object) => object.as_str().unwrap(),
-            None => return None,
+            None => return DerivationType::None,
         };
 
-        let d = match derivation {
+        match derivation {
             "Revision" => DerivationType::Revision,
             "Quotation" => DerivationType::Quotation,
             "PrimarySource" => DerivationType::PrimarySource,
             _ => unreachable!(),
-        };
-        Some(d)
+        }
     }
 
     fn domain(&self) -> Option<DomaintypeId> {
