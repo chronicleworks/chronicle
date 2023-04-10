@@ -29,8 +29,7 @@ network access for dependencies, and can be used in secure environments.
 
 For friction-free development and testing, without the need for a backend ledger,
 domain-specific versions of Chronicle can be built in the same CI / CD process
-as your production version. Chronicle will use an embedded database and can be
-started with an [embedded GraphQL IDE](./cli.md#serve-graphql).
+as your production version.
 
 ![file](diagrams/out/stand-alone-deployment.svg)
 

@@ -1517,7 +1517,7 @@ mod test {
             ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
             KeyRegistration, NamespaceCommand,
         },
-        database::{get_embedded_db_connection, Database},
+        database::TemporaryDatabase,
         identity::AuthId,
         k256::{
             pkcs8::{EncodePrivateKey, LineEnding},
@@ -1536,12 +1536,12 @@ mod test {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    struct TestDispatch {
+    struct TestDispatch<'a> {
         api: ApiDispatch,
-        _db: Database, // share lifetime
+        _db: TemporaryDatabase<'a>, // share lifetime
     }
 
-    impl TestDispatch {
+    impl TestDispatch<'_> {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
@@ -1576,7 +1576,7 @@ mod test {
         }
     }
 
-    async fn test_api() -> TestDispatch {
+    async fn test_api<'a>() -> TestDispatch<'a> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
@@ -1588,7 +1588,8 @@ mod test {
         let mut ledger = InMemLedger::new();
         let reader = ledger.reader();
 
-        let (database, pool) = get_embedded_db_connection().await.unwrap();
+        let database = TemporaryDatabase::default();
+        let pool = database.connection_pool().unwrap();
 
         let dispatch = Api::new(
             pool,

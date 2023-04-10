@@ -9,11 +9,28 @@ API service starts up.
 
 ## Remote PostgreSQL Database
 
+### Setup
+
+Install PostgreSQL with a download from the
+[official website](https://www.postgresql.org/).
+Alternatively, it is offered through many popular package managers, so you may
+find it more conveniently available via whichever means you typically install
+other software on your system. In production, we recommend running Chronicle
+and PostgreSQL on separate systems, whether virtual or physical.
+
+To learn more about installing PostgreSQL, and about how to set up a database,
+user and password for Chronicle, refer to the
+[Server Administration](https://www.postgresql.org/docs/current/admin.html)
+part of PostgreSQL's documentation. After Chronicle successfully connects to
+an empty database then it will automatically create the tables, etc. that it
+requires.
+
+### Use with Chronicle
+
 The standard PostgreSQL variables `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
 `PGDATABASE` are recognized by Chronicle which uses them in attempting to
-connect to a remote database on startup. To prevent fallback to an embedded
-database on connection failure, use `--remote-database`. As described in the
-`--help`, values for the database connection configuration can be provided via
+connect to a remote database on startup. As described in the `--help`,
+values for the database connection configuration can be provided via
 `--database-*` options at the command line, except for `PGPASSWORD` for
 reasons of security.
 
@@ -21,16 +38,3 @@ reasons of security.
 
 Passing the `--features inmem` argument to `cargo run` has Chronicle use an
 in-memory transaction processor rather than attempting to connect to Sawtooth.
-
-Passing the `--embedded-database` argument to Chronicle itself has it use an
-embedded PostgreSQL server instead of attempting to connect to a database
-provided in the deployment environment.
-
-The combination of these options is useful for obtaining a simple development
-environment wherein provenance information need not persist between sessions.
-
-An example for GraphQL interaction:
-
-```bash
-cargo run --features inmem --bin chronicle -- --embedded-database serve-graphql --open
-```

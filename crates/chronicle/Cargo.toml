@@ -26,7 +26,6 @@ opa.workspace                  = true
 opentelemetry.workspace        = true
 opentelemetry-jaeger.workspace = true
 percent-encoding.workspace     = true
-pg-embed.workspace             = true
 proto                          = { path = "../sawtooth-protocol" }
 question.workspace             = true
 rand.workspace                 = true
