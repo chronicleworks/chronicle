@@ -103,7 +103,7 @@ services:
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty \
           --sawtooth tcp://validator:4004 \
-          serve-graphql \
+          serve-api \
           --interface 0.0.0.0:9982
     volumes:
       - type: bind

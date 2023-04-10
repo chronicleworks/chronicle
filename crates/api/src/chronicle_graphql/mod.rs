@@ -504,13 +504,15 @@ impl SecurityConf {
 }
 
 #[async_trait::async_trait]
-pub trait ChronicleGraphQlServer {
-    async fn serve_graphql(
+pub trait ChronicleApiServer {
+    async fn serve_api(
         &self,
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
         security_conf: SecurityConf,
+        serve_graphql: bool,
+        serve_data: bool,
     ) -> Result<(), ApiError>;
 }
 
@@ -1011,17 +1013,19 @@ impl async_graphql::extensions::ExtensionFactory for OpaCheck {
 }
 
 #[async_trait::async_trait]
-impl<Query, Mutation> ChronicleGraphQlServer for ChronicleGraphQl<Query, Mutation>
+impl<Query, Mutation> ChronicleApiServer for ChronicleGraphQl<Query, Mutation>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
-    async fn serve_graphql(
+    async fn serve_api(
         &self,
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
         address: SocketAddr,
         sec: SecurityConf,
+        serve_graphql: bool,
+        serve_data: bool,
     ) -> Result<(), ApiError> {
         let claim_parser = sec
             .id_pointer
@@ -1050,7 +1054,9 @@ where
             claim_parser: claim_parser.clone(),
         };
 
-        let app = match sec.jwks_uri {
+        let mut app = Route::new();
+
+        match sec.jwks_uri {
             Some(jwks_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
                 tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
@@ -1063,31 +1069,42 @@ where
                     )
                 };
 
-                Route::new()
-                    .at(
-                        "/",
-                        post(QueryEndpoint {
-                            secconf: secconf(),
-                            schema: schema.clone(),
-                        }),
-                    )
-                    .at(
-                        "/ws",
-                        get(SubscriptionEndpoint {
-                            secconf: secconf(),
-                            schema,
-                        }),
-                    )
-                    .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
-                    .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
+                if serve_graphql {
+                    app = app
+                        .at(
+                            "/",
+                            post(QueryEndpoint {
+                                secconf: secconf(),
+                                schema: schema.clone(),
+                            }),
+                        )
+                        .at(
+                            "/ws",
+                            get(SubscriptionEndpoint {
+                                secconf: secconf(),
+                                schema,
+                            }),
+                        )
+                };
+                if serve_data {
+                    app = app
+                        .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
+                        .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
+                };
             }
             None => {
                 tracing::warn!("API endpoint uses no authentication");
-                Route::new()
-                    .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
-                    .at("/ws", get(GraphQLSubscription::new(schema)))
-                    .at("/data/:iri", get(iri_endpoint(None)))
-                    .at("/data/:ns/:iri", get(iri_endpoint(None)))
+
+                if serve_graphql {
+                    app = app
+                        .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
+                        .at("/ws", get(GraphQLSubscription::new(schema)))
+                };
+                if serve_data {
+                    app = app
+                        .at("/data/:iri", get(iri_endpoint(None)))
+                        .at("/data/:ns/:iri", get(iri_endpoint(None)))
+                };
             }
         };
 

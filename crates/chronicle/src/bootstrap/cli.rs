@@ -989,14 +989,15 @@ impl SubCommand for CliModel {
             )
             .subcommand(Command::new("export-schema").about("Print SDL and exit"))
             .subcommand(
-                Command::new("serve-graphql")
-                    .about("Start a graphql server")
+                Command::new("serve-api")
+                    .alias("serve-graphql")
+                    .about("Start an API server")
                     .arg(
                         Arg::new("interface")
                             .long("interface")
                             .takes_value(true)
                             .default_value("127.0.0.1:9982")
-                            .help("The graphql server address (default 127.0.0.1:9982)"),
+                            .help("The API server address (default 127.0.0.1:9982)"),
                     ).arg(
                         Arg::new("playground")
                             .long("playground")
@@ -1038,6 +1039,15 @@ impl SubCommand for CliModel {
                         .multiple_values(true)
                         .number_of_values(2)
                         .help("claim name and value that must be present for accepting a JWT")
+                    )
+                    .arg(
+                        Arg::new("offer-endpoints")
+                        .long("offer-endpoints")
+                        .takes_value(true)
+                        .min_values(1)
+                        .value_parser(["data", "graphql"])
+                        .default_values(&["data", "graphql"])
+                        .help("which API endpoints to offer")
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));

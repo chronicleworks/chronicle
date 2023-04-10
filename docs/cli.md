@@ -2,9 +2,9 @@
 
 ## Subcommands
 
-### `serve-graphql`
+### `serve-api`
 
-Run Chronicle as a GraphQL server.
+Run Chronicle as an API server.
 
 #### Arguments
 
@@ -51,6 +51,14 @@ expected in the JWTs issued by the authorization server.
 
 This option may be given multiple times. To set via environment variables
 instead, prefix each variable name with `JWT_MUST_CLAIM_`.
+
+##### `--offer-endpoints name name ...`
+
+Which endpoints to listen at for serving requests. By default, all are served.
+Options are:
+
+- `data` for IRIs encoded in URIs (at `/data`)
+- `graphql` for GraphQL requests (at `/` and `/ws`)
 
 ### `export-schema`
 
