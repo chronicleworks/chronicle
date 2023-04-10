@@ -13,7 +13,7 @@ use sawtooth_sdk::{
     },
 };
 
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, sync::oneshot::channel};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
@@ -109,7 +109,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         let mut bytes = vec![];
         tx.write_to_vec(&mut bytes)?;
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<Result<_, SawtoothCommunicationError>>();
+        let (tx, rx) = channel::<Result<_, SawtoothCommunicationError>>();
 
         let send_clone = self.tx.clone();
         Handle::current().spawn_blocking(move || {

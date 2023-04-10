@@ -126,6 +126,11 @@ impl UuidGen for UniqueUuid {}
 
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
+struct OpaConfiguration {
+    policy: String,
+    entrypoint: String,
+}
+
 struct RemoteDatabaseConnector {
     db_uri: String,
 }

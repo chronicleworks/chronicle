@@ -974,8 +974,17 @@ impl SubCommand for CliModel {
                     .long("database-name")
                     .takes_value(true)
                     .env("PGDATABASE")
-                    .help("name of the database")
+                    .help("Name of the database")
                     .default_value("chronicle"),
+            )
+            .arg(
+                Arg::new("opa-policy-from-settings")
+                    .long("opa-policy-from-settings")
+                    .takes_value(false)
+                    .help("""Interrogate the settings TP for OPA policy entries.
+                            chronicle.opa - boolean, determines whether to secure with on-chain policy
+                            chronicle.opa_policy - string, the policy to use
+                            chronicle.opa_entrypoint - string, the entrypoint to use """)
             )
             .subcommand(
                 Command::new("completions")
