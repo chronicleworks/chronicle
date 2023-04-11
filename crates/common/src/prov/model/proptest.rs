@@ -558,7 +558,6 @@ proptest! {
                         .contains(&Usage {
                             activity_id: activity_id.clone(),
                             entity_id: id.clone(),
-                            time: None
                         });
 
                     prop_assert!(has_usage);
@@ -591,7 +590,7 @@ proptest! {
                         .contains(& Generation {
                             activity_id: activity_id.clone(),
                             generated_id: id.clone(),
-                            time: None });
+                        });
 
                     prop_assert!(has_generation);
                 }
