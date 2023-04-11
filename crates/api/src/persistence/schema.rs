@@ -1,6 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     activity (id) {
         id -> Int4,
         external_id -> Text,
@@ -12,6 +15,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     activity_attribute (activity_id, typename) {
         activity_id -> Int4,
         typename -> Text,
@@ -20,6 +26,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     agent (id) {
         id -> Int4,
         external_id -> Text,
@@ -31,6 +40,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     agent_attribute (agent_id, typename) {
         agent_id -> Int4,
         typename -> Text,
@@ -39,6 +51,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     association (agent_id, activity_id, role) {
         agent_id -> Int4,
         activity_id -> Int4,
@@ -47,6 +62,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     attachment (id) {
         id -> Int4,
         namespace_id -> Int4,
@@ -58,6 +76,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     attribution (agent_id, entity_id, role) {
         agent_id -> Int4,
         entity_id -> Int4,
@@ -66,6 +87,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     delegation (responsible_id, delegate_id, activity_id, role) {
         delegate_id -> Int4,
         responsible_id -> Int4,
@@ -75,6 +99,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     derivation (activity_id, used_entity_id, generated_entity_id, typ) {
         activity_id -> Int4,
         generated_entity_id -> Int4,
@@ -84,6 +111,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     entity (id) {
         id -> Int4,
         external_id -> Text,
@@ -94,6 +124,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     entity_attribute (entity_id, typename) {
         entity_id -> Int4,
         typename -> Text,
@@ -102,14 +135,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     generation (activity_id, generated_entity_id) {
         activity_id -> Int4,
         generated_entity_id -> Int4,
-        typ -> Nullable<Text>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     hadattachment (entity_id, attachment_id) {
         entity_id -> Int4,
         attachment_id -> Int4,
@@ -117,6 +155,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     hadidentity (agent_id, identity_id) {
         agent_id -> Int4,
         identity_id -> Int4,
@@ -124,6 +165,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     identity (id) {
         id -> Int4,
         namespace_id -> Int4,
@@ -132,6 +176,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     ledgersync (tx_id) {
         tx_id -> Text,
         bc_offset -> Nullable<Text>,
@@ -140,6 +187,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     namespace (id) {
         id -> Int4,
         external_id -> Text,
@@ -148,6 +198,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     usage (activity_id, entity_id) {
         activity_id -> Int4,
         entity_id -> Int4,
@@ -155,6 +208,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use common::prov::*;
+
     wasinformedby (activity_id, informing_activity_id) {
         activity_id -> Int4,
         informing_activity_id -> Int4,
