@@ -788,7 +788,15 @@ impl IriEndpoint {
             Ok(()) => match self.store.connection() {
                 Ok(connection) => match retrieve(connection, id, ns) {
                     Ok(data) => match data.to_json().compact().await {
-                        Ok(CompactedJson(json)) => {
+                        Ok(CompactedJson(mut json)) => {
+                            use serde_json::Value;
+                            if let Value::Object(mut map) = json {
+                                map.insert(
+                                    "@context".to_string(),
+                                    Value::String("/context".to_string()),
+                                );
+                                json = Value::Object(map);
+                            }
                             Ok(IntoResponse::into_response(poem::web::Json(json)))
                         }
                         Err(error) => {
@@ -916,6 +924,18 @@ impl Endpoint for IriEndpoint {
             None
         };
         self.respond(req, checked_claims.as_ref()).await
+    }
+}
+
+struct LdContextEndpoint;
+
+#[poem::async_trait]
+impl Endpoint for LdContextEndpoint {
+    type Output = poem::Response;
+
+    async fn call(&self, _req: poem::Request) -> poem::Result<Self::Output> {
+        let context: &serde_json::Value = &common::context::PROV;
+        Ok(IntoResponse::into_response(poem::web::Json(context)))
     }
 }
 
@@ -1088,6 +1108,7 @@ where
                 };
                 if serve_data {
                     app = app
+                        .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
                         .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
                 };
@@ -1102,6 +1123,7 @@ where
                 };
                 if serve_data {
                     app = app
+                        .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(None)))
                         .at("/data/:ns/:iri", get(iri_endpoint(None)))
                 };

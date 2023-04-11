@@ -57,7 +57,7 @@ instead, prefix each variable name with `JWT_MUST_CLAIM_`.
 Which endpoints to listen at for serving requests. By default, all are served.
 Options are:
 
-- `data` for IRIs encoded in URIs (at `/data`)
+- `data` for IRIs encoded in URIs (at `/context` and `/data`)
 - `graphql` for GraphQL requests (at `/` and `/ws`)
 
 ### `export-schema`
