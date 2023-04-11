@@ -854,13 +854,12 @@ impl Store {
             })
             .transpose()?;
 
-        use common::prov::operations::DerivationType;
         use schema::derivation::dsl as link;
         diesel::insert_into(schema::derivation::table)
             .values((
                 &link::used_entity_id.eq(stored_used.id),
                 &link::generated_entity_id.eq(stored_generated.id),
-                &link::typ.eq(derivation.typ.unwrap_or(DerivationType::None)),
+                &link::typ.eq(derivation.typ),
                 &link::activity_id.eq(stored_activity.map_or(-1, |activity| activity.id)),
             ))
             .on_conflict_do_nothing()

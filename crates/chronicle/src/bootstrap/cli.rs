@@ -854,7 +854,8 @@ impl SubCommand for EntityCliModel {
                         "quotation" => DerivationType::Quotation,
                         "primary-source" => DerivationType::PrimarySource,
                         _ => unreachable!(), // Guaranteed by PossibleValuesParser
-                    }),
+                    })
+                    .unwrap_or(DerivationType::None),
                 activity: id_from_option(matches, "activity_id")?,
                 used_entity: id_from(matches, "used_entity_id")?,
             })));

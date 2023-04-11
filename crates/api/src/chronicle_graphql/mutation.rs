@@ -37,7 +37,7 @@ async fn derivation<'a>(
     namespace: Option<String>,
     generated_entity: EntityId,
     used_entity: EntityId,
-    derivation: Option<DerivationType>,
+    derivation: DerivationType,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
 
@@ -175,7 +175,14 @@ pub async fn was_derived_from<'a>(
     generated_entity: EntityId,
     used_entity: EntityId,
 ) -> async_graphql::Result<Submission> {
-    derivation(ctx, namespace, generated_entity, used_entity, None).await
+    derivation(
+        ctx,
+        namespace,
+        generated_entity,
+        used_entity,
+        DerivationType::None,
+    )
+    .await
 }
 
 pub async fn was_revision_of<'a>(
@@ -189,7 +196,7 @@ pub async fn was_revision_of<'a>(
         namespace,
         generated_entity,
         used_entity,
-        Some(DerivationType::Revision),
+        DerivationType::Revision,
     )
     .await
 }
@@ -204,7 +211,7 @@ pub async fn had_primary_source<'a>(
         namespace,
         generated_entity,
         used_entity,
-        Some(DerivationType::PrimarySource),
+        DerivationType::PrimarySource,
     )
     .await
 }
@@ -219,7 +226,7 @@ pub async fn was_quoted_from<'a>(
         namespace,
         generated_entity,
         used_entity,
-        Some(DerivationType::Quotation),
+        DerivationType::Quotation,
     )
     .await
 }

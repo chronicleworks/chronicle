@@ -201,7 +201,7 @@ prop_compose! {
             id,
             used_id,
             activity_id: None,
-            typ: None
+            typ: DerivationType::None
         }
     }
 }

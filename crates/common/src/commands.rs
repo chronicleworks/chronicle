@@ -253,7 +253,7 @@ pub enum EntityCommand {
     Derive {
         id: EntityId,
         namespace: ExternalId,
-        derivation: Option<DerivationType>,
+        derivation: DerivationType,
         activity: Option<ActivityId>,
         used_entity: EntityId,
     },
@@ -291,7 +291,7 @@ impl EntityCommand {
     pub fn detach(
         id: EntityId,
         namespace: impl AsRef<str>,
-        derivation: Option<DerivationType>,
+        derivation: DerivationType,
         activity: Option<ActivityId>,
         used_entity: EntityId,
     ) -> Self {

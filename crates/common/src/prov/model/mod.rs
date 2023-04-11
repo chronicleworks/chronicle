@@ -322,7 +322,7 @@ pub struct Derivation {
     pub generated_id: EntityId,
     pub used_id: EntityId,
     pub activity_id: Option<ActivityId>,
-    pub typ: Option<DerivationType>,
+    pub typ: DerivationType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -479,7 +479,7 @@ impl ProvModel {
     pub fn was_derived_from(
         &mut self,
         namespace_id: NamespaceId,
-        typ: Option<DerivationType>,
+        typ: DerivationType,
         used_id: EntityId,
         id: EntityId,
         activity_id: Option<ActivityId>,
