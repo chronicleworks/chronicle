@@ -389,21 +389,18 @@ impl Association {
 pub struct Usage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
-    pub time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Generation {
     pub activity_id: ActivityId,
     pub generated_id: EntityId,
-    pub time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GeneratedEntity {
     pub entity_id: EntityId,
     pub generated_id: ActivityId,
-    pub time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -553,7 +550,6 @@ impl ProvModel {
             .insert(Generation {
                 activity_id: activity_id.clone(),
                 generated_id: generated_id.clone(),
-                time: None,
             });
     }
 
@@ -569,7 +565,6 @@ impl ProvModel {
             .insert(GeneratedEntity {
                 entity_id: entity_id.clone(),
                 generated_id: generated_id.clone(),
-                time: None,
             });
     }
 
@@ -580,7 +575,6 @@ impl ProvModel {
             .insert(Usage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
-                time: None,
             });
     }
 
