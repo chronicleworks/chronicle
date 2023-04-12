@@ -14,7 +14,7 @@ use url::Url;
 async fn main() {
     let matches = Command::new("chronicle-sawtooth-tp")
         .version("1.0")
-        .author("Blockchain technology partners")
+        .author("BTPWorks")
         .about("Write and query provenance data to distributed ledgers")
         .arg(
             Arg::new("connect")

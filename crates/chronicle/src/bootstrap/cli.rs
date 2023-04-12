@@ -912,7 +912,7 @@ impl SubCommand for CliModel {
         let mut app = Command::new("chronicle")
             .version(self.short_version.as_str())
             .long_version(self.long_version.as_str())
-            .author("Blockchain technology partners")
+            .author("BTPWorks")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
                 Arg::new("config")
