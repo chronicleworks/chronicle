@@ -798,6 +798,7 @@ pub mod test {
         association: {}
         derivation: {}
         delegation: {}
+        acted_on_behalf_of: {}
         generation: {}
         usage: {}
         was_informed_by: {}

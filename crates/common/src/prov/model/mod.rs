@@ -451,6 +451,7 @@ pub struct ProvModel {
     pub association: HashMap<NamespacedActivity, HashSet<Association>>,
     pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
     pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
+    pub acted_on_behalf_of: HashMap<NamespacedAgent, HashSet<Delegation>>,
     pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
     pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
     pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
@@ -501,22 +502,27 @@ impl ProvModel {
         activity_id: Option<ActivityId>,
         role: Option<Role>,
     ) {
+        let delegation = Delegation {
+            namespace_id: namespace_id.clone(),
+            id: DelegationId::from_component_ids(
+                delegate_id,
+                responsible_id,
+                activity_id.as_ref(),
+                role.as_ref(),
+            ),
+            responsible_id: responsible_id.clone(),
+            delegate_id: delegate_id.clone(),
+            activity_id,
+            role,
+        };
         self.delegation
             .entry((namespace_id.clone(), responsible_id.clone()))
             .or_insert_with(HashSet::new)
-            .insert(Delegation {
-                namespace_id: namespace_id.clone(),
-                id: DelegationId::from_component_ids(
-                    delegate_id,
-                    responsible_id,
-                    activity_id.as_ref(),
-                    role.as_ref(),
-                ),
-                responsible_id: responsible_id.clone(),
-                delegate_id: delegate_id.clone(),
-                activity_id,
-                role,
-            });
+            .insert(delegation.clone());
+        self.acted_on_behalf_of
+            .entry((namespace_id.clone(), delegate_id.clone()))
+            .or_insert_with(HashSet::new)
+            .insert(delegation);
     }
 
     pub fn qualified_association(

@@ -267,21 +267,21 @@ impl ProvModel {
             .ok()
             .and_then(|x| x.as_str().map(Role::from));
 
-        let responsible_id = extract_reference_ids(&Prov::Responsible, delegation)?
-            .into_iter()
-            .next()
-            .ok_or_else(|| ProcessorError::MissingProperty {
-                object: as_json(delegation),
-                iri: Prov::Responsible.as_iri().to_string(),
-            })
-            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
-
-        let delegate_id = extract_reference_ids(&Prov::ActedOnBehalfOf, delegation)?
+        let responsible_id = extract_reference_ids(&Prov::ActedOnBehalfOf, delegation)?
             .into_iter()
             .next()
             .ok_or_else(|| ProcessorError::MissingProperty {
                 object: as_json(delegation),
                 iri: Prov::ActedOnBehalfOf.as_iri().to_string(),
+            })
+            .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
+
+        let delegate_id = extract_reference_ids(&Prov::Delegate, delegation)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProcessorError::MissingProperty {
+                object: as_json(delegation),
+                iri: Prov::Delegate.as_iri().to_string(),
             })
             .and_then(|x| Ok(AgentId::try_from(x.as_iri())?))?;
 
