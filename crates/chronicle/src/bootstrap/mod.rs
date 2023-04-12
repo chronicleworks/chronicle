@@ -2,9 +2,7 @@ mod cli;
 mod config;
 
 use api::{
-    chronicle_graphql::{
-        ChronicleGraphQl, ChronicleGraphQlServer, JwksUri, SecurityConf, UserInfoUri,
-    },
+    chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
     Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
 use async_graphql::{async_trait, ObjectType};
@@ -145,28 +143,29 @@ async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> 
     Ok(pool)
 }
 
-fn graphql_addr(options: &ArgMatches) -> Result<Option<SocketAddr>, ApiError> {
-    if let Some(addr) = options.get_one::<String>("interface") {
-        Ok(Some(addr.parse()?))
-    } else {
-        Ok(None)
-    }
-}
-
-pub async fn graphql_server<Query, Mutation>(
+pub async fn api_server<Query, Mutation>(
     api: &ApiDispatch,
     pool: &ConnectionPool,
     gql: ChronicleGraphQl<Query, Mutation>,
-    options: &ArgMatches,
+    interface: Option<SocketAddr>,
     security_conf: SecurityConf,
+    serve_graphql: bool,
+    serve_data: bool,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
-    if let Some(addr) = graphql_addr(options)? {
-        gql.serve_graphql(pool.clone(), api.clone(), addr, security_conf)
-            .await?
+    if let Some(addr) = interface {
+        gql.serve_api(
+            pool.clone(),
+            api.clone(),
+            addr,
+            security_conf,
+            serve_graphql,
+            serve_data,
+        )
+        .await?
     }
 
     Ok(())
@@ -275,7 +274,12 @@ where
     let api = api(&pool, &matches, &config).await?;
     let ret_api = api.clone();
 
-    if let Some(matches) = matches.subcommand_matches("serve-graphql") {
+    if let Some(matches) = matches.subcommand_matches("serve-api") {
+        let interface = match matches.get_one::<String>("interface") {
+            Some(addr) => Some(addr.parse().map_err(ApiError::AddressParse)?),
+            None => None,
+        };
+
         let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
             Some(JwksUri::new(Url::from_str(uri)?))
         } else {
@@ -311,11 +315,17 @@ where
             ("allow_transactions", "allow_transactions.allowed_users");
         let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
 
-        graphql_server(
+        let endpoints: Vec<String> = matches
+            .get_many("offer-endpoints")
+            .unwrap()
+            .map(String::clone)
+            .collect();
+
+        api_server(
             &api,
             &pool,
             gql,
-            matches,
+            interface,
             SecurityConf::new(
                 jwks_uri,
                 userinfo_uri,
@@ -324,6 +334,8 @@ where
                 allow_anonymous,
                 opa,
             ),
+            endpoints.contains(&"graphql".to_string()),
+            endpoints.contains(&"data".to_string()),
         )
         .await?;
 
@@ -460,7 +472,7 @@ pub async fn bootstrap<Query, Mutation>(
                 },
                 _ => ConsoleLogging::Off,
             }
-        } else if matches.subcommand_name() == Some("serve-graphql") {
+        } else if matches.subcommand_name() == Some("serve-api") {
             ConsoleLogging::Pretty
         } else {
             ConsoleLogging::Off
