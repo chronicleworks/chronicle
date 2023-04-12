@@ -4,12 +4,12 @@ use std::{
     time::Duration,
 };
 
+use chronicle_protocol::async_sawtooth_sdk::ledger::Offset;
 use chrono::DateTime;
 
 use chrono::Utc;
 use common::{
     attributes::Attribute,
-    ledger::Offset,
     prov::{
         Activity, ActivityId, Agent, AgentId, Association, Attachment, Attribution,
         ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
@@ -61,6 +61,8 @@ pub enum StoreError {
 
     #[error("Could not find namespace")]
     InvalidNamespace,
+    #[error("Parse offset {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
 }
 
 #[derive(Debug)]
@@ -954,12 +956,20 @@ impl Store {
     pub(crate) fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
         use schema::ledgersync::dsl;
         self.connection()?.build_transaction().run(|connection| {
-            schema::ledgersync::table
+            let offset_and_tx = schema::ledgersync::table
                 .order_by(dsl::sync_time)
                 .select((dsl::bc_offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
-                .map_err(StoreError::from)
-                .map(|(offset, tx_id)| offset.map(|offset| (Offset::from(&*offset), tx_id)))
+                .map_err(StoreError::from)?;
+
+            if let Some(offset) = offset_and_tx.0 {
+                Ok(Some((
+                    Offset::from(offset.parse::<u64>().map_err(StoreError::from)?),
+                    offset_and_tx.1,
+                )))
+            } else {
+                Ok(None)
+            }
         })
     }
 
@@ -1332,7 +1342,7 @@ impl Store {
             Ok(self.connection()?.build_transaction().run(|connection| {
                 diesel::insert_into(dsl::table)
                     .values((
-                        dsl::bc_offset.eq(offset),
+                        dsl::bc_offset.eq(offset.to_string()),
                         dsl::tx_id.eq(&*tx_id.to_string()),
                         (dsl::sync_time.eq(Utc::now().naive_utc())),
                     ))

@@ -6,59 +6,65 @@ version = "0.6.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-graphql                = { workspace = true, features = [
+async-graphql = { workspace = true, features = [
   "opentelemetry",
   "chrono",
   "unblock",
   "default",
   "uuid",
 ] }
-async-graphql-poem.workspace = true
-async-stream.workspace       = true
-async-trait.workspace        = true
-base64.workspace             = true
-cached.workspace             = true
-chronicle-telemetry          = { path = "../chronicle-telemetry" }
-chrono.workspace             = true
-common                       = { path = "../common" }
-custom_error.workspace       = true
-derivative.workspace         = true
-diesel.workspace             = true
-diesel_migrations.workspace  = true
-futures.workspace            = true
-glob.workspace               = true
-hex.workspace                = true
-iref.workspace               = true
-iref-enum.workspace          = true
-json-ld.workspace            = true
-jwtk.workspace               = true
-opa.workspace                = true
-opentelemetry.workspace      = true
-parking_lot.workspace        = true
-poem.workspace               = true
-r2d2.workspace               = true
-rand.workspace               = true
-rand_core.workspace          = true
-reqwest.workspace            = true
-serde.workspace              = true
-serde_derive.workspace       = true
-serde_json.workspace         = true
-static-iref.workspace        = true
-thiserror.workspace          = true
-tokio.workspace              = true
-tracing.workspace            = true
-url.workspace                = true
-user-error.workspace         = true
-uuid.workspace               = true
+async-graphql-poem = { workspace = true }
+async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+cached = { workspace = true }
+chronicle-protocol = { path = "../chronicle-protocol" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
+chrono = { workspace = true }
+common = { path = "../common" }
+custom_error = { workspace = true }
+derivative = { workspace = true }
+diesel = { workspace = true }
+diesel_migrations = { workspace = true }
+futures = { workspace = true }
+glob = { workspace = true }
+hex = { workspace = true }
+iref = { workspace = true }
+iref-enum = { workspace = true }
+json-ld = { workspace = true }
+jwtk = { workspace = true }
+opa = { workspace = true }
+opentelemetry = { workspace = true }
+parking_lot = { workspace = true }
+poem = { workspace = true }
+r2d2 = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+reqwest = { workspace = true }
+sawtooth-sdk = { workspace = true }
+sawtooth_tp = { path = "../sawtooth-tp" }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+static-iref = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+user-error = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
-insta              = { workspace = true, features = ["json", "yaml"] }
-tempfile.workspace = true
+insta    = { workspace = true, features = ["json", "yaml"] }
+tempfile = { workspace = true }
 
 [build-dependencies]
 
 [features]
 devmode = ["inmem"]
+
 # Use an in-memory stub ledger
-inmem   = []
-strict  = []
+inmem  = []
+strict = []

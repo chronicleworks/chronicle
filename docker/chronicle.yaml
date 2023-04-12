@@ -65,7 +65,7 @@ services:
   chronicle-sawtooth-tp:
     environment: &rustenv
       - &rustbacktrace RUST_BACKTRACE=full
-      - &rustlog RUST_LOG=debug
+      - &rustlog RUST_LOG=debug,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     image: &chronicleTpImage chronicle-tp-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp

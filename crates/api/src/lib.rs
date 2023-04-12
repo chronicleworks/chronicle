@@ -1,9 +1,16 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 pub mod chronicle_graphql;
+pub mod inmem;
 mod persistence;
 
+use async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::BlockingLedgerWriter};
+use chronicle_protocol::{
+    async_sawtooth_sdk::ledger::{LedgerReader, LedgerWriter, Offset},
+    messages::ChronicleSubmitTransaction,
+    protocol::ChronicleOperationEvent,
+};
 use chrono::{DateTime, Utc};
-use derivative::*;
+
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, AsyncReadExt, FutureExt, StreamExt};
@@ -12,10 +19,8 @@ use common::{
     attributes::Attributes,
     commands::*,
     identity::{AuthId, IdentityError},
-    k256::ecdsa::{signature::Signer, Signature},
-    ledger::{
-        LedgerReader, LedgerWriter, Offset, SubmissionError, SubmissionStage, SubscriptionError,
-    },
+    k256::ecdsa::{signature::Signer, Signature, SigningKey},
+    ledger::{Commit, SubmissionError, SubmissionStage, SubscriptionError},
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
@@ -114,6 +119,9 @@ pub enum ApiError {
 
     #[error("Identity: {0}")]
     IdentityError(#[from] IdentityError),
+
+    #[error("Sawtooth communication error: {0}")]
+    SawtoothCommunicationError(#[from] SawtoothCommunicationError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -126,70 +134,9 @@ impl From<Infallible> for ApiError {
 impl UFE for ApiError {}
 
 type LedgerSendWithReply = (
-    ChronicleTransaction,
+    ChronicleSubmitTransaction,
     Sender<Result<ChronicleTransactionId, SubmissionError>>,
 );
-
-/// Blocking ledger writer, as we need to execute this within diesel transaction scope
-#[derive(Derivative)]
-#[derivative(Debug, Clone)]
-pub struct BlockingLedgerWriter {
-    tx: Sender<LedgerSendWithReply>,
-}
-
-impl BlockingLedgerWriter {
-    #[instrument(skip(ledger_writer))]
-    pub fn new<W: LedgerWriter + 'static + Send>(mut ledger_writer: W) -> Self {
-        let (tx, mut rx) = mpsc::channel::<LedgerSendWithReply>(10);
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        std::thread::spawn(move || {
-            let local = tokio::task::LocalSet::new();
-            local.spawn_local(async move {
-                loop {
-                    if let Some((submission, reply)) = rx.recv().await {
-                        let result = ledger_writer.submit(&submission).await;
-
-                        reply
-                            .send(result.map_err(SubmissionError::from))
-                            .await
-                            .map_err(|e| {
-                                error!(?e);
-                            })
-                            .ok();
-                    } else {
-                        return;
-                    }
-                }
-            });
-
-            rt.block_on(local)
-        });
-
-        Self { tx }
-    }
-
-    fn submit_blocking(
-        &mut self,
-        tx: &ChronicleTransaction,
-    ) -> Result<ChronicleTransactionId, ApiError> {
-        let (reply_tx, mut reply_rx) = mpsc::channel(1);
-        trace!(?tx.tx, "Dispatch submission to ledger");
-        self.tx.clone().blocking_send((tx.clone(), reply_tx))?;
-
-        let reply = reply_rx.blocking_recv();
-
-        if let Some(Err(ref error)) = reply {
-            error!(?error, "Ledger dispatch");
-        }
-
-        Ok(reply.ok_or(ApiError::ApiShutdownRx {})??)
-    }
-}
 
 type ApiSendWithReply = ((ApiCommand, AuthId), Sender<Result<ApiResponse, ApiError>>);
 
@@ -199,20 +146,21 @@ pub trait UuidGen {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug, Clone)]
-pub struct Api<U>
-where
+#[derive(Clone)]
+pub struct Api<
     U: UuidGen + Send + Sync + Clone,
-{
-    tx: Sender<ApiSendWithReply>,
+    W: LedgerWriter<Transaction = ChronicleSubmitTransaction, Error = SawtoothCommunicationError>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+> {
+    _reply_tx: Sender<ApiSendWithReply>,
     submit_tx: tokio::sync::broadcast::Sender<SubmissionStage>,
-    #[derivative(Debug = "ignore")]
     keystore: DirectoryStoredKeys,
-    ledger_writer: BlockingLedgerWriter,
-    #[derivative(Debug = "ignore")]
+    ledger_writer: Arc<BlockingLedgerWriter<W>>,
     store: persistence::Store,
-    #[derivative(Debug = "ignore")]
+    signer: SigningKey,
     uuidsource: PhantomData<U>,
 }
 
@@ -247,23 +195,24 @@ impl ApiDispatch {
     }
 }
 
-impl<U> Api<U>
+impl<U, LEDGER> Api<U, LEDGER>
 where
     U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
+    LEDGER: LedgerWriter<Transaction = ChronicleSubmitTransaction, Error = SawtoothCommunicationError>
+        + Clone
+        + Send
+        + Sync
+        + 'static
+        + LedgerReader<Event = ChronicleOperationEvent, Error = SawtoothCommunicationError>,
 {
-    #[instrument(skip(ledger_writer, ledger_reader,))]
-    pub async fn new<R, W>(
+    #[instrument(skip(ledger))]
+    pub async fn new(
         pool: Pool<ConnectionManager<PgConnection>>,
-        ledger_writer: W,
-        ledger_reader: R,
+        ledger: LEDGER,
         secret_path: &Path,
         uuidgen: U,
         namespace_bindings: HashMap<String, Uuid>,
-    ) -> Result<ApiDispatch, ApiError>
-    where
-        R: LedgerReader + Send + Clone + Sync + 'static,
-        W: LedgerWriter + Send + 'static,
-    {
+    ) -> Result<ApiDispatch, ApiError> {
         let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
         let (commit_notify_tx, _) = tokio::sync::broadcast::channel(20);
@@ -276,6 +225,9 @@ where
 
         let store = Store::new(pool.clone())?;
 
+        let keystore = DirectoryStoredKeys::new(secret_path)?;
+        let signing = keystore.chronicle_signing()?;
+
         pool.get()?
             .build_transaction()
             .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
@@ -285,31 +237,32 @@ where
             store.namespace_binding(&ns, uuid)?
         }
 
-        let reuse_reader = ledger_reader.clone();
+        let reuse_reader = ledger.clone();
+
+        let offset = store.get_last_offset().map(|x| x.map(|x| x.0));
+
+        let offset = if let Ok(Some(offset)) = offset {
+            Some(offset)
+        } else {
+            None
+        };
 
         tokio::task::spawn(async move {
-            let keystore = DirectoryStoredKeys::new(secret_path).unwrap();
-
-            let mut api = Api::<U> {
-                tx: commit_tx.clone(),
+            let mut api = Api::<U, LEDGER> {
+                _reply_tx: commit_tx.clone(),
                 submit_tx: commit_notify_tx.clone(),
                 keystore,
-                ledger_writer: BlockingLedgerWriter::new(ledger_writer),
+                signer: signing.clone(),
+                ledger_writer: Arc::new(BlockingLedgerWriter::new(ledger)),
                 store: store.clone(),
                 uuidsource: PhantomData::default(),
             };
 
-            debug!(?api, "Api running on localset");
-
             loop {
-                let mut state_updates = reuse_reader
-                    .clone()
-                    .state_updates(
-                        store
-                            .get_last_offset()
-                            .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
-                            .unwrap_or(Offset::Genesis),
-                    )
+                let state_updates = reuse_reader.clone();
+
+                let mut state_updates = state_updates
+                    .state_updates("chronicle/prov-update", offset, None)
                     .await
                     .unwrap();
 
@@ -324,23 +277,27 @@ where
                                   }
                                   // Ledger contradicted or error, so nothing to
                                   // apply, but forward notification
-                                  Some(commit @ Err(_)) => {
-                                    commit_notify_tx.send(SubmissionStage::committed(commit)).ok();
+                                  Some((ChronicleOperationEvent(Err(e)),tx,_,_)) => {
+                                    commit_notify_tx.send(SubmissionStage::not_committed(
+                                      ChronicleTransactionId::from(tx.as_str()),e.clone()
+                                    )).ok();
                                   },
-                                  Some(ref stage @ Ok(ref commit)) => {
-                                        let offset = commit.offset.clone();
-                                        let tx_id = commit.tx_id.clone();
-                                        let delta = commit.delta.clone();
+                                  // Successfully committed to ledger, so apply
+                                  // to db and broadcast notification to
+                                  // subscription subscribers
+                                  Some((ChronicleOperationEvent(Ok(ref commit)),tx,offset,_ )) => {
 
-                                        debug!(committed = ?tx_id);
-                                        debug!(delta = %delta.to_json().compact().await.unwrap().pretty());
+                                        debug!(committed = ?tx);
+                                        debug!(delta = %commit.to_json().compact().await.unwrap().pretty());
 
-                                        api.sync( delta, offset.clone(),tx_id.clone())
-                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, tx_id = %tx_id))
+                                        api.sync( commit.clone().into(), offset,ChronicleTransactionId::from(tx.as_str()))
+                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, tx_id = %tx))
                                             .await
                                             .map_err(|e| {
                                                 error!(?e, "Api sync to confirmed commit");
-                                            }).map(|_| commit_notify_tx.send(SubmissionStage::committed(stage.clone())).ok())
+                                            }).map(|_| commit_notify_tx.send(SubmissionStage::committed(Commit::new(
+                                               ChronicleTransactionId::from(tx.as_str()),offset, Box::new(commit.clone())
+                                            ))).ok())
                                             .ok();
                                   },
                                 }
@@ -378,20 +335,32 @@ where
         &mut self,
         tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, ApiError> {
-        let res = self.ledger_writer.submit_blocking(tx);
+        let res = self.ledger_writer.do_submit(
+            &ChronicleSubmitTransaction {
+                tx: tx.clone(),
+                signer: self.signer.clone(),
+            },
+            &self.signer,
+        );
 
         match res {
             Ok(tx_id) => {
+                let tx_id = ChronicleTransactionId::from(tx_id.as_str());
                 self.submit_tx.send(SubmissionStage::submitted(&tx_id)).ok();
                 Ok(tx_id)
             }
-            Err(ApiError::Ledger(ref source)) => {
+            Err((Some(tx_id), e)) => {
+                // We need the cloneable SubmissionError wrapper here
+                let submission_error = SubmissionError::communication(
+                    &ChronicleTransactionId::from(tx_id.as_str()),
+                    e,
+                );
                 self.submit_tx
-                    .send(SubmissionStage::submitted_error(source))
+                    .send(SubmissionStage::submitted_error(&submission_error))
                     .ok();
-                Err(source.clone().into())
+                Err(submission_error.into())
             }
-            e => e,
+            Err((None, e)) => Err(e.into()),
         }
     }
 
@@ -414,7 +383,7 @@ where
     /// # Arguments
     /// * `state` - `ProvModel` for the operations' namespace
     /// * `to_apply` - Chronicle operations resulting from an API call
-    #[instrument]
+    #[instrument(skip(self))]
     fn ensure_effects(
         &mut self,
         state: &mut ProvModel,
@@ -471,7 +440,7 @@ where
     /// For coordination between chronicle nodes we also need a namespace binding operation to tie the UUID from another instance to a external_id
     /// # Arguments
     /// * `external_id` - an arbitrary namespace identifier
-    #[instrument(skip(connection))]
+    #[instrument(skip(self, connection))]
     fn ensure_namespace(
         &mut self,
         connection: &mut PgConnection,
@@ -500,7 +469,7 @@ where
     /// Creates and submits a (ChronicleTransaction::GenerateEntity), and possibly (ChronicleTransaction::Domaintype) if specified
     ///
     /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
-    #[instrument]
+    #[instrument(skip(self))]
     async fn activity_generate(
         &self,
         id: EntityId,
@@ -540,7 +509,7 @@ where
 
     /// Creates and submits a (ChronicleTransaction::ActivityUses), and possibly (ChronicleTransaction::Domaintype) if specified
     /// We use our local store for a best guess at the activity, either by name or the last one started as a convenience for command line
-    #[instrument]
+    #[instrument(skip(self))]
     async fn activity_use(
         &self,
         id: EntityId,
@@ -585,7 +554,7 @@ where
     /// Creates and submits a (ChronicleTransaction::ActivityWasInformedBy)
     ///
     /// We use our local store for a best guess at the activity, either by external_id or the last one started as a convenience for command line
-    #[instrument]
+    #[instrument(skip(self))]
     async fn activity_was_informed_by(
         &self,
         id: ActivityId,
@@ -630,7 +599,7 @@ where
     /// Submits operations [`CreateEntity`], and [`SetAttributes::Entity`]
     ///
     /// We use our local store to see if the agent already exists, disambiguating the URI if so
-    #[instrument]
+    #[instrument(skip(self))]
     async fn create_entity(
         &self,
         external_id: ExternalId,
@@ -680,7 +649,7 @@ where
     /// Submits operations [`CreateActivity`], and [`SetAttributes::Activity`]
     ///
     /// We use our local store to see if the activity already exists, disambiguating the URI if so
-    #[instrument]
+    #[instrument(skip(self))]
     async fn create_activity(
         &self,
         external_id: ExternalId,
@@ -729,7 +698,7 @@ where
     /// Submits operations [`CreateAgent`], and [`SetAttributes::Agent`]
     ///
     /// We use our local store to see if the agent already exists, disambiguating the URI if so
-    #[instrument]
+    #[instrument(skip(self))]
     async fn create_agent(
         &self,
         external_id: ExternalId,
@@ -794,7 +763,7 @@ where
         .await?
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
         match command {
             (ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) => {
@@ -1102,7 +1071,7 @@ where
         .await?
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn entity_derive(
         &self,
         id: EntityId,
@@ -1149,7 +1118,7 @@ where
     ///
     /// # Notes
     /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
-    #[instrument]
+    #[instrument(skip(self))]
     async fn entity_attach(
         &self,
         id: EntityId,
@@ -1264,7 +1233,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::RegisterKey) implicitly verifying the input keys and saving to the local key store as required
-    #[instrument]
+    #[instrument(skip(self))]
     async fn register_key(
         &self,
         id: AgentId,
@@ -1318,7 +1287,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::StartActivity) determining the appropriate agent by external_id, or via [use_agent] context
-    #[instrument]
+    #[instrument(skip(self))]
     async fn instant(
         &self,
         id: ActivityId,
@@ -1378,7 +1347,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::StartActivity), determining the appropriate agent by name, or via [use_agent] context
-    #[instrument]
+    #[instrument(skip(self))]
     async fn start_activity(
         &self,
         id: ActivityId,
@@ -1432,7 +1401,7 @@ where
     }
 
     /// Creates and submits a (ChronicleTransaction::EndActivity), determining the appropriate agent by name or via [use_agent] context
-    #[instrument]
+    #[instrument(skip(self))]
     async fn end_activity(
         &self,
         id: ActivityId,
@@ -1485,7 +1454,7 @@ where
         .await?
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn use_agent_in_cli_context(
         &self,
         id: AgentId,
@@ -1509,7 +1478,8 @@ where
 #[cfg(test)]
 mod test {
 
-    use crate::{Api, ApiDispatch, ApiError, UuidGen};
+    use crate::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
+
     use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
@@ -1523,7 +1493,6 @@ mod test {
             pkcs8::{EncodePrivateKey, LineEnding},
             SecretKey,
         },
-        ledger::InMemLedger,
         prov::{
             operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
             ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
@@ -1539,9 +1508,10 @@ mod test {
     struct TestDispatch<'a> {
         api: ApiDispatch,
         _db: TemporaryDatabase<'a>, // share lifetime
+        _tp: EmbeddedChronicleTp,
     }
 
-    impl TestDispatch<'_> {
+    impl<'a> TestDispatch<'a> {
         pub async fn dispatch(
             &mut self,
             command: ApiCommand,
@@ -1554,11 +1524,11 @@ mod test {
                     let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
                     match commit {
                         common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-                        common::ledger::SubmissionStage::Committed(Ok(commit)) => {
+                        common::ledger::SubmissionStage::Committed(commit) => {
                             return Ok(Some((commit.delta, commit.tx_id)))
                         }
                         common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
-                        common::ledger::SubmissionStage::Committed(Err(e)) => panic!("{e:?}"),
+                        common::ledger::SubmissionStage::NotCommitted((_, tx)) => panic!("{tx:?}"),
                     }
                 }
             } else {
@@ -1576,6 +1546,12 @@ mod test {
         }
     }
 
+    fn embed_chronicle_tp() -> EmbeddedChronicleTp {
+        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+
+        EmbeddedChronicleTp::new()
+    }
+
     async fn test_api<'a>() -> TestDispatch<'a> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
@@ -1585,16 +1561,13 @@ mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let mut ledger = InMemLedger::new();
-        let reader = ledger.reader();
-
+        let embed_tp = embed_chronicle_tp();
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
         let dispatch = Api::new(
             pool,
-            ledger,
-            reader,
+            embed_tp.ledger.clone(),
             &secretpath,
             SameUuid,
             HashMap::default(),
@@ -1605,6 +1578,7 @@ mod test {
         TestDispatch {
             api: dispatch,
             _db: database, // share the lifetime
+            _tp: embed_tp,
         }
     }
 

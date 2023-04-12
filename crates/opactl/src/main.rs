@@ -1,14 +1,4 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-    str::from_utf8,
-};
-
-use async_sawtooth_sdk::{
-    ledger::{LedgerReader, LedgerWriter, TransactionId},
-    zmq_client::{SawtoothCommunicationError, ZmqRequestResponseSawtoothChannel},
-};
+use async_sawtooth_sdk::zmq_client::ZmqRequestResponseSawtoothChannel;
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
 use futures::{channel::oneshot, Future, StreamExt};
@@ -19,6 +9,10 @@ use k256::{
 };
 use opa_tp_protocol::{
     address::{FAMILY, VERSION},
+    async_sawtooth_sdk::{
+        error::SawtoothCommunicationError,
+        ledger::{LedgerReader, LedgerWriter, TransactionId},
+    },
     state::{key_address, policy_address, Keys, OpaOperationEvent},
     submission::SubmissionBuilder,
     transaction::OpaSubmitTransaction,
@@ -26,6 +20,12 @@ use opa_tp_protocol::{
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+    str::from_utf8,
+};
 use thiserror::Error;
 
 use rand::rngs::StdRng;
@@ -42,8 +42,8 @@ pub enum OpaCtlError {
     Communication(#[from] SawtoothCommunicationError),
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
-    #[error("Pkcs8 error: {0}")]
-    Pkcs8(#[from] k256::pkcs8::Error),
+    #[error("Pkcs8 error")]
+    Pkcs8,
     #[error("Utf8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
     #[error("Json error: {0}")]
@@ -92,7 +92,7 @@ async fn ambient_transactions<
         let goal_clone = goal_tx_id.clone();
 
         let stream = reader
-            .state_updates(vec!["opa/operation".to_string()], None, Some(max_steps))
+            .state_updates("opa/operation", None, Some(max_steps))
             .await;
 
         match stream {
@@ -281,7 +281,7 @@ async fn dispatch_args<
             .await?)
         }
         Some(("get-key", matches)) => {
-            let key = reader
+            let key: Vec<u8> = reader
                 .get_state_entry(&key_address(matches.get_one::<String>("id").unwrap()))
                 .await?;
 
@@ -301,7 +301,7 @@ async fn dispatch_args<
             Ok(Waited::NoWait)
         }
         Some(("get-policy", matches)) => {
-            let policy = reader
+            let policy: Vec<u8> = reader
                 .get_state_entry(&policy_address(matches.get_one::<String>("id").unwrap()))
                 .await?;
 
@@ -347,8 +347,8 @@ async fn main() {
 #[cfg(test)]
 pub mod test {
     use async_sawtooth_sdk::{
-        ledger::SawtoothLedger, zmq_client::RequestResponseSawtoothChannel,
-        zmq_client::SawtoothCommunicationError,
+        error::SawtoothCommunicationError, ledger::SawtoothLedger,
+        zmq_client::RequestResponseSawtoothChannel,
     };
     use clap::ArgMatches;
     use futures::{Stream, StreamExt};
@@ -443,7 +443,7 @@ pub mod test {
         ) -> Result<RX, SawtoothCommunicationError> {
             let mut in_buf = vec![];
             tx.write_to_vec(&mut in_buf).unwrap();
-            let out_buf = self.behavior.handle_request(message_type, in_buf)?;
+            let out_buf: Vec<u8> = self.behavior.handle_request(message_type, in_buf)?;
             Ok(RX::parse_from_bytes(&out_buf).unwrap())
         }
 
@@ -810,6 +810,27 @@ pub mod test {
     }
 
     impl EmbeddedOpaTp {
+        pub fn new() -> Self {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            let context = Arc::new(Mutex::new(TestTransactionContext::new(tx)));
+
+            let handler = Arc::new(OpaTransactionHandler::new());
+
+            let behavior = WellBehavedBehavior {
+                handler,
+                context: context.clone(),
+            };
+
+            EmbeddedOpaTp {
+                ledger: OpaLedger::new(
+                    SimulatedSubmissionChannel::new(Box::new(behavior), rx),
+                    FAMILY,
+                    VERSION,
+                ),
+                context,
+            }
+        }
+
         pub fn readable_state(&self) -> Vec<(String, Value)> {
             self.context.lock().unwrap().readable_state()
         }
@@ -817,25 +838,7 @@ pub mod test {
 
     fn embed_opa_tp() -> EmbeddedOpaTp {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let context = Arc::new(Mutex::new(TestTransactionContext::new(tx)));
-
-        let handler = Arc::new(OpaTransactionHandler::new());
-
-        let behavior = WellBehavedBehavior {
-            handler,
-            context: context.clone(),
-        };
-
-        EmbeddedOpaTp {
-            ledger: OpaLedger::new(
-                SimulatedSubmissionChannel::new(Box::new(behavior), rx),
-                FAMILY,
-                VERSION,
-            ),
-            context,
-        }
+        EmbeddedOpaTp::new()
     }
 
     fn reuse_opa_tp_state(tp: EmbeddedOpaTp) -> EmbeddedOpaTp {

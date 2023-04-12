@@ -1,27 +1,25 @@
-use std::collections::{BTreeMap, HashSet};
-
+use chronicle_protocol::protocol::{
+    chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
+    chronicle_operations_from_submission, deserialize_submission, messages::Submission,
+};
 use common::{
     identity::{AuthId, OpaData, SignedIdentity},
     ledger::{OperationState, StateOutput, SubmissionError},
     opa::{CliPolicyLoader, ExecutorContext},
-    protocol::{
-        chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
-        chronicle_operations_from_submission, deserialize_submission, messages::Submission,
-    },
     prov::{
         operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction,
         ChronicleTransactionId, ProcessorError, ProvModel,
     },
 };
-
 use prost::Message;
-use sawtooth_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
+use std::collections::{BTreeMap, HashSet};
+
+use chronicle_protocol::address::{SawtoothAddress, FAMILY, PREFIX, VERSION};
 
 use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
-use tokio::runtime::Handle;
 use tracing::{debug, error, info, instrument};
 
 use crate::abstract_tp::{TPSideEffects, TP};
@@ -313,22 +311,23 @@ impl TransactionHandler for ChronicleTransactionHandler {
     ) -> Result<(), ApplyError> {
         let submission = Self::tp_parse(request)?;
         let submission_clone = submission.clone();
-        let operations = Handle::current()
-            .block_on(async move { Self::tp_operations(submission.clone()).await })?;
+        let operations =
+            futures::executor::block_on(
+                async move { Self::tp_operations(submission.clone()).await },
+            )?;
 
         let state = Self::tp_state(context, &operations)?;
-        let effects = Handle::current()
-            .block_on(async move {
-                Self::tp(
-                    &self.opa_executor,
-                    request,
-                    submission_clone,
-                    operations,
-                    state,
-                )
-                .await
-            })
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+        let effects = futures::executor::block_on(async move {
+            Self::tp(
+                &self.opa_executor,
+                request,
+                submission_clone,
+                operations,
+                state,
+            )
+            .await
+        })
+        .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 
         effects
             .apply(context)
@@ -340,10 +339,13 @@ impl TransactionHandler for ChronicleTransactionHandler {
 pub mod test {
     use std::{cell::RefCell, collections::BTreeMap};
 
+    use chronicle_protocol::{
+        async_sawtooth_sdk::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
+        messages::ChronicleSubmitTransaction,
+    };
     use common::{
         identity::AuthId,
         k256::ecdsa::SigningKey,
-        protocol::messages,
         prov::{
             operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
             ActivityId, AgentId, ChronicleTransaction, DelegationId, ExternalId, ExternalIdPart,
@@ -352,7 +354,6 @@ pub mod test {
         signing::DirectoryStoredKeys,
     };
     use prost::Message;
-    use sawtooth_protocol::messaging::OperationMessageBuilder;
     use sawtooth_sdk::{
         messages::{processor::TpProcessRequest, transaction::TransactionHeader},
         processor::handler::{ContextError, TransactionContext, TransactionHandler},
@@ -402,11 +403,21 @@ pub mod test {
                     (
                         k.clone(),
                         attr.clone(),
-                        serde_json::from_str(&messages::Event::decode(&**data).unwrap().delta)
-                            .unwrap(),
+                        serde_json::from_str(
+                            &chronicle_protocol::sawtooth::Event::decode(&**data)
+                                .unwrap()
+                                .delta,
+                        )
+                        .unwrap(),
                     )
                 })
                 .collect()
+        }
+    }
+
+    impl Default for TestTransactionContext {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -538,9 +549,14 @@ pub mod test {
 
         let secret: SigningKey = keystore.chronicle_signing().unwrap();
 
+        let submit_tx = ChronicleSubmitTransaction {
+            tx,
+            signer: secret.clone(),
+        };
+
+        let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
         // Get a signed tx from sawtooth protocol
-        let mut submission_builder = OperationMessageBuilder::new(&secret, "TEST", "1.0");
-        let (tx, _id) = submission_builder.make_tx(&tx).await.unwrap();
+        let (tx, _id) = submit_tx.as_sawtooth_tx(&message_builder).await;
 
         let header =
             <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();
@@ -675,9 +691,14 @@ pub mod test {
 
         let secret: SigningKey = keystore.chronicle_signing().unwrap();
 
+        let submit_tx = ChronicleSubmitTransaction {
+            tx,
+            signer: secret.clone(),
+        };
+
+        let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
         // Get a signed tx from sawtooth protocol
-        let mut submission_builder = OperationMessageBuilder::new(&secret, "TEST", "1.0");
-        let (tx, _id) = submission_builder.make_tx(&tx).await.unwrap();
+        let (tx, _id) = submit_tx.as_sawtooth_tx(&message_builder).await;
 
         let header =
             <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();

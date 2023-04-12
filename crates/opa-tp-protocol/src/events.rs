@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::{ledger::LedgerEvent, zmq_client::SawtoothCommunicationError};
+use async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::LedgerEvent};
 use prost::Message;
 use serde_json::json;
 
@@ -7,8 +7,9 @@ use crate::{
     state::OpaOperationEvent,
 };
 
+#[async_trait::async_trait]
 impl LedgerEvent for OpaOperationEvent {
-    fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    async fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
     where
         Self: Sized,
     {

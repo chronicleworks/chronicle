@@ -7,72 +7,73 @@ version = "0.6.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow.workspace           = true
-async-graphql              = { workspace = true, features = [
+anyhow = { workspace = true }
+async-graphql = { workspace = true, features = [
   "opentelemetry",
   "chrono",
   "unblock",
   "default",
   "uuid",
 ] }
-async-trait.workspace      = true
-chrono                     = { workspace = true, features = ["serde"] }
-custom_error.workspace     = true
-derivative.workspace       = true
-diesel.workspace           = true
-futures.workspace          = true
-glob.workspace             = true
-hashbrown.workspace        = true
-hex.workspace              = true
-iref.workspace             = true
-iref-enum.workspace        = true
-json-ld.workspace          = true
-k256                       = { workspace = true, features = ["serde"] }
-lazy_static.workspace      = true
-locspan.workspace          = true
-mime.workspace             = true
-opa.workspace              = true
-opa-tp-protocol            = { path = "../opa-tp-protocol" }
-percent-encoding.workspace = true
-pkcs8.workspace            = true
-portpicker.workspace       = true
-prost                      = "0.10.0"
-protobuf.workspace         = true
-r2d2.workspace             = true
-rand.workspace             = true
-rand_core.workspace        = true
-rdf-types.workspace        = true
-rust-embed.workspace       = true
-sawtooth-sdk.workspace     = true
-serde.workspace            = true
-serde_derive.workspace     = true
-serde_json.workspace       = true
-static-iref.workspace      = true
-temp-dir.workspace         = true
-testcontainers.workspace   = true
-thiserror.workspace        = true
-tokio.workspace            = true
-tracing.workspace          = true
-url                        = { workspace = true, features = ["serde"] }
-uuid.workspace             = true
-zmq.workspace              = true
+async-trait = { workspace = true }
+chrono = { workspace = true }
+custom_error = { workspace = true }
+derivative = { workspace = true }
+diesel = { workspace = true }
+futures = { workspace = true }
+glob = { workspace = true }
+hashbrown = { workspace = true }
+hex = { workspace = true }
+iref = { workspace = true }
+iref-enum = { workspace = true }
+json-ld = { workspace = true }
+json-syntax = { workspace = true }
+k256 = { workspace = true }
+lazy_static = { workspace = true }
+locspan = { workspace = true }
+mime = { workspace = true }
+opa = { workspace = true }
+opa-tp-protocol = { path = "../opa-tp-protocol" }
+percent-encoding = { workspace = true }
+pkcs8 = { workspace = true }
+portpicker = { workspace = true }
+prost = "0.10.0"
+protobuf = { workspace = true }
+r2d2 = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+rdf-types = { workspace = true }
+rust-embed = { workspace = true }
+sawtooth-sdk = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+static-iref = { workspace = true }
+temp-dir = { workspace = true }
+testcontainers = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+zmq = { workspace = true }
 
 [build-dependencies]
-glob.workspace        = true
-lazy_static.workspace = true
-prost-build.workspace = true
-serde_json.workspace  = true
+glob        = { workspace = true }
+lazy_static = { workspace = true }
+prost-build = { workspace = true }
+serde_json  = { workspace = true }
 
 [dev-dependencies]
-api                    = { path = "../api" }
-criterion.workspace    = true
-insta                  = { workspace = true, features = ["json"] }
-proptest.workspace     = true
-sawtooth-sdk.workspace = true
+api          = { path = "../api" }
+criterion    = { workspace = true }
+insta        = { workspace = true }
+proptest     = { workspace = true }
+sawtooth-sdk = { workspace = true }
 
 [[bench]]
-name    = "opa_executor"
 harness = false
+name    = "opa_executor"
 
 [features]
 strict = []
