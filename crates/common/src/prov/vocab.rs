@@ -106,6 +106,8 @@ pub enum Prov {
     Association,
     #[iri("prov:Attribution")]
     Attribution,
+    #[iri("prov:agent")]
+    Responsible,
     #[iri("prov:wasGeneratedBy")]
     WasGeneratedBy,
     #[iri("prov:used")]
@@ -131,7 +133,7 @@ pub enum Prov {
     #[iri("prov:Delegation")]
     Delegation,
     #[iri("prov:agent")]
-    Responsible,
+    Delegate,
     #[iri("prov:hadRole")]
     HadRole,
     #[iri("prov:hadActivity")]

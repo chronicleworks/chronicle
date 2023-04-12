@@ -52,8 +52,8 @@ pub async fn acted_on_behalf_of<'a>(
     let mut connection = store.pool.get()?;
 
     Ok(delegation::table
-        .filter(dsl::responsible_id.eq(id))
-        .inner_join(agentdsl::table.on(dsl::delegate_id.eq(agentdsl::id)))
+        .filter(dsl::delegate_id.eq(id))
+        .inner_join(agentdsl::table.on(dsl::responsible_id.eq(agentdsl::id)))
         .order(agentdsl::external_id)
         .select((Agent::as_select(), dsl::role))
         .load::<(Agent, Role)>(&mut connection)?

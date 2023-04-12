@@ -113,14 +113,14 @@ impl ToJson for ProvModel {
                 }
 
                 if let Some(delegation) = self
-                    .delegation
+                    .acted_on_behalf_of
                     .get(&(agent.namespaceid.to_owned(), id.to_owned()))
                 {
                     let mut ids = Vec::new();
                     let mut qualified_ids = Vec::new();
 
                     for delegation in delegation.iter() {
-                        ids.push(json!({"@id": delegation.delegate_id.de_compact()}));
+                        ids.push(json!({"@id": delegation.responsible_id.de_compact()}));
                         qualified_ids.push(json!({"@id": delegation.id.de_compact()}));
                     }
 
@@ -274,7 +274,7 @@ impl ToJson for ProvModel {
                     );
 
                     delegationdoc.insert(
-                        Iri::from(Prov::Responsible).to_string(),
+                        Iri::from(Prov::ActedOnBehalfOf).to_string(),
                         Value::Array(responsible_ids),
                     );
 
@@ -283,7 +283,7 @@ impl ToJson for ProvModel {
                         .push(json!({ "@id": Value::String(delegation.delegate_id.de_compact())}));
 
                     delegationdoc.insert(
-                        Iri::from(Prov::ActedOnBehalfOf).to_string(),
+                        Iri::from(Prov::Delegate).to_string(),
                         Value::Array(delegate_ids),
                     );
 

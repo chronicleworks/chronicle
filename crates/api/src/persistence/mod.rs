@@ -1080,9 +1080,9 @@ impl Store {
         );
 
         for (responsible, activity, role) in schema::delegation::table
-            .filter(schema::delegation::responsible_id.eq(agent.id))
+            .filter(schema::delegation::delegate_id.eq(agent.id))
             .inner_join(
-                schema::agent::table.on(schema::delegation::delegate_id.eq(schema::agent::id)),
+                schema::agent::table.on(schema::delegation::responsible_id.eq(schema::agent::id)),
             )
             .inner_join(
                 schema::activity::table
@@ -1098,8 +1098,8 @@ impl Store {
         {
             model.qualified_delegation(
                 namespaceid,
-                &AgentId::from_external_id(&agent.external_id),
                 &AgentId::from_external_id(responsible),
+                &AgentId::from_external_id(&agent.external_id),
                 {
                     if activity.contains("hidden entry for Option None") {
                         None

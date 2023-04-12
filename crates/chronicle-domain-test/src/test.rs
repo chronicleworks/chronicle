@@ -183,7 +183,7 @@ mod test {
           .execute(Request::new(
               r#"
           query {
-              agentById(id: { id: "chronicle:agent:testagent" }) {
+              agentById(id: { id: "chronicle:agent:testdelegate" }) {
                   ... on ProvAgent {
                       id
                       externalId
@@ -203,12 +203,12 @@ mod test {
           .await.data, @r###"
         {
           "agentById": {
-            "id": "chronicle:agent:testagent",
-            "externalId": "testagent",
+            "id": "chronicle:agent:testdelegate",
+            "externalId": "testdelegate",
             "actedOnBehalfOf": [
               {
                 "agent": {
-                  "id": "chronicle:agent:testdelegate"
+                  "id": "chronicle:agent:testagent"
                 },
                 "role": "MANUFACTURER"
               }
@@ -1354,7 +1354,7 @@ mod test {
           .execute(Request::new(
               r#"
           query {
-              agentById(id: { id: "chronicle:agent:testagent" }) {
+              agentById(id: { id: "chronicle:agent:testdelegate" }) {
                   ... on ProvAgent {
                       id
                       externalId
@@ -1374,12 +1374,12 @@ mod test {
           .await.data, @r###"
         {
           "agentById": {
-            "id": "chronicle:agent:testagent",
-            "externalId": "testagent",
+            "id": "chronicle:agent:testdelegate",
+            "externalId": "testdelegate",
             "actedOnBehalfOf": [
               {
                 "agent": {
-                  "id": "chronicle:agent:testdelegate"
+                  "id": "chronicle:agent:testagent"
                 },
                 "role": "MANUFACTURER"
               }
