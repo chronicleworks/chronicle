@@ -842,12 +842,36 @@ mutation {
 }
 ```
 
-### Chronicle-specific Cryptographic Operations
+### Chronicle-Specific Cryptographic Operations
 
-#### Has Identity
+#### Background
 
-#### Had Evidence
+The following operations are prototypes. They should not yet be used nor be
+expected to be usable. Nonetheless, they are already part of Chronicle so
+they are documented, even just as a tentative preview of coming features.
 
-Evidence is a Chronicle-specific provenance feature that simplifies the
-association of a cryptographic signature with an Entity. You will need a GraphQL
-client with multipart support for the attachment to sign.
+#### Identity
+
+Identity is planned to be a Chronicle-specific provenance feature that allows
+a cryptographic key to be associated with an agent. An agent's identity cannot
+yet be set via a mutation.
+
+When it can be updated, agents' previous identities will remain recorded,
+along with the corresponding public keys.
+
+#### Evidence
+
+Evidence is planned to be a Chronicle-specific provenance feature that
+simplifies the association of a cryptographic signature with an entity.
+A user would need a GraphQL client with multipart support for submitting the
+attachment.
+
+The signature will be recorded. If an entity's evidence is updated
+subsequently, details of the previous evidence and their signatures will remain
+recorded, just like above wherein agents' past identities remain recorded.
+
+The attachment itself is not preserved, just the details of its location
+and signing.
+
+The current `hasAttachment` mutation is intended for recording but is not yet
+usable.

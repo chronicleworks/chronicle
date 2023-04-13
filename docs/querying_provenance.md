@@ -330,7 +330,42 @@ A DomainTypeID derived from the Entity subtype. The built-in GraphQL field
 
 #### Entity: evidence
 
-See [chronicle evidence](#chronicle-evidence)
+Still in development, see
+[attachments](./chronicle_vocabulary.md#chronicleattachment) and discussion
+of [planned behavior](./recording_provenance.md#evidence). Querying presently
+takes the form:
+
+```graphql
+query {
+  entityById(id: { externalId: "anaphylaxis-evidence-12114" }) {
+    ... on ExperimentEntity {
+      evidence {
+        signature
+        signatureTime
+        locator
+      }
+    }
+  }
+}
+```
+
+#### Entity: identity
+
+Still in development, see discussion of
+[planned behavior](./recording_provenance.md#identity). Querying presently
+takes the form:
+
+```graphql
+query {
+  agentById(id: { externalId: "homer" }) {
+    ... on PersonAgent {
+      identity {
+        publicKey
+      }
+    }
+  }
+}
+```
 
 #### Entity: wasGeneratedBy
 
