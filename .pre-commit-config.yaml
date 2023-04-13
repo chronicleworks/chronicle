@@ -29,6 +29,7 @@ repos:
           - --pattern
           - '^(?!((fix|feature|refactor)\/[a-zA-Z0-9\-]+)$).*'
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
         exclude: "docs/docs/diagrams/out/.*"
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v2.42.0
