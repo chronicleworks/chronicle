@@ -1,11 +1,14 @@
 mod cli;
 mod config;
 
+#[cfg(feature = "inmem")]
+use api::inmem::EmbeddedChronicleTp;
 use api::{
     chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
     Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
 use async_graphql::{async_trait, ObjectType};
+#[cfg(not(feature = "inmem"))]
 use chronicle_protocol::{
     address::{FAMILY, VERSION},
     async_sawtooth_sdk::zmq_client::ZmqRequestResponseSawtoothChannel,
