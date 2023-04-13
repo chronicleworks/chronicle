@@ -26,6 +26,7 @@ jobs:
       - run: cargo-checkmate check
       - run: cargo-checkmate format
       - run: cargo-checkmate clippy
+      - run: cargo clippy --features inmem
       - run: cargo-checkmate build
       - run: cargo-checkmate doc
       - run: cargo-checkmate audit
