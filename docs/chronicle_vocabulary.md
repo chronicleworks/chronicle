@@ -14,20 +14,20 @@ signing identity via `chronicle:hasIdentity` and historical identities via
 
 A value containing a hex-encoded ECDSA public key.
 
-Domain: Identity
+Domain: `chronicle:Identity`
 
 ## chronicle:hasIdentity
 
 The current cryptographic identity of a `prov:Agent`.
 
-Domain: prov:Agent
-Range: chronicle:Identity
+Domain: `prov:Agent`  
+Range: `chronicle:Identity`
 
 ## chronicle:hadIdentity
 
 A historical cryptographic identity for a `prov:Agent`.
 
-Domain: `prov:Agent`
+Domain: `prov:Agent`  
 Range: `chronicle:Identity`
 
 ## chronicle:Namespace
@@ -35,6 +35,8 @@ Range: `chronicle:Identity`
 An IRI containing an external id and uuid part, used for disambiguation.
 In order to work on the same namespace discrete Chronicle instances must share
 the uuid part.
+
+Domain: All prov and Chronicle resources
 
 ## chronicle:hasNamespace
 
@@ -52,37 +54,37 @@ signed by an agent.
 
 The current attachment for a `prov:Entity`.
 
-Domain: prov:Entity
-Range: chronicle:Attachment
+Domain: `prov:Entity`  
+Range: `chronicle:Attachment`
 
 ## chronicle:hadAttachment
 
 A historical attachment for a `prov:Entity`.
 
-Domain: `prov:Entity`
+Domain: `prov:Entity`  
 Range: `chronicle:Attachment`
 
 ## chronicle:entitySignature
 
 A hex-encoded ECDSA signature for the resource represented by an attachment.
 
-Domain: Attachment
+Domain: `chronicle:Attachment`
 
 ## chronicle:entityLocator
 
 An arbitrary value describing the attachment, likely an external IRI.
 
-Domain: Attachment
+Domain: `chronicle:Attachment`
 
 ## chronicle:signedAtTime
 
 The date / time when an attachment was created.
 
-Domain: chronicle:Attachment
+Domain: `chronicle:Attachment`
 
 ## chronicle:signedBy
 
 The chronicle:Identity (and by inference, prov:Agent) that signed an attachment.
 
-Domain: `chronicle:Attachment`
+Domain: `chronicle:Attachment`  
 Range: `chronicle:Identity`
