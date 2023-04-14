@@ -16,7 +16,7 @@ fn transactor_key() -> Arg {
      .env("TRANSACTOR_KEY")
      .num_args(0..=1)
      .value_hint(ValueHint::FilePath)
-     .help("A PEM-encoded private key, used to sign the sawtooth transaction. If not specified an ephemeral key will be generated")
+     .help("The path of a PEM-encoded private key, used to sign the sawtooth transaction. If not specified an ephemeral key will be generated")
 }
 
 fn wait_args(command: Command) -> Command {
@@ -43,7 +43,7 @@ fn bootstrap() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("A PEM-encoded private key"),
+                    .help("The path of a PEM-encoded private key"),
             )
             .arg(transactor_key()),
     )
@@ -75,7 +75,7 @@ fn rotate_root() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The current registered root private key"),
+                    .help("The path of the current registered root private key"),
             )
             .arg(
                 Arg::new("new-root-key")
@@ -85,7 +85,7 @@ fn rotate_root() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The new key to register as the root key"),
+                    .help("The path of the new key to register as the root key"),
             )
             .arg(transactor_key()),
     )
@@ -103,7 +103,7 @@ fn register_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("A PEM encoded key to register"),
+                    .help("The path of a PEM encoded key to register"),
             )
             .arg(
                 Arg::new("root-key")
@@ -113,7 +113,7 @@ fn register_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("A PEM-encoded private key"),
+                    .help("The path of a PEM-encoded private key"),
             )
             .arg(
                 Arg::new("id")
@@ -123,7 +123,7 @@ fn register_key() -> Command {
                     .num_args(1)
                     .value_hint(ValueHint::Unknown)
                     .value_parser(NonEmptyStringValueParser::new())
-                    .help("The new key to register as the root key"),
+                    .help("The path of the new key to register as the root key"),
             )
             .arg(transactor_key()),
     )
@@ -141,7 +141,7 @@ fn rotate_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The current registered root key"),
+                    .help("The path of the current registered root key"),
             )
             .arg(
                 Arg::new("root-key")
@@ -151,7 +151,7 @@ fn rotate_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("A PEM-encoded private key"),
+                    .help("The path of a PEM-encoded private key"),
             )
             .arg(
                 Arg::new("new-key")
@@ -161,7 +161,7 @@ fn rotate_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The new key to register for the given name"),
+                    .help("The path of the new key to register for the given name"),
             )
             .arg(
                 Arg::new("id")
@@ -200,7 +200,7 @@ fn set_policy() -> Command {
                     .required(true)
                     .value_hint(ValueHint::FilePath)
                     .value_parser(PathBufValueParser::new())
-                    .help("A path to the policy wasm to register"),
+                    .help("The path of the policy wasm to register"),
             )
             .arg(
                 Arg::new("root-key")
@@ -210,7 +210,7 @@ fn set_policy() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("A PEM-encoded private key"),
+                    .help("The path of a PEM-encoded private key"),
             )
             .arg(transactor_key()),
     )
