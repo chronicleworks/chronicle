@@ -161,7 +161,8 @@ pub struct Api<
     ledger_writer: Arc<BlockingLedgerWriter<W>>,
     store: persistence::Store,
     signer: SigningKey,
-    uuidsource: PhantomData<U>,
+    uuid_source: PhantomData<U>,
+    policy_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -212,6 +213,7 @@ where
         secret_path: &Path,
         uuidgen: U,
         namespace_bindings: HashMap<String, Uuid>,
+        policy_name: Option<String>,
     ) -> Result<ApiDispatch, ApiError> {
         let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -255,7 +257,8 @@ where
                 signer: signing.clone(),
                 ledger_writer: Arc::new(BlockingLedgerWriter::new(ledger)),
                 store: store.clone(),
-                uuidsource: PhantomData::default(),
+                uuid_source: PhantomData::default(),
+                policy_name,
             };
 
             loop {
@@ -334,13 +337,12 @@ where
     fn submit_blocking(
         &mut self,
         tx: &ChronicleTransaction,
-        opa_policy: Option<(String, String)>,
     ) -> Result<ChronicleTransactionId, ApiError> {
         let res = self.ledger_writer.do_submit(
             &ChronicleSubmitTransaction {
                 tx: tx.clone(),
                 signer: self.signer.clone(),
-                on_chain_opa_policy: opa_policy,
+                policy_name: self.policy_name.clone(),
             },
             &self.signer,
         );
@@ -371,13 +373,11 @@ where
         &mut self,
         id: impl Into<ChronicleIri>,
         identity: AuthId,
-        opa_policy: Option<(String, String)>,
         to_apply: Vec<ChronicleOperation>,
     ) -> Result<ApiResponse, ApiError> {
         let identity = identity.signed_identity(&self.keystore)?;
         let model = ProvModel::from_tx(&to_apply)?;
-        let tx_id =
-            self.submit_blocking(&ChronicleTransaction::new(to_apply, identity), opa_policy)?;
+        let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
         Ok(ApiResponse::submission(id, model, tx_id))
     }
@@ -1484,6 +1484,7 @@ mod test {
 
     use crate::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
 
+    use async_sawtooth_sdk::protobuf::Message;
     use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
@@ -1495,6 +1496,7 @@ mod test {
         identity::AuthId,
         k256::{
             pkcs8::{EncodePrivateKey, LineEnding},
+            sha2::{Digest, Sha256},
             SecretKey,
         },
         prov::{
@@ -1503,7 +1505,9 @@ mod test {
         },
         signing::DirectoryStoredKeys,
     };
+    use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
     use rand_core::SeedableRng;
+    use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
 
     use std::collections::HashMap;
     use tempfile::TempDir;
@@ -1552,8 +1556,62 @@ mod test {
 
     fn embed_chronicle_tp() -> EmbeddedChronicleTp {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.policy_name".to_string(),
+                value: "allow_transactions".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
+        let setting_id = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
+            buf,
+        );
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.entrypoint".to_string(),
+                value: "allow_transactions.allowed_users".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
 
-        EmbeddedChronicleTp::new()
+        let setting_entrypoint = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
+            buf,
+        );
+
+        let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
+        let bin = std::fs::read(d).unwrap();
+
+        let meta = PolicyMeta {
+            id: "allow_transactions".to_string(),
+            hash: hex::encode(Sha256::digest(&bin)),
+            policy_address: policy_address("allow_transactions"),
+        };
+
+        EmbeddedChronicleTp::new_with_state(
+            vec![
+                setting_id,
+                setting_entrypoint,
+                (policy_address("allow_transactions"), bin),
+                (
+                    policy_meta_address("allow_transactions"),
+                    serde_json::to_vec(&meta).unwrap(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
     }
 
     async fn test_api<'a>() -> TestDispatch<'a> {
@@ -1575,6 +1633,7 @@ mod test {
             &secretpath,
             SameUuid,
             HashMap::default(),
+            Some("allow_transactions".into()),
         )
         .await
         .unwrap();

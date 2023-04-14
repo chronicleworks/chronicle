@@ -98,7 +98,7 @@ impl ZmqRequestResponseSawtoothChannel {
 
 #[async_trait::async_trait]
 impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
-    #[instrument(name = "receive_one", level = "debug", skip(self), ret(Debug))]
+    #[instrument(name = "receive_one", level = "trace", skip(self), ret(Debug))]
     async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
         &self,
         tx: TX,

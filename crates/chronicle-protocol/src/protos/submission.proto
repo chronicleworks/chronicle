@@ -20,5 +20,4 @@ message Submission {
   uint64 span_id = 2;
   repeated string body = 3;
   string identity = 4;
-  optional OpaPolicy policy = 5;
 }

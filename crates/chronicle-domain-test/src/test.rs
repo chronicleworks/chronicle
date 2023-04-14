@@ -74,13 +74,17 @@ mod test {
         common::{
             database::TemporaryDatabase,
             identity::AuthId,
+            k256::sha2::{Digest, Sha256},
             opa::{CliPolicyLoader, ExecutorContext},
             signing::DirectoryStoredKeys,
         },
-        tokio,
+        serde_json, tokio,
         uuid::Uuid,
     };
+    use chronicle_protocol::async_sawtooth_sdk::protobuf::Message;
     use core::future::Future;
+    use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
+    use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
     use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
 
@@ -127,7 +131,63 @@ mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let tp = EmbeddedChronicleTp::new();
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.policy_name".to_string(),
+                value: "allow_transactions".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
+        let setting_id = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
+            buf,
+        );
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.entrypoint".to_string(),
+                value: "allow_transactions.allowed_users".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
+
+        let setting_entrypoint = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
+            buf,
+        );
+
+        let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
+        let bin = std::fs::read(d).unwrap();
+
+        let meta = PolicyMeta {
+            id: "allow_transactions".to_string(),
+            hash: hex::encode(Sha256::digest(&bin)),
+            policy_address: policy_address("allow_transactions"),
+        };
+
+        let tp = EmbeddedChronicleTp::new_with_state(
+            vec![
+                setting_id,
+                setting_entrypoint,
+                (policy_address("allow_transactions"), bin),
+                (
+                    policy_meta_address("allow_transactions"),
+                    serde_json::to_vec(&meta).unwrap(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
         let ledger = tp.ledger.clone();
 
         let database = TemporaryDatabase::default();
@@ -139,6 +199,7 @@ mod test {
             &secretpath,
             SameUuid,
             HashMap::default(),
+            None,
         )
         .await
         .unwrap();
@@ -177,7 +238,7 @@ mod test {
         context = 'chronicle:agent:testagent'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -270,7 +331,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -292,7 +353,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -314,7 +375,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -336,7 +397,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -358,7 +419,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -380,7 +441,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -402,7 +463,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -1209,7 +1270,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -1290,7 +1351,7 @@ mod test {
 
         assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -1348,7 +1409,7 @@ mod test {
         context = 'chronicle:agent:testagent'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -1413,7 +1474,7 @@ mod test {
             context = 'chronicle:agent:huey'
           "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_toml_snapshot!(schema
             .execute(Request::new(
@@ -1433,7 +1494,7 @@ mod test {
               context = 'chronicle:agent:dewey'
               "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_toml_snapshot!(schema
               .execute(Request::new(
@@ -1453,7 +1514,7 @@ mod test {
                 context = 'chronicle:agent:louie'
                   "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         // create activities
 
@@ -1475,7 +1536,7 @@ mod test {
         context = 'chronicle:activity:manufacture'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1495,7 +1556,7 @@ mod test {
         context = 'chronicle:activity:certification'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         // associate contractors with activities
 
@@ -1518,7 +1579,7 @@ mod test {
           context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1539,7 +1600,7 @@ mod test {
           context = 'chronicle:agent:dewey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1561,7 +1622,7 @@ mod test {
         context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         // check responsible and delegate are correct for activities
 
@@ -1685,7 +1746,7 @@ mod test {
           context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         // check that same delegate is returned twice over
 

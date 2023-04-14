@@ -1,6 +1,8 @@
-use std::str::from_utf8;
-
-use k256::{ecdsa::signature::Verifier, pkcs8::DecodePublicKey};
+use k256::{
+    ecdsa::signature::Verifier,
+    pkcs8::DecodePublicKey,
+    sha2::{Digest, Sha256},
+};
 use opa_tp_protocol::{
     address::{HasSawtoothAddress, FAMILY, PREFIX, VERSION},
     events::opa_event,
@@ -10,6 +12,7 @@ use opa_tp_protocol::{
         PolicyMeta,
     },
 };
+use std::str::from_utf8;
 
 use k256::ecdsa::{Signature, VerifyingKey};
 use prost::Message;
@@ -66,7 +69,7 @@ impl Default for OpaTransactionHandler {
 // operation can be performed, otherwise this will be an error
 // If the system has been bootstrapped, then the current key must match the signing
 // key of the operation
-#[instrument(ret(Debug))]
+#[instrument(skip(submission, root_keys), ret(Debug))]
 fn verify_signed_operation(
     submission: &Submission,
     root_keys: &Option<Keys>,
@@ -116,7 +119,7 @@ fn verify_signed_operation(
 }
 
 // Either apply our bootstrap operation or our signed operation
-#[instrument(skip(context, request), ret(Debug))]
+#[instrument(skip(context, request, payload), ret(Debug))]
 fn apply_signed_operation(
     payload: opa_tp_protocol::messages::submission::Payload,
     request: &TpProcessRequest,
@@ -172,7 +175,7 @@ fn apply_signed_operation(
     }
 }
 
-#[instrument(skip(context), ret(Debug))]
+#[instrument(skip(request, context, payload), ret(Debug))]
 fn apply_signed_operation_payload(
     request: &TpProcessRequest,
     payload: opa_tp_protocol::messages::signed_operation::payload::Operation,
@@ -299,30 +302,22 @@ fn apply_signed_operation_payload(
         opa_tp_protocol::messages::signed_operation::payload::Operation::SetPolicy(
             opa_tp_protocol::messages::SetPolicy { policy, id },
         ) => {
-            let existing_policy_meta = context.get_state_entry(&policy_meta_address(&*id))?;
-
-            let version = if existing_policy_meta.is_some() {
-                let existing_policy: PolicyMeta = serde_json::from_str(
-                    from_utf8(&existing_policy_meta.unwrap())
-                        .map_err(|_| OpaTpError::MalformedMessage)?,
-                )?;
-                existing_policy.version + 1
-            } else {
-                0
-            };
+            let _existing_policy_meta = context.get_state_entry(&policy_meta_address(&*id))?;
+            let hash = Sha256::digest(&policy);
+            let hash = hex::encode(hash);
 
             let policy_meta = PolicyMeta {
                 id: id.clone(),
-                version,
+                hash,
                 policy_address: policy_address(&*id),
             };
 
             context.set_state_entry(
-                policy_meta.policy_address.clone(),
-                serde_json::to_string(&policy)?.into_bytes(),
+                policy_meta_address(&id),
+                serde_json::to_string(&policy_meta)?.into_bytes(),
             )?;
 
-            context.set_state_entry(policy_address(id), policy)?;
+            context.set_state_entry(policy_address(&id), policy)?;
 
             context.add_event(
                 "opa/operation".to_string(),
@@ -354,6 +349,7 @@ fn root_keys_from_state(
 }
 
 impl TP for OpaTransactionHandler {
+    #[instrument(skip(request, context))]
     fn apply(
         &self,
         request: &TpProcessRequest,
@@ -563,7 +559,6 @@ mod test {
         secret
     }
 
-    async fn submission_to_state(
     /// Apply a transaction to a transaction context
     async fn apply_tx(
         mut context: TestTransactionContext,
@@ -1296,6 +1291,10 @@ mod test {
             - 1
             - 2
             - 3
+        - - 7ed1932b35db049f40833c5c2eaa47e070ce2648c478469a4cdf44ff7a37dd5468208e
+          - hash: 054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8
+            id: test
+            policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
         insta::assert_yaml_snapshot!(context.readable_events(),{
@@ -1315,9 +1314,9 @@ mod test {
           - - - transaction_id
               - d97436915a49d3a37eb5b0615c9fd415fc7f79cd5cb1c8f45fcd2d948e9bff7029cb8351cb59a5d25aee9315158af8bed3be5416dd28975803d83465dfd189e1
           - PolicyUpdate:
+              hash: 054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8
               id: test
               policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
-              version: 0
         "###);
     }
 }

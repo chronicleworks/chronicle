@@ -19,6 +19,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 cached = { workspace = true }
+cfg-if = { workspace = true }
 chronicle-protocol = { path = "../chronicle-protocol" }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true }
@@ -57,8 +58,10 @@ user-error = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-insta    = { workspace = true, features = ["json", "yaml"] }
-tempfile = { workspace = true }
+chronicle-protocol = { path = "../chronicle-protocol" }
+insta              = { workspace = true, features = ["json", "yaml"] }
+opa-tp-protocol    = { path = "../opa-tp-protocol" }
+tempfile           = { workspace = true }
 
 [build-dependencies]
 

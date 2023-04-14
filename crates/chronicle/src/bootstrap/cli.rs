@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, convert::Infallible, path::PathBuf};
 
 use api::ApiError;
+use chronicle_protocol::async_sawtooth_sdk::error::SawtoothCommunicationError;
 use clap::{builder::PossibleValuesParser, *};
 use common::{
     attributes::{Attribute, Attributes},
@@ -86,6 +87,12 @@ pub enum CliError {
 
     #[error("OPA executor error: {0}")]
     OpaExecutor(#[from] OpaExecutorError),
+
+    #[error("Sawtooth communication error: {source}")]
+    SawtoothCommunicationError {
+        #[from]
+        source: SawtoothCommunicationError,
+    },
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -977,15 +984,6 @@ impl SubCommand for CliModel {
                     .help("Name of the database")
                     .default_value("chronicle"),
             )
-            .arg(
-                Arg::new("opa-policy-from-settings")
-                    .long("opa-policy-from-settings")
-                    .takes_value(false)
-                    .help("""Interrogate the settings TP for OPA policy entries.
-                            chronicle.opa - boolean, determines whether to secure with on-chain policy
-                            chronicle.opa_policy - string, the policy to use
-                            chronicle.opa_entrypoint - string, the entrypoint to use """)
-            )
             .subcommand(
                 Command::new("completions")
                     .about("Generate shell completions and exit")
@@ -1084,6 +1082,14 @@ impl SubCommand for CliModel {
                     .default_value("tcp://localhost:4004")
                     .help("Sets sawtooth validator address")
                     .takes_value(true),
+            )
+            .arg(
+                Arg::new("embedded-opa-policy")
+                    .long("embedded-opa-policy")
+                    .takes_value(false)
+                    .help(
+                        "Operate without an external OPA policy, using an embedded default policy",
+                    ),
             )
         }
         #[cfg(feature = "inmem")]

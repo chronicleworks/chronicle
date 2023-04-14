@@ -10,6 +10,7 @@ version = "0.6.0"
 Inflector            = { workspace = true }
 api                  = { path = "../api" }
 async-graphql        = { workspace = true }
+cfg-if               = { workspace = true }
 chronicle-protocol   = { path = "../chronicle-protocol" }
 chronicle-telemetry  = { path = "../chronicle-telemetry" }
 chrono               = { workspace = true, features = ["serde"] }
@@ -56,6 +57,10 @@ strict = []
 [build-dependencies]
 
 [dev-dependencies]
-assert_fs = { workspace = true }
-insta     = { workspace = true, features = ["yaml"] }
-tempfile  = { workspace = true }
+assert_fs          = { workspace = true }
+async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+chronicle-protocol = { path = "../chronicle-protocol" }
+insta              = { workspace = true, features = ["yaml"] }
+opa-tp-protocol    = { path = "../opa-tp-protocol" }
+sawtooth-sdk       = { workspace = true }
+tempfile           = { workspace = true }

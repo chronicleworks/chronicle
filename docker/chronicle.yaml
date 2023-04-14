@@ -36,6 +36,8 @@ services:
           sawtooth.consensus.max_wait_time=0 \
           sawtooth.consensus.algorithm.name=Devmode \
           sawtooth.consensus.algorithm.version=0.1 \
+          chronicle.opa.policy_name=allow_transactions \
+          chronicle.opa.entrypoint=allow_transactions.allowed_users \
           -o consensus-settings.batch
         sawadm genesis config-genesis.batch consensus-settings.batch
         sawtooth-validator -vvv --scheduler parallel \
@@ -64,21 +66,26 @@ services:
 
   chronicle-sawtooth-tp:
     environment: &rustenv
-      - &rustbacktrace RUST_BACKTRACE=full
-      - &rustlog RUST_LOG=debug,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
+      - RUST_BACKTRACE=full
+      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     image: &chronicleTpImage chronicle-tp-amd64:${ISOLATION_ID:-local}
-    entrypoint: >
-      /bin/bash -xc "/usr/local/bin/chronicle_sawtooth_tp
-      -C tcp://validator:4004
-      --console-logging pretty"
+    entrypoint: /bin/bash
+    command:
+      - -exc
+      - |
+        sleep 40
+        /usr/local/bin/chronicle_sawtooth_tp \
+         -C tcp://validator:4004 \
+         --console-logging pretty
     depends_on:
       - validator
+      - opa-init
     volumes: *rngVolumes
 
   opa-tp:
     environment:
       - RUST_BACKTRACE=full
-      - RUST_LOG=trace
+      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     image: &chronicleOpaTpImage opa-tp-amd64:${ISOLATION_ID:-local}
     entrypoint: >
       /bin/bash -xc "/usr/local/bin/opa-tp
@@ -99,16 +106,18 @@ services:
 
   chronicle-sawtooth-api:
     environment:
-      - *rustbacktrace
-      - *rustlog
+      - RUST_BACKTRACE=full
+      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
       - PGHOST=chronicle-pg
       - PGPASSWORD=chronicle
     image: &chronicleImage chronicle-amd64:${ISOLATION_ID:-local}
     entrypoint: /bin/bash
+    links:
+      - "opa-init:opa-init"
     command:
       - -exc
       - |
-        sleep 10
+        sleep 60
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty verify-keystore
@@ -127,12 +136,15 @@ services:
     ports:
       - "9982:9982"
     depends_on:
+      - opa-init
       - validator
       - chronicle-pg
 
   # A chronicle container to exec into for CLI operations
   chronicle-sawtooth-cli:
-    environment: *rustenv
+    environment:
+      - RUST_BACKTRACE=full
+      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     image: *chronicleImage
     entrypoint: "/bin/sh"
     stdin_open: true
@@ -140,6 +152,7 @@ services:
     depends_on:
       - devmode-engine
       - validator
+      - opa-init
     volumes: *rngVolumes
 
   jaeger:
@@ -161,8 +174,28 @@ services:
     depends_on:
       - chronicle-sawtooth-api
 
-  opa-test:
-    image: opa-test:${ISOLATION_ID}
-    profiles: ["test-opa"]
+  opa-init:
+    image: opactl-amd64:${ISOLATION_ID}
+    entrypoint: /bin/bash
+    environment:
+      - RUST_BACKTRACE=full
+      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
+    volumes:
+      - ${PWD}/policies:/policies
+    command:
+      - -exc
+      - |
+        sleep 20
+        cd /tmp
+        /usr/local/bin/opactl generate --output ./root.pem
+        /usr/local/bin/opactl \
+          --sawtooth-address  tcp://validator:4004 \
+            bootstrap --root-key ./root.pem
+        /usr/local/bin/opactl \
+          --sawtooth-address tcp://validator:4004 \
+          set-policy \
+            --id allow_transactions -p /policies/bundle.tar.gz \
+            --root-key ./root.pem
+        while true; do sleep 30; done;
     depends_on:
-      - chronicle-sawtooth-api
+      - opa-tp

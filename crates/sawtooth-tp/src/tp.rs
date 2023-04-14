@@ -5,7 +5,7 @@ use chronicle_protocol::protocol::{
 use common::{
     identity::{AuthId, OpaData, SignedIdentity},
     ledger::{OperationState, StateOutput, SubmissionError},
-    opa::{CliPolicyLoader, ExecutorContext},
+    opa::ExecutorContext,
     prov::{
         operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransaction,
         ChronicleTransactionId, ProcessorError, ProvModel,
@@ -315,9 +315,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
         let submission = Self::tp_parse(request)?;
         let submission_clone = submission.clone();
 
-        let opa_exec_context = self
-            .opa_executor
-            .executor_context_from_submission(submission.policy.clone(), context)?;
+        let opa_exec_context = self.opa_executor.executor_context(context)?;
 
         let operations =
             futures::executor::block_on(
@@ -563,7 +561,7 @@ pub mod test {
         let submit_tx = ChronicleSubmitTransaction {
             tx,
             signer: secret.clone(),
-            on_chain_opa_policy: None,
+            policy_name: None,
         };
 
         let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
@@ -706,7 +704,7 @@ pub mod test {
         let submit_tx = ChronicleSubmitTransaction {
             tx,
             signer: secret.clone(),
-            on_chain_opa_policy: None,
+            policy_name: None,
         };
 
         let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");

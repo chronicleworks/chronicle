@@ -29,13 +29,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   g++-aarch64-linux-gnu \
   libpq5 \
   libpq-dev \
+  lsb-release \
   protobuf-compiler
 
 RUN rustup target add aarch64-unknown-linux-gnu \
   && rustup target add x86_64-unknown-linux-gnu
 
 WORKDIR /app
-RUN useradd -m -u ${TESTER_UID} tester \
+RUN useradd -m tester \
   && chown -R tester /app
 
 COPY .cargo /app/.cargo
@@ -150,7 +151,6 @@ USER tester
 FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as artifacts
 COPY --from=crossbuild --link /artifacts /artifacts
 
-USER root
 
 FROM --platform=${TARGETPLATFORM} rust:${RUST_VERSION} as chronicle-builder
 ARG TARGETARCH

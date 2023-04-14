@@ -1,3 +1,5 @@
+use std::string::FromUtf8Error;
+
 use futures::channel::mpsc::SendError;
 use protobuf::ProtobufError;
 use sawtooth_sdk::messaging::stream::ReceiveError;
@@ -41,5 +43,11 @@ pub enum SawtoothCommunicationError {
     LedgerEventParse {
         #[from]
         source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("Utf8 {source}")]
+    Utf8 {
+        #[from]
+        source: FromUtf8Error,
     },
 }

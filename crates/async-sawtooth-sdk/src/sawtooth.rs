@@ -20,7 +20,7 @@ use sawtooth_sdk::messages::{
     events::{EventFilter, EventFilter_FilterType, EventSubscription},
     transaction::{Transaction, TransactionHeader},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 
 use crate::ledger::{BlockId, TransactionId};
 
@@ -164,12 +164,11 @@ impl MessageBuilder {
         let s = s.normalize_s().unwrap_or(s);
         let s = hex::encode(s.as_ref());
 
-        debug!(batch_header=?header, batch_header_signature=?s, transactions = ?tx);
+        trace!(batch_header=?header, batch_header_signature=?s, transactions = ?tx);
 
         batch.transactions = vec![tx].into();
         batch.header = encoded_header;
         batch.header_signature = s;
-        batch.trace = true;
 
         batch
     }

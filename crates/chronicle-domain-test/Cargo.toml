@@ -27,6 +27,10 @@ strict  = []
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-futures  = { workspace = true }
-insta    = { workspace = true, features = ["json"] }
-tempfile = { workspace = true }
+chronicle-protocol = { path = "../chronicle-protocol" }
+futures            = { workspace = true }
+hex                = { workspace = true }
+insta              = { workspace = true, features = ["json"] }
+opa-tp-protocol    = { path = "../opa-tp-protocol" }
+sawtooth-sdk       = { workspace = true }
+tempfile           = { workspace = true }

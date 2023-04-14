@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM opactl-${HOST_ARCH}:  AS opa-test
+FROM node:18 AS chronicle-test
 
 RUN npm install -g -f graphqurl
 
@@ -21,4 +21,4 @@ COPY docker/chronicle-test/wait-for-it /usr/local/bin/wait-for-it
 
 RUN chmod +rx /usr/local/bin/*
 
-ENTRYPOINT [ "/usr/local/bin/opa-test.sh" ]
+ENTRYPOINT [ "/usr/local/bin/chronicle-test.sh" ]
