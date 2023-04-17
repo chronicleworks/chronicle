@@ -8,6 +8,12 @@ Run Chronicle as an API server.
 
 #### Arguments
 
+##### `--id-pointer <JSON ptr>`
+
+A JSON pointer into the JSON Web Token claims, specifying the location of
+a string value corresponding to the external ID that should be used in
+constructing the authenticated user's Chronicle identity.
+
 ##### `--interface <interface>`
 
 The GraphQL server socket address - defaults to 127.0.0.1:9982.
@@ -19,16 +25,27 @@ This typically has a suffix of `jwks.json`.
 The JWKS is used for verifying JSON Web Tokens provided via HTTP
 `Authorized: Bearer ...`.
 
-##### `--id-pointer <JSON ptr>`
+##### `--jwt-must-claim <name> <value>`
 
-A JSON pointer into the JSON Web Token claims, specifying the location of
-a string value corresponding to the external ID that should be used in
-constructing the authenticated user's Chronicle identity.
+For security, the GraphQL server can be set to ignore JSON Web Tokens that
+do not include the expected claims. It may be appropriate to set required
+values for names such as `iss`, `aud`, or `azp` depending on the claims
+expected in the JWTs issued by the authorization server.
 
-#### `--unlock-cors`
+This option may be given multiple times. To set via environment variables
+instead, prefix each variable name with `JWT_MUST_CLAIM_`.
 
-Unlocks using the GraphQL Playground on `http://127.0.0.1:9982/`. `--open`
-may also be used as an alias.
+##### `--offer-endpoints <name> <name> ...`
+
+Which endpoints to listen at for serving requests. By default, all are served.
+Options are:
+
+- `data` for IRIs encoded in URIs (at `/context` and `/data`)
+- `graphql` for GraphQL requests (at `/` and `/ws`)
+
+##### `--playground` / `--open`
+
+Deprecated option (after v0.6.0) to make available the GraphQL Playground.
 
 ##### `--require-auth`
 
@@ -41,24 +58,6 @@ The URI that should be used to exchange access tokens for user information,
 typically suffixed `/userinfo`. If this option is supplied then the endpoint
 must supply any additional claims in response to the same `Authorization:`
 header that was provided by a user in making their API request.
-
-##### `--jwt-must-claim name value`
-
-For security, the GraphQL server can be set to ignore JSON Web Tokens that
-do not include the expected claims. It may be appropriate to set required
-values for names such as `iss`, `aud`, or `azp` depending on the claims
-expected in the JWTs issued by the authorization server.
-
-This option may be given multiple times. To set via environment variables
-instead, prefix each variable name with `JWT_MUST_CLAIM_`.
-
-##### `--offer-endpoints name name ...`
-
-Which endpoints to listen at for serving requests. By default, all are served.
-Options are:
-
-- `data` for IRIs encoded in URIs (at `/context` and `/data`)
-- `graphql` for GraphQL requests (at `/` and `/ws`)
 
 ### `export-schema`
 

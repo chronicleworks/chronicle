@@ -38,7 +38,7 @@ definition explained here, along with the following operations:
 - [defineQuestionAskedActivity](./recording_provenance.md#define-an-activity) defines
   an Activity of subtype QuestionAsked
 - [definePersonAgent or defineOrganizationAgent](./recording_provenance.md#define-an-agent)
-  defines an Agent of subtype Person or Organization to act as  Stakeholders
+  defines an Agent of subtype Person or Organization to act as Stakeholders
 - [definePersonAgent](./recording_provenance.md#define-an-agent) defines an Agent
   of subtype Person to act as Authors
 - [wasGeneratedBy](./recording_provenance.md#generation) specifies that the QuestionAsked
