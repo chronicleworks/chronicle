@@ -566,6 +566,171 @@ Supplying this as a YAML file to the Chronicle build image as documented in
 [building chronicle](./building.md) will produce a well-typed API for your
 domain. The next step is then [recording provenance](./recording_provenance.md).
 
+## Chronicle Domain Definition Documentation Capabilities
+
+Chronicle's documentation capabilities provide users with a powerful tool for
+generating Rust code documentation and GraphQL schema documentation for their
+domains.
+
+Chronicle provides users with the ability to define a domain by using a
+domain.yaml file and adding documentation comments to it. Upon loading a
+valid domain.yaml file, Chronicle generates the domain based on its contents.
+Any `doc` and `roles_doc` field comments included in the domain.yaml file are
+used to document both the Rust code and the GraphQL schema associated with
+the Chronicle domain. The `doc` and `roles_doc` field comments are optional
+and can be left out.
+
+Below, in the snippet of the `attributes` of a domain entiteld `Artworld`, the
+`Title` attribute of the `Artwork` entity is documented with a Markdown
+comment that describes what the `Title` attribute represents and the entities
+and activities it is associated with.
+
+```yaml
+name: Artworld
+attributes:
+  Title:
+    doc: |
+      # `Title`
+
+      `Title` can be the title attributed to
+
+      * `Artwork`
+      * `ArtworkDetails`
+      * `Created`
+
+    type: String
+  Location:
+    type: String
+  PurchaseValue:
+    type: String
+  PurchaseValueCurrency:
+    type: String
+  Description:
+    type: String
+  Name:
+    type: String
+```
+
+Similarly, as you see in the snippet below, the `Collector` and `Artist`
+agents are documented with `doc` field comments that describe what they
+represent and their relationship to other entities and activities in the
+domain.
+
+```yaml
+agents:
+  Collector:
+    doc: |
+      # `Collector`
+
+      Collectors purchase and amass collections of art.
+
+      Collectors might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.
+    attributes:
+      - Name
+  Artist:
+    doc: |
+      # `Artist`
+
+      Artists create new works of art.
+
+      Artists might well be involved in exhibiting (`Exhibited`) and selling (`Sold`) works of art.
+    attributes:
+      - Name
+```
+
+The `Artwork` and `ArtworkDetails` entities are also documented with
+`doc` field comments that provide more information about what they
+represent and how they can be defined using GraphQL.
+
+```yaml
+entities:
+  Artwork:
+    doc: |
+      # `Artwork`
+
+      Refers to the actual physical art piece.
+
+      ## Examples
+
+      This entity can be defined in Chronicle using GraphQL like so:
+
+      ```graphql
+
+      mutation {
+        defineArtworkEntity(
+          externalId: "salvatormundi"
+          attributes: { titleAttribute: "Salvator Mundi" }
+        ) {
+          context
+          txId
+        }
+      }
+
+      ```
+
+    attributes:
+      - Title
+  ArtworkDetails:
+    doc: |
+      # `ArtworkDetails`
+
+      Provides more information about the piece, such as its title and description
+
+      ## Examples
+
+      This entity can be defined in Chronicle using GraphQL like so:
+
+      ```graphql
+
+      mutation {
+        defineArtworkDetailsEntity(
+          externalId: "salvatormundidetails"
+          attributes: {
+            titleAttribute: "Salvator Mundi"
+            descriptionAttribute: "Depiction of Christ holding a crystal orb and making the sign of the blessing."
+          }
+        ) {
+          context
+          txId
+        }
+      }
+
+      ```
+
+    attributes:
+      - Title
+      - Description
+```
+
+The `roles_doc` field provides additional documentation for the
+roles associated with the entities and activities in the domain.
+It includes examples of how these roles can be used in the context
+of selling or creating an artwork, and provides an overview of the
+roles associated with buying, selling, and creating art.
+
+```yaml
+roles_doc: |
+  # Buyer, Seller, and Creator Roles
+
+  ## Examples
+
+  In the context of association with selling (`Sold`) of an `Artwork`,
+  an `Artist`'s function could be `SELLER`, and `CREATOR` in the context
+  of creation (`Created`).
+
+  A `Collector`'s function in the context of the sale (`Sold`) of an
+  `Artwork` could be `BUYER` or `SELLER`.
+roles:
+  - BUYER
+  - SELLER
+  - CREATOR
+```
+
+For more information on writing documentation comments for Rust, see
+[the rustdoc book](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html).
+See the [Markdown Guide](https://www.markdownguide.org/) for more about
+how to use Markdown.
+
 ## Evolution
 
 Redefinition of a Chronicle domain with existing data is possible, with some
