@@ -11,7 +11,7 @@ image to be used in CI/CD.
 Assuming a valid [Chronicle domain configuration](./domain_modeling.md) located
 in the same directory as the Dockerfile, the following will build a
 domain-specific Chronicle. You should only need to source control the Dockerfile
-and domain.config - Chronicle's build image will do the rest.
+and domain.yaml - Chronicle's build image will do the rest.
 
 ```docker
 FROM blockchaintp/builder:{VERSION_NUMBER} as domain
