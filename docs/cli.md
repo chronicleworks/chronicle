@@ -1,4 +1,4 @@
-# Command line options
+# Command-Line Options
 
 ## Subcommands
 
@@ -8,24 +8,28 @@ Run Chronicle as an API server.
 
 #### Arguments
 
-##### `--id-pointer <JSON ptr>`
+##### Listening Socket
+
+###### `--interface <interface>`
+
+The GraphQL server socket address - defaults to 127.0.0.1:9982.
+
+##### Authentication
+
+###### `--id-pointer <JSON ptr>`
 
 A JSON pointer into the JSON Web Token claims, specifying the location of
 a string value corresponding to the external ID that should be used in
 constructing the authenticated user's Chronicle identity.
 
-##### `--interface <interface>`
-
-The GraphQL server socket address - defaults to 127.0.0.1:9982.
-
-##### `--jwks-address <URI>`
+###### `--jwks-address <URI>`
 
 The URI from which the JSON Web Key Set (JWKS) can be obtained.
 This typically has a suffix of `jwks.json`.
 The JWKS is used for verifying JSON Web Tokens provided via HTTP
 `Authorized: Bearer ...`.
 
-##### `--jwt-must-claim <name> <value>`
+###### `--jwt-must-claim <name> <value>`
 
 For security, the GraphQL server can be set to ignore JSON Web Tokens that
 do not include the expected claims. It may be appropriate to set required
@@ -35,7 +39,7 @@ expected in the JWTs issued by the authorization server.
 This option may be given multiple times. To set via environment variables
 instead, prefix each variable name with `JWT_MUST_CLAIM_`.
 
-##### `--offer-endpoints <name> <name> ...`
+###### `--offer-endpoints <name> <name> ...`
 
 Which endpoints to listen at for serving requests. By default, all are served.
 Options are:
@@ -43,21 +47,25 @@ Options are:
 - `data` for IRIs encoded in URIs (at `/context` and `/data`)
 - `graphql` for GraphQL requests (at `/` and `/ws`)
 
-##### `--playground` / `--open`
-
-Deprecated option (after v0.6.0) to make available the GraphQL Playground.
-
-##### `--require-auth`
+###### `--require-auth`
 
 Reject anonymous requests. Requires `--jwks-address` because identity for
 every request must be established verifiably.
 
-##### `--userinfo-address`
+###### `--userinfo-address`
 
 The URI that should be used to exchange access tokens for user information,
 typically suffixed `/userinfo`. If this option is supplied then the endpoint
 must supply any additional claims in response to the same `Authorization:`
 header that was provided by a user in making their API request.
+
+##### Deprecated Options
+
+Options may be removed in the next release of Chronicle.
+
+###### `--playground` / `--open`
+
+Make the GraphQL Playground available.
 
 ### `export-schema`
 
