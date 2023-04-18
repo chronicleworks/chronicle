@@ -1,4 +1,4 @@
-# Authentication and Authorization with OPA
+# Access Control Policy with OPA
 
 ## OPA Standard
 

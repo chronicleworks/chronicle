@@ -1,11 +1,16 @@
 # Configuration
 
-## Configuration File
+## Configuring Chronicle
 
 Chronicle's `config.toml` file contains settings for where to store secret
 keys, how to connect to the Sawtooth validator, and any namespace bindings. If
 a configuration file does not yet exist, Chronicle will create one before its
 API service starts up.
+
+Additionally, the [command-line interface](./cli.md) offers various arguments,
+many of which have an associated environment variable that can be used to set
+their value. The [opactl](./opa.md) utility is important in setting access
+controls.
 
 ## Remote PostgreSQL Database
 
@@ -33,6 +38,12 @@ connect to a remote database on startup. As described in the `--help`,
 values for the database connection configuration can be provided via
 `--database-*` options at the command line, except for `PGPASSWORD` for
 reasons of security.
+
+## Authentication and Authorization
+
+Separate sections describe how [identity is established](./auth.md) and
+[access is controlled](./opa.md). The [command-line interface](./cli.md)
+and associated environment variables include options relating to these.
 
 ## In-Memory Operation for Development
 

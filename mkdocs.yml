@@ -41,7 +41,8 @@ nav:
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
-      - Authorization with OPA: opa.md
+      - Establishing identity: auth.md
+      - Access control policy: opa.md
   - Installing:
       - Installing with Sextant: sextant.md
   - Upgrading: upgrading.md
