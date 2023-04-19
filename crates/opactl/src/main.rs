@@ -322,7 +322,7 @@ async fn main() {
     let args = cli::cli().get_matches();
     let address: &Url = args.get_one("sawtooth-address").unwrap();
     let client = ZmqRequestResponseSawtoothChannel::new(address);
-    let reader = OpaLedger::new(client.clone(), VERSION, FAMILY);
+    let reader = OpaLedger::new(client.clone(), FAMILY, VERSION);
     let writer = reader.clone();
 
     dispatch_args(args, writer, reader)
