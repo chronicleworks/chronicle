@@ -249,3 +249,63 @@ Transaction Processor.
 ```bash
 opactl rotate-key -c path/to/current/key
 ```
+
+### `set-policy`
+
+Sets a policy with a given ID, using a specified policy compiled to `.wasm`
+and requiring access to the root private key. The command takes the following
+arguments:
+
+- `--id` (`-i`): A required argument that specifies the ID of the new policy.
+
+- `--policy` (`-p`): A required argument that specifies the path of the policy.
+
+- `--root-key` (`-k`): A required argument that specifies the path of a
+  PEM-encoded private key that has access to the root.
+
+- `--transactor-key` (`-t`): An optional argument that specifies the path of
+  a PEM-encoded private key for the transactor.
+
+#### `set-policy` Example
+
+```bash
+opactl set-policy -i my_policy \
+                 -p /path/to/policy.wasm \
+                 -k /path/to/private/key
+```
+
+### `get-key`
+
+Gets the currently registered public key, with an option to specify the key ID
+and an option to write the key to a file. The command takes the following
+arguments:
+
+- `--id` (`-i`): An optional argument that specifies the ID of the key. If not
+  specified, the root key is returned.
+
+- `--output` (`-o`): An optional argument that specifies the path to write the
+  key to. If not specified, the key is written to stdout.
+
+#### `get-key` Example
+
+```bash
+opactl get-key -i my_key -o /path/to/output
+```
+
+### `get-policy`
+
+Gets the currently registered policy, with an option to specify the policy ID
+and an option to write the policy to a file. The command takes the following
+arguments:
+
+- `--id` (`-i`): A required argument that specifies the ID of the policy. If
+  not specified, the default policy is returned.
+
+- `--output` (`-o`): An optional argument that specifies the path where the
+  policy will be written.
+
+#### `get-policy` Example
+
+```bash
+opactl get-policy -i my_policy -o /path/to/output
+```
