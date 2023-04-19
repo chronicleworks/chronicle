@@ -8,11 +8,19 @@ Run Chronicle as an API server.
 
 #### Arguments
 
-##### Listening Socket
+##### Client Connection Settings
 
 ###### `--interface <interface>`
 
-The GraphQL server socket address - defaults to 127.0.0.1:9982.
+The API server socket address - defaults to 127.0.0.1:9982.
+
+###### `--offer-endpoints <name> <name> ...`
+
+Which endpoints to listen at for serving requests. By default, all are served.
+Options are:
+
+- `data` for IRIs encoded in URIs (at `/context` and `/data`)
+- `graphql` for GraphQL requests (at `/` and `/ws`)
 
 ##### Authentication
 
@@ -38,14 +46,6 @@ expected in the JWTs issued by the authorization server.
 
 This option may be given multiple times. To set via environment variables
 instead, prefix each variable name with `JWT_MUST_CLAIM_`.
-
-###### `--offer-endpoints <name> <name> ...`
-
-Which endpoints to listen at for serving requests. By default, all are served.
-Options are:
-
-- `data` for IRIs encoded in URIs (at `/context` and `/data`)
-- `graphql` for GraphQL requests (at `/` and `/ws`)
 
 ###### `--require-auth`
 
