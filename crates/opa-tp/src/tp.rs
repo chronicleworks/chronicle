@@ -180,7 +180,11 @@ fn apply_signed_operation_payload(
 ) -> Result<(), OpaTpError> {
     match payload {
         opa_tp_protocol::messages::signed_operation::payload::Operation::RegisterKey(
-            opa_tp_protocol::messages::RegisterKey { public_key, id },
+            opa_tp_protocol::messages::RegisterKey {
+                public_key,
+                id,
+                overwrite_existing,
+            },
         ) => {
             if id == "root" {
                 error!("Cannot register a key with the id 'root'");
@@ -189,8 +193,12 @@ fn apply_signed_operation_payload(
 
             let existing_key = context.get_state_entry(&key_address(id.clone()))?;
             if existing_key.is_some() {
-                error!("Key already registered");
-                return Err(OpaTpError::InvalidOperation);
+                if overwrite_existing {
+                    debug!("Registration replaces existing key");
+                } else {
+                    error!("Key already registered");
+                    return Err(OpaTpError::InvalidOperation);
+                }
             }
 
             let keys = Keys {
@@ -807,8 +815,12 @@ mod test {
         let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
-        let builder =
-            SubmissionBuilder::register_key("nonroot", &non_root_key.verifying_key(), &root_key);
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
         let submission = builder.build(0xffff);
 
         let context =
@@ -865,8 +877,12 @@ mod test {
         let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
-        let builder =
-            SubmissionBuilder::register_key("nonroot", &non_root_key.verifying_key(), &root_key);
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
         let submission = builder.build(0xffff);
 
         let context = submission_to_state(
@@ -945,12 +961,16 @@ mod test {
     }
 
     #[tokio::test]
-    async fn cannot_register_key_as_root() {
+    async fn cannot_register_key_as_nonroot() {
         let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
-        let builder =
-            SubmissionBuilder::register_key("root", &non_root_key.verifying_key(), &root_key);
+        let builder = SubmissionBuilder::register_key(
+            "root",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
         let submission = builder.build(0xffff);
 
         let context =
@@ -990,12 +1010,61 @@ mod test {
     }
 
     #[tokio::test]
-    async fn cannot_register_existing_key() {
+    async fn cannot_register_key_as_nonroot_with_overwrite() {
         let (context, root_key) = bootstrap_root().await;
         let non_root_key = key_from_seed(1);
 
         let builder =
-            SubmissionBuilder::register_key("nonroot", &non_root_key.verifying_key(), &root_key);
+            SubmissionBuilder::register_key("root", &non_root_key.verifying_key(), &root_key, true);
+        let submission = builder.build(0xffff);
+
+        let context =
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
+
+        insta::assert_yaml_snapshot!(context.readable_state(),{
+            ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
+        }, @r###"
+        ---
+        - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
+          - current:
+              key: "[pem]"
+              version: 0
+            expired: ~
+            id: root
+        "### );
+        insta::assert_yaml_snapshot!(context.readable_events(), {
+            ".**.date" => "[date]",
+        }, @r###"
+        ---
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - db21731ad3f4915f14ddb7295a3471f364eaa134bc31875d59b3b5d9705019b06945a6ce5729d55a6cfa8ede566eba7ae7e888ce67facd40564f5b38e8f3f63d
+          - error: Invalid operation
+        "###);
+    }
+
+    #[tokio::test]
+    async fn cannot_register_existing_key() {
+        let (context, root_key) = bootstrap_root().await;
+        let non_root_key = key_from_seed(1);
+
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
         let submission = builder.build(0xffff);
 
         let context = submission_to_state(
@@ -1006,8 +1075,12 @@ mod test {
         )
         .await;
 
-        let builder =
-            SubmissionBuilder::register_key("nonroot", &non_root_key.verifying_key(), &root_key);
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
         let submission = builder.build(0xffff);
 
         let context =
@@ -1057,6 +1130,138 @@ mod test {
         - - opa/operation
           - - - transaction_id
               - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
+          - error: Invalid operation
+        "###);
+    }
+
+    #[tokio::test]
+    async fn can_register_existing_key_with_overwrite() {
+        let (context, root_key) = bootstrap_root().await;
+        let non_root_key = key_from_seed(1);
+
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            false,
+        );
+        let submission = builder.build(0xffff);
+
+        let context = submission_to_state(
+            context,
+            root_key.clone(),
+            &[key_address("nonroot")],
+            submission,
+        )
+        .await;
+
+        let builder = SubmissionBuilder::register_key(
+            "nonroot",
+            &non_root_key.verifying_key(),
+            &root_key,
+            true,
+        );
+        let submission = builder.build(0xffff);
+
+        let context =
+            submission_to_state(context, root_key, &[key_address("nonroot")], submission).await;
+
+        insta::assert_yaml_snapshot!(context.readable_state(),{
+            ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
+        }, @r###"
+        ---
+        - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
+          - current:
+              key: "[pem]"
+              version: 0
+            expired: ~
+            id: root
+        - - 7ed1931c7f165dbd2e5e0dd1c360aa665b4366010392df934edbea19b9bd29f0a228af
+          - current:
+              key: "[pem]"
+              version: 0
+            expired: ~
+            id: nonroot
+        "### );
+        insta::assert_yaml_snapshot!(context.readable_events(), {
+            ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
+        }, @r###"
+        ---
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                key: "[pem]"
+                version: 0
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - f02e95d91b00e441e12ae03d84855c0cec6a107f802cfe73e45daacebb83eebd49857616982936a2ca688d9c68735df01e5ebe7843dce3632ea1f1fab59e7ec5
+          - KeyUpdate:
+              current:
+                key: "[pem]"
+                version: 0
+              expired: ~
+              id: nonroot
+        - - opa/operation
+          - - - transaction_id
+              - fa6ec58f6c2c06fdf639b9d87b49405dbd38f46fb182a6e44828c4ea7053e0503b8f081b9018c588bbefa834fc0e097ecfe926cd949d22f3a80cdbb23dc251bf
+          - KeyUpdate:
+              current:
+                key: "[pem]"
+                version: 0
+              expired: ~
+              id: nonroot
+        "###);
+    }
+
+    #[tokio::test]
+    async fn cannot_register_existing_root_key_with_overwrite() {
+        let (context, root_key) = bootstrap_root().await;
+        let new_root_key = key_from_seed(1);
+
+        let builder =
+            SubmissionBuilder::register_key("root", &new_root_key.verifying_key(), &root_key, true);
+        let submission = builder.build(0xffff);
+
+        let context =
+            submission_to_state(context, root_key, &[key_address("root")], submission).await;
+
+        insta::assert_yaml_snapshot!(context.readable_state(),{
+            ".**.date" => "[date]",
+            ".**.transaction_id" => "[hash]",
+            ".**.key" => "[pem]",
+        }, @r###"
+        ---
+        - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
+          - current:
+              key: "[pem]"
+              version: 0
+            expired: ~
+            id: root
+        "### );
+        insta::assert_yaml_snapshot!(context.readable_events(), {
+            ".**.date" => "[date]",
+        }, @r###"
+        ---
+        - - opa/operation
+          - - - transaction_id
+              - f9ad4db8361e558014fb7ef69d906ab805e84bf4df6cc32f4517bb11de513f37009ee785de3d8103696aa05fdec582a223b1de3775a2d3721ef0dc13adcf067e
+          - KeyUpdate:
+              current:
+                key: "-----BEGIN PUBLIC KEY-----\r\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEm++NVW2A5Drn4L7LOn5oOLld7+RYlu1g\r\ndbuQNdBsmWQFjSRFb/vyW2dcdou7IhKn73bgfza7E9H49xQEG7eMJA==\r\n-----END PUBLIC KEY-----\r\n"
+                version: 0
+              expired: ~
+              id: root
+        - - opa/operation
+          - - - transaction_id
+              - 5e591cc161a8c217b0ef9a382700d483e6730118717514a113b3bf74b16c4dcd67e685140c0c31ea0dc03e9df1a1cf287b53e36e540e55468d4aecb03b3ba0ae
           - error: Invalid operation
         "###);
     }

@@ -231,14 +231,24 @@ async fn dispatch_args<
             let new_key: SigningKey = load_key_from_match("new-key", matches).into();
             let id = matches.get_one::<String>("id").unwrap();
             let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let register_key =
-                SubmissionBuilder::register_key(id, &new_key.verifying_key(), &current_root_key)
-                    .build(span_id);
+            let overwrite_existing = matches.get_flag("overwrite");
+            let register_key = SubmissionBuilder::register_key(
+                id,
+                &new_key.verifying_key(),
+                &current_root_key,
+                overwrite_existing,
+            )
+            .build(span_id);
             Ok(handle_wait(
                 matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::register_key(id, register_key, &transactor_key),
+                OpaSubmitTransaction::register_key(
+                    id,
+                    register_key,
+                    &transactor_key,
+                    overwrite_existing,
+                ),
                 &transactor_key,
             )
             .await?)
