@@ -311,11 +311,11 @@ pub(crate) fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey
             let path: &String = matches.get_one(name).unwrap();
             let key = std::fs::read_to_string(path)
                 .unwrap_or_else(|_| panic!("Unable to read file {path}"));
-            SecretKey::from_pkcs8_pem(&key).unwrap()
+            SecretKey::from_pkcs8_pem(key.trim()).unwrap()
         }
         ValueSource::EnvVariable => {
             let key: &String = matches.get_one(name).unwrap();
-            SecretKey::from_pkcs8_pem(key).unwrap()
+            SecretKey::from_pkcs8_pem(key.trim()).unwrap()
         }
         _ => unreachable!(),
     }
