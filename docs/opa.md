@@ -215,6 +215,9 @@ processor.
   the PEM-encoded private key to be used for signing the transaction. If not
   specified, an ephemeral key will be generated.
 
+- `--overwrite` (`-o`): An optional flag allowing re-registration of a
+  non-root key.
+
 #### `register-key` Example
 
 ```bash

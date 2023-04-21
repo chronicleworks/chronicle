@@ -14,7 +14,7 @@ use crate::{
 pub enum OpaSubmitTransaction {
     BootstrapRoot(Submission, SigningKey),
     RotateRoot(Submission, SigningKey),
-    RegisterKey(Submission, SigningKey, String),
+    RegisterKey(Submission, SigningKey, String, bool),
     RotateKey(Submission, SigningKey, String),
     SetPolicy(Submission, SigningKey, String),
 }
@@ -32,11 +32,13 @@ impl OpaSubmitTransaction {
         name: impl AsRef<str>,
         submission: Submission,
         sawtooth_signer: &SigningKey,
+        overwrite_existing: bool,
     ) -> Self {
         Self::RegisterKey(
             submission,
             sawtooth_signer.to_owned(),
             name.as_ref().to_owned(),
+            overwrite_existing,
         )
     }
 
@@ -49,6 +51,7 @@ impl OpaSubmitTransaction {
             submission,
             sawtooth_signer.to_owned(),
             name.as_ref().to_owned(),
+            false,
         )
     }
 
@@ -71,7 +74,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
         match self {
             Self::BootstrapRoot(_, signer) => signer,
             Self::RotateRoot(_, signer) => signer,
-            Self::RegisterKey(_, signer, _) => signer,
+            Self::RegisterKey(_, signer, _, _) => signer,
             Self::RotateKey(_, signer, _) => signer,
             Self::SetPolicy(_, signer, _) => signer,
         }
@@ -85,7 +88,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
             Self::RotateRoot(_, _) => {
                 vec![key_address("root")]
             }
-            Self::RegisterKey(_, _, name) => {
+            Self::RegisterKey(_, _, name, _) => {
                 vec![key_address("root"), key_address(name.clone())]
             }
             Self::RotateKey(_, _, name) => {
@@ -113,7 +116,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
                 match self {
                     Self::BootstrapRoot(submission, _) => submission,
                     Self::RotateRoot(submission, _) => submission,
-                    Self::RegisterKey(submission, _, _) => submission,
+                    Self::RegisterKey(submission, _, _, _) => submission,
                     Self::RotateKey(submission, _, _) => submission,
                     Self::SetPolicy(submission, _, _) => submission,
                 },

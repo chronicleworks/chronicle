@@ -14,11 +14,16 @@ fn bootstrap_root(public_key: VerifyingKey) -> messages::BootstrapRoot {
     }
 }
 
-fn register_key(id: impl AsRef<str>, public_key: &VerifyingKey) -> messages::RegisterKey {
+fn register_key(
+    id: impl AsRef<str>,
+    public_key: &VerifyingKey,
+    overwrite_existing: bool,
+) -> messages::RegisterKey {
     let public_key: PublicKey = public_key.into();
     messages::RegisterKey {
         id: id.as_ref().to_string(),
         public_key: public_key.to_public_key_pem(LineEnding::CRLF).unwrap(),
+        overwrite_existing,
     }
 }
 
@@ -84,10 +89,11 @@ impl SubmissionBuilder {
         id: impl AsRef<str>,
         new_key: &VerifyingKey,
         root_key: &SigningKey,
+        overwrite_existing: bool,
     ) -> Self {
         let operation = messages::signed_operation::Payload {
             operation: Some(messages::signed_operation::payload::Operation::RegisterKey(
-                register_key(id, new_key),
+                register_key(id, new_key, overwrite_existing),
             )),
         };
 

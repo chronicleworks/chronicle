@@ -1,7 +1,7 @@
 use clap::{
     builder::{NonEmptyStringValueParser, PathBufValueParser},
     parser::ValueSource,
-    Arg, ArgMatches, Command, ValueHint,
+    Arg, ArgAction, ArgMatches, Command, ValueHint,
 };
 use k256::{pkcs8::DecodePrivateKey, SecretKey};
 use rand::rngs::StdRng;
@@ -103,7 +103,7 @@ fn register_key() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM encoded key to register"),
+                    .help("The path of a PEM-encoded key to register"),
             )
             .arg(
                 Arg::new("root-key")
@@ -123,7 +123,14 @@ fn register_key() -> Command {
                     .num_args(1)
                     .value_hint(ValueHint::Unknown)
                     .value_parser(NonEmptyStringValueParser::new())
-                    .help("The path of the new key to register as the root key"),
+                    .help("The id of the key"),
+            )
+            .arg(
+                Arg::new("overwrite")
+                    .short('o')
+                    .long("overwrite")
+                    .action(ArgAction::SetTrue)
+                    .help("Replace any existing non-root key"),
             )
             .arg(transactor_key()),
     )
