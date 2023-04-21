@@ -8,6 +8,7 @@ pub mod attributes;
 pub mod commands;
 pub mod context;
 pub mod database;
+pub mod etl;
 pub mod identity;
 pub mod import;
 pub mod ledger;

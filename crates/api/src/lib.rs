@@ -126,6 +126,9 @@ pub enum ApiError {
 
     #[error("Sawtooth communication error: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
+
+    #[error("ETL error: {0}")]
+    ETLError(#[from] common::etl::ETLError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -515,6 +518,13 @@ where
         &mut self,
         tx: &ChronicleTransaction,
     ) -> Result<ChronicleTransactionId, ApiError> {
+        if cfg!(feature = "export") {
+            let path = Path::new("export.json");
+            let operations =
+                common::etl::read_and_update_operations_from_file(&tx.tx, &path.into())?;
+            common::etl::write_operations_to_file(&operations, &path.into())?;
+        }
+
         let res = self.ledger_writer.do_submit(
             &ChronicleSubmitTransaction {
                 tx: tx.clone(),

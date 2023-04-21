@@ -75,6 +75,9 @@ tempfile           = { workspace = true }
 [features]
 devmode = ["inmem"]
 
+# Write operations as ETL to export.json
+export = []
+
 # Use an in-memory stub ledger
 inmem  = []
 strict = []

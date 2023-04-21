@@ -51,9 +51,10 @@ valico               = { workspace = true }
 
 [features]
 devmode = ["inmem"]
+export  = []
 # Use an in-memory stub ledger
-inmem  = []
-strict = []
+inmem   = []
+strict  = []
 
 [build-dependencies]
 

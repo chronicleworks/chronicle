@@ -62,6 +62,7 @@ lazy_static = { workspace = true }
 serde_json  = { workspace = true }
 
 [dev-dependencies]
+assert_fs    = { workspace = true }
 criterion    = { workspace = true }
 insta        = { workspace = true, features = ["json"] }
 mockito      = { workspace = true }
