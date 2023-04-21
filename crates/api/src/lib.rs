@@ -194,6 +194,34 @@ impl ApiDispatch {
 
         reply.ok_or(ApiError::ApiShutdownRx {})?
     }
+
+    #[instrument]
+    pub async fn handle_import_command(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+        operations: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.import_operations(identity, namespace, operations)
+            .await
+    }
+
+    #[instrument]
+    async fn import_operations(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+        operations: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch(
+            ApiCommand::Import(ImportCommand {
+                namespace,
+                operations,
+            }),
+            identity.clone(),
+        )
+        .await
+    }
 }
 
 impl<U, LEDGER> Api<U, LEDGER>
@@ -779,6 +807,16 @@ where
     #[instrument(skip(self))]
     async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
         match command {
+            (
+                ApiCommand::Import(ImportCommand {
+                    namespace,
+                    operations,
+                }),
+                identity,
+            ) => {
+                self.submit_import_operations(identity, namespace, operations)
+                    .await
+            }
             (ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) => {
                 self.create_namespace(&external_id, identity).await
             }
@@ -1227,6 +1265,48 @@ where
         .await?
     }
 
+    async fn submit_import_operations(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+        operations: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        let identity = identity.signed_identity(&self.keystore)?;
+        let model = ProvModel::from_tx(&operations)?;
+        tokio::task::spawn_blocking(move || {
+            // Check here to ensure that import operations result in data changes
+            let mut connection = api.store.connection()?;
+            connection.build_transaction().run(|connection| {
+                // If the namespace exists, get the model for the namespace and check each operation will have effects
+                let mut state = match api.store.prov_model_for_namespace(connection, &namespace) {
+                    Ok(mut state) => {
+                        info!("Importing data to existing namespace: {namespace}");
+                        // `prov_model_for_namespace` returns a model with the namespace context not applied
+                        state.namespace_context(&namespace);
+                        state
+                    }
+                    _ => {
+                        // If namespace does not exist, create a new model
+                        info!("Importing data to new namespace: {namespace}");
+                        ProvModel::default()
+                    }
+                };
+                if let Some(operations) = api.ensure_effects(&mut state, &operations)? {
+                    info!("Submitting import operations to ledger");
+                    let tx_id =
+                        api.submit_blocking(&ChronicleTransaction::new(operations, identity))?;
+                    Ok(ApiResponse::import_submitted(model, tx_id))
+                } else {
+                    info!("Import will not result in any data changes");
+                    let model = ProvModel::from_tx(&operations)?;
+                    Ok(ApiResponse::already_recorded(namespace, model))
+                }
+            })
+        })
+        .await?
+    }
+
     #[instrument(level = "debug", skip(self), ret(Debug))]
     async fn sync(
         &self,
@@ -1498,8 +1578,8 @@ mod test {
     use common::{
         attributes::{Attribute, Attributes},
         commands::{
-            ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyImport,
-            KeyRegistration, NamespaceCommand,
+            ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, ImportCommand,
+            KeyImport, KeyRegistration, NamespaceCommand,
         },
         database::TemporaryDatabase,
         identity::AuthId,
@@ -1509,8 +1589,10 @@ mod test {
             SecretKey,
         },
         prov::{
-            operations::DerivationType, to_json_ld::ToJson, ActivityId, AgentId,
-            ChronicleTransactionId, DomaintypeId, EntityId, ProvModel,
+            operations::{ChronicleOperation, DerivationType},
+            to_json_ld::ToJson,
+            ActivityId, AgentId, ChronicleTransactionId, DomaintypeId, EntityId, ExpandedJson,
+            NamespaceId, ProvModel,
         },
         signing::DirectoryStoredKeys,
     };
@@ -1535,23 +1617,27 @@ mod test {
             identity: AuthId,
         ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
             // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
-                // Recv until we get a commit notification
-                loop {
-                    let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
-                    match commit {
-                        common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-                        common::ledger::SubmissionStage::Committed(commit, _id) => {
-                            return Ok(Some((commit.delta, commit.tx_id)))
-                        }
-                        common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
-                        common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
-                            panic!("{tx:?}")
+            match self.api.dispatch(command, identity).await? {
+                ApiResponse::Submission { .. } | ApiResponse::ImportSubmitted { .. } => {
+                    // Recv until we get a commit notification
+                    loop {
+                        let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
+                        match commit {
+                            common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
+                            common::ledger::SubmissionStage::Committed(commit, _id) => {
+                                return Ok(Some((commit.delta, commit.tx_id)))
+                            }
+                            common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
+                            common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
+                                panic!("{tx:?}")
+                            }
                         }
                     }
                 }
-            } else {
-                Ok(None)
+                ApiResponse::AlreadyRecorded { subject: _, prov } => {
+                    Ok(Some((prov, ChronicleTransactionId::from("null"))))
+                }
+                _ => Ok(None),
             }
         }
     }
@@ -1654,6 +1740,155 @@ mod test {
             _db: database, // share the lifetime
             _tp: embed_tp,
         }
+    }
+
+    // Creates a mock file containing JSON-LD of the ChronicleOperations
+    // that would be created by the given command, although not in any particular order.
+    fn test_create_agent_operations_import() -> assert_fs::NamedTempFile {
+        let file = assert_fs::NamedTempFile::new("import.json").unwrap();
+        assert_fs::prelude::FileWriteStr::write_str(
+            &file,
+            r#"
+        [
+            {
+                "@id": "_:n1",
+                "@type": [
+                "http://btp.works/chronicleoperations/ns#SetAttributes"
+                ],
+                "http://btp.works/chronicleoperations/ns#agentName": [
+                {
+                    "@value": "testagent"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#attributes": [
+                {
+                    "@type": "@json",
+                    "@value": {}
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#domaintypeId": [
+                {
+                    "@value": "type"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceName": [
+                {
+                    "@value": "testns"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+                {
+                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+                }
+                ]
+            },
+            {
+                "@id": "_:n1",
+                "@type": [
+                "http://btp.works/chronicleoperations/ns#CreateNamespace"
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceName": [
+                {
+                    "@value": "testns"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+                {
+                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+                }
+                ]
+            },
+            {
+                "@id": "_:n1",
+                "@type": [
+                "http://btp.works/chronicleoperations/ns#AgentExists"
+                ],
+                "http://btp.works/chronicleoperations/ns#agentName": [
+                {
+                    "@value": "testagent"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceName": [
+                {
+                    "@value": "testns"
+                }
+                ],
+                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+                {
+                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+                }
+                ]
+            }
+        ]
+         "#,
+        )
+        .unwrap();
+        file
+    }
+
+    #[tokio::test]
+    async fn test_import_operations() {
+        let mut api = test_api().await;
+
+        let file = test_create_agent_operations_import();
+
+        let contents = std::fs::read_to_string(file.path()).unwrap();
+
+        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents).unwrap();
+
+        let mut operations = Vec::with_capacity(json_array.len());
+        for value in json_array.into_iter() {
+            let op = ChronicleOperation::from_json(ExpandedJson(value))
+                .await
+                .expect("Failed to parse imported JSON-LD to ChronicleOperation");
+            operations.push(op);
+        }
+
+        let namespace = NamespaceId::from_external_id(
+            "testns",
+            Uuid::parse_str("6803790d-5891-4dfa-b773-41827d2c630b").unwrap(),
+        );
+        let identity = AuthId::chronicle();
+
+        insta::assert_json_snapshot!(api
+            .dispatch(ApiCommand::Import(ImportCommand { namespace: namespace.clone(), operations: operations.clone() } ), identity.clone())
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .to_json()
+            .compact_stable_order()
+            .await
+            .unwrap(), @r###"
+        {
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:agent:testagent",
+              "@type": [
+                "prov:Agent",
+                "chronicle:domaintype:type"
+              ],
+              "externalId": "testagent",
+              "namespace": "chronicle:ns:testns:6803790d-5891-4dfa-b773-41827d2c630b",
+              "value": {}
+            },
+            {
+              "@id": "chronicle:ns:testns:6803790d-5891-4dfa-b773-41827d2c630b",
+              "@type": "chronicle:Namespace",
+              "externalId": "testns"
+            }
+          ]
+        }
+        "###);
+
+        // Check that the operations that do not result in data changes are not submitted
+        insta::assert_json_snapshot!(api
+            .dispatch(ApiCommand::Import(ImportCommand { namespace, operations } ), identity)
+            .await
+            .unwrap()
+            .unwrap()
+            .1, @r###""null""###);
     }
 
     #[tokio::test]

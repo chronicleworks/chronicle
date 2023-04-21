@@ -59,6 +59,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 chronicle-protocol = { path = "../chronicle-protocol" }
+assert_fs          = { workspace = true }
 insta              = { workspace = true, features = ["json", "yaml"] }
 opa-tp-protocol    = { path = "../opa-tp-protocol" }
 tempfile           = { workspace = true }
