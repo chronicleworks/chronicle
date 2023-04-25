@@ -88,6 +88,30 @@ allow_defines {
 default deny_all = false
 ```
 
+The [discussion of authorization
+tokens](./auth.md#constructing-chronicle-identity-from-bearer-token-claims)
+mentions OAuth scope which is an important means by which an authorization
+server can assert that the authenticated user is authorized to perform
+specific actions within Chronicle. If, for example, in the above rules, we
+wish to allow defines to only those users whose role grants them the
+`write:instance` scope, we may note the granted scopes in a variable:
+
+```rego
+oauth_scopes := split(input.claims.scope, " ")
+```
+
+then, among the rules for `allow_defines`, include,
+
+```rego
+"write:instance" in oauth_scopes
+```
+
+Additionally, for this scenario, the allowed `input.type` values should
+include `"jwt"`, corresponding to users whose identity and access rights are
+demonstrated by their presentation of a token issued by an authorization
+server. Users' scopes are typically defined in that server's settings for
+role-based access control.
+
 ## `opa-tp`
 
 The opa-tp command-line interface (CLI) is used to interact with the Chronicle OPA-TP
