@@ -156,7 +156,7 @@ impl TP for ChronicleTransactionHandler {
                 // A contradiction raises an event and shortcuts processing
                 Err(ProcessorError::Contradiction(source)) => {
                     info!(contradiction = %source);
-                    let ev = chronicle_contradicted(span, &source)
+                    let ev = chronicle_contradicted(span, &source, &operations.identity)
                         .map_err(|e| ApplyError::InternalError(e.to_string()))?;
                     effects.add_event(
                         "chronicle/prov-update".to_string(),
@@ -223,7 +223,7 @@ impl TP for ChronicleTransactionHandler {
         }
 
         // Finally emit the delta as an event
-        let ev = chronicle_committed(span, delta)
+        let ev = chronicle_committed(span, delta, &operations.identity)
             .await
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
 

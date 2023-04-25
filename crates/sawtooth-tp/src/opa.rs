@@ -43,11 +43,11 @@ impl TpOpa {
 
         match (policy_name_settings_entry, entrypoint_settings_entry) {
             (None, None) => {
-                warn!("Insecure operating mode - no on chain policy name or entrypoint settings found");
+                warn!("Insecure operating mode - no on-chain policy name or entrypoint settings found");
                 Ok(self.embedded.clone())
             }
             (Some(policy_name_settings_entry), Some(entrypoint_settings_entry)) => {
-                info!("Chronicle operating in secure mode - on chain policy name and entrypoint settings found");
+                info!("Chronicle operating in secure mode - on-chain policy name and entrypoint settings found");
                 let policy_name_settings_entry: Setting =
                     Message::parse_from_bytes(&policy_name_settings_entry).map_err(|_e| {
                         ApplyError::InternalError("Invalid setting entry".to_string())

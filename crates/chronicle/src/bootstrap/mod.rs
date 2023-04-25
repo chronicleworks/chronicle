@@ -50,6 +50,7 @@ use crate::codegen::ChronicleDomainDef;
 
 use self::opa::opa_executor_from_embedded_policy;
 
+#[cfg(not(feature = "inmem"))]
 fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Url, SignerError> {
     Ok(options
         .get_one::<String>("sawtooth")
@@ -173,7 +174,7 @@ pub async fn api(
     pool: &ConnectionPool,
     _options: &ArgMatches,
     config: &Config,
-    remote_opa: Option<(String, String)>,
+    remote_opa: Option<String>,
 ) -> Result<api::ApiDispatch, ApiError> {
     let embedded_tp = in_mem_ledger(config, _options)?;
 
@@ -257,6 +258,7 @@ impl ConfiguredOpa {
 /// attempt to load it from sawtooth settings. If we are running in inmem mode,
 /// then always use embedded policy
 #[cfg(feature = "inmem")]
+#[allow(unused_variables)]
 async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
     let (default_policy_name, entrypoint) =
         ("allow_transactions", "allow_transactions.allowed_users");
@@ -424,15 +426,15 @@ where
                             break;
                         }
                     }
-                    SubmissionStage::Committed(commit) => {
+                    SubmissionStage::Committed(commit, _) => {
                         if commit.tx_id == tx_id {
                             debug!("Transaction committed: {}", commit.tx_id);
                         }
                         println!("{subject}");
                     }
-                    SubmissionStage::NotCommitted((id, contradiction)) => {
+                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
                         if id == tx_id {
-                            eprintln!("Transaction rejected by ledger: {id} {contradiction}");
+                            eprintln!("Transaction rejected: {id} {contradiction}");
                             break;
                         }
                     }
@@ -583,10 +585,10 @@ pub mod test {
                 loop {
                     let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
 
-                    if let SubmissionStage::Committed(commit) = submission {
+                    if let SubmissionStage::Committed(commit, _) = submission {
                         break Ok(Some((commit.delta, commit.tx_id)));
                     }
-                    if let SubmissionStage::NotCommitted((_, contradiction)) = submission {
+                    if let SubmissionStage::NotCommitted((_, contradiction, _)) = submission {
                         panic!("Contradiction: {contradiction}");
                     }
                 }

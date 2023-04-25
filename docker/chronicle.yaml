@@ -73,7 +73,6 @@ services:
     command:
       - -exc
       - |
-        sleep 40
         /usr/local/bin/chronicle_sawtooth_tp \
          -C tcp://validator:4004 \
          --console-logging pretty
@@ -104,6 +103,8 @@ services:
     ports:
       - "5432:5432"
 
+  #Chronicle API initialization is delayed as it needs opa-init to have placed a
+  #policy on-chain
   chronicle-sawtooth-api:
     environment:
       - RUST_BACKTRACE=full
@@ -112,12 +113,13 @@ services:
       - PGPASSWORD=chronicle
     image: &chronicleImage chronicle-amd64:${ISOLATION_ID:-local}
     entrypoint: /bin/bash
+    restart: on-failure:5
     links:
       - "opa-init:opa-init"
     command:
       - -exc
       - |
-        sleep 60
+        sleep 30
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty verify-keystore
@@ -185,7 +187,6 @@ services:
     command:
       - -exc
       - |
-        sleep 20
         cd /tmp
         /usr/local/bin/opactl generate --output ./root.pem
         /usr/local/bin/opactl \
@@ -196,6 +197,7 @@ services:
           set-policy \
             --id allow_transactions -p /policies/bundle.tar.gz \
             --root-key ./root.pem
-        while true; do sleep 30; done;
+        tail -f /dev/null
     depends_on:
       - opa-tp
+      - validator

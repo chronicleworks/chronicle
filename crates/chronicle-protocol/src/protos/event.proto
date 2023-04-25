@@ -10,4 +10,5 @@ message Event {
   uint64 span_id = 2;
   oneof option_contradiction { string contradiction = 3; }
   string delta = 4;
+  string identity = 5;
 }

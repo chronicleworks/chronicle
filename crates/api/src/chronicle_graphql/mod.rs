@@ -10,7 +10,8 @@ use async_graphql_poem::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    identity::{AuthId, JwtClaims, OpaData},
+    identity::{AuthId, JwtClaims, OpaData, SignedIdentity},
+    k256::schnorr::signature::Signature,
     ledger::{SubmissionError, SubmissionStage},
     opa::{ExecutorContext, OpaExecutorError},
     prov::{
@@ -310,11 +311,29 @@ pub struct Delta(async_graphql::Value);
 scalar!(Delta);
 
 #[derive(SimpleObject)]
+pub struct CommitIdentity {
+    identity: String,
+    signature: String,
+    verifying_key: String,
+}
+
+impl From<SignedIdentity> for CommitIdentity {
+    fn from(identity: SignedIdentity) -> Self {
+        CommitIdentity {
+            identity: identity.identity,
+            signature: hex::encode(identity.signature.as_bytes()),
+            verifying_key: hex::encode(identity.verifying_key.to_bytes()),
+        }
+    }
+}
+
+#[derive(SimpleObject)]
 pub struct CommitNotification {
     pub stage: Stage,
     pub tx_id: String,
     pub error: Option<String>,
     pub delta: Option<Delta>,
+    pub id: Option<CommitIdentity>,
 }
 
 impl CommitNotification {
@@ -324,6 +343,7 @@ impl CommitNotification {
             tx_id: tx_id.to_string(),
             error: None,
             delta: None,
+            id: None,
         }
     }
 
@@ -333,21 +353,28 @@ impl CommitNotification {
             tx_id: e.tx_id().to_string(),
             error: Some(e.to_string()),
             delta: None,
+            id: None,
         }
     }
 
-    pub fn from_contradiction(tx_id: &ChronicleTransactionId, contradiction: &str) -> Self {
+    pub fn from_contradiction(
+        tx_id: &ChronicleTransactionId,
+        contradiction: &str,
+        id: SignedIdentity,
+    ) -> Self {
         CommitNotification {
             stage: Stage::Commit,
             tx_id: tx_id.to_string(),
             error: Some(contradiction.to_string()),
             delta: None,
+            id: Some(id.into()),
         }
     }
 
     pub async fn from_committed(
         tx_id: &ChronicleTransactionId,
         delta: Box<ProvModel>,
+        id: SignedIdentity,
     ) -> Result<Self, async_graphql::Error> {
         Ok(CommitNotification {
             stage: Stage::Commit,
@@ -361,6 +388,7 @@ impl CommitNotification {
                 .map(async_graphql::Value::from_json)
                 .transpose()?
                 .map(Delta),
+            id: Some(id.into()),
         })
     }
 }
@@ -384,16 +412,16 @@ impl Subscription {
                 match rx.recv().await {
                     Ok(SubmissionStage::Submitted(Ok(submission))) =>
                       yield CommitNotification::from_submission(&submission),
-                    Ok(SubmissionStage::Committed(commit)) => {
-                      let notify = CommitNotification::from_committed(&commit.tx_id, commit.delta).await;
+                    Ok(SubmissionStage::Committed(commit, id)) => {
+                      let notify = CommitNotification::from_committed(&commit.tx_id, commit.delta, *id).await;
                       if let Ok(notify) = notify {
                         yield notify;
                       } else {
                         error!("Failed to convert commit to notification: {:?}", notify.err());
                       }
                     }
-                    Ok(SubmissionStage::NotCommitted((commit,contradiction))) =>
-                      yield CommitNotification::from_contradiction(&commit, &contradiction.to_string()),
+                    Ok(SubmissionStage::NotCommitted((commit,contradiction, id))) =>
+                      yield CommitNotification::from_contradiction(&commit, &contradiction.to_string(), *id),
                     Ok(SubmissionStage::Submitted(Err(e))) => {
                       error!("Failed to submit: {:?}", e);
                       yield CommitNotification::from_submission_failed(&e);

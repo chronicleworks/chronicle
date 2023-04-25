@@ -280,15 +280,15 @@ where
                                   }
                                   // Ledger contradicted or error, so nothing to
                                   // apply, but forward notification
-                                  Some((ChronicleOperationEvent(Err(e)),tx,_,_)) => {
+                                  Some((ChronicleOperationEvent(Err(e), id),tx,_,_)) => {
                                     commit_notify_tx.send(SubmissionStage::not_committed(
-                                      ChronicleTransactionId::from(tx.as_str()),e.clone()
+                                      ChronicleTransactionId::from(tx.as_str()),e.clone(), id
                                     )).ok();
                                   },
                                   // Successfully committed to ledger, so apply
                                   // to db and broadcast notification to
                                   // subscription subscribers
-                                  Some((ChronicleOperationEvent(Ok(ref commit)),tx,offset,_ )) => {
+                                  Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,offset,_ )) => {
 
                                         debug!(committed = ?tx);
                                         debug!(delta = %commit.to_json().compact().await.unwrap().pretty());
@@ -300,7 +300,7 @@ where
                                                 error!(?e, "Api sync to confirmed commit");
                                             }).map(|_| commit_notify_tx.send(SubmissionStage::committed(Commit::new(
                                                ChronicleTransactionId::from(tx.as_str()),offset, Box::new(commit.clone())
-                                            ))).ok())
+                                            ), id )).ok())
                                             .ok();
                                   },
                                 }
@@ -1532,11 +1532,13 @@ mod test {
                     let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
                     match commit {
                         common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-                        common::ledger::SubmissionStage::Committed(commit) => {
+                        common::ledger::SubmissionStage::Committed(commit, _id) => {
                             return Ok(Some((commit.delta, commit.tx_id)))
                         }
                         common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
-                        common::ledger::SubmissionStage::NotCommitted((_, tx)) => panic!("{tx:?}"),
+                        common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
+                            panic!("{tx:?}")
+                        }
                     }
                 }
             } else {
