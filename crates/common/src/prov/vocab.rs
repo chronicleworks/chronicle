@@ -37,7 +37,7 @@ pub enum ChronicleOperations {
     StartActivity,
     #[iri("chronicleop:startActivityTime")]
     StartActivityTime,
-    #[iri("chronicleop:endactivity")]
+    #[iri("chronicleop:EndActivity")]
     EndActivity,
     #[iri("chronicleop:endActivityTime")]
     EndActivityTime,
@@ -83,7 +83,7 @@ pub enum ChronicleOperations {
     WasInformedBy,
     #[iri("chronicleop:informingActivityName")]
     InformingActivityName,
-    #[iri("chronicleop:generated")]
+    #[iri("chronicleop:Generated")]
     Generated,
 }
 
