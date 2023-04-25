@@ -34,6 +34,7 @@ locspan = { workspace = true }
 mime = { workspace = true }
 opa = { workspace = true }
 opa-tp-protocol = { path = "../opa-tp-protocol" }
+openssl = { workspace = true }
 percent-encoding = { workspace = true }
 pkcs8 = { workspace = true }
 portpicker = { workspace = true }

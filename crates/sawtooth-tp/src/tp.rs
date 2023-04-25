@@ -337,7 +337,10 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
 #[cfg(test)]
 pub mod test {
-    use std::{cell::RefCell, collections::BTreeMap};
+    use std::{
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet},
+    };
 
     use chronicle_protocol::{
         async_sawtooth_sdk::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
@@ -673,7 +676,7 @@ pub mod test {
                 .unwrap()
                 .to_owned(),
             );
-            AuthId::from_jwt_claims(&claims, "/sub").unwrap()
+            AuthId::from_jwt_claims(&claims, &BTreeSet::from(["sub".to_string()])).unwrap()
         };
 
         let signed_identity = user_identity.signed_identity(&keystore).unwrap();

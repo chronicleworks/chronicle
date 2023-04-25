@@ -24,11 +24,15 @@ Options are:
 
 ##### Authentication
 
-###### `--id-pointer <JSON ptr>`
+###### `--id-claims <JWT field names>`
 
-A JSON pointer into the JSON Web Token claims, specifying the location of
-a string value corresponding to the external ID that should be used in
-constructing the authenticated user's Chronicle identity.
+The names of the JSON Web Token claim fields whose values should be used to
+determine the external ID of the authenticated user's Chronicle identity. All
+listed fields must be present among the user's claims and their values must
+be strings.
+
+The order in which the fields are specified does not change the resulting
+external ID.
 
 ###### `--jwks-address <URI>`
 

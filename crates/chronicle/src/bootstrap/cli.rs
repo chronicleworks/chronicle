@@ -1025,12 +1025,13 @@ impl SubCommand for CliModel {
                             .help("URI of the OIDC UserInfo endpoint")
                     }
                     ).arg(
-                        Arg::new("id-pointer")
-                            .long("id-pointer")
+                        Arg::new("id-claims")
+                            .long("id-claims")
                             .takes_value(true)
-                            .env("JWT_POINTER")
-                            .default_value("/sub")
-                            .help("JSON pointer into JWT claims for Chronicle ID"),
+                            .min_values(1)
+                            .default_values(&["iss", "sub"])
+                            .env("JWT_ID_CLAIMS")
+                            .help("JWT claims that determine Chronicle ID"),
                     )
                     .arg(
                         Arg::new("jwt-must-claim")

@@ -39,7 +39,13 @@ use poem::{
 use r2d2::PooledConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::HashMap, fmt::Display, net::SocketAddr, str::FromStr, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt::Display,
+    net::SocketAddr,
+    str::FromStr,
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
@@ -477,7 +483,7 @@ impl std::fmt::Debug for UserInfoUri {
 pub struct SecurityConf {
     jwks_uri: Option<JwksUri>,
     userinfo_uri: Option<UserInfoUri>,
-    id_pointer: Option<String>,
+    id_claims: Option<BTreeSet<String>>,
     jwt_must_claim: HashMap<String, String>,
     allow_anonymous: bool,
     opa: ExecutorContext,
@@ -487,7 +493,7 @@ impl SecurityConf {
     pub fn new(
         jwks_uri: Option<JwksUri>,
         userinfo_uri: Option<UserInfoUri>,
-        id_pointer: Option<String>,
+        id_claims: Option<BTreeSet<String>>,
         jwt_must_claim: HashMap<String, String>,
         allow_anonymous: bool,
         opa: ExecutorContext,
@@ -495,7 +501,7 @@ impl SecurityConf {
         Self {
             jwks_uri,
             userinfo_uri,
-            id_pointer,
+            id_claims,
             jwt_must_claim,
             allow_anonymous,
             opa,
@@ -941,13 +947,13 @@ impl Endpoint for LdContextEndpoint {
 
 #[derive(Clone, Debug)]
 pub struct AuthFromJwt {
-    json_pointer: String,
+    id_claims: BTreeSet<String>,
 }
 
 impl AuthFromJwt {
     #[instrument(level = "debug", ret(Debug))]
     fn identity(&self, claims: &JwtClaims) -> Option<AuthId> {
-        AuthId::from_jwt_claims(claims, &self.json_pointer).ok()
+        AuthId::from_jwt_claims(claims, &self.id_claims).ok()
     }
 }
 
@@ -972,7 +978,7 @@ impl async_graphql::extensions::Extension for AuthFromJwt {
 impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
     fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
         Arc::new(AuthFromJwt {
-            json_pointer: self.json_pointer.clone(),
+            id_claims: self.id_claims.clone(),
         })
     }
 }
@@ -1047,9 +1053,7 @@ where
         serve_graphql: bool,
         serve_data: bool,
     ) -> Result<(), ApiError> {
-        let claim_parser = sec
-            .id_pointer
-            .map(|json_pointer| AuthFromJwt { json_pointer });
+        let claim_parser = sec.id_claims.map(|id_claims| AuthFromJwt { id_claims });
         let mut schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
                 "chronicle-api-gql",

@@ -36,10 +36,10 @@ combined. This can be a means of including both OAuth scope (from an access
 token) and user identity (from the user info endpoint) among the resulting
 claims.
 
-For constructing the Chronicle identity from the claims, a
-[configured ID pointer](./cli.md#id-pointer-json-ptr) identifies the claim
-whose value should be accepted as the external ID of the Chronicle user who
-submitted the request.
+For constructing the Chronicle identity from the claims,
+[configured field names](./cli.md#id-claims-jwt-field-names) identify the
+claims whose values should be used in deriving the external ID of the
+Chronicle user who submitted the request.
 
 Omitting the `Authorization:` header means that the user is regarded as
 being anonymous and has no accompanying claims. Such requests may be
@@ -56,7 +56,7 @@ settings of your authorization server,
 chronicle serve-api \
   --jwks-address https://auth.example.com/.well-known/jwks.json \
   --userinfo-address https://auth.example.com/userinfo \
-  --id-pointer /nickname \
+  --id-claims nickname \
   --require-auth \
   --jwt-must-claim iss https://auth.example.com/ \
   --jwt-must-claim aud https://auth.example.com/chronicle-api/ \
@@ -68,8 +68,8 @@ This,
 - requires bearer tokens to be presented with API requests
 - uses the fetched `jwks.json` to verify JWT signatures
 - uses the `userinfo` endpoint to obtain claims associated with the token
-- uses value of the `"nickname"` field among the claims as the external ID of
-  the authenticated Chronicle user
+- uses value of the `"nickname"` field among the claims to derive the external
+  ID of the authenticated Chronicle user
 - rejects any requests that do not include an `Authorization:` header with a
   bearer token
 - rejects any tokens that lead to JWT claims that do not include those
