@@ -38,7 +38,12 @@ use diesel::{
 use chronicle_telemetry::{self, ConsoleLogging};
 use url::Url;
 
-use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashMap},
+    io,
+    net::SocketAddr,
+    str::FromStr,
+};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -299,10 +304,13 @@ where
 
         let allow_anonymous = !matches.is_present("require-auth");
 
-        // CliModel defaults to looking for "/sub"
-        let id_pointer = matches
-            .value_of("id-pointer")
-            .map(|id_pointer| id_pointer.to_string());
+        let id_claims = matches.get_many::<String>("id-claims").map(|id_claims| {
+            let mut id_keys = BTreeSet::new();
+            for id_claim in id_claims {
+                id_keys.extend(id_claim.split_whitespace().map(|s| s.to_string()));
+            }
+            id_keys
+        });
 
         let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
         for (name, value) in std::env::vars() {
@@ -334,7 +342,7 @@ where
             SecurityConf::new(
                 jwks_uri,
                 userinfo_uri,
-                id_pointer,
+                id_claims,
                 jwt_must_claim,
                 allow_anonymous,
                 opa,

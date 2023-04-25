@@ -946,6 +946,7 @@ dependencies = [
  "mime",
  "opa",
  "opa-tp-protocol",
+ "openssl",
  "percent-encoding",
  "pkcs8 0.10.2",
  "portpicker",

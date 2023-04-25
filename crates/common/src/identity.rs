@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 use crate::{
     prov::AgentId,
@@ -6,6 +6,7 @@ use crate::{
 };
 
 use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
+use openssl::sha::Sha512;
 use serde_json::{Map, Value};
 use thiserror::Error;
 use tracing::warn;
@@ -97,23 +98,31 @@ impl TryFrom<&str> for AuthId {
 impl AuthId {
     /// Establish a Chronicle user via JWT using a provided pointer into the JWT claims,
     /// caching the claims with the JWT user identity
-    pub fn from_jwt_claims(claims: &JwtClaims, json_pointer: &str) -> Result<Self, IdentityError> {
-        let claims = claims.to_owned();
+    pub fn from_jwt_claims(
+        JwtClaims(claims): &JwtClaims,
+        id_keys: &BTreeSet<String>,
+    ) -> Result<Self, IdentityError> {
+        const ZERO: [u8; 1] = [0];
 
-        if let Some(Value::String(external_id)) =
-            Value::Object(claims.0.clone()).pointer(json_pointer)
-        {
-            Ok(Self::JWT(JwtId::new(
-                external_id,
-                serde_json::to_value(claims)?,
-            )))
-        } else {
-            warn!(
-                "Pointer ({json_pointer}) failed to get externalId from JWT claims: {:#?}",
-                claims
-            );
-            Err(IdentityError::JwtClaims)
+        let mut hasher = Sha512::new();
+        for id_key in id_keys {
+            if let Some(Value::String(claim_value)) = claims.get(id_key) {
+                hasher.update(id_key.as_bytes());
+                hasher.update(&ZERO);
+                hasher.update(claim_value.as_bytes());
+                hasher.update(&ZERO);
+            } else {
+                warn!(
+                    "For constructing Chronicle identity no {id_key:?} field among JWT claims: {claims:#?}"
+                );
+                return Err(IdentityError::JwtClaims);
+            }
         }
+
+        Ok(Self::JWT(JwtId::new(
+            &hex::encode(hasher.finish()),
+            Value::Object(claims.to_owned()),
+        )))
     }
 
     /// Create an Anonymous Chronicle user
@@ -243,7 +252,18 @@ impl TryFrom<&SignedIdentity> for AuthId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prov::{ExternalId, ExternalIdPart};
     use serde_json::json;
+
+    fn external_id_from_jwt_claims<'a>(claim_strings: impl Iterator<Item = &'a str>) -> ExternalId {
+        const ZERO: [u8; 1] = [0];
+        let mut hasher = Sha512::new();
+        claim_strings.for_each(|s| {
+            hasher.update(s.as_bytes());
+            hasher.update(&ZERO);
+        });
+        hex::encode(hasher.finish()).into()
+    }
 
     #[test]
     fn test_auth_id_serialization() {
@@ -269,16 +289,26 @@ mod tests {
             .unwrap()
             .to_owned(),
         );
-        let auth_id = AuthId::from_jwt_claims(&claims, "/name").unwrap();
+        let auth_id =
+            AuthId::from_jwt_claims(&claims, &BTreeSet::from(["name".to_string()])).unwrap();
         insta::assert_json_snapshot!(auth_id, @r###"
         {
           "type": "jwt",
-          "id": "abcdef",
+          "id": "6e7f57aeab5edb9bf5863ba2d749715b6f9a9079f3b8c81b6207d437c005b5b9f6f14de53c34c38ee0b1cc77fa6e02b5cef694faf5aaf028b58c15b3c4ee1cb0",
           "claims": {
             "name": "abcdef"
           }
         }
         "###);
+
+        if let AuthId::JWT(JwtId { id, .. }) = auth_id {
+            assert_eq!(
+                &external_id_from_jwt_claims(vec!["name", "abcdef"].into_iter()),
+                id.external_id_part()
+            );
+        } else {
+            panic!("did not receive expected JWT identity: {auth_id}");
+        }
     }
 
     #[test]
@@ -320,16 +350,27 @@ mod tests {
             .unwrap()
             .to_owned(),
         );
-        let auth_id_result = AuthId::from_jwt_claims(&claims, "/sub").unwrap();
-        insta::assert_json_snapshot!(auth_id_result, @r###"
+        let auth_id =
+            AuthId::from_jwt_claims(&claims, &BTreeSet::from(["sub".to_string()])).unwrap();
+
+        insta::assert_json_snapshot!(auth_id, @r###"
         {
           "type": "jwt",
-          "id": "John Doe",
+          "id": "13cc0854e3c226984a47e3159be9d71dae9796586ae15c493a7dcb79c2c511be7b311a238439a6922b779014b2bc71f351ff388fcac012d4f20f161720fa0dcf",
           "claims": {
             "sub": "John Doe"
           }
         }
         "###);
+
+        if let AuthId::JWT(JwtId { id, .. }) = auth_id {
+            assert_eq!(
+                &external_id_from_jwt_claims(vec!["sub", "John Doe"].into_iter()),
+                id.external_id_part()
+            );
+        } else {
+            panic!("did not receive expected JWT identity: {auth_id}");
+        }
     }
 
     #[test]
@@ -342,7 +383,8 @@ mod tests {
             .unwrap()
             .to_owned(),
         );
-        let auth_id_result = AuthId::from_jwt_claims(&claims, "/externalId");
+        let auth_id_result =
+            AuthId::from_jwt_claims(&claims, &BTreeSet::from(["externalId".to_string()]));
         assert!(auth_id_result.is_err());
         assert_eq!(
             auth_id_result.unwrap_err().to_string(),

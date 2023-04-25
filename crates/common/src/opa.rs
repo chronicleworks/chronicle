@@ -317,11 +317,10 @@ struct EmbeddedOpaPolicies;
 
 #[cfg(test)]
 mod tests {
-    use serde_json::Value;
-
-    use crate::identity::IdentityContext;
-
     use super::*;
+    use crate::identity::IdentityContext;
+    use serde_json::Value;
+    use std::collections::BTreeSet;
 
     fn chronicle_id() -> AuthId {
         AuthId::chronicle()
@@ -391,7 +390,7 @@ mod tests {
             .unwrap()
             .to_owned(),
         );
-        AuthId::from_jwt_claims(&claims, "/sub").unwrap()
+        AuthId::from_jwt_claims(&claims, &BTreeSet::from(["sub".to_string()])).unwrap()
     }
 
     fn jwt_user_opa_data() -> OpaData {
