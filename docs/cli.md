@@ -10,9 +10,10 @@ Run Chronicle as an API server.
 
 ##### Client Connection Settings
 
-###### `--interface <interface>`
+###### `--interface <interface> ...`
 
-The API server socket address - defaults to 127.0.0.1:9982.
+The API server socket address. If more than one value is provided then the
+Chronicle API will listen on all the specified sockets.
 
 ###### `--offer-endpoints <name> <name> ...`
 

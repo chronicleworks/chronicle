@@ -96,8 +96,8 @@ pub enum ApiError {
     #[error("Connection pool: {0}")]
     ConnectionPool(#[from] r2d2::Error),
 
-    #[error("File upload: {0}")]
-    FileUpload(#[from] std::io::Error),
+    #[error("IO error: {0}")]
+    InputOutput(#[from] std::io::Error),
 
     #[error("Blocking thread pool: {0}")]
     Join(#[from] JoinError),
@@ -1139,7 +1139,7 @@ where
                     .unwrap()
                     .read_to_end(&mut buf)
                     .await
-                    .map_err(ApiError::FileUpload)?;
+                    .map_err(ApiError::InputOutput)?;
 
                 Ok(buf)
             }

@@ -28,7 +28,7 @@ use futures::Stream;
 use poem::{
     get, handler,
     http::{HeaderValue, StatusCode},
-    listener::TcpListener,
+    listener::{Listener, TcpListener},
     post,
     web::{
         headers::authorization::{Bearer, Credentials},
@@ -424,6 +424,7 @@ where
     mutation: Mutation,
 }
 
+#[derive(Clone)]
 pub struct JwksUri {
     uri: Url,
 }
@@ -515,7 +516,7 @@ pub trait ChronicleApiServer {
         &self,
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
-        address: SocketAddr,
+        addresses: Vec<SocketAddr>,
         security_conf: SecurityConf,
         serve_graphql: bool,
         serve_data: bool,
@@ -1048,7 +1049,7 @@ where
         &self,
         pool: Pool<ConnectionManager<PgConnection>>,
         api: ApiDispatch,
-        address: SocketAddr,
+        addresses: Vec<SocketAddr>,
         sec: SecurityConf,
         serve_graphql: bool,
         serve_data: bool,
@@ -1080,14 +1081,14 @@ where
 
         let mut app = Route::new();
 
-        match sec.jwks_uri {
+        match &sec.jwks_uri {
             Some(jwks_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
                 tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
 
                 let secconf = || {
                     EndpointSecurityConfiguration::new(
-                        JwtChecker::new(&jwks_uri, sec.userinfo_uri.as_ref(), CACHE_EXPIRY_SECONDS),
+                        JwtChecker::new(jwks_uri, sec.userinfo_uri.as_ref(), CACHE_EXPIRY_SECONDS),
                         sec.jwt_must_claim.clone(),
                         sec.allow_anonymous,
                     )
@@ -1132,9 +1133,15 @@ where
                         .at("/data/:ns/:iri", get(iri_endpoint(None)))
                 };
             }
-        };
+        }
 
-        Server::new(TcpListener::bind(address)).run(app).await?;
+        let listener = addresses
+            .into_iter()
+            .map(|address| TcpListener::bind(address).boxed())
+            .reduce(|listener_1, listener_2| listener_1.combine(listener_2).boxed())
+            .unwrap();
+
+        Server::new(listener).run(app).await?;
         Ok(())
     }
 }
