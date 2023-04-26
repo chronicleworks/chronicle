@@ -119,7 +119,6 @@ services:
     command:
       - -exc
       - |
-        sleep 30
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty verify-keystore

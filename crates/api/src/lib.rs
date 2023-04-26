@@ -41,7 +41,7 @@ use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
-    path::Path, sync::Arc,
+    path::Path, sync::Arc, time::Duration,
 };
 use thiserror::Error;
 use tokio::{
@@ -264,10 +264,18 @@ where
             loop {
                 let state_updates = reuse_reader.clone();
 
-                let mut state_updates = state_updates
+                let state_updates = state_updates
                     .state_updates("chronicle/prov-update", offset, None)
-                    .await
-                    .unwrap();
+                    .await;
+
+                if let Err(e) = state_updates {
+                    error!(subscribe_to_events = ?e);
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    reuse_reader.reconnect().await;
+                    continue;
+                }
+
+                let mut state_updates = state_updates.unwrap();
 
                 loop {
                     select! {
@@ -275,7 +283,8 @@ where
 
                                 match state {
                                   None => {
-                                    warn!("Ledger reader disconnected");
+                                    error!("Ledger reader disconnected");
+                                    reuse_reader.reconnect().await;
                                     break;
                                   }
                                   // Ledger contradicted or error, so nothing to

@@ -5,6 +5,7 @@ use async_sawtooth_sdk::{
 };
 use k256::sha2::{Digest, Sha256};
 use sawtooth_sdk::messages::setting::Setting;
+use tracing::error;
 
 use crate::ChronicleLedger;
 
@@ -75,9 +76,18 @@ impl SettingsReader {
     /// Settings values are not uniform, so we return a `Vec<u8>` for further processing
     pub async fn read_settings(&self, key: &str) -> Result<Setting, SawtoothCommunicationError> {
         let address = sawtooth_settings_address(key);
-        Ok(Message::parse_from_bytes(
-            &self.0.get_state_entry(&address).await?,
-        )?)
+        loop {
+            let res = self.0.get_state_entry(&address).await;
+
+            if let Err(e) = res {
+                error!("Error reading settings: {}", e);
+                self.0.reconnect().await;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                continue;
+            }
+
+            return Ok(Message::parse_from_bytes(&res.unwrap())?);
+        }
     }
 }
 
