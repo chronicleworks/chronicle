@@ -319,7 +319,7 @@ syntax. Chronicle domain models are specified in YAML, a complete model for the
 conceptual design can be written like this:
 
 ```yaml
-name: 'evidence'
+name: evidence
 attributes:
   Content:
     type: String
@@ -381,7 +381,7 @@ A string that names your domain, used to coordinate deployments that require
 multiple namespaces.
 
 ```yaml
-name: "evidence"
+name: evidence
 ```
 
 ### Attributes
@@ -565,6 +565,38 @@ roles:
 Supplying this as a YAML file to the Chronicle build image as documented in
 [building chronicle](./building.md) will produce a well-typed API for your
 domain. The next step is then [recording provenance](./recording_provenance.md).
+
+### Editor Configuration
+
+Chronicle provides assistance for editors and development environments that
+you may choose for creating and editing your `domain.yaml` files. Chronicle's
+source tree and the chronicle-builder Docker images include a
+`schema/domain.json` file which is a schema for validating domain definitions.
+This JSON schema provided with Chronicle can assist with YAML files because
+the two formats are closely related.
+
+For example, using Visual Studio Code with Red Hat's YAML extension installed,
+one can edit the extension's settings in VS Code's `settings.json` to include,
+
+```json
+"yaml.schemas": {
+    "/full/path/of/chronicle/schema/domain.json": "domain.yaml"
+},
+```
+
+adjusting the above path as appropriate then, when you open a `domain.yaml`
+file, you should see "Chronicle Domain" (the `title` in the `domain.json`
+file) in VS Code's status bar, and you should receive some Chronicle-specific
+assistance from your editor when working on your domain definition.
+
+For more information, see the README for that VS Code
+[YAML extension](https://github.com/redhat-developer/vscode-yaml#readme)
+or check the documentation for your chosen YAML editor.
+
+Note that the provided JSON schema for Chronicle's domain definitions can
+catch many mistakes but not all of them. A `domain.yaml` file that validates
+against `schema/domain.json` may still have Chronicle report some error with
+the domain definition that needs correcting.
 
 ## Chronicle Domain Definition Documentation Capabilities
 
