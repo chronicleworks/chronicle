@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     attributes::Attributes,
     prov::{
-        operations::DerivationType, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
-        EntityId, ExternalId, ProvModel, Role,
+        operations::{ChronicleOperation, DerivationType},
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, EntityId, ExternalId,
+        NamespaceId, ProvModel, Role,
     },
 };
 
@@ -311,12 +312,19 @@ pub struct QueryCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportCommand {
+    pub namespace: NamespaceId,
+    pub operations: Vec<ChronicleOperation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ApiCommand {
     NameSpace(NamespaceCommand),
     Agent(AgentCommand),
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
+    Import(ImportCommand),
 }
 
 #[derive(Debug)]
@@ -336,6 +344,11 @@ pub enum ApiResponse {
     },
     /// The api has successfully executed the query
     QueryReply { prov: Box<ProvModel> },
+    /// The api has submitted the import transactions to a ledger
+    ImportSubmitted {
+        prov: Box<ProvModel>,
+        tx_id: ChronicleTransactionId,
+    },
 }
 
 impl ApiResponse {
@@ -365,6 +378,13 @@ impl ApiResponse {
         ApiResponse::AlreadyRecorded {
             subject: subject.into(),
             prov: Box::new(prov),
+        }
+    }
+
+    pub fn import_submitted(prov: ProvModel, tx_id: ChronicleTransactionId) -> Self {
+        ApiResponse::ImportSubmitted {
+            prov: Box::new(prov),
+            tx_id,
         }
     }
 }

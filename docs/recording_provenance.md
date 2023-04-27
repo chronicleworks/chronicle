@@ -875,3 +875,152 @@ and signing.
 
 The current `hasAttachment` mutation is intended for recording but is not yet
 usable.
+
+## Importing Data into Chronicle
+
+Chronicle provides a CLI command `import` to load data from a JSON-LD file that
+contains an array of Chronicle Operations. These operations can be used to
+create agents, namespaces, and other resources in the Chronicle database.
+
+To import data into Chronicle, follow these steps:
+
+- Create a JSON-LD file with an array of Chronicle Operations.
+- Save the file in the Chronicle root directory with a unique name, for example,
+  `import.json`.
+- Run the following command:
+
+  ```bash
+  chronicle --bin chronicle -- import <namespace-id> <namespace-uuid> <path-to-json-file>
+  ```
+
+  where:
+
+  `<namespace-id>`: the name of the namespace to which the data will be imported.
+  `<namespace-uuid>`: the UUID of the namespace to which the data will be imported.
+  `<path-to-json-file>`: the path to the JSON-LD file containing the Chronicle Operations.
+
+- If the data is successfully imported, the Chronicle Operations will be added
+  to the Chronicle database.
+
+For example, suppose you want to create a new agent with the name `testagent`
+and a new namespace with the name `testns`. You can add the following
+operations to your JSON-LD file:
+
+```json
+[
+    {
+        "@id": "_:n1",
+        "@type": [
+        "http://btp.works/chronicleoperations/ns#SetAttributes"
+        ],
+        "http://btp.works/chronicleoperations/ns#agentName": [
+        {
+            "@value": "testagent"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#attributes": [
+        {
+            "@type": "@json",
+            "@value": {}
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#domaintypeId": [
+        {
+            "@value": "type"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        {
+            "@value": "testns"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        {
+            "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+        }
+        ]
+    },
+    {
+        "@id": "_:n1",
+        "@type": [
+        "http://btp.works/chronicleoperations/ns#CreateNamespace"
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        {
+            "@value": "testns"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        {
+            "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+        }
+        ]
+    },
+    {
+        "@id": "_:n1",
+        "@type": [
+        "http://btp.works/chronicleoperations/ns#AgentExists"
+        ],
+        "http://btp.works/chronicleoperations/ns#agentName": [
+        {
+            "@value": "testagent"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        {
+            "@value": "testns"
+        }
+        ],
+        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        {
+            "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
+        }
+        ]
+    }
+]
+```
+
+To import data into Chronicle using the `import` command, you need to provide
+the `namespace-id` and `namespace-uuid` arguments. These arguments are required
+to specify the namespace to which the imported data will be imported.
+
+The `namespace-id` argument is a string that specifies the name of the namespace
+to which the data will be imported. This value should match the value of the
+`http://btp.works/chronicleoperations/ns#namespaceName` property in the JSON-LD
+file.
+
+The `namespace-uuid` argument is a string that specifies the UUID of the
+namespace to which the data will be imported. This value should match the value
+of the `http://btp.works/chronicleoperations/ns#namespaceUuid` property in the
+JSON-LD file.
+
+Once you have provided the `namespace-id` and `namespace-uuid` arguments, you
+can run the `import` command using the JSON-LD file containing the Chronicle
+operations as the data source. If the data is successfully imported, the
+Chronicle Operations will be added to the Chronicle database.
+
+In the example provided, the `import` command imports data from the `import.json`
+file into the namespace with the name `testns` and the UUID
+`6803790d-5891-4dfa-b773-41827d2c630b`. The JSON-LD file contains three
+Chronicle Operations that set the attributes of a new agent with the name
+`testagent`, create a new namespace with the name `testns`, and create the new
+agent `testagent` in the namespace `testns`.
+
+To run the transaction described above, run the following command:
+
+```bash
+chronicle --bin chronicle -- import testns 6803790d-5891-4dfa-b773-41827d2c630b import.json
+```
+
+`import` uses standard input as its data source by default. To import data from
+standard input run the `import` command like this:
+
+```bash
+< import.json cargo run --bin chronicle \
+    -- import \
+    testns \
+    6803790d-5891-4dfa-b773-41827d2c630b
+```
+
+If the `import` command is executed successfully, the agent `testagent` and
+the namespace `testns` will be created in the Chronicle database.

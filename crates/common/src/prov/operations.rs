@@ -318,6 +318,34 @@ pub enum ChronicleOperation {
     WasInformedBy(WasInformedBy),
 }
 
+impl ChronicleOperation {
+    /// Returns a reference to the `NamespaceId` of the `ChronicleOperation`
+    pub fn namespace(&self) -> &NamespaceId {
+        match self {
+            ChronicleOperation::ActivityExists(o) => &o.namespace,
+            ChronicleOperation::AgentExists(o) => &o.namespace,
+            ChronicleOperation::AgentActsOnBehalfOf(o) => &o.namespace,
+            ChronicleOperation::CreateNamespace(o) => &o.id,
+            ChronicleOperation::RegisterKey(o) => &o.namespace,
+            ChronicleOperation::StartActivity(o) => &o.namespace,
+            ChronicleOperation::EndActivity(o) => &o.namespace,
+            ChronicleOperation::ActivityUses(o) => &o.namespace,
+            ChronicleOperation::EntityExists(o) => &o.namespace,
+            ChronicleOperation::WasGeneratedBy(o) => &o.namespace,
+            ChronicleOperation::EntityDerive(o) => &o.namespace,
+            ChronicleOperation::EntityHasEvidence(o) => &o.namespace,
+            ChronicleOperation::SetAttributes(o) => match o {
+                SetAttributes::Activity { namespace, .. } => namespace,
+                SetAttributes::Agent { namespace, .. } => namespace,
+                SetAttributes::Entity { namespace, .. } => namespace,
+            },
+            ChronicleOperation::WasAssociatedWith(o) => &o.namespace,
+            ChronicleOperation::WasAttributedTo(o) => &o.namespace,
+            ChronicleOperation::WasInformedBy(o) => &o.namespace,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use chrono::{TimeZone, Utc};

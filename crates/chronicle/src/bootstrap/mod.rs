@@ -24,7 +24,7 @@ use common::{
     identity::AuthId,
     ledger::SubmissionStage,
     opa::ExecutorContext,
-    prov::to_json_ld::ToJson,
+    prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
     signing::{DirectoryStoredKeys, SignerError},
 };
 use tracing::{debug, error, info, instrument};
@@ -41,8 +41,9 @@ use url::Url;
 
 use std::{
     collections::{BTreeSet, HashMap},
-    io,
+    io::{self, Read},
     net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
     str::FromStr,
 };
 
@@ -377,6 +378,53 @@ where
         .await?;
 
         Ok((ApiResponse::Unit, ret_api))
+    } else if let Some(matches) = matches.subcommand_matches("import") {
+        let (namespace_id, namespace_uuid) = (
+            matches.value_of("namespace-id").unwrap(),
+            matches.value_of("namespace-uuid").unwrap(),
+        );
+        let namespace = NamespaceId::from_external_id(
+            namespace_id,
+            uuid::Uuid::parse_str(namespace_uuid).unwrap(),
+        );
+
+        let contents = if matches.is_present("path") {
+            // Get the path to the file to import
+            let path: PathBuf = matches.value_of("path").unwrap().into();
+            let contents = std::fs::read_to_string(&path)?;
+            info!("Loaded import data from {:?}", path.display());
+            contents
+        } else {
+            let mut buffer = String::new();
+            let mut stdin = io::stdin();
+            let bytes = stdin.read_to_string(&mut buffer)?;
+            info!("Loaded {bytes} bytes of import data from stdin");
+            buffer
+        };
+
+        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents)?;
+
+        let mut operations = Vec::new();
+        for value in json_array.into_iter() {
+            let op = ChronicleOperation::from_json(ExpandedJson(value))
+                .await
+                .expect("Failed to parse imported JSON-LD to ChronicleOperation");
+            // Only import operations for the specified namespace
+            if op.namespace() == &namespace {
+                operations.push(op);
+            }
+        }
+
+        info!("Loading import data complete");
+
+        let identity = AuthId::chronicle();
+        info!("Importing data as root to Chronicle namespace: {namespace}");
+
+        let response = api
+            .handle_import_command(identity, namespace, operations)
+            .await?;
+
+        Ok((response, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
 
@@ -422,7 +470,7 @@ where
                     }
                     SubmissionStage::Submitted(Err(err)) => {
                         if err.tx_id() == &tx_id {
-                            eprintln!("Transaction rejected by chronicle: {} {}", err, err.tx_id());
+                            eprintln!("Transaction rejected by Chronicle: {} {}", err, err.tx_id());
                             break;
                         }
                     }
@@ -464,6 +512,54 @@ where
                     .to_colored_json_auto()
                     .unwrap()
             );
+        }
+        (ApiResponse::ImportSubmitted { prov, tx_id }, api) => {
+            let mut tx_notifications = api.notify_commit.subscribe();
+
+            loop {
+                let stage = tx_notifications.recv().await.map_err(CliError::from)?;
+
+                match stage {
+                    SubmissionStage::Submitted(Ok(id)) => {
+                        if id == tx_id {
+                            debug!("Import operations submitted: {}", id);
+                        }
+                    }
+                    SubmissionStage::Submitted(Err(err)) => {
+                        if err.tx_id() == &tx_id {
+                            eprintln!(
+                                "Import transaction rejected by Chronicle: {} {}",
+                                err,
+                                err.tx_id()
+                            );
+                            break;
+                        }
+                    }
+                    SubmissionStage::Committed(commit, _) => {
+                        if commit.tx_id == tx_id {
+                            debug!("Import transaction committed: {}", commit.tx_id);
+                            println!("Import complete");
+                            println!(
+                                "{}",
+                                prov.to_json()
+                                    .compact()
+                                    .await?
+                                    .to_string()
+                                    .to_colored_json_auto()
+                                    .unwrap()
+                            );
+                            // An import command generates a single transaction, so we can break here and exit
+                            break;
+                        }
+                    }
+                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
+                        if id == tx_id {
+                            eprintln!("Transaction rejected by ledger: {id} {contradiction}");
+                            break;
+                        }
+                    }
+                }
+            }
         }
     };
     Ok(())

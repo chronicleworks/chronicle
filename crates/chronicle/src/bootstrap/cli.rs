@@ -1060,7 +1060,29 @@ impl SubCommand for CliModel {
                         .help("which API endpoints to offer")
                     ),
             )
-            .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"));
+            .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"))
+            .subcommand(
+                Command::new("import")
+                    .about("Import and apply Chronicle operations, then exit")
+                    .arg(
+                        Arg::new("namespace-id")
+                            .value_name("NAMESPACE_ID")
+                            .help("External ID of the namespace to import into")
+                            .required(true)
+                    )
+                    .arg(
+                        Arg::new("namespace-uuid")
+                            .value_name("NAMESPACE_UUID")
+                            .help("UUID of the namespace to import into")
+                            .required(true)
+                    )
+                    .arg(
+                        Arg::new("path")
+                            .value_name("PATH")
+                            .help("Path to data import file")
+                            .value_hint(ValueHint::FilePath)
+                    )
+            );
 
         for agent in self.agents.iter() {
             app = app.subcommand(agent.as_cmd());

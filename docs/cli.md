@@ -80,6 +80,44 @@ Write the GraphQL SDL for Chronicle to stdout and exit.
 
 Installs shell completions for bash, zsh, or fish.
 
+### `import` <`namespace-id`> <`namespace-uuid`> <`path`>
+
+The import command is used to load data from a JSON-LD file containing an
+array of Chronicle Operations. This command requires two arguments:
+`namespace-id` and `namespace-uuid`, which are used to create a unique
+identifier for the namespace that the data is being imported to. The
+`NamespaceId` is a required argument for the import command because it
+allows the program to differentiate between different namespaces and avoid
+conflicts when importing data.
+
+By default, `import` will use standard input as its data source. Users can
+also use an optional `path` argument to specify the file path of a JSON-LD
+file to be imported.
+
+Once the data has been successfully imported, the Chronicle Operations will
+be added to the Chronicle database under the specified namespace.
+
+To import to namespace `testns`, UUID 6803790d-5891-4dfa-b773-41827d2c630b
+from standard input:
+
+```bash
+< import.json cargo run --bin chronicle \
+    -- import \
+    testns \
+    6803790d-5891-4dfa-b773-41827d2c630b
+```
+
+To import from a file named import.json, run the following command:
+
+```bash
+chronicle \
+    --bin chronicle \
+    -- import \
+    testns \
+    6803790d-5891-4dfa-b773-41827d2c630b \
+    import.json
+```
+
 ## Other Subcommands
 
 Chronicle will also generate subcommands for recording provenance, derived from
