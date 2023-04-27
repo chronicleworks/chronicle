@@ -276,7 +276,7 @@ fn get_policy() -> Command {
 pub fn cli() -> Command {
     Command::new("opactl")
         .version(env!("CARGO_PKG_VERSION"))
-        .author("BTPWorks")
+        .author("Blockchain Technology Partners")
         .about("A command line tool for interacting with the OPA transaction processor")
         .arg(
             Arg::new("sawtooth-address")
