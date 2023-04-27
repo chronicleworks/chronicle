@@ -41,7 +41,7 @@ use url::Url;
 use std::{
     collections::{BTreeSet, HashMap},
     io,
-    net::SocketAddr,
+    net::{SocketAddr, ToSocketAddrs},
     str::FromStr,
 };
 
@@ -161,7 +161,7 @@ pub async fn api_server<Query, Mutation>(
     api: &ApiDispatch,
     pool: &ConnectionPool,
     gql: ChronicleGraphQl<Query, Mutation>,
-    interface: Option<SocketAddr>,
+    interface: Option<Vec<SocketAddr>>,
     security_conf: SecurityConf,
     serve_graphql: bool,
     serve_data: bool,
@@ -170,11 +170,11 @@ where
     Query: ObjectType + Copy,
     Mutation: ObjectType + Copy,
 {
-    if let Some(addr) = interface {
+    if let Some(addresses) = interface {
         gql.serve_api(
             pool.clone(),
             api.clone(),
-            addr,
+            addresses,
             security_conf,
             serve_graphql,
             serve_data,
@@ -285,8 +285,14 @@ where
     let ret_api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-api") {
-        let interface = match matches.get_one::<String>("interface") {
-            Some(addr) => Some(addr.parse().map_err(ApiError::AddressParse)?),
+        let interface = match matches.get_many::<String>("interface") {
+            Some(interface_args) => {
+                let mut addrs = Vec::new();
+                for interface_arg in interface_args {
+                    addrs.extend(interface_arg.to_socket_addrs()?);
+                }
+                Some(addrs)
+            }
             None => None,
         };
 

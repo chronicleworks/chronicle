@@ -66,8 +66,8 @@ pub enum CliError {
     #[error("Key storage: {0}")]
     Keys(#[from] SignerError),
 
-    #[error("Cannot locate configuration file: {0}")]
-    FileSystem(#[from] std::io::Error),
+    #[error("IO error: {0}")]
+    InputOutput(#[from] std::io::Error),
 
     #[error("Invalid configuration file: {0}")]
     ConfigInvalid(#[from] toml::de::Error),
@@ -996,8 +996,10 @@ impl SubCommand for CliModel {
                         Arg::new("interface")
                             .long("interface")
                             .takes_value(true)
-                            .default_value("127.0.0.1:9982")
-                            .help("The API server address (default 127.0.0.1:9982)"),
+                            .min_values(1)
+                            .default_values(&["localhost:9982"])
+                            .env("API_LISTEN_SOCKET")
+                            .help("The API server address"),
                     ).arg(
                         Arg::new("playground")
                             .long("playground")
