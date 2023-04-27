@@ -114,7 +114,19 @@ impl SawtoothPolicyLoader {
         }
         let load_policy_from = self.sawtooth_address(&self.policy_id);
         debug!(load_policy_from=?load_policy_from);
-        self.ledger.get_state_entry(&load_policy_from).await
+
+        loop {
+            let res = self.ledger.get_state_entry(&load_policy_from).await;
+
+            if let Err(res) = &res {
+                error!(error=?res, "Failed to load policy from chain");
+                self.ledger.reconnect().await;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                continue;
+            }
+
+            return Ok(res.unwrap());
+        }
     }
 }
 
@@ -331,7 +343,7 @@ impl WasmtimeOpaExecutor {
 
 #[async_trait::async_trait]
 impl OpaExecutor for WasmtimeOpaExecutor {
-    #[instrument(level = "debug", skip(self), ret)]
+    #[instrument(level = "trace", skip(self))]
     async fn evaluate(&mut self, id: &AuthId, context: &OpaData) -> Result<(), OpaExecutorError> {
         self.opa.set_data(context)?;
         let input = id.identity()?;

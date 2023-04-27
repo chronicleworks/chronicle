@@ -137,8 +137,8 @@ impl MessageBuilder {
             ..Default::default()
         };
 
-        if let Some(offset) = block_id {
-            request.last_known_block_ids = vec![offset.to_string()].into();
+        if let Some(block_id) = block_id {
+            request.last_known_block_ids = vec![block_id.to_string()].into();
         }
 
         operation_subscriptions.push(block_subscription);

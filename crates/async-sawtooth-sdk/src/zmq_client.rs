@@ -76,6 +76,8 @@ pub trait RequestResponseSawtoothChannel {
     ) -> Result<BoxStream<'static, RX>, SawtoothCommunicationError>;
 
     fn reconnect(&self) {}
+
+    fn close(&self) {}
 }
 
 #[derive(Clone)]
@@ -118,9 +120,9 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
                 .unwrap()
                 .send(message_type, &correlation_id, &bytes);
 
-            if let Err(e) = &future {
+            if let Err(e) = future {
                 error!(send_message=%correlation_id, error=%e);
-                //tx.send(Err(SawtoothCommunicationError::from(e.clone())));
+                tx.send(Err(SawtoothCommunicationError::from(e))).unwrap();
                 return;
             }
             debug!(send_message=%correlation_id);
@@ -182,5 +184,9 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         let (tx, rx) = ZmqMessageConnection::new(self.address.as_str()).create();
         *self.tx.lock().unwrap() = tx;
         *self.rx.lock().unwrap() = rx;
+    }
+
+    fn close(&self) {
+        self.tx.lock().unwrap().close();
     }
 }

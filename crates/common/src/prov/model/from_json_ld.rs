@@ -9,7 +9,7 @@ use mime::Mime;
 use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf, IriVocabularyMut};
 use serde_json::json;
 use std::collections::BTreeMap;
-use tracing::{instrument, trace};
+use tracing::{error, instrument, trace};
 
 use crate::{
     attributes::{Attribute, Attributes},
@@ -1070,6 +1070,7 @@ impl ChronicleOperation {
                     informing_activity,
                 }))
             } else {
+                error!("Unknown operation: {:?}", o.type_entry());
                 unreachable!()
             }
         } else {

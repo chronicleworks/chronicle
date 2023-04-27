@@ -249,6 +249,8 @@ pub trait LedgerReader {
         // The number of blocks to process before ending the stream
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error>;
+
+    async fn reconnect(&self) {}
 }
 
 #[derive(Derivative)]
@@ -341,7 +343,7 @@ impl<
         let subscription_request = self
             .builder
             .make_subscription_request(offset_id, vec![event_type.into()]);
-        debug!(?subscription_request);
+        debug!(subscription_request = ?subscription_request);
         let sub = self
             .channel
             .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
@@ -491,7 +493,7 @@ impl<
         Ok((Offset::from(block), BlockId(id)))
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "debug")]
     async fn state_updates(
         &self,
         event_type: &str,
@@ -508,6 +510,8 @@ impl<
             }
         };
 
+        debug!(?from_offset, ?from_block_id);
+
         let subscribe = self
             .get_events_from(event_type, &from_offset, &from_block_id)
             .await?;
@@ -521,6 +525,12 @@ impl<
                 })
             })
             .boxed())
+    }
+
+    async fn reconnect(&self) {
+        debug!("Reconnect ZMQ channel");
+        self.channel.close();
+        self.channel.reconnect();
     }
 }
 
