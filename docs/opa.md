@@ -279,7 +279,7 @@ opactl rotate-key -c path/to/current/key
 
 ### `set-policy`
 
-Sets a policy with a given ID, using a specified policy compiled to `.wasm`
+Sets a policy with a given ID, using a specified policy compiled to `.bundle.tar.gz`
 and requiring access to the root private key. The command takes the following
 arguments:
 
@@ -297,7 +297,7 @@ arguments:
 
 ```bash
 opactl set-policy -i my_policy \
-                 -p /path/to/policy.wasm \
+                 -p /path/to/policy.bundle.tar.gz \
                  -k /path/to/private/key
 ```
 
@@ -336,3 +336,33 @@ arguments:
 ```bash
 opactl get-policy -i my_policy -o /path/to/output
 ```
+
+## Configuring Chronicle to use OPA
+
+By default, an embedded policy is used that allows all graphql operations and
+transactions. To use a custom policy you must:
+
+### Load a policy bundle using opactl
+
+The policy id here must match the rego.
+
+```bash
+opactl set-policy -i allow_transactions -p /path/to/bundle.tar.gz
+```
+
+### Configure Sawtooth with settings that match the policy
+
+2 settings entries are required, you should use
+[sawset](https://sawtooth.hyperledger.org/docs/1.2/cli/sawset.html) with the
+following 2 settings keys, using the policy name and entrypoint you have defined
+ and previously uploaded to the `opa-tp`.
+
+For the example rego we are using, these entries will be:
+
+```text
+chronicle.opa.policy_name=allow_transactions
+chronicle.opa.entrypoint=allow_transactions.allowed_users
+```
+
+Once this has been set, you should restart Chronicle for them to be applied, the
+transaction processor should not need to be restarted.

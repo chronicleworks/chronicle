@@ -2,8 +2,12 @@ use common::{
     k256::ecdsa::SigningKey,
     prov::{to_json_ld::ToJson, ChronicleTransaction},
 };
+use opa_tp_protocol::state::{policy_address, policy_meta_address};
 
-use crate::{address::SawtoothAddress, protocol::ProtocolError, PROTOCOL_VERSION};
+use crate::{
+    address::SawtoothAddress, protocol::ProtocolError, settings::sawtooth_settings_address,
+    PROTOCOL_VERSION,
+};
 
 use super::sawtooth::*;
 use async_sawtooth_sdk::{
@@ -17,6 +21,7 @@ use sawtooth_sdk::messages::transaction::Transaction;
 pub struct ChronicleSubmitTransaction {
     pub tx: ChronicleTransaction,
     pub signer: SigningKey,
+    pub policy_name: Option<String>,
 }
 #[async_trait::async_trait]
 impl TransactionPayload for ChronicleSubmitTransaction {
@@ -49,8 +54,12 @@ impl TransactionPayload for ChronicleSubmitTransaction {
 }
 
 impl ChronicleSubmitTransaction {
-    pub fn new(tx: ChronicleTransaction, signer: SigningKey) -> Self {
-        Self { tx, signer }
+    pub fn new(tx: ChronicleTransaction, signer: SigningKey, policy_name: Option<String>) -> Self {
+        Self {
+            tx,
+            signer,
+            policy_name,
+        }
     }
 }
 
@@ -75,14 +84,28 @@ impl LedgerTransaction for ChronicleSubmitTransaction {
         &self,
         message_builder: &MessageBuilder,
     ) -> (Transaction, TransactionId) {
+        //Ensure we append any opa policy binary address and meta address to the
+        //list of addresses, along with the settings address
+        let mut addresses: Vec<_> = self
+            .addresses()
+            .into_iter()
+            .chain(vec![
+                sawtooth_settings_address("chronicle.opa.policy_name"),
+                sawtooth_settings_address("chronicle.opa.entrypoint"),
+            ])
+            .collect();
+
+        if self.policy_name.is_some() {
+            addresses = addresses
+                .into_iter()
+                .chain(vec![
+                    policy_address(self.policy_name.as_ref().unwrap()),
+                    policy_meta_address(self.policy_name.as_ref().unwrap()),
+                ])
+                .collect();
+        }
         message_builder
-            .make_sawtooth_transaction(
-                self.addresses(),
-                self.addresses(),
-                vec![],
-                self,
-                self.signer(),
-            )
+            .make_sawtooth_transaction(addresses.clone(), addresses, vec![], self, self.signer())
             .await
     }
 }

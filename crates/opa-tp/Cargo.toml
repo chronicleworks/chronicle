@@ -23,6 +23,7 @@ bytes = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
+hex = { workspace = true }
 k256 = { workspace = true, features = [
   "default",
   "arithmetic",

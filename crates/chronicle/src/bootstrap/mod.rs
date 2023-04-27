@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod opa;
 
 #[cfg(feature = "inmem")]
 use api::inmem::EmbeddedChronicleTp;
@@ -22,7 +23,7 @@ use common::{
     database::{get_connection_with_retry, DatabaseConnector},
     identity::AuthId,
     ledger::SubmissionStage,
-    opa::{CliPolicyLoader, ExecutorContext, PolicyLoader},
+    opa::ExecutorContext,
     prov::to_json_ld::ToJson,
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -47,16 +48,21 @@ use std::{
 
 use crate::codegen::ChronicleDomainDef;
 
+use self::opa::opa_executor_from_embedded_policy;
+
+#[cfg(not(feature = "inmem"))]
+fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Url, SignerError> {
+    Ok(options
+        .get_one::<String>("sawtooth")
+        .map(|s| Url::parse(s))
+        .unwrap_or_else(|| Ok(config.validator.address.clone()))?)
+}
+
 #[allow(dead_code)]
 #[cfg(not(feature = "inmem"))]
 fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, SignerError> {
     Ok(ChronicleLedger::new(
-        ZmqRequestResponseSawtoothChannel::new(
-            &options
-                .get_one::<String>("sawtooth")
-                .map(|s| Url::parse(s))
-                .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        ),
+        ZmqRequestResponseSawtoothChannel::new(&sawtooth_address(config, options)?),
         FAMILY,
         VERSION,
     ))
@@ -68,49 +74,6 @@ fn in_mem_ledger(
     _options: &ArgMatches,
 ) -> Result<crate::api::inmem::EmbeddedChronicleTp, SignerError> {
     Ok(crate::api::inmem::EmbeddedChronicleTp::new())
-}
-
-trait SetRuleOptions {
-    fn rule_addr(&mut self, options: &ArgMatches) -> Result<(), CliError>;
-    fn rule_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError>;
-    fn set_addr_and_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
-        self.rule_addr(options)?;
-        self.rule_entrypoint(options)?;
-        Ok(())
-    }
-}
-
-impl SetRuleOptions for CliPolicyLoader {
-    fn rule_addr(&mut self, options: &ArgMatches) -> Result<(), CliError> {
-        if let Some(val) = options.get_one::<String>("opa-rule") {
-            self.set_address(val);
-            Ok(())
-        } else {
-            Err(CliError::MissingArgument {
-                arg: "opa-rule".to_string(),
-            })
-        }
-    }
-
-    fn rule_entrypoint(&mut self, options: &ArgMatches) -> Result<(), CliError> {
-        if let Some(val) = options.get_one::<String>("opa-entrypoint") {
-            self.set_entrypoint(val);
-            Ok(())
-        } else {
-            Err(CliError::MissingArgument {
-                arg: "opa-entrypoint".to_string(),
-            })
-        }
-    }
-}
-
-async fn opa_executor_from_embedded_policy(
-    policy_name: &str,
-    entrypoint: &str,
-) -> Result<ExecutorContext, CliError> {
-    tracing::warn!("insecure operating mode");
-    let loader = CliPolicyLoader::from_embedded_policy(policy_name, entrypoint)?;
-    Ok(ExecutorContext::from_loader(&loader)?)
 }
 
 #[cfg(feature = "inmem")]
@@ -149,6 +112,7 @@ impl DatabaseConnector<(), StoreError> for RemoteDatabaseConnector {
     }
 }
 
+#[instrument(skip(db_uri))] //Do not log db_uri, as it can contain passwords
 async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> {
     let (_, pool) = get_connection_with_retry(RemoteDatabaseConnector {
         db_uri: db_uri.to_string(),
@@ -190,6 +154,7 @@ pub async fn api(
     pool: &ConnectionPool,
     options: &ArgMatches,
     config: &Config,
+    policy_name: Option<String>,
 ) -> Result<ApiDispatch, ApiError> {
     let ledger = ledger(config, options)?;
 
@@ -199,6 +164,7 @@ pub async fn api(
         &config.secrets.path,
         UniqueUuid,
         config.namespace_bindings.clone(),
+        policy_name,
     )
     .await
 }
@@ -208,6 +174,7 @@ pub async fn api(
     pool: &ConnectionPool,
     _options: &ArgMatches,
     config: &Config,
+    remote_opa: Option<String>,
 ) -> Result<api::ApiDispatch, ApiError> {
     let embedded_tp = in_mem_ledger(config, _options)?;
 
@@ -217,6 +184,7 @@ pub async fn api(
         &config.secrets.path,
         UniqueUuid,
         config.namespace_bindings.clone(),
+        remote_opa,
     )
     .await
 }
@@ -264,6 +232,60 @@ fn construct_db_uri(matches: &ArgMatches) -> String {
     )
 }
 
+#[derive(Debug, Clone)]
+pub enum ConfiguredOpa {
+    Embedded(ExecutorContext),
+    Remote(ExecutorContext, chronicle_protocol::settings::OpaSettings),
+}
+
+impl ConfiguredOpa {
+    pub fn context(&self) -> &ExecutorContext {
+        match self {
+            ConfiguredOpa::Embedded(context) => context,
+            ConfiguredOpa::Remote(context, _) => context,
+        }
+    }
+
+    pub fn remote_settings(&self) -> Option<String> {
+        match self {
+            ConfiguredOpa::Embedded(_) => None,
+            ConfiguredOpa::Remote(_, settings) => Some(settings.policy_name.clone()),
+        }
+    }
+}
+
+/// If embedded-opa-policy is set, we will use the embedded policy, otherwise we
+/// attempt to load it from sawtooth settings. If we are running in inmem mode,
+/// then always use embedded policy
+#[cfg(feature = "inmem")]
+#[allow(unused_variables)]
+async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
+    let (default_policy_name, entrypoint) =
+        ("allow_transactions", "allow_transactions.allowed_users");
+    let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
+    Ok(ConfiguredOpa::Embedded(opa))
+}
+
+#[cfg(not(feature = "inmem"))]
+#[instrument(skip(config, options))]
+async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
+    if options.is_present("embedded-opa-policy") {
+        let (default_policy_name, entrypoint) =
+            ("allow_transactions", "allow_transactions.allowed_users");
+        let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
+        tracing::warn!(
+            "Chronicle operating in an insecure mode with an embedded default OPA policy"
+        );
+        Ok(ConfiguredOpa::Embedded(opa))
+    } else {
+        let (opa, settings) =
+            self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(config, options)?)
+                .await?;
+        tracing::info!(use_on_chain_opa= ?settings, "Chronicle operating in secure mode with on chain OPA policy");
+
+        Ok(ConfiguredOpa::Remote(opa, settings))
+    }
+}
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
@@ -278,10 +300,10 @@ where
 
     let matches = cli.as_cmd().get_matches();
 
-    debug!("connecting to remote DB");
     let pool = pool_remote(&construct_db_uri(&matches)).await?;
 
-    let api = api(&pool, &matches, &config).await?;
+    let opa = configure_opa(&config, &matches).await?;
+    let api = api(&pool, &matches, &config, opa.remote_settings()).await?;
     let ret_api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-api") {
@@ -330,10 +352,6 @@ where
             }
         }
 
-        let (default_policy_name, entrypoint) =
-            ("allow_transactions", "allow_transactions.allowed_users");
-        let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
-
         let endpoints: Vec<String> = matches
             .get_many("offer-endpoints")
             .unwrap()
@@ -351,7 +369,7 @@ where
                 id_claims,
                 jwt_must_claim,
                 allow_anonymous,
-                opa,
+                opa.context().clone(),
             ),
             endpoints.contains(&"graphql".to_string()),
             endpoints.contains(&"data".to_string()),
@@ -408,15 +426,15 @@ where
                             break;
                         }
                     }
-                    SubmissionStage::Committed(commit) => {
+                    SubmissionStage::Committed(commit, _) => {
                         if commit.tx_id == tx_id {
                             debug!("Transaction committed: {}", commit.tx_id);
                         }
                         println!("{subject}");
                     }
-                    SubmissionStage::NotCommitted((id, contradiction)) => {
+                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
                         if id == tx_id {
-                            eprintln!("Transaction rejected by ledger: {id} {contradiction}");
+                            eprintln!("Transaction rejected: {id} {contradiction}");
                             break;
                         }
                     }
@@ -528,10 +546,12 @@ pub async fn bootstrap<Query, Mutation>(
 #[cfg(test)]
 pub mod test {
     use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
+    use async_sawtooth_sdk::protobuf::Message;
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::TemporaryDatabase,
         identity::AuthId,
+        k256::sha2::{Digest, Sha256},
         ledger::SubmissionStage,
         prov::{
             to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
@@ -539,6 +559,8 @@ pub mod test {
         },
         signing::DirectoryStoredKeys,
     };
+    use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
+    use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -563,10 +585,10 @@ pub mod test {
                 loop {
                     let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
 
-                    if let SubmissionStage::Committed(commit) = submission {
+                    if let SubmissionStage::Committed(commit, _) = submission {
                         break Ok(Some((commit.delta, commit.tx_id)));
                     }
-                    if let SubmissionStage::NotCommitted((_, contradiction)) = submission {
+                    if let SubmissionStage::NotCommitted((_, contradiction, _)) = submission {
                         panic!("Contradiction: {contradiction}");
                     }
                 }
@@ -594,7 +616,62 @@ pub mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let embedded_tp = EmbeddedChronicleTp::new();
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.policy_name".to_string(),
+                value: "allow_transactions".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
+        let setting_id = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
+            buf,
+        );
+        let mut buf = vec![];
+        Setting {
+            entries: vec![Setting_Entry {
+                key: "chronicle.opa.entrypoint".to_string(),
+                value: "allow_transactions.allowed_users".to_string(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+        .write_to_vec(&mut buf)
+        .unwrap();
+
+        let setting_entrypoint = (
+            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
+            buf,
+        );
+
+        let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
+        let bin = std::fs::read(d).unwrap();
+
+        let meta = PolicyMeta {
+            id: "allow_transactions".to_string(),
+            hash: hex::encode(Sha256::digest(&bin)),
+            policy_address: policy_address("allow_transactions"),
+        };
+
+        let embedded_tp = EmbeddedChronicleTp::new_with_state(
+            vec![
+                setting_id,
+                setting_entrypoint,
+                (policy_address("allow_transactions"), bin),
+                (
+                    policy_meta_address("allow_transactions"),
+                    serde_json::to_vec(&meta).unwrap(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
 
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
@@ -605,6 +682,7 @@ pub mod test {
             &secretpath,
             SameUuid,
             HashMap::default(),
+            Some("allow_transactions".to_owned()),
         )
         .await
         .unwrap();

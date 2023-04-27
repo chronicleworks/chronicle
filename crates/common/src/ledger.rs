@@ -3,16 +3,19 @@ use derivative::Derivative;
 use opa_tp_protocol::async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::Offset};
 use tracing::{debug, instrument};
 
-use crate::prov::{
-    operations::{
-        ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-        CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence, RegisterKey,
-        SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
-        WasInformedBy,
+use crate::{
+    identity::SignedIdentity,
+    prov::{
+        operations::{
+            ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
+            CreateNamespace, EndActivity, EntityDerive, EntityExists, EntityHasEvidence,
+            RegisterKey, SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo,
+            WasGeneratedBy, WasInformedBy,
+        },
+        to_json_ld::ToJson,
+        ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
+        ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
-    to_json_ld::ToJson,
-    ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
-    ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
 };
 
 use std::{
@@ -140,8 +143,8 @@ pub type CommitResult = Result<Commit, (ChronicleTransactionId, Contradiction)>;
 #[derive(Debug, Clone)]
 pub enum SubmissionStage {
     Submitted(SubmitResult),
-    Committed(Commit),
-    NotCommitted((ChronicleTransactionId, Contradiction)),
+    Committed(Commit, Box<SignedIdentity>),
+    NotCommitted((ChronicleTransactionId, Contradiction, Box<SignedIdentity>)),
 }
 
 impl SubmissionStage {
@@ -153,12 +156,16 @@ impl SubmissionStage {
         SubmissionStage::Submitted(Ok(r.clone()))
     }
 
-    pub fn committed(commit: Commit) -> Self {
-        SubmissionStage::Committed(commit)
+    pub fn committed(commit: Commit, identity: SignedIdentity) -> Self {
+        SubmissionStage::Committed(commit, identity.into())
     }
 
-    pub fn not_committed(tx: ChronicleTransactionId, contradiction: Contradiction) -> Self {
-        SubmissionStage::NotCommitted((tx, contradiction))
+    pub fn not_committed(
+        tx: ChronicleTransactionId,
+        contradiction: Contradiction,
+        identity: SignedIdentity,
+    ) -> Self {
+        SubmissionStage::NotCommitted((tx, contradiction, identity.into()))
     }
 
     pub fn tx_id(&self) -> &ChronicleTransactionId {
@@ -167,8 +174,8 @@ impl SubmissionStage {
                 Ok(tx_id) => tx_id,
                 Err(e) => e.tx_id(),
             },
-            Self::Committed(commit) => &commit.tx_id,
-            Self::NotCommitted((tx_id, _)) => tx_id,
+            Self::Committed(commit, _) => &commit.tx_id,
+            Self::NotCommitted((tx_id, _, _)) => tx_id,
         }
     }
 }

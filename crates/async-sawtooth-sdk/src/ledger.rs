@@ -122,6 +122,13 @@ pub trait LedgerEvent {
 }
 
 #[async_trait::async_trait]
+impl LedgerEvent for () {
+    async fn deserialize(_buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError> {
+        Ok(((), 0))
+    }
+}
+
+#[async_trait::async_trait]
 pub trait LedgerTransaction {
     fn signer(&self) -> &SigningKey;
     fn addresses(&self) -> Vec<String>;
@@ -146,6 +153,43 @@ pub trait LedgerWriter {
     async fn submit(&self, tx: Transaction, signer: &SigningKey) -> Result<(), Self::Error>;
 
     fn message_builder(&self) -> &MessageBuilder;
+}
+
+pub struct BlockingLedgerReader<R>
+where
+    R: LedgerReader + Send,
+{
+    reader: R,
+}
+
+impl<R> BlockingLedgerReader<R>
+where
+    R: LedgerReader + Send,
+{
+    pub fn new(reader: R) -> Self {
+        Self { reader }
+    }
+
+    pub fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, R::Error> {
+        tokio::runtime::Handle::current().block_on(self.reader.get_state_entry(address))
+    }
+
+    pub fn block_height(&self) -> Result<(Offset, BlockId), R::Error> {
+        tokio::runtime::Handle::current().block_on(self.reader.block_height())
+    }
+
+    pub fn state_updates(
+        &self,
+        event_type: &str,
+        from_offset: Option<Offset>,
+        number_of_blocks: Option<u64>,
+    ) -> Result<BoxStream<LedgerEventContext<R::Event>>, R::Error> {
+        tokio::runtime::Handle::current().block_on(self.reader.state_updates(
+            event_type,
+            from_offset,
+            number_of_blocks,
+        ))
+    }
 }
 
 pub struct BlockingLedgerWriter<W>
@@ -188,11 +232,10 @@ where
 
 #[async_trait::async_trait]
 pub trait LedgerReader {
-    type Error: std::error::Error;
     type Event: LedgerEvent;
+    type Error: std::error::Error;
     /// Get the state entry at `address`
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
-
     // Get the block height of the ledger, and the id of the highest block
     async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error>;
     /// Subscribe to state updates from this ledger, starting at `offset`, and
@@ -239,7 +282,7 @@ impl<
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "trace")]
     async fn submit_batch(&self, batch: Batch) -> Result<(), SawtoothCommunicationError> {
         let request = ClientBatchSubmitRequest {
             batches: vec![batch].into(),
@@ -509,7 +552,7 @@ impl<
         Ok((id, sawtooth_tx))
     }
 
-    #[instrument(skip(self) ret(Debug))]
+    #[instrument(skip(self), level = "trace", ret(Debug))]
     async fn submit(
         &self,
         tx: sawtooth_sdk::messages::transaction::Transaction,

@@ -67,7 +67,7 @@ impl SimulatedSubmissionChannel {
 
 #[async_trait::async_trait]
 impl RequestResponseSawtoothChannel for SimulatedSubmissionChannel {
-    #[instrument(skip(self), ret(Debug))]
+    #[instrument(skip(self), level = "trace", ret(Debug))]
     async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
         &self,
         tx: TX,
@@ -322,9 +322,12 @@ pub struct EmbeddedChronicleTp {
 }
 
 impl EmbeddedChronicleTp {
-    pub fn new() -> Self {
+    pub fn new_with_state(state: BTreeMap<String, Vec<u8>>) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let context = Arc::new(Mutex::new(SimulatedTransactionContext::new(tx)));
+
+        let context = Arc::new(Mutex::new(SimulatedTransactionContext::new_with_state(
+            tx, state,
+        )));
 
         let (policy, entrypoint) = ("allow_transactions", "allow_transactions.allowed_users");
 
@@ -343,6 +346,10 @@ impl EmbeddedChronicleTp {
             ),
             context,
         }
+    }
+
+    pub fn new() -> Self {
+        Self::new_with_state(BTreeMap::new())
     }
 
     pub fn readable_state(&self) -> Vec<(String, Value)> {

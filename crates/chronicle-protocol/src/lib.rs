@@ -5,6 +5,7 @@ use protocol::ChronicleOperationEvent;
 pub mod address;
 pub mod messages;
 pub mod protocol;
+pub mod settings;
 
 pub use async_sawtooth_sdk;
 

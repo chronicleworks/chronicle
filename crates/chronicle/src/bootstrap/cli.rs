@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, convert::Infallible, path::PathBuf};
 
 use api::ApiError;
+use chronicle_protocol::async_sawtooth_sdk::error::SawtoothCommunicationError;
 use clap::{builder::PossibleValuesParser, *};
 use common::{
     attributes::{Attribute, Attributes},
@@ -86,6 +87,12 @@ pub enum CliError {
 
     #[error("OPA executor error: {0}")]
     OpaExecutor(#[from] OpaExecutorError),
+
+    #[error("Sawtooth communication error: {source}")]
+    SawtoothCommunicationError {
+        #[from]
+        source: SawtoothCommunicationError,
+    },
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -974,7 +981,7 @@ impl SubCommand for CliModel {
                     .long("database-name")
                     .takes_value(true)
                     .env("PGDATABASE")
-                    .help("name of the database")
+                    .help("Name of the database")
                     .default_value("chronicle"),
             )
             .subcommand(
@@ -1075,6 +1082,14 @@ impl SubCommand for CliModel {
                     .default_value("tcp://localhost:4004")
                     .help("Sets sawtooth validator address")
                     .takes_value(true),
+            )
+            .arg(
+                Arg::new("embedded-opa-policy")
+                    .long("embedded-opa-policy")
+                    .takes_value(false)
+                    .help(
+                        "Operate without an external OPA policy, using an embedded default policy",
+                    ),
             )
         }
         #[cfg(feature = "inmem")]

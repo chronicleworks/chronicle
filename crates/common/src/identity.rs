@@ -222,9 +222,9 @@ impl OpaData {
 /// verifying key. Implements `TryFrom` to deserialize to the user identity object
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SignedIdentity {
-    identity: String,
-    signature: Signature,
-    verifying_key: VerifyingKey,
+    pub identity: String,
+    pub signature: Signature,
+    pub verifying_key: VerifyingKey,
 }
 
 impl SignedIdentity {

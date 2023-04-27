@@ -16,7 +16,7 @@ use thiserror::Error;
 use self::messages::event::OptionContradiction;
 
 #[derive(Debug)]
-pub struct ChronicleOperationEvent(pub Result<ProvModel, Contradiction>);
+pub struct ChronicleOperationEvent(pub Result<ProvModel, Contradiction>, pub SignedIdentity);
 
 impl From<ChronicleOperationEvent> for Result<ProvModel, Contradiction> {
     fn from(val: ChronicleOperationEvent) -> Self {
@@ -57,7 +57,11 @@ impl LedgerEvent for ChronicleOperationEvent {
                 Ok(model)
             }
         };
-        Ok((Self(model), span_id.into_u64()))
+
+        let identity = serde_json::from_str(&event.identity)
+            .map_err(|e| SawtoothCommunicationError::LedgerEventParse { source: e.into() })?;
+
+        Ok((Self(model, identity), span_id.into_u64()))
     }
 }
 
@@ -103,11 +107,13 @@ pub mod messages {
 pub async fn chronicle_committed(
     span: u64,
     delta: ProvModel,
+    identity: &SignedIdentity,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
         delta: serde_json::to_string(&delta.to_json().compact_stable_order().await?)?,
         span_id: span,
+        identity: serde_json::to_string(identity)?,
         ..Default::default()
     })
 }
@@ -115,6 +121,7 @@ pub async fn chronicle_committed(
 pub fn chronicle_contradicted(
     span: u64,
     contradiction: &Contradiction,
+    identity: &SignedIdentity,
 ) -> Result<messages::Event, ProtocolError> {
     Ok(messages::Event {
         version: PROTOCOL_VERSION.to_owned(),
@@ -122,6 +129,7 @@ pub fn chronicle_contradicted(
         option_contradiction: Some(OptionContradiction::Contradiction(serde_json::to_string(
             &contradiction,
         )?)),
+        identity: serde_json::to_string(identity)?,
         ..Default::default()
     })
 }

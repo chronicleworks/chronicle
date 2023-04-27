@@ -37,7 +37,7 @@ pub fn key_address(id: impl AsRef<str>) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicyMeta {
     pub id: String,
-    pub version: u64,
+    pub hash: String,
     pub policy_address: String,
 }
 

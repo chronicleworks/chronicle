@@ -1143,7 +1143,7 @@ pub mod test {
         WaitedAndFound:
           PolicyUpdate:
             id: test
-            version: 0
+            hash: 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
@@ -1160,6 +1160,10 @@ pub mod test {
             id: root
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
           - - 0
+        - - 7ed1932b35db049f40833c5c2eaa47e070ce2648c478469a4cdf44ff7a37dd5468208e
+          - hash: 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
+            id: test
+            policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
         policy.write_all(&[1]).unwrap();
@@ -1184,7 +1188,7 @@ pub mod test {
         WaitedAndFound:
           PolicyUpdate:
             id: test
-            version: 0
+            hash: b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "### );
 
@@ -1202,6 +1206,10 @@ pub mod test {
         - - 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
           - - 0
             - 1
+        - - 7ed1932b35db049f40833c5c2eaa47e070ce2648c478469a4cdf44ff7a37dd5468208e
+          - hash: b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2
+            id: test
+            policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
     }
 }

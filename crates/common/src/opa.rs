@@ -1,4 +1,5 @@
 use crate::identity::{AuthId, IdentityError, OpaData};
+use k256::sha2::{Digest, Sha256};
 use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::{
     address::{FAMILY, VERSION},
@@ -13,7 +14,7 @@ use rust_embed::RustEmbed;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::{error, instrument};
+use tracing::{debug, error, info, instrument};
 use url::Url;
 
 #[derive(Debug, Error)]
@@ -75,24 +76,25 @@ pub trait PolicyLoader {
         );
         Ok(())
     }
+
+    fn hash(&self) -> String;
 }
 
-#[derive(Clone)]
 pub struct SawtoothPolicyLoader {
-    rule_name: String,
+    policy_id: String,
     address: String,
-    policy: Vec<u8>,
+    policy: Option<Vec<u8>>,
     entrypoint: String,
     ledger: OpaLedger,
 }
 
 impl SawtoothPolicyLoader {
-    pub fn new(address: &Url) -> Self {
+    pub fn new(address: &Url, policy_id: &str, entrypoint: &str) -> Self {
         Self {
-            rule_name: String::default(),
+            policy_id: policy_id.to_owned(),
             address: String::default(),
-            policy: Vec::default(),
-            entrypoint: String::default(),
+            policy: None,
+            entrypoint: entrypoint.to_owned(),
             ledger: OpaLedger::new(
                 ZmqRequestResponseSawtoothChannel::new(address),
                 FAMILY,
@@ -105,11 +107,14 @@ impl SawtoothPolicyLoader {
         policy_address(policy)
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
-    async fn get_policy(&mut self) -> Result<Vec<u8>, SawtoothCommunicationError> {
-        self.ledger
-            .get_state_entry(&self.sawtooth_address(&self.rule_name))
-            .await
+    #[instrument(level = "debug", skip(self))]
+    async fn load_bundle_from_chain(&mut self) -> Result<Vec<u8>, SawtoothCommunicationError> {
+        if let Some(policy) = self.policy.as_ref() {
+            return Ok(policy.clone());
+        }
+        let load_policy_from = self.sawtooth_address(&self.policy_id);
+        debug!(load_policy_from=?load_policy_from);
+        self.ledger.get_state_entry(&load_policy_from).await
     }
 }
 
@@ -120,7 +125,7 @@ impl PolicyLoader for SawtoothPolicyLoader {
     }
 
     fn set_rule_name(&mut self, name: &str) {
-        self.rule_name = name.to_owned()
+        self.policy_id = name.to_owned()
     }
 
     fn set_entrypoint(&mut self, entrypoint: &str) {
@@ -132,7 +137,7 @@ impl PolicyLoader for SawtoothPolicyLoader {
     }
 
     fn get_rule_name(&self) -> &str {
-        &self.rule_name
+        &self.policy_id
     }
 
     fn get_entrypoint(&self) -> &str {
@@ -140,16 +145,27 @@ impl PolicyLoader for SawtoothPolicyLoader {
     }
 
     fn get_policy(&self) -> &[u8] {
-        &self.policy
+        self.policy.as_ref().unwrap()
     }
 
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
-        self.policy = self.get_policy().await?;
-        Ok(())
+        let bundle = self.load_bundle_from_chain().await?;
+        info!(loaded_policy_bytes=?bundle.len(), "Loaded policy");
+        if bundle.is_empty() {
+            error!("Policy not found: {}", self.get_rule_name());
+            return Err(PolicyLoaderError::MissingPolicy(
+                self.get_rule_name().to_string(),
+            ));
+        }
+        self.load_policy_from_bundle(&Bundle::from_bytes(&*bundle)?)
     }
 
     fn load_policy_from_bytes(&mut self, policy: &[u8]) {
-        self.policy = policy.to_vec()
+        self.policy = Some(policy.to_vec())
+    }
+
+    fn hash(&self) -> String {
+        hex::encode(Sha256::digest(self.policy.as_ref().unwrap()))
     }
 }
 
@@ -194,11 +210,17 @@ impl CliPolicyLoader {
     }
 
     /// Create a loaded [`CliPolicyLoader`] from an OPA policy's bytes and entrypoint
-    pub fn from_policy_bytes(entrypoint: &str, policy: &[u8]) -> CliPolicyLoader {
+    pub fn from_policy_bytes(
+        policy: &str,
+        entrypoint: &str,
+        bytes: &[u8],
+    ) -> Result<Self, PolicyLoaderError> {
         let mut loader = CliPolicyLoader::new();
+        loader.set_rule_name(policy);
         loader.set_entrypoint(entrypoint);
-        loader.load_policy_from_bytes(policy);
-        loader
+        let bundle = Bundle::from_bytes(bytes)?;
+        loader.load_policy_from_bundle(&bundle)?;
+        Ok(loader)
     }
 }
 
@@ -240,6 +262,10 @@ impl PolicyLoader for CliPolicyLoader {
         self.policy = self.get_policy_from_file().await?;
         Ok(())
     }
+
+    fn hash(&self) -> String {
+        hex::encode(Sha256::digest(&self.policy))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -266,6 +292,7 @@ pub trait OpaExecutor {
 #[derive(Clone, Debug)]
 pub struct ExecutorContext {
     executor: Arc<Mutex<WasmtimeOpaExecutor>>,
+    hash: String,
 }
 
 impl ExecutorContext {
@@ -277,7 +304,12 @@ impl ExecutorContext {
     pub fn from_loader<L: PolicyLoader>(loader: &L) -> Result<Self, OpaExecutorError> {
         Ok(Self {
             executor: Arc::new(Mutex::new(WasmtimeOpaExecutor::from_loader(loader)?)),
+            hash: loader.hash(),
         })
+    }
+
+    pub fn hash(&self) -> &str {
+        &self.hash
     }
 }
 

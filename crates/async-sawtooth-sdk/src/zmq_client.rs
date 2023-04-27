@@ -13,19 +13,12 @@ use sawtooth_sdk::{
     },
 };
 
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, sync::oneshot::channel};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
 use crate::error::SawtoothCommunicationError;
 
-/// A trait representing a communication channel for sending request and receiving
-/// response messages to/from the Sawtooth network.
-///
-/// This trait defines methods for sending a single message and waiting for a response,
-/// listening on the channel for response messages, and reconnecting to the Sawtooth
-/// network if the connection is lost or interrupted.
-///
 /// A trait representing a communication channel for sending request and receiving
 /// response messages to/from the Sawtooth network.
 ///
@@ -105,7 +98,7 @@ impl ZmqRequestResponseSawtoothChannel {
 
 #[async_trait::async_trait]
 impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
-    #[instrument(name = "receive_one", level = "debug", skip(self), ret(Debug))]
+    #[instrument(name = "receive_one", level = "trace", skip(self), ret(Debug))]
     async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
         &self,
         tx: TX,
@@ -116,7 +109,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
         let mut bytes = vec![];
         tx.write_to_vec(&mut bytes)?;
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<Result<_, SawtoothCommunicationError>>();
+        let (tx, rx) = channel::<Result<_, SawtoothCommunicationError>>();
 
         let send_clone = self.tx.clone();
         Handle::current().spawn_blocking(move || {

@@ -10,6 +10,11 @@ option java_multiple_files = true;
 option java_package = "sawtooth.sdk.protobuf";
 option go_package = "batch_pb2";
 
+message OpaPolicy {
+  string id = 1;
+  string entrypoint = 2;
+}
+
 message Submission {
   string version = 1;
   uint64 span_id = 2;
