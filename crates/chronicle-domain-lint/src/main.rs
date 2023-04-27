@@ -5,7 +5,7 @@ fn main() {
     let version = env!("CARGO_PKG_VERSION");
     let cli = Command::new("chronicle-domain-lint")
         .version(version)
-        .author("BTPWorks")
+        .author("Blockchain Technology Partners")
         .arg(
             Arg::new("filenames")
                 .value_hint(ValueHint::FilePath)

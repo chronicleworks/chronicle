@@ -13,7 +13,7 @@ use url::Url;
 async fn main() {
     let matches = Command::new("opa-tp")
         .version("1.0")
-        .author("BTPWorks")
+        .author("Blockchain Technology Partners")
         .about("PKI and OPA rule storage")
         .arg(
             Arg::new("connect")
