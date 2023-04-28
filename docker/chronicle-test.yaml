@@ -169,6 +169,11 @@ services:
       - "14268:14268"
       - "9411:9411"
 
+  chronicle-test:
+    image: chronicle-test:${ISOLATION_ID}
+    depends_on:
+      - chronicle-sawtooth-api
+
   opa-init:
     image: opactl-amd64:${ISOLATION_ID}
     entrypoint: /bin/bash

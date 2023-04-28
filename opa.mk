@@ -47,7 +47,7 @@ build-end-to-end-test:
 
 .PHONY: test-e2e
 test-e2e: build-end-to-end-test
-	COMPOSE_PROFILES=test $(COMPOSE) -f docker/opa.yaml up --force-recreate --exit-code-from opa-test
+	$(COMPOSE) -f docker/opa-test.yaml up --force-recreate --exit-code-from opa-test
 
 run:
 	$(COMPOSE) -f docker/opa.yaml up -d

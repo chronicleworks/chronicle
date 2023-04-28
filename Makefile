@@ -46,7 +46,7 @@ build-end-to-end-test:
 
 .PHONY: test-chronicle-e2e
 test-chronicle-e2e: build-end-to-end-test
-	COMPOSE_PROFILES=test $(COMPOSE) -f docker/chronicle.yaml up --exit-code-from chronicle-test
+	$(COMPOSE) -f docker/chronicle-test.yaml up --exit-code-from chronicle-test
 
 .PHONY: test-e2e
 test-e2e: test-chronicle-e2e

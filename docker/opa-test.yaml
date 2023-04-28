@@ -74,3 +74,9 @@ services:
     depends_on:
       - validator
     volumes: *rngVolumes
+
+  opa-test:
+    image: opa-test:${ISOLATION_ID:-local}
+    depends_on:
+      - opa-tp
+      - validator
