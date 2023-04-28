@@ -385,7 +385,8 @@ where
         );
         let namespace = NamespaceId::from_external_id(
             namespace_id,
-            uuid::Uuid::parse_str(namespace_uuid).unwrap(),
+            uuid::Uuid::try_parse(namespace_uuid)
+                .expect("cannot parse namespace UUID: {namespace_uuid}"),
         );
 
         let contents = if matches.is_present("path") {
@@ -595,7 +596,7 @@ pub async fn bootstrap<Query, Mutation>(
     chronicle_telemetry::telemetry(
         matches
             .get_one::<String>("instrument")
-            .and_then(|s| Url::parse(s).ok()),
+            .map(|s| Url::parse(s).expect("cannot parse instrument as URI: {s}")),
         if matches.contains_id("console-logging") {
             match matches.get_one::<String>("console-logging") {
                 Some(level) => match level.as_str() {
@@ -613,13 +614,17 @@ pub async fn bootstrap<Query, Mutation>(
     );
 
     if matches.subcommand_matches("verify-keystore").is_some() {
-        let config = handle_config_and_init(&domain.into()).unwrap();
-        let store = DirectoryStoredKeys::new(config.secrets.path).unwrap();
+        let config = handle_config_and_init(&domain.into())
+            .expect("failed to initialize from domain definition");
+        let store = DirectoryStoredKeys::new(config.secrets.path)
+            .expect("failed to create key store at {config.secrets.path}");
         info!(keystore=?store);
 
         if store.chronicle_signing().is_err() {
             info!("Generating new chronicle key");
-            store.generate_chronicle().unwrap();
+            store
+                .generate_chronicle()
+                .expect("failed to create key in {store.base}");
         }
 
         std::process::exit(0);
@@ -679,7 +684,13 @@ pub mod test {
             // We can sort of get final on chain state here by using a map of subject to model
             if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
                 loop {
-                    let submission = self.api.notify_commit.subscribe().recv().await.unwrap();
+                    let submission = self
+                        .api
+                        .notify_commit
+                        .subscribe()
+                        .recv()
+                        .await
+                        .expect("failed to receive response to submission");
 
                     if let SubmissionStage::Committed(commit, _) = submission {
                         break Ok(Some((commit.delta, commit.tx_id)));
