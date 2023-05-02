@@ -416,7 +416,7 @@ impl SubCommand for AgentCliModel {
                     })
                 } else {
                     KeyRegistration::ImportVerifying(KeyImport::FromPath {
-                        path: matches.get_one::<PathBuf>("privatekey").unwrap().to_owned(),
+                        path: matches.get_one::<PathBuf>("publickey").unwrap().to_owned(),
                     })
                 }
             };
