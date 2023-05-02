@@ -35,7 +35,7 @@ use sawtooth_sdk::{
     },
 };
 use tokio::task::JoinError;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
@@ -73,6 +73,7 @@ use crate::{
     messages::MessageBuilder,
     sawtooth::{
         client_events_subscribe_response::Status, ClientEventsSubscribeResponse, EventList,
+        PingResponse,
     },
 };
 
@@ -121,12 +122,25 @@ impl StateDelta {
 
     async fn recv_from_channel(
         fut: Arc<Mutex<Receiver<MessageResult>>>,
+        ping_respond: Arc<Mutex<ZmqMessageSender>>,
     ) -> Result<MessageResult, StateError> {
         let response = tokio::task::spawn_blocking(move || {
             let response = fut.lock().unwrap().recv_timeout(Duration::from_secs(2));
             response
         })
         .await??;
+
+        if let Ok(message) = response.as_ref() {
+            if message.message_type == Message_MessageType::PING_REQUEST {
+                debug!(ping_response = message.correlation_id);
+                let buf = PingResponse::default().encode_to_vec();
+                ping_respond.lock().unwrap().send(
+                    Message_MessageType::PING_RESPONSE,
+                    &message.correlation_id,
+                    &buf,
+                )?;
+            }
+        }
 
         Ok(response)
     }
@@ -174,135 +188,151 @@ impl StateDelta {
             });
         }
 
-        Ok(Self::event_stream(self.rx.clone(), offset.clone()))
+        Ok(Self::event_stream(
+            self.rx.clone(),
+            offset.clone(),
+            self.tx.clone(),
+        ))
     }
 
     fn event_stream(
         rx: Arc<Mutex<MessageReceiver>>,
         block: Offset,
+        tx: Arc<Mutex<ZmqMessageSender>>,
     ) -> impl futures::Stream<Item = Vec<Result<Commit, (ChronicleTransactionId, Contradiction)>>>
     {
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         enum ParsedEvent {
             Block(String),
             State(Box<ProvModel>, ChronicleTransactionId),
             Contradiction(Contradiction, ChronicleTransactionId),
         }
 
-        stream::unfold((rx, block), |(rx, block)| async move {
-            loop {
-                let events = StateDelta::recv_from_channel(rx.clone()).await;
+        stream::unfold(
+            ((rx, tx), block),
+            |((rx, ping_respond), block)| async move {
+                let last_block = &mut block.clone();
+                loop {
+                    let events =
+                        StateDelta::recv_from_channel(rx.clone(), ping_respond.clone()).await;
 
-                match events {
-                    Err(StateError::ZmqRxx { .. }) => {}
-                    Ok(Ok(events)) => {
-                        match EventList::decode(events.get_content()) {
-                            Ok(events) => {
-                                debug!(?events, "Received events");
-                                let mut updates = vec![];
-                                for event in events.events {
-                                    updates.push(match &*event.event_type {
-                                        "sawtooth/block-commit" => event
-                                            .attributes
-                                            .iter()
-                                            .find(|attr| attr.key == "block_id")
-                                            .ok_or(StateError::MissingBlockNum {})
-                                            .map(|attr| {
-                                                Some(ParsedEvent::Block(attr.value.clone()))
-                                            }),
-                                        "chronicle/prov-update" => {
-                                            let transaction_id = event
+                    match events {
+                        Err(StateError::ZmqRxx { source }) => {
+                            trace!(zmq_poll_no_items = ?source);
+                        }
+                        Ok(Ok(events)) => {
+                            trace!(?events, "Received events");
+                            match EventList::decode(events.get_content()) {
+                                Ok(events) => {
+                                    debug!(?events, "Received events");
+                                    let mut updates = vec![];
+                                    for event in events.events {
+                                        updates.push(match &*event.event_type {
+                                            "sawtooth/block-commit" => event
                                                 .attributes
                                                 .iter()
-                                                .find(|attr| attr.key == "transaction_id")
-                                                .ok_or(StateError::MissingTransactionId {})
+                                                .find(|attr| attr.key == "block_id")
+                                                .ok_or(StateError::MissingBlockNum {})
                                                 .map(|attr| {
-                                                    ChronicleTransactionId::from(&*attr.value)
-                                                });
+                                                    Some(ParsedEvent::Block(attr.value.clone()))
+                                                }),
+                                            "chronicle/prov-update" => {
+                                                let transaction_id = event
+                                                    .attributes
+                                                    .iter()
+                                                    .find(|attr| attr.key == "transaction_id")
+                                                    .ok_or(StateError::MissingTransactionId {})
+                                                    .map(|attr| {
+                                                        ChronicleTransactionId::from(&*attr.value)
+                                                    });
 
-                                            let event = deserialize_event(&event.data)
-                                                .await
-                                                .map_err(StateError::from);
+                                                let event = deserialize_event(&event.data)
+                                                    .await
+                                                    .map_err(StateError::from);
 
-                                            transaction_id
-                                                .map_err(StateError::from)
-                                                .and_then(|transaction_id| {
-                                                    event.map(|event| (transaction_id, event))
-                                                })
-                                                .map(|(transaction_id, (_span, res))| match res {
-                                                    Err(contradiction) => {
-                                                        Some(ParsedEvent::Contradiction(
-                                                            contradiction,
+                                                transaction_id
+                                                    .map_err(StateError::from)
+                                                    .and_then(|transaction_id| {
+                                                        event.map(|event| (transaction_id, event))
+                                                    })
+                                                    .map(|(transaction_id, (_span, res))| match res
+                                                    {
+                                                        Err(contradiction) => {
+                                                            Some(ParsedEvent::Contradiction(
+                                                                contradiction,
+                                                                transaction_id,
+                                                            ))
+                                                        }
+                                                        Ok(delta) => Some(ParsedEvent::State(
+                                                            Box::new(delta),
                                                             transaction_id,
-                                                        ))
-                                                    }
-                                                    Ok(delta) => Some(ParsedEvent::State(
-                                                        Box::new(delta),
-                                                        transaction_id,
-                                                    )),
-                                                })
-                                        }
-                                        _ => Ok(None),
-                                    });
-                                }
-
-                                debug!(?updates, "Parsed events");
-
-                                let events = updates.into_iter().fold(
-                                    (vec![], block),
-                                    |(mut prov, block), event| {
-                                        match event {
-                                            // Next block num
-                                            Ok(Some(ParsedEvent::Block(next))) => {
-                                                (prov, Offset::from(&*next))
+                                                        )),
+                                                    })
                                             }
-                                            Ok(Some(ParsedEvent::State(
-                                                next_prov,
-                                                transaction_id,
-                                            ))) => {
-                                                prov.push(Ok(Commit::new(
-                                                    transaction_id,
-                                                    block.clone(),
+                                            _ => Ok(None),
+                                        });
+                                    }
+
+                                    debug!(?updates, "Parsed events");
+
+                                    let events = updates.into_iter().fold(
+                                        (vec![], last_block.clone()),
+                                        |(mut prov, block), event| {
+                                            match event {
+                                                // Next block num
+                                                Ok(Some(ParsedEvent::Block(next))) => {
+                                                    (prov, Offset::from(&*next))
+                                                }
+                                                Ok(Some(ParsedEvent::State(
                                                     next_prov,
-                                                )));
-                                                (prov, block)
+                                                    transaction_id,
+                                                ))) => {
+                                                    prov.push(Ok(Commit::new(
+                                                        transaction_id,
+                                                        block.clone(),
+                                                        next_prov,
+                                                    )));
+                                                    (prov, block)
+                                                }
+                                                Ok(Some(ParsedEvent::Contradiction(
+                                                    contradiction,
+                                                    transaction_id,
+                                                ))) => {
+                                                    prov.push(Err((transaction_id, contradiction)));
+                                                    (prov, block)
+                                                }
+                                                Err(e) => {
+                                                    error!(?e, "Parsing state update");
+                                                    (prov, block)
+                                                }
+                                                _ => (prov, block),
                                             }
-                                            Ok(Some(ParsedEvent::Contradiction(
-                                                contradiction,
-                                                transaction_id,
-                                            ))) => {
-                                                prov.push(Err((transaction_id, contradiction)));
-                                                (prov, block)
-                                            }
-                                            Err(e) => {
-                                                error!(?e, "Parsing state update");
-                                                (prov, block)
-                                            }
-                                            _ => (prov, block),
-                                        }
-                                    },
-                                );
+                                        },
+                                    );
 
-                                return Some((events.0, (rx, events.1)));
-                            }
-                            Err(e) => {
-                                error!(?e, "Decoding protobuf");
+                                    *last_block = events.1.clone();
+                                    debug!(?last_block);
+                                    return Some((events.0, ((rx, ping_respond), events.1)));
+                                }
+                                Err(e) => {
+                                    error!(?e, "Decoding protobuf");
+                                }
                             }
                         }
-                    }
-                    Ok(Err(e)) => {
-                        // recoverable error
-                        warn!(?e, "Zmq recv error");
-                        return None;
-                    }
-                    Err(e) => {
-                        // Non recoverable channel error, end stream
-                        error!(?e, "Zmq recv error");
-                        return None;
+                        Ok(Err(e)) => {
+                            // recoverable error
+                            warn!(?e, "Zmq recv error");
+                            return None;
+                        }
+                        Err(e) => {
+                            // Non recoverable channel error, end stream
+                            error!(?e, "Zmq recv error");
+                            return None;
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
     }
 }
 

@@ -46,7 +46,6 @@ impl MessageBuilder {
     #[allow(dead_code)]
     pub fn make_subscription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
-
         let mut delta_subscription = EventSubscription::default();
         let filter_address = EventFilter {
             key: "address".to_string(),
