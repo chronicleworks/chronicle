@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "@id": "_:n1",
+  "@type": {
+    "type": "array",
+    "length": 1,
+    "content": "http://btp.works/chronicleoperations/ns#EntityExists"
+  },
+  "http://btp.works/chronicleoperations/ns#entityName": "@entity_name",
+  "http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+  "http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+}

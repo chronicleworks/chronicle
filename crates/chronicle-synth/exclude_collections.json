@@ -1,0 +1,21 @@
+{
+    "exclude": [
+      "activity_name",
+      "agent_name",
+      "attribute",
+      "attributes",
+      "earlier_date_time",
+      "later_date_time",
+      "domain_type_id",
+      "entity_name",
+      "namespace",
+      "namespace_uuid",
+      "role",
+      "roles",
+      "same_namespace_name",
+      "same_namespace_uuid",
+      "second_activity_name",
+      "second_agent_name",
+      "second_entity_name"
+    ]
+  }

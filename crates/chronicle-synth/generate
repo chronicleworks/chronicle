@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# This script generates a JSON array of Synth collections from
+# those found in the 'chronicle-synth/collections/' directory.
+#
+# It is not designed to be definitive, but rather to provide a
+# starting point for generating Synth data for Chronicle using
+# Chronicle Synth.
+
+# Populate an array of collections to exclude from a file
+# Exclude component Synth generators, while including collections
+# that generate Chronicle operations
+exclude_file="./exclude_collections.json"
+exclude_collections=$(jq -r '.exclude[]' "$exclude_file")
+
+# Initialize an empty array to store the collections
+collections=()
+
+# Get the list of .json files and exclude some collections
+for file in collections/*.json
+do
+  filename=$(basename "$file")
+  collection=${filename%.*}
+  if [[ ! " ${exclude_collections[*]} " =~ ${collection} ]]; then
+    collections+=("$collection")
+  fi
+done
+
+# Initialize an empty JSON array
+json_array="["
+
+# Loop through each collection
+for collection in "${collections[@]}"
+do
+  # Generate a JSON object using the 'synth' command and 'jq' utility
+  json_object=$(synth generate ./collections --collection "$collection" --size 1 --random | jq -c '.')
+
+  # Append the JSON object to the JSON array
+  json_array="${json_array}${json_object},"
+done
+
+# Remove the trailing comma and close the JSON array
+json_array="${json_array%?}]"
+
+# Output the JSON array
+echo "$json_array"

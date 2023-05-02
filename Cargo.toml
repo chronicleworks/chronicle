@@ -9,6 +9,7 @@ members = [
   "crates/chronicle-domain-lint",
   "crates/chronicle-domain-test",
   "crates/chronicle-protocol",
+  "crates/chronicle-synth",
   "crates/opa-tp-protocol",
   "crates/opactl",
   "crates/sawtooth-tp",
@@ -68,6 +69,7 @@ k256 = { version = "0.11.3", features = [
 ] }
 lazy_static = "1.4.0"
 locspan = "0.7"
+maplit = "1.0.2"
 mime = "0.3"
 opa = "0.9.0"
 openssl = "0.10.48"
@@ -77,6 +79,7 @@ opentelemetry-jaeger = { version = "0.17.0", features = [
   "reqwest_collector_client",
   "collector_client",
 ] }
+owo-colors = "3.5.0"
 parking_lot = "0.12.0"
 percent-encoding = "2.1.0"
 pin-project = "1.0.12"
@@ -106,6 +109,7 @@ serde_json = "1.0.93"
 serde_yaml = "0.9.14"
 shellexpand = "3.0.0"
 static-iref = "2.0.0"
+structopt = "0.3.26"
 temp-dir = "0.1.11"
 tempfile = "3.4.0"
 testcontainers = "0.14"

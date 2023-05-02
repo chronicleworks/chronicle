@@ -1,0 +1,11 @@
+{
+    "type": "array",
+    "length": 1,
+    "content": {
+        "type": "object",
+        "@value": {
+            "type": "string",
+            "uuid": {}
+        }
+    }
+}

@@ -1,0 +1,11 @@
+{
+    "type": "array",
+    "length": 1,
+    "content": {
+        "type": "object",
+        "@value": {
+            "type": "string",
+            "pattern": "60976119-adc6-3826-a57b-3ccb0580e7bd"
+        }
+    }
+}
