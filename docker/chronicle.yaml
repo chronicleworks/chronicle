@@ -13,7 +13,7 @@ services:
       - /dev/urandom:/dev/random
       - /dev/urandom:/dev/urandom
 
-validator:
+  validator:
     image: blockchaintp/sawtooth-validator:BTP2.1.0
     expose:
       - 4004
