@@ -72,8 +72,8 @@ use crate::{
     address::{FAMILY, VERSION},
     messages::MessageBuilder,
     sawtooth::{
-        client_events_subscribe_response::Status, ClientEventsSubscribeResponse, EventList,
-        PingResponse,
+        client_block_get_response, client_events_subscribe_response::Status, BlockHeader,
+        ClientBlockGetResponse, ClientEventsSubscribeResponse, EventList, PingResponse,
     },
 };
 
@@ -145,6 +145,47 @@ impl StateDelta {
         Ok(response)
     }
 
+    #[instrument]
+    async fn resolve_genesis_block(&self, offset: &Offset) -> Result<Offset, StateError> {
+        if let Offset::Identity(_) = offset {
+            return Ok(offset.clone());
+        }
+
+        let block = {
+            let buf = MessageBuilder::get_head_block_id_request().encode_to_vec();
+            loop {
+                debug!("Resolving genesis block");
+                let mut fut = self.tx.lock().unwrap().send(
+                    Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST,
+                    &uuid::Uuid::new_v4().to_string(),
+                    &buf,
+                )?;
+
+                let response = fut.get_timeout(Duration::from_secs(2));
+                if let Ok(response) = response {
+                    let message: ClientBlockGetResponse =
+                        ClientBlockGetResponse::decode(&*response.content)?;
+                    trace!(block_by_num_response = ?message);
+                    match (
+                        client_block_get_response::Status::from_i32(message.status),
+                        message.block,
+                    ) {
+                        (Some(client_block_get_response::Status::Ok), Some(block)) => break block,
+                        (e, _) => {
+                            error!(head_block_status = ?e)
+                        }
+                    };
+                }
+
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        };
+
+        Ok(Offset::Identity(
+            BlockHeader::decode(block.header.as_slice())?.previous_block_id,
+        ))
+    }
+
     /// Subscribe to state delta events and then set up the event stream
     #[instrument]
     async fn get_state_from(
@@ -154,7 +195,9 @@ impl StateDelta {
         impl futures::Stream<Item = Vec<Result<Commit, (ChronicleTransactionId, Contradiction)>>>,
         StateError,
     > {
-        let request = self.builder.make_subscription_request(offset);
+        info!(read_ledger_state_from_block_id = ?offset);
+        let offset = self.resolve_genesis_block(offset).await?;
+        let request = self.builder.make_subscription_request(&offset);
 
         debug!(?request, "Subscription request");
         let mut buf = Vec::new();
