@@ -13,7 +13,7 @@ services:
       - /dev/urandom:/dev/random
       - /dev/urandom:/dev/urandom
 
-  validator:
+validator:
     image: blockchaintp/sawtooth-validator:BTP2.1.0
     expose:
       - 4004
@@ -23,17 +23,26 @@ services:
       - "4004:4004"
       - "8800:8800"
       - "5050:5050"
-    entrypoint: >
-      /bin/bash -xc "sawadm keygen && sawtooth keygen
-      && sawset genesis -k
-      /etc/sawtooth/keys/validator.priv -o config-genesis.batch
-      && sawset proposal create -k /etc/sawtooth/keys/validator.priv
-      sawtooth.consensus.min_wait_time=0
-      sawtooth.consensus.max_wait_time=0 -o consensus-settings.batch
-      && sawadm genesis config-genesis.batch consensus-settings.batch
-      && sawtooth-validator -vvv --scheduler parallel
-      --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004
-      --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800"
+    entrypoint: /bin/bash
+    command:
+      - -exc
+      - |
+        sawadm keygen
+        sawtooth keygen
+        sawset genesis -k \
+          /etc/sawtooth/keys/validator.priv -o config-genesis.batch
+        sawset proposal create -k /etc/sawtooth/keys/validator.priv \
+          sawtooth.consensus.min_wait_time=0 \
+          sawtooth.consensus.max_wait_time=0 \
+          sawtooth.consensus.algorithm.name=Devmode \
+          sawtooth.consensus.algorithm.version=0.1 \
+          chronicle.opa.policy_name=allow_transactions \
+          chronicle.opa.entrypoint=allow_transactions.allowed_users \
+          -o consensus-settings.batch
+        sawadm genesis config-genesis.batch consensus-settings.batch
+        sawtooth-validator -vvv --scheduler parallel \
+          --endpoint tcp://validator:8800 --bind component:tcp://eth0:4004 \
+          --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800
     volumes: *rngVolumes
 
   devmode-engine:
