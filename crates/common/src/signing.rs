@@ -1,7 +1,7 @@
 use custom_error::custom_error;
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},
-    pkcs8::{self, spki, DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
+    pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
     SecretKey,
 };
 use rand::prelude::StdRng;
@@ -20,8 +20,8 @@ custom_error! {pub SignerError
     Io{source: std::io::Error}                              = "Invalid key store directory",
     Pattern{source: glob::PatternError}                     = "Invalid glob ",
     Encoding{source: FromUtf8Error}                         = "Invalid file encoding",
-    InvalidPublicKey{source: pkcs8::Error}                  = "Invalid public key",
-    InvalidPrivateKey{source: spki::Error}                  = "Invalid private key",
+    InvalidPublicKey{}                  = "Invalid public key",
+    InvalidPrivateKey{}                  = "Invalid private key",
     NoPublicKeyFound{}                                      = "No public key found",
     NoPrivateKeyFound{}                                     = "No private key found",
 }
@@ -156,7 +156,9 @@ impl DirectoryStoredKeys {
         debug!(generate_secret_at = ?secretpath);
         let secret = SecretKey::random(StdRng::from_entropy());
 
-        let privpem = secret.to_pkcs8_pem(LineEnding::CRLF)?;
+        let privpem = secret
+            .to_pkcs8_pem(LineEnding::CRLF)
+            .map_err(|_| SignerError::InvalidPrivateKey {})?;
 
         std::fs::write(
             Path::join(Path::new(&secretpath), Path::new("key.priv.pem")),
@@ -172,15 +174,19 @@ impl DirectoryStoredKeys {
 
     fn signing_key_at(path: &Path) -> Result<SigningKey, SignerError> {
         debug!(load_signing_key_at = ?path);
-        Ok(SigningKey::from_pkcs8_pem(&std::fs::read_to_string(
-            Path::join(path, Path::new("key.priv.pem")),
-        )?)?)
+        SigningKey::from_pkcs8_pem(&std::fs::read_to_string(Path::join(
+            path,
+            Path::new("key.priv.pem"),
+        ))?)
+        .map_err(|_| SignerError::InvalidPrivateKey {})
     }
 
     fn verifying_key_at(path: &Path) -> Result<VerifyingKey, SignerError> {
         debug!(load_verifying_key_at = ?path);
-        Ok(VerifyingKey::from_public_key_pem(
-            &std::fs::read_to_string(Path::join(path, Path::new("key.pub.pem")))?,
-        )?)
+        VerifyingKey::from_public_key_pem(&std::fs::read_to_string(Path::join(
+            path,
+            Path::new("key.pub.pem"),
+        ))?)
+        .map_err(|_| SignerError::InvalidPublicKey {})
     }
 }

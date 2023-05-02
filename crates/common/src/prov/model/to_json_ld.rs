@@ -474,7 +474,7 @@ impl ProvModel {
         }
 
         doc.insert(
-            &Chronicle::Value.as_iri().to_string(),
+            Chronicle::Value.as_iri().as_ref(),
             object! {"@value" : attribute_node, "@type": "@json"},
         )
         .ok();
@@ -1102,7 +1102,7 @@ impl Operate for JsonValue {
         }
 
         self.insert(
-            &iref::Iri::from(ChronicleOperations::Attributes).to_string(),
+            iref::Iri::from(ChronicleOperations::Attributes).as_ref(),
             object! {"@value" : attribute_node, "@type": "@json"},
         )
         .ok();

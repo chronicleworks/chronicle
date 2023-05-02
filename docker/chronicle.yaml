@@ -13,7 +13,7 @@ services:
       - /dev/urandom:/dev/random
       - /dev/urandom:/dev/urandom
 
-validator:
+  validator:
     image: blockchaintp/sawtooth-validator:BTP2.1.0
     expose:
       - 4004
@@ -100,6 +100,7 @@ validator:
       --console-logging pretty verify-keystore &&
       /usr/local/bin/chronicle
       -c /etc/chronicle/config/config.toml
+      --remote-database
       --console-logging pretty
       --sawtooth tcp://validator:4004
       serve-graphql

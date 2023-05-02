@@ -137,11 +137,15 @@ RUN apt-get update && \
 
 COPY .artifacts/artifacts/${TARGETARCH}/chronicle /usr/local/bin
 
+
 RUN chmod 755 \
   /usr/local/bin/chronicle
 
 RUN groupadd -g 999 chronicle && \
   useradd -m -r -u 999 -g chronicle chronicle
+
+
+RUN mkdir -p /var/lib/chronicle && chown chronicle:chronicle /var/lib/chronicle
 
 USER chronicle
 
