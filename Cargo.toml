@@ -1,3 +1,12 @@
 [workspace]
 
-members = ["crates/*"]
+members = [
+  "crates/api",
+  "crates/chronicle",
+  "crates/chronicle-domain",
+  "crates/chronicle-domain-lint",
+  "crates/common",
+  "crates/sawtooth-protocol",
+  "crates/sawtooth-tp",
+  "crates/telemetry",
+]

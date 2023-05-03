@@ -43,10 +43,13 @@ impl MessageBuilder {
         hex::encode(bytes)
     }
 
+    pub fn get_head_block_id_request() -> ClientBlockGetByNumRequest {
+        ClientBlockGetByNumRequest { block_num: 0 }
+    }
+
     #[allow(dead_code)]
     pub fn make_subscription_request(&self, offset: &Offset) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
-
         let mut delta_subscription = EventSubscription::default();
         let filter_address = EventFilter {
             key: "address".to_string(),

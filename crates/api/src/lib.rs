@@ -43,7 +43,7 @@ use tokio::{
     task::JoinError,
 };
 
-use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
@@ -318,7 +318,10 @@ where
                                     .ok();
                                 }
                         }
-                        complete => break
+                        complete => {
+                          info!("Event stream exited cleanly");
+                          break;
+                        }
                     }
                 }
             }
@@ -1297,8 +1300,7 @@ mod test {
         },
         database::{get_embedded_db_connection, Database},
         k256::{
-            ecdsa::SigningKey,
-            pkcs8::{self, spki, DecodePrivateKey, DecodePublicKey, EncodePrivateKey, LineEnding},
+            pkcs8::{EncodePrivateKey, LineEnding},
             SecretKey,
         },
         ledger::InMemLedger,

@@ -311,7 +311,10 @@ impl Subscription {
                     }
                     Err(RecvError::Lagged(_)) => {
                     }
-                    Err(_) => break
+                    Err(e) => {
+                      tracing::error!(?e);
+                      break;
+                    }
                 }
             }
         }

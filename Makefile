@@ -13,6 +13,9 @@ HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/a
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
+DOCKER_GID := $(shell getent group docker | cut -f 3 -d :)
+
+
 clean: clean_containers clean_target
 
 distclean: clean_docker clean_markers

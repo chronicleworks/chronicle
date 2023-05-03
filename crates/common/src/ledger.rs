@@ -274,7 +274,8 @@ impl LedgerReader for InMemLedgerReader {
         self,
         _offset: Offset,
     ) -> Result<Pin<Box<dyn Stream<Item = CommitResult> + Send>>, SubscriptionError> {
-        let chan = self.chan.lock().unwrap().take().unwrap();
+        let chan: UnboundedReceiver<Result<Commit, (ChronicleTransactionId, Contradiction)>> =
+            self.chan.lock().unwrap().take().unwrap();
         let stream = stream::unfold(chan, |mut chan| async move {
             chan.next().await.map(|stage| (stage, chan))
         });

@@ -13,4 +13,7 @@ ignore = [
 
   #CBOR will be replaced with proto for TP events before long
   "RUSTSEC-2021-0127",
+
+  #false positive as cargo audit is reporting vulnerabilities in crates.io/telemetry
+  "RUSTSEC-2021-0046",
 ]
