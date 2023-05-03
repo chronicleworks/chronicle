@@ -4092,6 +4092,102 @@ mod test {
         }
         "###);
 
+        // As previous but omitting forEntity and forAgent
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                order: NEWEST_FIRST,
+                activityTypes: [ItemCertifiedActivity, ItemCodifiedActivity],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "8"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertifiedActivity"
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertifiedActivity"
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "4"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertifiedActivity"
+                  },
+                  "cursor": "5"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "6"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCertifiedActivity"
+                  },
+                  "cursor": "7"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "8"
+                }
+              ]
+            }
+          }
+        }
+        "###);
+
         // By agent
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -4102,6 +4198,78 @@ mod test {
                 forAgent: [{id: "chronicle:agent:testagent2"}],
                 order: NEWEST_FIRST,
                 activityTypes: [],
+                              ) {
+                  pageInfo {
+                      hasPreviousPage
+                      hasNextPage
+                      startCursor
+                      endCursor
+                  }
+                  edges {
+                      node {
+                          __typename
+                      }
+                      cursor
+                  }
+              }
+              }
+      "#,
+          ))
+          .await, @r###"
+        {
+          "data": {
+            "activityTimeline": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "0",
+                "endCursor": "4"
+              },
+              "edges": [
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "0"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "1"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "2"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "3"
+                },
+                {
+                  "node": {
+                    "__typename": "ItemCodifiedActivity"
+                  },
+                  "cursor": "4"
+                }
+              ]
+            }
+          }
+        }
+        "###);
+
+        // As previous but omitting forEntity and activityTypes
+        insta::assert_json_snapshot!(schema
+          .execute(Request::new(
+              r#"
+              query {
+              activityTimeline(
+                forAgent: [{id: "chronicle:agent:testagent2"}],
+                order: NEWEST_FIRST,
                               ) {
                   pageInfo {
                       hasPreviousPage
