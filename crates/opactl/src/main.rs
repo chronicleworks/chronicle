@@ -25,13 +25,14 @@ use std::{
     io::{Read, Write},
     path::PathBuf,
     str::from_utf8,
+    time::Duration,
 };
 use thiserror::Error;
 
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
-use tracing::{debug, error, instrument, span, Level};
+use tracing::{debug, error, info, instrument, span, Level};
 use url::Url;
 use user_error::UFE;
 mod cli;
@@ -91,30 +92,36 @@ async fn ambient_transactions<
         debug!(waiting_for=?goal_tx_id, max_steps=?max_steps);
         let goal_clone = goal_tx_id.clone();
 
-        let stream = reader
-            .state_updates("opa/operation", None, Some(max_steps))
-            .await;
+        let mut stream = loop {
+            let stream = reader
+                .state_updates(
+                    "opa/operation",
+                    async_sawtooth_sdk::ledger::FromBlock::Head,
+                    Some(max_steps),
+                )
+                .await;
 
-        match stream {
-            Ok(mut stream) => {
-                while let Some((op, tx, _, _)) = stream.next().await {
-                    debug!(tx=?tx, op=?op);
-                    if tx == goal_clone {
-                        if let OpaOperationEvent::Error(_) = op {
-                            debug!(not_found_tx=?tx, op=?op);
-                            notify_tx
-                                .send(Waited::WaitedAndOperationFailed(op))
-                                .unwrap();
-                            break;
-                        }
-                        debug!(found_tx=?tx, op=?op);
-                        notify_tx.send(Waited::WaitedAndFound(op)).unwrap();
-                        break;
-                    }
-                }
+            if let Ok(stream) = stream {
+                break stream;
             }
-            Err(e) => {
+            if let Err(e) = stream {
                 error!(subscribe_to_events=?e);
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        };
+        while let Some((op, tx, _block_id, _position, _span)) = stream.next().await {
+            info!(tx=?tx, op=?op);
+            if tx == goal_clone {
+                if let OpaOperationEvent::Error(_) = op {
+                    debug!(not_found_tx=?tx, op=?op);
+                    notify_tx
+                        .send(Waited::WaitedAndOperationFailed(op))
+                        .unwrap();
+                    break;
+                }
+                debug!(found_tx=?tx, op=?op);
+                notify_tx.send(Waited::WaitedAndFound(op)).unwrap();
+                break;
             }
         }
     });
@@ -139,7 +146,6 @@ async fn handle_wait<
 ) -> Result<Waited, OpaCtlError> {
     let wait = Wait::from_matches(matches);
     let (tx_id, tx) = writer.pre_submit(&submission).await?;
-
     match wait {
         Wait::NoWait => {
             writer.submit(tx, transactor_key).await?;
@@ -147,7 +153,7 @@ async fn handle_wait<
             Ok(Waited::NoWait)
         }
         Wait::NumberOfBlocks(blocks) => {
-            let waiter = ambient_transactions(reader, tx_id.clone(), blocks).await;
+            let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
             writer.submit(tx, transactor_key).await?;
 
             match waiter.await {
@@ -174,7 +180,7 @@ async fn dispatch_args<
     writer: W,
     reader: R,
 ) -> Result<Waited, OpaCtlError> {
-    let span = span!(Level::DEBUG, "dispatch_args");
+    let span = span!(Level::TRACE, "dispatch_args");
     let _entered = span.enter();
     let span_id = span.id().map(|x| x.into_u64()).unwrap_or(u64::MAX);
     match matches.subcommand() {
@@ -368,8 +374,13 @@ pub mod test {
         state::OpaOperationEvent,
         transaction::OpaSubmitTransaction,
     };
-    use sawtooth_sdk::messages::client_state::{
-        ClientStateGetRequest, ClientStateGetResponse, ClientStateGetResponse_Status,
+    use sawtooth_sdk::messages::{
+        client_block::{
+            ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockGetResponse_Status,
+        },
+        client_state::{
+            ClientStateGetRequest, ClientStateGetResponse, ClientStateGetResponse_Status,
+        },
     };
 
     use k256::{
@@ -805,6 +816,24 @@ pub mod test {
                         response.set_value(state[0].1.clone());
                     }
 
+                    let mut buf = vec![];
+                    response.write_to_vec(&mut buf).unwrap();
+                    Ok(buf)
+                }
+                Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST => {
+                    let req = ClientBlockGetByNumRequest::parse_from_bytes(&request).unwrap();
+                    let mut response = ClientBlockGetResponse::new();
+                    let block_header = BlockHeader {
+                        block_num: req.get_block_num(),
+                        previous_block_id: hex::encode([0; 32]),
+                        ..Default::default()
+                    };
+                    let block_header_bytes = block_header.write_to_bytes().unwrap();
+                    response.set_block(Block {
+                        header: block_header_bytes,
+                        ..Default::default()
+                    });
+                    response.set_status(ClientBlockGetResponse_Status::OK);
                     let mut buf = vec![];
                     response.write_to_vec(&mut buf).unwrap();
                     Ok(buf)

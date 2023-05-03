@@ -41,6 +41,7 @@ RUN useradd -m tester \
 
 COPY .cargo /app/.cargo
 COPY Cargo.lock /app
+COPY .VERSION /app
 COPY Cargo.toml /app
 COPY crates /app/crates
 COPY domain_docs /app/domain_docs

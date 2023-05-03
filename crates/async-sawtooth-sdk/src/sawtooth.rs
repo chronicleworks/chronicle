@@ -13,7 +13,7 @@ use protobuf::Message as ProtobufMessage;
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use sawtooth_sdk::messages::{
     batch::{Batch, BatchHeader},
-    client_block::ClientBlockListRequest,
+    client_block::{ClientBlockGetByNumRequest, ClientBlockListRequest},
     client_event::ClientEventsSubscribeRequest,
     client_list_control::{ClientPagingControls, ClientSortControls},
     client_state::ClientStateGetRequest,
@@ -92,9 +92,17 @@ impl MessageBuilder {
             .into(),
             sorting: vec![ClientSortControls {
                 reverse: true,
+                keys: vec!["block_num".to_string()].into(),
                 ..Default::default()
             }]
             .into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn get_genesis_block_id_request(&self) -> ClientBlockGetByNumRequest {
+        ClientBlockGetByNumRequest {
+            block_num: 0,
             ..Default::default()
         }
     }
@@ -110,7 +118,7 @@ impl MessageBuilder {
     // type. sawtooth/block-commit events are always subscribed to.
     pub fn make_subscription_request(
         &self,
-        block_id: &Option<BlockId>,
+        from_block_id: &BlockId,
         event_types: Vec<String>,
     ) -> ClientEventsSubscribeRequest {
         let mut request = ClientEventsSubscribeRequest::default();
@@ -137,8 +145,8 @@ impl MessageBuilder {
             ..Default::default()
         };
 
-        if let Some(block_id) = block_id {
-            request.last_known_block_ids = vec![block_id.to_string()].into();
+        if let BlockId::Block(_) = from_block_id {
+            request.last_known_block_ids = vec![from_block_id.to_string()].into();
         }
 
         operation_subscriptions.push(block_subscription);

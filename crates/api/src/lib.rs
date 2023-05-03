@@ -3,9 +3,12 @@ pub mod chronicle_graphql;
 pub mod inmem;
 mod persistence;
 
-use async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::BlockingLedgerWriter};
+use async_sawtooth_sdk::{
+    error::SawtoothCommunicationError,
+    ledger::{BlockId, BlockingLedgerWriter, FromBlock},
+};
 use chronicle_protocol::{
-    async_sawtooth_sdk::ledger::{LedgerReader, LedgerWriter, Offset},
+    async_sawtooth_sdk::ledger::{LedgerReader, LedgerWriter},
     messages::ChronicleSubmitTransaction,
     protocol::ChronicleOperationEvent,
 };
@@ -265,7 +268,7 @@ where
 
         // Append namespace bindings and system namespace
         store.namespace_binding(
-            &"chronicle-system".to_string(),
+            "chronicle-system",
             Uuid::try_from("00000000-0000-0000-0000-000000000001").unwrap(),
         )?;
         for (ns, uuid) in namespace_bindings {
@@ -274,13 +277,15 @@ where
 
         let reuse_reader = ledger.clone();
 
-        let offset = store.get_last_offset().map(|x| x.map(|x| x.0));
+        let last_seen_block = store.get_last_block_id();
 
-        let offset = if let Ok(Some(offset)) = offset {
-            Some(offset)
+        let start_from_block = if let Ok(Some(start_from_block)) = last_seen_block {
+            FromBlock::BlockId(start_from_block)
         } else {
-            None
+            FromBlock::Genesis //Full catch up, as we have no last seen block
         };
+
+        debug!(start_from_block = ?start_from_block, "Starting from block");
 
         tokio::task::spawn(async move {
             let mut api = Api::<U, LEDGER> {
@@ -298,7 +303,7 @@ where
                 let state_updates = reuse_reader.clone();
 
                 let state_updates = state_updates
-                    .state_updates("chronicle/prov-update", offset, None)
+                    .state_updates("chronicle/prov-update", start_from_block, None)
                     .await;
 
                 if let Err(e) = state_updates {
@@ -322,7 +327,7 @@ where
                                   }
                                   // Ledger contradicted or error, so nothing to
                                   // apply, but forward notification
-                                  Some((ChronicleOperationEvent(Err(e), id),tx,_,_)) => {
+                                  Some((ChronicleOperationEvent(Err(e), id),tx,_block_id,_position, _span)) => {
                                     commit_notify_tx.send(SubmissionStage::not_committed(
                                       ChronicleTransactionId::from(tx.as_str()),e.clone(), id
                                     )).ok();
@@ -330,18 +335,18 @@ where
                                   // Successfully committed to ledger, so apply
                                   // to db and broadcast notification to
                                   // subscription subscribers
-                                  Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,offset,_ )) => {
+                                  Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,block_id,_position,_span )) => {
 
                                         debug!(committed = ?tx);
                                         debug!(delta = %commit.to_json().compact().await.unwrap().pretty());
 
-                                        api.sync( commit.clone().into(), offset,ChronicleTransactionId::from(tx.as_str()))
-                                            .instrument(info_span!("Incoming confirmation", offset = ?offset, tx_id = %tx))
+                                        api.sync( commit.clone().into(), &block_id,ChronicleTransactionId::from(tx.as_str()))
+                                            .instrument(info_span!("Incoming confirmation", offset = ?block_id, tx_id = %tx))
                                             .await
                                             .map_err(|e| {
                                                 error!(?e, "Api sync to confirmed commit");
                                             }).map(|_| commit_notify_tx.send(SubmissionStage::committed(Commit::new(
-                                               ChronicleTransactionId::from(tx.as_str()),offset, Box::new(commit.clone())
+                                               ChronicleTransactionId::from(tx.as_str()),block_id, Box::new(commit.clone())
                                             ), id )).ok())
                                             .ok();
                                   },
@@ -1316,14 +1321,14 @@ where
     async fn sync(
         &self,
         prov: Box<ProvModel>,
-        offset: Offset,
+        block_id: &BlockId,
         tx_id: ChronicleTransactionId,
     ) -> Result<ApiResponse, ApiError> {
         let api = self.clone();
-
+        let block_id = *block_id;
         tokio::task::spawn_blocking(move || {
             api.store.apply_prov(&prov)?;
-            api.store.set_last_offset(offset, tx_id)?;
+            api.store.set_last_block_id(&block_id, tx_id)?;
 
             Ok(ApiResponse::Unit)
         })

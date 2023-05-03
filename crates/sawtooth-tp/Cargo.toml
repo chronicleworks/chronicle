@@ -23,6 +23,7 @@ chronicle-telemetry  = { path = "../chronicle-telemetry" }
 clap                 = { workspace = true }
 clap_generate        = { workspace = true }
 common               = { path = "../common" }
+const_format         = { workspace = true }
 crossbeam            = { workspace = true }
 custom_error         = { workspace = true }
 derivative           = { workspace = true }

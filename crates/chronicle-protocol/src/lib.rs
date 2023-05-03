@@ -1,4 +1,7 @@
-use async_sawtooth_sdk::{ledger::SawtoothLedger, zmq_client::ZmqRequestResponseSawtoothChannel};
+use async_sawtooth_sdk::{
+    ledger::SawtoothLedger,
+    zmq_client::{ReconnectingRequestResponseChannel, ZmqRequestResponseSawtoothChannel},
+};
 use messages::ChronicleSubmitTransaction;
 use protocol::ChronicleOperationEvent;
 
@@ -12,7 +15,7 @@ pub use async_sawtooth_sdk;
 static PROTOCOL_VERSION: &str = "1";
 
 pub type ChronicleLedger = SawtoothLedger<
-    ZmqRequestResponseSawtoothChannel,
+    ReconnectingRequestResponseChannel<ZmqRequestResponseSawtoothChannel>,
     ChronicleOperationEvent,
     ChronicleSubmitTransaction,
 >;

@@ -19,6 +19,7 @@ clap                 = { workspace = true, features = ["derive", "env"] }
 clap_complete        = { workspace = true }
 colored_json         = { workspace = true }
 common               = { path = "../common" }
+const_format         = { workspace = true }
 diesel               = { workspace = true }
 dotenvy              = { workspace = true }
 futures              = { workspace = true }
@@ -47,7 +48,6 @@ url                  = { workspace = true, features = ["serde"] }
 user-error           = { workspace = true }
 uuid                 = { workspace = true }
 valico               = { workspace = true }
-
 
 [features]
 devmode = ["inmem"]

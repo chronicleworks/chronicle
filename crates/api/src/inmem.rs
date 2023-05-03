@@ -13,7 +13,10 @@ use sawtooth_sdk::{
         client_batch_submit::{
             ClientBatchSubmitRequest, ClientBatchSubmitResponse, ClientBatchSubmitResponse_Status,
         },
-        client_block::{ClientBlockListResponse, ClientBlockListResponse_Status},
+        client_block::{
+            ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockGetResponse_Status,
+            ClientBlockListResponse, ClientBlockListResponse_Status,
+        },
         client_event::{ClientEventsSubscribeResponse, ClientEventsSubscribeResponse_Status},
         client_state::{
             ClientStateGetRequest, ClientStateGetResponse, ClientStateGetResponse_Status,
@@ -253,6 +256,24 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
                 }
                 let mut response = ClientBatchSubmitResponse::new();
                 response.set_status(ClientBatchSubmitResponse_Status::OK);
+                let mut buf = vec![];
+                response.write_to_vec(&mut buf).unwrap();
+                Ok(buf)
+            }
+            Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST => {
+                let req = ClientBlockGetByNumRequest::parse_from_bytes(&request).unwrap();
+                let mut response = ClientBlockGetResponse::new();
+                let block_header = BlockHeader {
+                    block_num: req.get_block_num(),
+                    previous_block_id: hex::encode([0; 32]),
+                    ..Default::default()
+                };
+                let block_header_bytes = block_header.write_to_bytes().unwrap();
+                response.set_block(Block {
+                    header: block_header_bytes,
+                    ..Default::default()
+                });
+                response.set_status(ClientBlockGetResponse_Status::OK);
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
                 Ok(buf)

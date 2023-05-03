@@ -1,6 +1,6 @@
 use derivative::Derivative;
 
-use opa_tp_protocol::async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::Offset};
+use opa_tp_protocol::async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::BlockId};
 use tracing::{debug, instrument};
 
 use crate::{
@@ -124,15 +124,15 @@ pub type SubmitResult = Result<ChronicleTransactionId, SubmissionError>;
 #[derive(Debug, Clone)]
 pub struct Commit {
     pub tx_id: ChronicleTransactionId,
-    pub offset: Offset,
+    pub block_id: BlockId,
     pub delta: Box<ProvModel>,
 }
 
 impl Commit {
-    pub fn new(tx_id: ChronicleTransactionId, offset: Offset, delta: Box<ProvModel>) -> Self {
+    pub fn new(tx_id: ChronicleTransactionId, block_id: BlockId, delta: Box<ProvModel>) -> Self {
         Commit {
             tx_id,
-            offset,
+            block_id,
             delta,
         }
     }

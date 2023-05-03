@@ -13,11 +13,13 @@ use sawtooth_sdk::{
     },
 };
 
+use prost::Message;
+
 use tokio::{runtime::Handle, sync::oneshot::channel};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
-use crate::error::SawtoothCommunicationError;
+use crate::{error::SawtoothCommunicationError, messages::PingResponse};
 
 /// A trait representing a communication channel for sending request and receiving
 /// response messages to/from the Sawtooth network.
@@ -44,7 +46,7 @@ pub trait RequestResponseSawtoothChannel {
     /// # Errors
     ///
     /// Returns an error if the send or receive operation fails.
-    async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
+    async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message + Clone>(
         &self,
         tx: TX,
         message_type: Message_MessageType,
@@ -81,6 +83,71 @@ pub trait RequestResponseSawtoothChannel {
 }
 
 #[derive(Clone)]
+pub struct ReconnectingRequestResponseChannel<
+    Inner: RequestResponseSawtoothChannel + Sized + Clone + Send + Sync,
+>(Inner);
+
+impl<Inner: RequestResponseSawtoothChannel + Sized + Clone + Send + Sync>
+    ReconnectingRequestResponseChannel<Inner>
+{
+    pub fn new(inner: Inner) -> Self {
+        Self(inner)
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestResponseSawtoothChannel
+    for ReconnectingRequestResponseChannel<ZmqRequestResponseSawtoothChannel>
+{
+    async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message + Clone>(
+        &self,
+        tx: TX,
+        message_type: Message_MessageType,
+        timeout: std::time::Duration,
+    ) -> Result<RX, SawtoothCommunicationError> {
+        loop {
+            let res = self
+                .0
+                .send_and_recv_one(tx.clone(), message_type, timeout)
+                .await;
+
+            if res.is_ok() {
+                return res;
+            }
+
+            if let Err(e) = res {
+                debug!(zmq_send_error = ?e, "ZMQ send error, reconnecting");
+            }
+
+            self.0.reconnect();
+        }
+    }
+
+    async fn recv_stream<RX: protobuf::Message>(
+        self,
+    ) -> Result<BoxStream<'static, RX>, SawtoothCommunicationError> {
+        let chan = self.0.clone();
+        loop {
+            let res = chan.clone().recv_stream().await;
+
+            if res.is_ok() {
+                return res;
+            }
+
+            self.0.reconnect();
+        }
+    }
+
+    fn close(&self) {
+        self.0.close()
+    }
+
+    fn reconnect(&self) {
+        self.0.reconnect()
+    }
+}
+
+#[derive(Clone)]
 pub struct ZmqRequestResponseSawtoothChannel {
     address: Url,
     tx: Arc<Mutex<ZmqMessageSender>>,
@@ -95,6 +162,10 @@ impl ZmqRequestResponseSawtoothChannel {
             tx: Arc::new(tx.into()),
             rx: Arc::new(rx.into()),
         }
+    }
+
+    pub fn retrying(self) -> ReconnectingRequestResponseChannel<Self> {
+        ReconnectingRequestResponseChannel::new(self)
     }
 }
 
@@ -144,36 +215,58 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
     ) -> Result<BoxStream<'static, RX>, SawtoothCommunicationError> {
         let channel = self;
         let stream = stream::unfold(channel, move |channel| async move {
-            let response = tokio::task::spawn_blocking(move || {
-                let response = channel
-                    .rx
-                    .lock()
-                    .unwrap()
-                    .recv_timeout(Duration::from_secs(30));
-                debug!(?response);
-                (channel, response)
-            })
-            .await;
-            match response {
-                Ok((channel, Ok(Ok(response)))) => {
-                    let response = RX::parse_from_bytes(&response.content)
-                        .map_err(SawtoothCommunicationError::from);
-                    if let Err(e) = &response {
-                        error!(decode_message= ?e);
-                        None
-                    } else {
-                        Some((response.unwrap(), channel))
+            loop {
+                let channel = channel.clone();
+                let response = tokio::task::spawn_blocking(move || {
+                    let response = channel
+                        .rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(30));
+                    debug!(?response);
+                    (channel, response)
+                })
+                .await;
+                match response {
+                    Ok((channel, Ok(Ok(response))))
+                        if response.message_type == Message_MessageType::PING_REQUEST =>
+                    {
+                        trace!(ping_request = ?response.correlation_id);
+                        let ping_reply = PingResponse::default().encode_to_vec();
+                        channel
+                            .tx
+                            .lock()
+                            .unwrap()
+                            .send(
+                                Message_MessageType::PING_RESPONSE,
+                                &response.correlation_id,
+                                &ping_reply,
+                            )
+                            .map_err(|e| error!(send_ping_reply = ?e))
+                            .ok();
+                    }
+                    Ok((channel, Ok(Ok(response)))) => {
+                        let response = RX::parse_from_bytes(&response.content)
+                            .map_err(SawtoothCommunicationError::from);
+                        if let Err(e) = &response {
+                            error!(decode_message= ?e);
+                            break None;
+                        } else {
+                            break Some((response.unwrap(), channel));
+                        }
+                    }
+                    Ok((self, Ok(Err(zmq)))) => {
+                        error!(stream_error=%zmq);
+                        break None;
+                    }
+                    Err(e) => {
+                        error!(task_error=%e);
+                        break None;
+                    }
+                    Ok((self, Err(e))) => {
+                        trace!(poll_timeout = ?e);
                     }
                 }
-                Ok((self, Ok(Err(zmq)))) => {
-                    error!(stream_error=%zmq);
-                    None
-                }
-                Err(e) => {
-                    error!(task_error=%e);
-                    None
-                }
-                Ok((self, Err(_e))) => None,
             }
         });
 
