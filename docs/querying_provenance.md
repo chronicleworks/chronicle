@@ -5,9 +5,9 @@ Currently Chronicle has 7 root queries.
 ```graphql
 type Query {
   activityTimeline(
-    activityTypes: [ActivityType!]!
-    forEntity: [EntityIdOrExternal!]!
-    forAgent: [AgentIdOrExternal!]!
+    activityTypes: [ActivityType!]
+    forEntity: [EntityIdOrExternal!]
+    forAgent: [AgentIdOrExternal!]
     from: DateTime
     to: DateTime
     order: TimelineOrder

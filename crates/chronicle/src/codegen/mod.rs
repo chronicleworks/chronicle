@@ -1011,9 +1011,9 @@ fn gen_query() -> rust::Tokens {
     pub async fn activity_timeline<'a>(
         &self,
         ctx: &#graphql_context<'a>,
-        activity_types: Vec<ActivityType>,
-        for_entity: Vec<#entity_id>,
-        for_agent: Vec<#agent_id>,
+        activity_types: Option<Vec<ActivityType>>,
+        for_entity: Option<Vec<#entity_id>>,
+        for_agent: Option<Vec<#agent_id>>,
         from: Option<DateTime<Utc>>,
         to: Option<DateTime<Utc>>,
         order: Option<#timeline_order>,
@@ -1025,18 +1025,18 @@ fn gen_query() -> rust::Tokens {
     ) -> #graphql_result<#graphql_connection<i32, #(activity_union_type_name()), #empty_fields, #empty_fields>> {
             let connection = #query_impl::activity_timeline(
                 ctx,
-                activity_types
+                activity_types.map(|xs| xs
                     .into_iter()
                     .filter_map(|x| x.into())
-                    .collect(),
-                for_agent
+                    .collect()),
+                for_agent.map(|xs| xs
                     .into_iter()
                     .map(|x| x.into())
-                    .collect(),
-                for_entity
+                    .collect()),
+                for_entity.map(|xs| xs
                     .into_iter()
                     .map(|x| x.into())
-                    .collect(),
+                    .collect()),
                 from,
                 to,
                 order,

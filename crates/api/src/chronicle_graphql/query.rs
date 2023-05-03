@@ -17,9 +17,9 @@ use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 #[instrument(skip(ctx))]
 pub async fn activity_timeline<'a>(
     ctx: &Context<'a>,
-    activity_types: Vec<DomaintypeId>,
-    for_agent: Vec<AgentId>,
-    for_entity: Vec<EntityId>,
+    activity_types: Option<Vec<DomaintypeId>>,
+    for_agent: Option<Vec<AgentId>>,
+    for_entity: Option<Vec<EntityId>>,
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
     order: Option<TimelineOrder>,
@@ -81,37 +81,43 @@ pub async fn activity_timeline<'a>(
         .select(Activity::as_select())
         .into_boxed();
 
-    if !for_entity.is_empty() {
-        sql_query = sql_query.filter(
-            entity::external_id.eq_any(
-                for_entity
-                    .iter()
-                    .map(|x| x.external_id_part().clone())
-                    .collect::<Vec<_>>(),
-            ),
-        )
-    };
+    if let Some(for_entity) = for_entity {
+        if !for_entity.is_empty() {
+            sql_query = sql_query.filter(
+                entity::external_id.eq_any(
+                    for_entity
+                        .iter()
+                        .map(|x| x.external_id_part().clone())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+        }
+    }
 
-    if !for_agent.is_empty() {
-        sql_query = sql_query.filter(
-            agent::external_id.eq_any(
-                for_agent
-                    .iter()
-                    .map(|x| x.external_id_part().clone())
-                    .collect::<Vec<_>>(),
-            ),
-        )
-    };
+    if let Some(for_agent) = for_agent {
+        if !for_agent.is_empty() {
+            sql_query = sql_query.filter(
+                agent::external_id.eq_any(
+                    for_agent
+                        .iter()
+                        .map(|x| x.external_id_part().clone())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+        }
+    }
 
-    if !activity_types.is_empty() {
-        sql_query = sql_query.filter(
-            activity::domaintype.eq_any(
-                activity_types
-                    .iter()
-                    .map(|x| x.external_id_part().clone())
-                    .collect::<Vec<_>>(),
-            ),
-        );
+    if let Some(activity_types) = activity_types {
+        if !activity_types.is_empty() {
+            sql_query = sql_query.filter(
+                activity::domaintype.eq_any(
+                    activity_types
+                        .iter()
+                        .map(|x| x.external_id_part().clone())
+                        .collect::<Vec<_>>(),
+                ),
+            );
+        }
     }
 
     if order.unwrap_or(TimelineOrder::NewestFirst) == TimelineOrder::NewestFirst {
