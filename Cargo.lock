@@ -3566,9 +3566,8 @@ dependencies = [
 
 [[package]]
 name = "sawtooth-sdk"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e175737d87cfadf9a6243aaa7221d34a985b1799a90f07d34a0b4e205c56d592"
+version = "0.5.3"
+source = "git+https://github.com/blockchaintp/sawtooth-sdk-rust?branch=fix/no-panic-channels#e173a520a0a4092ba11695b7a12876e79b67f78c"
 dependencies = [
  "ctrlc",
  "glob",

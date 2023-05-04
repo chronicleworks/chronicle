@@ -76,7 +76,7 @@ insta = { version = "1.14.0", features = [
   "yaml",
 ] }
 proptest = "1.0.0"
-sawtooth-sdk = "0.5.2"
+sawtooth-sdk = { git = "https://github.com/blockchaintp/sawtooth-sdk-rust", branch = "fix/no-panic-channels" }
 
 [features]
 strict = []

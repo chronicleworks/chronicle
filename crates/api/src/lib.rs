@@ -259,7 +259,7 @@ where
             debug!(?api, "Api running on localset");
 
             loop {
-                let mut state_updates = reuse_reader
+                let state_updates = reuse_reader
                     .clone()
                     .state_updates(
                         store
@@ -267,8 +267,14 @@ where
                             .map(|x| x.map(|x| x.0).unwrap_or(Offset::Genesis))
                             .unwrap_or(Offset::Genesis),
                     )
-                    .await
-                    .unwrap();
+                    .await;
+
+                if let Err(e) = state_updates {
+                    error!(persistent_state_update_error = ?e);
+                    continue;
+                }
+
+                let mut state_updates = state_updates.unwrap();
 
                 loop {
                     select! {

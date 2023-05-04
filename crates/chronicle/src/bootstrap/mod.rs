@@ -333,9 +333,8 @@ pub async fn bootstrap<Query, Mutation>(
     Query: ObjectType + 'static + Copy,
     Mutation: ObjectType + 'static + Copy,
 {
-    //panic::always_abort();
+    // Set up panic hook to print stack trace on any task thread panics
     panic::set_hook(Box::new(|info| {
-        //let stacktrace = Backtrace::capture();
         let stacktrace = Backtrace::force_capture();
         println!("Got panic. @info:{}\n@stackTrace:{}", info, stacktrace);
         std::process::abort();
