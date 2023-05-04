@@ -155,13 +155,26 @@ impl StateDelta {
             let buf = MessageBuilder::get_head_block_id_request().encode_to_vec();
             loop {
                 debug!("Resolving genesis block");
-                let mut fut = self.tx.lock().unwrap().send(
+                let fut = self.tx.lock().unwrap().send(
                     Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST,
                     &uuid::Uuid::new_v4().to_string(),
                     &buf,
-                )?;
+                );
 
-                let response = fut.get_timeout(Duration::from_secs(2));
+                // Force reconnection on any send error that's not a timeout -
+                // disconnect can actually mean a dead Zmq Thread
+                match fut {
+                    Err(SendError::DisconnectedError) | Err(SendError::UnknownError) => {
+                        self.reconnect();
+                        continue;
+                    }
+                    Err(_) => continue,
+                    Ok(_) => {}
+                }
+
+                let mut fut = fut.unwrap();
+
+                let response = fut.get_timeout(Duration::from_secs(30));
                 if let Ok(response) = response {
                     let message: ClientBlockGetResponse =
                         ClientBlockGetResponse::decode(&*response.content)?;
@@ -175,9 +188,9 @@ impl StateDelta {
                             error!(head_block_status = ?e)
                         }
                     };
+                } else {
+                    self.reconnect();
                 }
-
-                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         };
 
