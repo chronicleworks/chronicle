@@ -10,6 +10,7 @@ version = "0.6.0"
 Inflector            = { workspace = true }
 api                  = { path = "../api" }
 async-graphql        = { workspace = true }
+atty                 = { workspace = true }
 cfg-if               = { workspace = true }
 chronicle-protocol   = { path = "../chronicle-protocol" }
 chronicle-telemetry  = { path = "../chronicle-telemetry" }

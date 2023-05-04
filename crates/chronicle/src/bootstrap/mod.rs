@@ -379,31 +379,29 @@ where
 
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(matches) = matches.subcommand_matches("import") {
-        let (namespace_id, namespace_uuid) = (
-            matches.value_of("namespace-id").unwrap(),
-            matches.value_of("namespace-uuid").unwrap(),
-        );
-        let namespace = NamespaceId::from_external_id(
-            namespace_id,
-            uuid::Uuid::try_parse(namespace_uuid)
-                .expect("cannot parse namespace UUID: {namespace_uuid}"),
-        );
+        let namespace = get_namespace(matches);
 
-        let contents = if matches.is_present("path") {
-            // Get the path to the file to import
-            let path: PathBuf = matches.value_of("path").unwrap().into();
-            let contents = std::fs::read_to_string(&path)?;
-            info!("Loaded import data from {:?}", path.display());
-            contents
+        let data = if let Some(path) = matches.value_of("path") {
+            let path = PathBuf::from(path);
+            let data = std::fs::read_to_string(&path)?;
+            info!("Loaded import data from {:?}", path);
+            data
         } else {
-            let mut buffer = String::new();
-            let mut stdin = io::stdin();
-            let bytes = stdin.read_to_string(&mut buffer)?;
-            info!("Loaded {bytes} bytes of import data from stdin");
-            buffer
+            if atty::is(atty::Stream::Stdin) {
+                eprintln!("Attempting to import data from standard input, press Ctrl-D to finish.");
+            }
+            info!("Attempting to read import data from stdin...");
+            let data = read_import_data()?;
+            info!("Loaded {} bytes of import data from stdin", data.len());
+            data
         };
 
-        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents)?;
+        if data.trim().is_empty() {
+            eprintln!("Import data is empty, nothing to import");
+            return Ok((ApiResponse::Unit, ret_api));
+        }
+
+        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&data)?;
 
         let mut operations = Vec::new();
         for value in json_array.into_iter() {
@@ -428,11 +426,25 @@ where
         Ok((response, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
-
         Ok((api.dispatch(cmd, identity).await?, ret_api))
     } else {
         Ok((ApiResponse::Unit, ret_api))
     }
+}
+
+fn get_namespace(matches: &ArgMatches) -> NamespaceId {
+    let namespace_id = matches.value_of("namespace-id").unwrap();
+    let namespace_uuid = matches.value_of("namespace-uuid").unwrap();
+    let uuid = uuid::Uuid::try_parse(namespace_uuid)
+        .unwrap_or_else(|_| panic!("cannot parse namespace UUID: {}", namespace_uuid));
+    NamespaceId::from_external_id(namespace_id, uuid)
+}
+
+fn read_import_data() -> Result<String, io::Error> {
+    let mut buffer = String::new();
+    let mut stdin = io::stdin();
+    let _ = stdin.read_to_string(&mut buffer)?;
+    Ok(buffer)
 }
 
 async fn config_and_exec<Query, Mutation>(
