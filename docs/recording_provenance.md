@@ -982,7 +982,7 @@ operations to your JSON-LD file:
 
 To import data into Chronicle using the `import` command, you need to provide
 the `namespace-id` and `namespace-uuid` arguments. These arguments are required
-to specify the namespace to which the imported data will be imported.
+to specify the namespace to which the data will be imported.
 
 The `namespace-id` argument is a string that specifies the name of the namespace
 to which the data will be imported. This value should match the value of the
@@ -992,7 +992,7 @@ file.
 The `namespace-uuid` argument is a string that specifies the UUID of the
 namespace to which the data will be imported. This value should match the value
 of the `http://btp.works/chronicleoperations/ns#namespaceUuid` property in the
-JSON-LD file.
+JSON-LD file. Data in the file not matching the specified namespace is ignored.
 
 Once you have provided the `namespace-id` and `namespace-uuid` arguments, you
 can run the `import` command using the JSON-LD file containing the Chronicle

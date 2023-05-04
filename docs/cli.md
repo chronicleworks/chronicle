@@ -88,7 +88,8 @@ array of Chronicle Operations. This command requires two arguments:
 identifier for the namespace that the data is being imported to. The
 `NamespaceId` is a required argument for the import command because it
 allows the program to differentiate between different namespaces and avoid
-conflicts when importing data.
+conflicts when importing data. Data not matching the given namespace is
+ignored.
 
 By default, `import` will use standard input as its data source. Users can
 also use an optional `path` argument to specify the file path of a JSON-LD
