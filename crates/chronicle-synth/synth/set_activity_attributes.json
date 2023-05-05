@@ -1,0 +1,13 @@
+{
+    "type": "object",
+    "@id": "_:n1",
+    "@type": {
+        "type": "array",
+        "length": 1,
+        "content": "http://btp.works/chronicleoperations/ns#SetAttributes"
+    },
+    "http://btp.works/chronicleoperations/ns#activityName": "@activity_name",
+    "http://btp.works/chronicleoperations/ns#attributes": "@attributes",
+    "http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+    "http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+}

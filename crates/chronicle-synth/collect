@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# This script collates Synth collections generated for
+# a Chronicle domain (which are writtent to 'domain-schema/')
+# with the core set of Chronicle Synth collections (found
+# in 'chronicle-synth/synth/') and copies them to the
+# 'chronicle-synth/collections/' directory.
+#
+# It is run as part of the 'Rust program' defined in the
+# 'chronicle-synth/src/generate.rs' binary.
+
+# Define the source directories
+source_dir1="./crates/chronicle-synth/synth"
+source_dir2="./crates/chronicle-synth/domain-schema"
+
+# Define the destination directory
+dest_dir="./crates/chronicle-synth/collections"
+
+# Create the destination directory if it doesn't exist
+if [ ! -d "${dest_dir}" ]; then
+    mkdir "${dest_dir}"
+fi
+
+# Copy files from source_dir1 to dest_dir
+for file in "${source_dir1}"/*; do
+    filename=$(basename "${file}")
+    if [ -f "${dest_dir}/${filename}" ]; then
+        echo "Replacing file: ${filename}"
+    fi
+    cp -f "${file}" "${dest_dir}"
+done
+
+# Copy files from source_dir2 to dest_dir
+for file in "${source_dir2}"/*; do
+    filename=$(basename "${file}")
+    if [ -f "${dest_dir}/${filename}" ]; then
+        echo "Replacing file: ${filename}"
+    else
+        echo "Copying file: ${filename}"
+    fi
+    cp -f "${file}" "${dest_dir}"
+done

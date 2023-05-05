@@ -1,0 +1,12 @@
+{
+    "type": "array",
+    "length": 1,
+    "content": {
+        "type": "object",
+        "@type": {
+            "type": "string",
+            "constant": "@json"
+        },
+        "@value": "@attribute"
+    }
+}
