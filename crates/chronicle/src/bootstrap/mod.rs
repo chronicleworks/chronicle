@@ -29,7 +29,7 @@ use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
 use telemetry::{self, ConsoleLogging};
 use url::Url;
 
-use std::{io, net::SocketAddr};
+use std::{backtrace::Backtrace, io, net::SocketAddr, panic};
 
 use crate::codegen::ChronicleDomainDef;
 
@@ -333,6 +333,13 @@ pub async fn bootstrap<Query, Mutation>(
     Query: ObjectType + 'static + Copy,
     Mutation: ObjectType + 'static + Copy,
 {
+    // Set up panic hook to print stack trace on any task thread panics
+    panic::set_hook(Box::new(|info| {
+        let stacktrace = Backtrace::force_capture();
+        println!("Got panic. @info:{}\n@stackTrace:{}", info, stacktrace);
+        std::process::abort();
+    }));
+
     let matches = cli(domain.clone()).as_cmd().get_matches();
 
     if let Some(generator) = matches.subcommand_matches("completions") {
