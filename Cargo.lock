@@ -152,7 +152,7 @@ checksum = "7de8ce5e0f9f8d88245311066a578d72b7af3e7088f32783804676302df237e4"
 
 [[package]]
 name = "api"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "assert_fs",
  "async-graphql",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "async-sawtooth-sdk"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -638,7 +638,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chronicle"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "Inflector",
  "api",
@@ -690,7 +690,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-domain"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chronicle",
  "insta",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-domain-lint"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chronicle",
  "clap 3.2.23",
@@ -707,7 +707,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-example"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chronicle",
  "chronicle-protocol",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-protocol"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-synth"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "assert_fs",
  "chronicle",
@@ -779,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-telemetry"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "api",
@@ -3203,7 +3203,7 @@ dependencies = [
 
 [[package]]
 name = "opa-tp"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -3230,7 +3230,7 @@ dependencies = [
 
 [[package]]
 name = "opa-tp-protocol"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-sawtooth-sdk",
@@ -3262,7 +3262,7 @@ dependencies = [
 
 [[package]]
 name = "opactl"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -4449,7 +4449,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth_tp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
