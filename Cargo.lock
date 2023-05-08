@@ -645,6 +645,7 @@ dependencies = [
  "assert_fs",
  "async-graphql",
  "async-sawtooth-sdk",
+ "atty",
  "cfg-if",
  "chronicle-protocol",
  "chronicle-telemetry",
