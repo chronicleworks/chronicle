@@ -140,24 +140,31 @@ impl SawtoothSubmitter {
                 batches: vec![batch],
             };
 
+            let correlation_id = uuid::Uuid::new_v4().to_string();
+            debug!("submitting request with correlation ID {correlation_id}");
+
             let mut future = loop {
                 let future = self.tx.send(
                     Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
-                    &tx_id.to_string(),
+                    &correlation_id,
                     &request.encode_to_vec(),
                 );
+                debug!("attempted to send request");
 
-                // Force reconnection on any send error that's not a timeout -
-                // disconnect can actually mean a dead Zmq Thread
-                if let Err(SendError::UnknownError) | Err(SendError::DisconnectedError) = future {
-                    debug!("Send error, re-initialise ZMQ");
-                    let (tx, rx) = ZmqMessageConnection::new(self.address.as_str()).create();
-                    self.tx = tx;
-                    self.rx = rx;
-                    continue;
+                if let Err(send_error) = &future {
+                    if let SendError::TimeoutError = send_error {
+                        debug!("request timed out, retrying");
+                    } else {
+                        // DisconnectedError can mean a dead Zmq Thread
+                        debug!("error sending request ({send_error}), reinitializing ZMQ");
+                        let (tx, rx) = ZmqMessageConnection::new(self.address.as_str()).create();
+                        self.tx = tx;
+                        self.rx = rx;
+                    }
+                } else {
+                    debug!("request sent");
+                    break future.unwrap();
                 }
-
-                break future.unwrap();
             };
 
             debug!(submit_transaction=%tx_id);
