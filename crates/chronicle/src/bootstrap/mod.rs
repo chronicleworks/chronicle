@@ -25,7 +25,7 @@ use diesel::{
     PgConnection,
 };
 
-use sawtooth_protocol::{events::StateDelta, messaging::SawtoothSubmitter};
+use sawtooth_protocol::events::SawtoothLedger;
 use telemetry::{self, ConsoleLogging};
 use url::Url;
 
@@ -34,19 +34,8 @@ use std::{backtrace::Backtrace, io, net::SocketAddr, panic};
 use crate::codegen::ChronicleDomainDef;
 
 #[allow(dead_code)]
-fn submitter(config: &Config, options: &ArgMatches) -> Result<SawtoothSubmitter, SignerError> {
-    Ok(SawtoothSubmitter::new(
-        &options
-            .get_one::<String>("sawtooth")
-            .map(|s| Url::parse(s))
-            .unwrap_or_else(|| Ok(config.validator.address.clone()))?,
-        &common::signing::DirectoryStoredKeys::new(&config.secrets.path)?.chronicle_signing()?,
-    ))
-}
-
-#[allow(dead_code)]
-fn state_delta(config: &Config, options: &ArgMatches) -> Result<StateDelta, SignerError> {
-    Ok(StateDelta::new(
+fn sawtooth(config: &Config, options: &ArgMatches) -> Result<SawtoothLedger, SignerError> {
+    Ok(SawtoothLedger::new(
         &options
             .get_one::<String>("sawtooth")
             .map(|s| Url::parse(s))
@@ -119,13 +108,12 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
 ) -> Result<ApiDispatch, ApiError> {
-    let submitter = submitter(config, options)?;
-    let state = state_delta(config, options)?;
-
+    let submitter = sawtooth(config, options)?;
+    let state_delta = submitter.clone();
     Api::new(
         pool.clone(),
         submitter,
-        state,
+        state_delta,
         &config.secrets.path,
         UniqueUuid,
         config.namespace_bindings.clone(),

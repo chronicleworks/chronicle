@@ -304,7 +304,7 @@ impl Subscription {
                       }
                     }
                     Ok(SubmissionStage::Committed(Err((commit,contradiction)))) =>
-                      yield CommitNotification::from_contradiction(&commit, &*contradiction.to_string()),
+                      yield CommitNotification::from_contradiction(&commit, &contradiction.to_string()),
                     Ok(SubmissionStage::Submitted(Err(e))) => {
                       error!("Failed to submit: {:?}", e);
                       yield CommitNotification::from_submission_failed(&e);

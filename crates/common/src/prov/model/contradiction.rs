@@ -66,6 +66,7 @@ impl Contradiction {
             contradiction: vec![ContradictionDetail::StartAlteration { value, attempted }],
         }
     }
+
     pub fn end_date_alteration(
         id: ChronicleIri,
         namespace: NamespaceId,

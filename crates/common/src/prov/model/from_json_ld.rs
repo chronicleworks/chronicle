@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use iref::{AsIri, Iri, IriBuf, IriRefBuf};
-use json::object;
-use json::JsonValue;
+use json::{object, JsonValue};
 use json_ld::{
     syntax::Term, util::AsJson, Document, Indexed, JsonContext, Loader, Node, Reference,
     RemoteDocument,
@@ -102,6 +101,7 @@ impl ProvModel {
 
         Ok(())
     }
+
     pub async fn apply_json_ld_bytes(&mut self, buf: &[u8]) -> Result<(), ProcessorError> {
         self.apply_json_ld(json::parse(std::str::from_utf8(buf)?)?)
             .await?;
