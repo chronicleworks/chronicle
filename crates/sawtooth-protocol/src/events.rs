@@ -10,11 +10,14 @@ use std::{
 use backoff::ExponentialBackoff;
 
 use common::{
-    ledger::{Commit, CommitResult, LedgerReader, Offset, SubscriptionError},
+    ledger::{
+        Commit, CommitResult, LedgerReader, LedgerWriter, Offset, SubmissionError,
+        SubscriptionError,
+    },
     protocol::{deserialize_event, ProtocolError},
     prov::{
-        ChronicleTransactionId, ChronicleTransactionIdError, Contradiction, ProcessorError,
-        ProvModel,
+        ChronicleTransaction, ChronicleTransactionId, ChronicleTransactionIdError, Contradiction,
+        ProcessorError, ProvModel,
     },
 };
 use custom_error::custom_error;
@@ -36,6 +39,7 @@ use sawtooth_sdk::{
 };
 use tokio::task::JoinError;
 use tracing::{debug, error, info, instrument, trace, warn};
+use uuid::Uuid;
 
 custom_error! {pub StateError
     Subscription                                    = "Invalid subscription",
@@ -71,33 +75,40 @@ impl From<StateError> for SubscriptionError {
 use crate::{
     address::{FAMILY, VERSION},
     messages::MessageBuilder,
+    messaging::{OperationMessageBuilder, SawtoothSubmissionError},
     sawtooth::{
         client_block_get_response, client_events_subscribe_response::Status, BlockHeader,
-        ClientBlockGetResponse, ClientEventsSubscribeResponse, EventList, PingResponse,
+        ClientBatchSubmitRequest, ClientBatchSubmitResponse, ClientBlockGetResponse,
+        ClientEventsSubscribeResponse, EventList, PingResponse,
     },
 };
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
-pub struct StateDelta {
+pub struct SawtoothLedger {
     address: url::Url,
     #[derivative(Debug = "ignore")]
     tx: Arc<Mutex<ZmqMessageSender>>,
     rx: Arc<Mutex<MessageReceiver>>,
+    #[derivative(Debug = "ignore")]
     builder: MessageBuilder,
+    #[derivative(Debug = "ignore")]
+    transaction_builder: Arc<Mutex<OperationMessageBuilder>>,
 }
 
-impl StateDelta {
+impl SawtoothLedger {
     #[instrument]
     pub fn new(address: &url::Url, signer: &SigningKey) -> Self {
         let builder = MessageBuilder::new(signer.to_owned(), FAMILY, VERSION);
+        let transaction_builder = OperationMessageBuilder::new(signer, FAMILY, VERSION);
         let (tx, rx) = ZmqMessageConnection::new(address.as_str()).create();
         info!(?address, "Subscribing to state updates");
-        StateDelta {
+        SawtoothLedger {
             address: address.clone(),
             tx: Arc::new(tx.into()),
             rx: Arc::new(rx.into()),
             builder,
+            transaction_builder: Arc::new(transaction_builder.into()),
         }
     }
 
@@ -224,7 +235,7 @@ impl StateDelta {
                     &uuid::Uuid::new_v4().to_string(),
                     &buf,
                 )?;
-                match StateDelta::recv_from_messagefuture(fut).await {
+                match SawtoothLedger::recv_from_messagefuture(fut).await {
                     Ok((_, response)) => {
                         break ClientEventsSubscribeResponse::decode(response?.get_content())?;
                     }
@@ -270,7 +281,7 @@ impl StateDelta {
                 let last_block = &mut block.clone();
                 loop {
                     let events =
-                        StateDelta::recv_from_channel(rx.clone(), ping_respond.clone()).await;
+                        SawtoothLedger::recv_from_channel(rx.clone(), ping_respond.clone()).await;
 
                     match events {
                         Err(StateError::ZmqRxx { source }) => {
@@ -390,10 +401,83 @@ impl StateDelta {
             },
         )
     }
+
+    #[instrument(
+        name = "submit_sawtooth_tx",
+        level = "info",
+        skip(self, transactions),
+        ret(Debug)
+    )]
+
+    async fn submit_transaction(
+        &self,
+        transactions: &ChronicleTransaction,
+    ) -> Result<ChronicleTransactionId, (ChronicleTransactionId, SawtoothSubmissionError)> {
+        // Practically, a protobuf serialization error here is probably a crash
+        // loop level fault, but we will handle it without panic for now
+        let (sawtooth_transaction, tx_id) = self
+            .transaction_builder
+            .lock()
+            .unwrap()
+            .make_tx(transactions)
+            .await
+            .map_err(|e| (ChronicleTransactionId::from(""), e.into()))?;
+
+        let ret_tx_id = tx_id.clone();
+
+        let res = async move {
+            let batch = self.builder.wrap_tx_as_sawtooth_batch(sawtooth_transaction);
+
+            trace!(?batch, "Validator request");
+
+            let request = ClientBatchSubmitRequest {
+                batches: vec![batch],
+            };
+
+            let mut future = loop {
+                let correlation_id = Uuid::new_v4().to_string();
+                let future = self.tx.lock().unwrap().send(
+                    Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
+                    &correlation_id.to_string(),
+                    &request.encode_to_vec(),
+                );
+
+                // Force reconnection on any send error that's not a timeout -
+                // disconnect can actually mean a dead Zmq Thread
+                if let Err(_e) = future {
+                    debug!("Send error, re-initialise ZMQ");
+                    self.reconnect();
+                    continue;
+                }
+
+                break future.unwrap();
+            };
+
+            debug!(submit_transaction=%tx_id);
+
+            let result = future.get_timeout(std::time::Duration::from_secs(10))?;
+
+            let response =
+                ClientBatchSubmitResponse::decode(&*result.content).map_err(ProtocolError::from)?;
+
+            debug!(validator_response=?response);
+
+            if response.status == 1 {
+                Ok(tx_id)
+            } else {
+                Err(SawtoothSubmissionError::UnexpectedStatus {
+                    status: response.status,
+                })
+            }
+        }
+        .await;
+
+        res.map_err(|e| (ret_tx_id, e))
+    }
 }
 
 #[async_trait::async_trait]
-impl LedgerReader for StateDelta {
+impl LedgerReader for SawtoothLedger {
     #[instrument]
     async fn state_updates(
         self,
@@ -409,5 +493,19 @@ impl LedgerReader for StateDelta {
         });
 
         Ok(subscribe.await?.fuse().flat_map(stream::iter).boxed())
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl LedgerWriter for SawtoothLedger {
+    /// TODO: This blocks on a bunch of non tokio / futures 'futures' in the sawtooth rust SDK,
+    /// which also exposes a bunch of non clonable types so we probably need another dispatch / join mpsc here
+    async fn submit(
+        &mut self,
+        tx: &ChronicleTransaction,
+    ) -> Result<ChronicleTransactionId, SubmissionError> {
+        self.submit_transaction(tx)
+            .await
+            .map_err(|(tx_id, e)| SubmissionError::implementation(&tx_id, Arc::new(e.into())))
     }
 }

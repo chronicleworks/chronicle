@@ -193,6 +193,7 @@ impl IdToSign {
             },
         }
     }
+
     fn to_sign(&self) -> Result<Vec<u8>, ProcessorError> {
         Ok(serde_json::to_string(self)?.as_bytes().to_vec())
     }

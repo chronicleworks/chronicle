@@ -161,6 +161,7 @@ impl SubmissionStage {
     pub fn submitted_error(r: &SubmissionError) -> Self {
         SubmissionStage::Submitted(Err(r.clone()))
     }
+
     pub fn submitted(r: &ChronicleTransactionId) -> Self {
         SubmissionStage::Submitted(Ok(r.clone()))
     }
