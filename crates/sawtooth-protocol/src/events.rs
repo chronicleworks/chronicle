@@ -294,14 +294,17 @@ impl SawtoothLedger {
                                     debug!(?events, "Received events");
                                     let mut updates = vec![];
                                     for event in events.events {
-                                        updates.push(match &*event.event_type {
+                                        let event_type = &*event.event_type;
+                                        updates.push(match event_type {
                                             "sawtooth/block-commit" => event
                                                 .attributes
                                                 .iter()
                                                 .find(|attr| attr.key == "block_id")
                                                 .ok_or(StateError::MissingBlockNum {})
                                                 .map(|attr| {
-                                                    Some(ParsedEvent::Block(attr.value.clone()))
+                                                    let block_id = attr.value.clone();
+                                                    trace!("parsed block ID {block_id}");
+                                                    Some(ParsedEvent::Block(block_id))
                                                 }),
                                             "chronicle/prov-update" => {
                                                 let transaction_id = event
@@ -310,7 +313,11 @@ impl SawtoothLedger {
                                                     .find(|attr| attr.key == "transaction_id")
                                                     .ok_or(StateError::MissingTransactionId {})
                                                     .map(|attr| {
-                                                        ChronicleTransactionId::from(&*attr.value)
+                                                        let transaction_id = &*attr.value;
+                                                        trace!(
+                                                            "parsed transaction ID {transaction_id}"
+                                                        );
+                                                        ChronicleTransactionId::from(transaction_id)
                                                     });
 
                                                 let event = deserialize_event(&event.data)
@@ -325,18 +332,25 @@ impl SawtoothLedger {
                                                     .map(|(transaction_id, (_span, res))| match res
                                                     {
                                                         Err(contradiction) => {
+                                                            trace!("transaction {transaction_id} causes contradiction");
                                                             Some(ParsedEvent::Contradiction(
                                                                 contradiction,
                                                                 transaction_id,
                                                             ))
                                                         }
-                                                        Ok(delta) => Some(ParsedEvent::State(
-                                                            Box::new(delta),
-                                                            transaction_id,
-                                                        )),
+                                                        Ok(delta) => {
+                                                            trace!("transaction {transaction_id} causes state change");
+                                                            Some(ParsedEvent::State(
+                                                                Box::new(delta),
+                                                                transaction_id,
+                                                            ))
+                                                        }
                                                     })
                                             }
-                                            _ => Ok(None),
+                                            _ => {
+                                                trace!("received event of type {event_type}");
+                                                Ok(None)
+                                            }
                                         });
                                     }
 
@@ -436,16 +450,18 @@ impl SawtoothLedger {
 
             let mut future = loop {
                 let correlation_id = Uuid::new_v4().to_string();
+                trace!("submitting transaction ID {tx_id} with correlation ID {correlation_id}");
                 let future = self.tx.lock().unwrap().send(
                     Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
                     &correlation_id.to_string(),
                     &request.encode_to_vec(),
                 );
 
-                // Force reconnection on any send error that's not a timeout -
+                // Force reconnection on send errors,
                 // disconnect can actually mean a dead Zmq Thread
-                if let Err(_e) = future {
-                    debug!("Send error, re-initialise ZMQ");
+
+                if let Err(error) = future {
+                    debug!("Send error ({error}), reinitializing ZMQ");
                     self.reconnect();
                     continue;
                 }
