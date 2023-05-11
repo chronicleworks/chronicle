@@ -17,11 +17,11 @@ keywords:
 # This is the chart version. This version number should be incremented each
 # time you make changes to the chart and its templates, including the app
 # version.
-version: 0.1.7
+version: 0.1.13
 
 # This is the version number of Chronicle being deployed. This version
 # number should be incremented each time you make changes to Chronicle.
-appVersion: 0.2.1
+appVersion: 0.6.2
 
 dependencies:
   - name: standard-defs
