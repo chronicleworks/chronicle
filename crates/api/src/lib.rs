@@ -263,6 +263,11 @@ where
             .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
             .map_err(|migration| StoreError::DbMigration(migration))?;
 
+        // Append namespace bindings and system namespace
+        store.namespace_binding(
+            &"chronicle-system".to_string(),
+            Uuid::try_from("00000000-0000-0000-0000-000000000001").unwrap(),
+        )?;
         for (ns, uuid) in namespace_bindings {
             store.namespace_binding(&ns, uuid)?
         }
@@ -2068,6 +2073,61 @@ mod test {
         was_informed_by: {}
         generated: {}
         attribution: {}
+        "###);
+    }
+
+    #[tokio::test]
+    async fn create_system_activity() {
+        let mut api = test_api().await;
+
+        let identity = AuthId::chronicle();
+
+        insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+            external_id: "testactivity".into(),
+            namespace: "chronicle-system".into(),
+            attributes: Attributes {
+                typ: Some(DomaintypeId::from_external_id("test")),
+                attributes: [(
+                    "test".to_owned(),
+                    Attribute {
+                        typ: "test".to_owned(),
+                        value: serde_json::Value::String("test".to_owned()),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+        }), identity)
+        .await
+        .unwrap()
+        .unwrap()
+        .0
+        .to_json()
+        .compact_stable_order()
+        .await
+        .unwrap(), @r###"
+        {
+          "@context": "https://btp.works/chr/1.0/c.jsonld",
+          "@graph": [
+            {
+              "@id": "chronicle:activity:testactivity",
+              "@type": [
+                "prov:Activity",
+                "chronicle:domaintype:test"
+              ],
+              "externalId": "testactivity",
+              "namespace": "chronicle:ns:chronicle%2Dsystem:00000000-0000-0000-0000-000000000001",
+              "value": {
+                "test": "test"
+              }
+            },
+            {
+              "@id": "chronicle:ns:chronicle%2Dsystem:00000000-0000-0000-0000-000000000001",
+              "@type": "chronicle:Namespace",
+              "externalId": "chronicle-system"
+            }
+          ]
+        }
         "###);
     }
 
