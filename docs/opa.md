@@ -1,5 +1,118 @@
 # Access Control Policy with OPA
 
+## Default Policy in Chronicle
+
+The default policy in Chronicle defines the access control rules for
+authorization decisions. It consists of the `allow_transactions` and
+`common_rules` packages, which define the authorization rules for
+transaction.
+
+### Default Policy Description
+
+The default policy in Chronicle is defined using the
+[Rego policy language](https://www.openpolicyagent.org/docs/latest/policy-language/)
+of the Open Policy Agent (OPA). It consists of two main packages:
+`allow_transactions` and `common_rules`.
+
+#### `allow_transactions` Package
+
+The `allow_transactions` package is responsible for defining authorization rules
+related to transaction processing in Chronicle. It depends on the rules
+specified in the `common_rules` package.
+
+The following rules are defined in the `allow_transactions` package:
+
+```rego
+package allow_transactions
+
+import data.common_rules
+import future.keywords.in
+import input
+
+default allowed_users = false
+allowed_users {
+  common_rules.allowed_users
+}
+
+default allow_defines = false
+allow_defines {
+  common_rules.allow_defines
+}
+
+default deny_all = false
+```
+
+- `allowed_users`: This rule determines whether users are allowed to access
+  resources or perform actions. It relies on the `allowed_users` rule defined
+  in the `common_rules` package.
+
+- `allow_defines`: This rule specifies whether users are allowed to execute
+  Chronicle's `define` Mutation and Submission operations. It also relies on
+  the `allow_defines` rule defined in the `common_rules` package.
+
+- `deny_all`: This rule denies access to all resources or actions by
+  default. It ensures that if no other rules match, access is denied.
+
+#### `common_rules` Package
+
+The `common_rules` package defines authorization rules that are common to
+various parts of Chronicle's functionality.
+
+The following rules are defined in the `common_rules` package:
+
+```rego
+package common_rules
+
+import future.keywords.in
+import input
+
+allowed := {"chronicle", "anonymous"}
+
+allowed_users {
+  input.type in allowed
+}
+
+allow_defines {
+  data.context.operation in ["Mutation", "Submission"]
+  startswith(data.context.state[0], "define")
+}
+```
+
+- `allowed_users`: This rule determines whether users of specific types
+  are allowed to access resources or perform actions. In the current
+  implementation, users with the types `"chronicle"` and `"anonymous"` are
+  allowed.
+
+- `allow_defines`: This rule specifies whether users can execute
+  Chronicle's `define` Mutation and Submission operations. It checks the
+  operation type and verifies if the state starts with the string `"define"`.
+
+### Default Policy and JWKS Authorization
+
+The default policy implemented in Chronicle does not allow access to
+users authenticated using JWKS authorization. Users of type `"jwt"`
+will be denied access under the default policy. This is because the
+default policy does not include rules specific to JWKS authorization. If
+you want to enable access for JWKS-authorized users, you need to modify
+the policy accordingly.
+
+### Modifying the Default Policy
+
+To modify the default policy in Chronicle, you can follow these steps:
+
+- Update the Rego policy files to define the desired access control
+  rules.
+
+- Use the `opactl` command-line tool to load the updated policy bundle
+  into the OPA Transaction Processor.
+
+- Configure Chronicle's settings to match the policy by setting the
+  appropriate Sawtooth settings entries.
+
+Detailed instructions on modifying the default policy can be found in
+the [Configuration section](#configuring-chronicle-to-use-opa) of this
+documentation.
+
 ## OPA Standard
 
 The OPA standard, or [Open Policy Agent](https://www.openpolicyagent.org/docs/latest/),
