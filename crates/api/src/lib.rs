@@ -268,7 +268,7 @@ where
 
         // Append namespace bindings and system namespace
         store.namespace_binding(
-            "chronicle-system",
+            &"chronicle-system".to_string(),
             Uuid::try_from("00000000-0000-0000-0000-000000000001").unwrap(),
         )?;
         for (ns, uuid) in namespace_bindings {
