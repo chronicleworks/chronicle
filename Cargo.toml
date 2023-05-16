@@ -9,6 +9,7 @@ members = [
   "crates/chronicle-domain-test",
   "crates/chronicle-protocol",
   "crates/chronicle-synth",
+  "crates/chronicle-signing",
   "crates/chronicle-telemetry",
   "crates/gq-subscribe",
   "crates/id-provider",
@@ -52,6 +53,7 @@ futures = "0.3.21"
 genco = "0.16.1"
 glob = "0.3.0"
 hashbrown = "0.13"
+hashicorp_vault = "0.2"
 hex = "0.4.3"
 http = "0.2.9"
 insta = { version = "1.26.0", features = ["redactions", "toml"] }
@@ -109,6 +111,8 @@ rust-embed = { version = "6.6.0", features = [
   "include-exclude",
 ] }
 sawtooth-sdk = { git = "https://github.com/hyperledger/sawtooth-sdk-rust", rev = "5a300de" }
+secret-vault = "0.8"
+secret-vault-value = "0.3"
 serde = "1.0.152"
 serde_derive = "1.0.152"
 serde_json = "1.0.93"
