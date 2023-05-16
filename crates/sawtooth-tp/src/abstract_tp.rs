@@ -4,7 +4,7 @@ use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, ContextError, TransactionContext},
 };
-use tracing::instrument;
+use tracing::{debug, instrument};
 // Sawtooth's &mut dyn TransactionContext is highly inconvenient to work with in
 // an async environment, so we will use an effects model instead,
 // TP inputs can be determined synchronously, so we split processing into a sync
@@ -69,8 +69,9 @@ impl TPSideEffects {
         });
     }
 
-    #[instrument(name = "apply_effects", level = "debug", skip(self, ctx), fields (effects = ?self.effects))]
+    #[instrument(name = "apply_effects", level = "trace", skip(self, ctx), fields (effects = ?self.effects))]
     pub fn apply(self, ctx: &mut dyn TransactionContext) -> Result<(), ContextError> {
+        debug!(effect_count = %self.effects.len());
         for effect in self.effects.into_iter() {
             match effect {
                 TPSideEffect::SetState { address, value } => {

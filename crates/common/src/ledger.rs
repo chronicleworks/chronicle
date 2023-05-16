@@ -334,7 +334,7 @@ impl LedgerWriter for InMemLedger {
             )
         }));
 
-        debug!(
+        trace!(
             input_chronicle_addresses=?deps,
         );
 
@@ -354,7 +354,7 @@ impl LedgerWriter for InMemLedger {
                         tx_output
                             .into_iter()
                             .map(|output| {
-                                debug!(output_state = %output.data);
+                                trace!(output_state = %output.data);
                                 (output.address, Some(output.data))
                             })
                             .collect::<BTreeMap<_, _>>()
@@ -788,7 +788,7 @@ impl ChronicleOperation {
     ) -> Result<(Vec<StateOutput<LedgerAddress>>, ProvModel), ProcessorError> {
         for input in input {
             let graph = json::parse(&input.data)?;
-            debug!(input_model=%graph.pretty(2));
+            trace!(input_model=%graph.pretty(2));
             let resource = json::object! {
                 "@graph": [graph],
             };
