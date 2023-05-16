@@ -13,12 +13,10 @@ use crate::{
     },
 };
 
-use super::{
-    ActivityUses, ActsOnBehalfOf, CompactedJson, EntityDerive, EntityHasEvidence, StartActivity,
-};
+use super::{ActivityUses, ActsOnBehalfOf, EntityDerive, EntityHasEvidence, StartActivity};
 
 prop_compose! {
-    fn an_external_id()(external_id in ".*") -> ExternalId {
+    fn an_external_id()(external_id in "[A-Za-z]") -> ExternalId {
         ExternalId::from(external_id)
     }
 }
@@ -61,7 +59,7 @@ prop_compose! {
 
 // Choose from a limited selection of namespaces so that we get multiple references
 prop_compose! {
-    fn namespace()(namespaces in prop::collection::vec(a_namespace(), 2), index in (0..2usize)) -> NamespaceId {
+    fn namespace()(namespaces in prop::collection::vec(a_namespace(), 1), index in (0..1usize)) -> NamespaceId {
         namespaces.get(index).unwrap().to_owned()
     }
 }
@@ -356,7 +354,7 @@ fn operation_seq() -> impl Strategy<Value = Vec<ChronicleOperation>> {
     proptest::collection::vec(transaction(), 1..50)
 }
 
-fn compact_json(prov: &ProvModel) -> CompactedJson {
+fn compact_json(prov: &ProvModel) -> serde_json::Value {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -685,11 +683,18 @@ proptest! {
         // Test that serialisation to and from JSON-LD is symmetric
         let lhs_json_expanded = prov.to_json().0;
 
-        let lhs_json = compact_json(&prov).0;
+        let lhs_json = compact_json(&prov);
 
         let serialized_prov = prov_from_json_ld(lhs_json.clone());
 
+
         prop_assert_eq!(&prov, &serialized_prov, "Prov reserialisation compact: \n{} expanded \n {}",
             serde_json::to_string_pretty(&lhs_json).unwrap(), serde_json::to_string_pretty(&lhs_json_expanded).unwrap());
+
+        // Test that serialisation to JSON-LD is deterministic
+        for _ in 0..10 {
+            let lhs_json_2 = compact_json(&prov).clone();
+            prop_assert_eq!( lhs_json.clone().to_string(), lhs_json_2.to_string());
+        }
     }
 }

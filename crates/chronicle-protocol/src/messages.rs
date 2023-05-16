@@ -15,7 +15,6 @@ use async_sawtooth_sdk::{
     sawtooth::{MessageBuilder, TransactionPayload},
 };
 use prost::Message;
-use sawtooth_sdk::messages::transaction::Transaction;
 
 #[derive(Debug, Clone)]
 pub struct ChronicleSubmitTransaction {
@@ -39,7 +38,7 @@ impl TransactionPayload for ChronicleSubmitTransaction {
         let mut ops = Vec::with_capacity(self.tx.tx.len());
         for op in &self.tx.tx {
             let op_json = op.to_json();
-            let compact_json_string = op_json.compact().await?.0.to_string();
+            let compact_json_string = op_json.compact().await?.to_string();
             // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
             // which calls here from `sawtooth-protocol::messages` being non-fallible
             ops.push(compact_json_string);
@@ -83,7 +82,7 @@ impl LedgerTransaction for ChronicleSubmitTransaction {
     async fn as_sawtooth_tx(
         &self,
         message_builder: &MessageBuilder,
-    ) -> (Transaction, TransactionId) {
+    ) -> (async_sawtooth_sdk::messages::Transaction, TransactionId) {
         //Ensure we append any opa policy binary address and meta address to the
         //list of addresses, along with the settings address
         let mut addresses: Vec<_> = self

@@ -7,18 +7,18 @@ use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::{
     address::{FAMILY, VERSION},
     async_sawtooth_sdk::{
-        error::SawtoothCommunicationError, ledger::LedgerReader,
-        zmq_client::ZmqRequestResponseSawtoothChannel,
+        error::SawtoothCommunicationError,
+        ledger::LedgerReader,
+        zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
     },
     state::policy_address,
     OpaLedger,
 };
 use rust_embed::RustEmbed;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
-use url::Url;
 
 #[derive(Debug, Error)]
 pub enum PolicyLoaderError {
@@ -95,18 +95,27 @@ pub struct SawtoothPolicyLoader {
 }
 
 impl SawtoothPolicyLoader {
-    pub fn new(address: &Url, policy_id: &str, entrypoint: &str) -> Self {
-        Self {
+    pub fn new(
+        address: &SocketAddr,
+        policy_id: &str,
+        entrypoint: &str,
+    ) -> Result<Self, SawtoothCommunicationError> {
+        Ok(Self {
             policy_id: policy_id.to_owned(),
             address: String::default(),
             policy: None,
             entrypoint: entrypoint.to_owned(),
             ledger: OpaLedger::new(
-                ZmqRequestResponseSawtoothChannel::new(address),
+                ZmqRequestResponseSawtoothChannel::new(
+                    "sawtooth_policy",
+                    &[address.to_owned()],
+                    HighestBlockValidatorSelector,
+                )?
+                .retrying(),
                 FAMILY,
                 VERSION,
             ),
-        }
+        })
     }
 
     fn sawtooth_address(&self, policy: impl AsRef<str>) -> String {
@@ -126,7 +135,6 @@ impl SawtoothPolicyLoader {
 
             if let Err(res) = &res {
                 error!(error=?res, "Failed to load policy from chain");
-                self.ledger.reconnect().await;
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 continue;
             }
@@ -525,10 +533,10 @@ mod tests {
         let (policy, entrypoint) = allow_all_users();
         let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
         let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-        assert!(executor
+        executor
             .evaluate(&anonymous_user(), &anonymous_user_opa_data())
             .await
-            .is_ok());
+            .unwrap();
         Ok(())
     }
 

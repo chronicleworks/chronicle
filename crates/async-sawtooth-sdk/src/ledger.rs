@@ -10,27 +10,15 @@ use futures::{
     stream::{self, BoxStream},
     StreamExt,
 };
+use prost::Message;
 
-use k256::ecdsa::SigningKey;
-use protobuf::Message;
-use sawtooth_sdk::messages::{
-    batch::Batch,
-    block::{Block, BlockHeader},
-    client_batch_submit::{
-        ClientBatchSubmitRequest, ClientBatchSubmitResponse, ClientBatchSubmitResponse_Status,
-    },
-    client_block::{
-        ClientBlockGetResponse, ClientBlockGetResponse_Status, ClientBlockListResponse,
-        ClientBlockListResponse_Status,
-    },
-    client_event::{ClientEventsSubscribeResponse, ClientEventsSubscribeResponse_Status},
-    client_state::{ClientStateGetResponse, ClientStateGetResponse_Status},
-    events::EventList,
-    transaction::Transaction,
-    validator::Message_MessageType,
+use crate::messages::{
+    message::MessageType, Batch, Block, BlockHeader, ClientBatchSubmitRequest,
+    ClientBatchSubmitResponse, ClientBlockGetResponse, ClientBlockListResponse,
+    ClientEventsSubscribeResponse, ClientStateGetResponse, EventList, Transaction,
 };
+use k256::ecdsa::SigningKey;
 use serde::{Deserialize, Serialize};
-
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -181,21 +169,29 @@ impl std::fmt::Display for Position {
     }
 }
 
+// Type that can contain a distributed tracing span for transaction processors
+// that support it
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum Span {
+    Span(u64),
+    NotTraced,
+}
+
 // An application specific ledger event with its corresponding transaction id,
 // block height and trace span
-pub type LedgerEventContext<Event> = (Event, TransactionId, BlockId, Position, u64);
+pub type LedgerEventContext<Event> = (Event, TransactionId, BlockId, Position, Span);
 
 #[async_trait::async_trait]
 pub trait LedgerEvent {
-    async fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    async fn deserialize(buf: &[u8]) -> Result<(Self, Span), SawtoothCommunicationError>
     where
         Self: Sized;
 }
 
 #[async_trait::async_trait]
 impl LedgerEvent for () {
-    async fn deserialize(_buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError> {
-        Ok(((), 0))
+    async fn deserialize(_buf: &[u8]) -> Result<(Self, Span), SawtoothCommunicationError> {
+        Ok(((), Span::NotTraced))
     }
 }
 
@@ -206,7 +202,7 @@ pub trait LedgerTransaction {
     async fn as_sawtooth_tx(
         &self,
         message_builder: &MessageBuilder,
-    ) -> (Transaction, TransactionId);
+    ) -> (crate::messages::Transaction, TransactionId);
 }
 
 #[async_trait::async_trait]
@@ -330,12 +326,9 @@ pub trait LedgerReader {
         // The number of blocks to process before ending the stream
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error>;
-
-    async fn reconnect(&self) {}
-
-    fn shutdown(&self) {}
 }
 
+// Transaction submission and event streaming for Sawtooth.
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
 pub struct SawtoothLedger<
@@ -364,30 +357,31 @@ impl<
             builder,
             channel,
             last_seen_block: Default::default(),
-            _e: std::marker::PhantomData::default(),
-            _t: std::marker::PhantomData::default(),
+            _e: std::marker::PhantomData,
+            _t: std::marker::PhantomData,
         }
     }
 
     #[instrument(skip(self), level = "trace")]
     async fn submit_batch(&self, batch: Batch) -> Result<(), SawtoothCommunicationError> {
         let request = ClientBatchSubmitRequest {
-            batches: vec![batch].into(),
-            ..Default::default()
+            batches: vec![batch],
         };
         let batch_response: ClientBatchSubmitResponse = self
             .channel
             .send_and_recv_one(
-                request,
-                sawtooth_sdk::messages::validator::Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST,
+                &request,
+                MessageType::ClientBatchSubmitRequest,
+                MessageType::ClientBatchSubmitResponse,
                 std::time::Duration::from_secs(10),
             )
             .await?;
-        if batch_response.status == ClientBatchSubmitResponse_Status::OK {
+        if batch_response.status == crate::messages::client_batch_submit_response::Status::Ok as i32
+        {
             Ok(())
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
-                status: batch_response.status as i32,
+                status: batch_response.status,
             })
         }
     }
@@ -398,25 +392,26 @@ impl<
         let response: ClientBlockListResponse = self
             .channel
             .send_and_recv_one(
-                request,
-                sawtooth_sdk::messages::validator::Message_MessageType::CLIENT_BLOCK_LIST_REQUEST,
+                &request,
+                MessageType::ClientBlockListRequest,
+                MessageType::ClientBlockListResponse,
                 std::time::Duration::from_secs(10),
             )
             .await?;
-        if response.status == ClientBlockListResponse_Status::OK {
+        if response.status == crate::messages::client_block_list_response::Status::Ok as i32 {
             let block = response
-                .get_blocks()
+                .blocks
                 .first()
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
-            let header = BlockHeader::parse_from_bytes(&block.header)?;
+            let header = BlockHeader::decode(&*block.header)?;
             Ok((
                 header.block_num.into(),
                 block.header_signature.clone().try_into()?,
             ))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
-                status: response.status as i32,
+                status: response.status,
             })
         }
     }
@@ -430,16 +425,23 @@ impl<
             let response: Result<ClientBlockGetResponse, _> = self
                 .channel
                 .send_and_recv_one(
-                    req,
-                    Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST,
+                    &req,
+                    MessageType::ClientBlockGetByNumRequest,
+                    MessageType::ClientBlockGetResponse,
                     Duration::from_secs(10),
                 )
                 .await;
 
             if let Ok(response) = response {
                 trace!(block_by_num_response = ?response);
-                match (response.status, response.block.into_option()) {
-                    (ClientBlockGetResponse_Status::OK, Some(block)) => break block,
+                match (
+                    crate::messages::client_block_list_response::Status::from_i32(response.status),
+                    response.block,
+                ) {
+                    (
+                        Some(crate::messages::client_block_list_response::Status::Ok),
+                        Some(block),
+                    ) => break block,
                     (e, _) => {
                         error!(head_block_status = ?e)
                     }
@@ -464,17 +466,20 @@ impl<
         debug!(subscription_request = ?subscription_request);
         let sub = self
             .channel
-            .send_and_recv_one::<ClientEventsSubscribeResponse, _>(
-                subscription_request,
-                Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST,
+            .send_and_recv_all::<ClientEventsSubscribeResponse, _>(
+                &subscription_request,
+                MessageType::ClientEventsSubscribeRequest,
+                MessageType::ClientEventsSubscribeResponse,
                 Duration::from_secs(10),
             )
             .await?;
 
-        if sub.status != ClientEventsSubscribeResponse_Status::OK {
-            return Err(SawtoothCommunicationError::SubscribeError {
-                code: sub.status as i32,
-            });
+        for sub in sub {
+            debug!(subscription_response = ?sub);
+
+            if sub.status != crate::messages::client_events_subscribe_response::Status::Ok as i32 {
+                return Err(SawtoothCommunicationError::SubscribeError { code: sub.status });
+            }
         }
 
         self.event_stream(event_type, from_block).await
@@ -485,16 +490,19 @@ impl<
         event_type: &str,
         from_block: BlockId,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
+        debug!(event_stream= ?event_type, from_block = %from_block);
         let event_type = event_type.to_owned();
         #[derive(Debug)]
         enum ParsedEvent<Event> {
             Block(BlockId, Position),
-            Operation(Event, TransactionId, u64),
+            Operation(Event, TransactionId, Span),
         }
 
         let channel = self.channel.clone();
         let from_block = from_block;
-        let event_stream = channel.recv_stream::<EventList>().await?;
+        let event_stream = channel
+            .recv_stream::<EventList>(MessageType::ClientEvents)
+            .await?;
         let event_stream = event_stream.then(move |events| {
             let event_type = event_type.clone();
             async move {
@@ -630,19 +638,22 @@ impl<
         let response = self
             .channel
             .send_and_recv_one::<ClientStateGetResponse, _>(
-                request,
-                Message_MessageType::CLIENT_STATE_GET_REQUEST,
+                &request,
+                MessageType::ClientStateGetRequest,
+                MessageType::ClientStateGetResponse,
                 Duration::from_secs(10),
             )
             .await?;
 
-        if response.status == ClientStateGetResponse_Status::OK {
+        if response.status == crate::messages::client_state_get_response::Status::Ok as i32 {
             Ok(response.value)
-        } else if response.status == ClientStateGetResponse_Status::NO_RESOURCE {
+        } else if response.status
+            == crate::messages::client_state_get_response::Status::NoResource as i32
+        {
             Err(SawtoothCommunicationError::ResourceNotFound)
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
-                status: response.status as i32,
+                status: response.status,
             })
         }
     }
@@ -694,17 +705,6 @@ impl<
             })
             .boxed())
     }
-
-    async fn reconnect(&self) {
-        debug!("Reconnect ZMQ channel");
-        self.channel.close();
-        self.channel.reconnect();
-    }
-
-    fn shutdown(&self) {
-        debug!("Shutdown ZMQ channel");
-        self.channel.close();
-    }
 }
 
 #[async_trait::async_trait]
@@ -724,13 +724,7 @@ impl<
     async fn pre_submit(
         &self,
         tx: &Self::Transaction,
-    ) -> Result<
-        (
-            TransactionId,
-            sawtooth_sdk::messages::transaction::Transaction,
-        ),
-        Self::Error,
-    > {
+    ) -> Result<(TransactionId, crate::messages::Transaction), Self::Error> {
         let (sawtooth_tx, id) = tx.as_sawtooth_tx(self.message_builder()).await;
         Ok((id, sawtooth_tx))
     }
@@ -738,7 +732,7 @@ impl<
     #[instrument(skip(self), level = "trace", ret(Debug))]
     async fn submit(
         &self,
-        tx: sawtooth_sdk::messages::transaction::Transaction,
+        tx: crate::messages::Transaction,
         signer: &SigningKey,
     ) -> Result<(), Self::Error> {
         let batch = self.message_builder().wrap_tx_as_sawtooth_batch(tx, signer);

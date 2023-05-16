@@ -36,7 +36,8 @@ opa-tp-protocol      = { path = "../opa-tp-protocol" }
 openssl              = { workspace = true }
 opentelemetry        = { workspace = true }
 opentelemetry-jaeger = { workspace = true }
-prost                = "0.10.0"
+prost                = { workspace = true }
+protobuf             = { workspace = true }
 rand                 = { workspace = true }
 rand_core            = { workspace = true }
 sawtooth-sdk         = { workspace = true }
@@ -59,6 +60,5 @@ protobuf = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default          = ["vendored-zmq", "vendored-openssl"]
+default          = ["vendored-openssl"]
 vendored-openssl = ['openssl/vendored']
-vendored-zmq     = ['zmq/vendored']

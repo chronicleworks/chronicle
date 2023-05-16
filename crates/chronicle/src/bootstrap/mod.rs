@@ -12,7 +12,6 @@ use async_graphql::{async_trait, ObjectType};
 #[cfg(not(feature = "inmem"))]
 use chronicle_protocol::{
     address::{FAMILY, VERSION},
-    async_sawtooth_sdk::zmq_client::ZmqRequestResponseSawtoothChannel,
     ChronicleLedger,
 };
 use clap::{ArgMatches, Command};
@@ -26,7 +25,7 @@ use common::{
     ledger::SubmissionStage,
     opa::ExecutorContext,
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
-    signing::{DirectoryStoredKeys, SignerError},
+    signing::DirectoryStoredKeys,
 };
 use is_terminal::IsTerminal;
 use tracing::{debug, error, info, instrument};
@@ -53,18 +52,33 @@ use crate::codegen::ChronicleDomainDef;
 use self::opa::opa_executor_from_embedded_policy;
 
 #[cfg(not(feature = "inmem"))]
-fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Url, SignerError> {
+fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Vec<SocketAddr>, CliError> {
     Ok(options
-        .get_one::<String>("sawtooth")
-        .map(|s| Url::parse(s))
-        .unwrap_or_else(|| Ok(config.validator.address.clone()))?)
+        .value_of("sawtooth")
+        .map(str::to_string)
+        .or_else(|| Some(config.validator.address.clone().to_string()))
+        .ok_or(CliError::MissingArgument {
+            arg: "sawtooth".to_owned(),
+        })
+        .and_then(|s| Url::parse(&s).map_err(CliError::from))
+        .map(|u| u.socket_addrs(|| Some(4004)))
+        .map_err(CliError::from)??)
 }
 
 #[allow(dead_code)]
 #[cfg(not(feature = "inmem"))]
-fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, SignerError> {
+fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, CliError> {
+    use async_sawtooth_sdk::zmq_client::{
+        HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
+    };
+
     Ok(ChronicleLedger::new(
-        ZmqRequestResponseSawtoothChannel::new(&sawtooth_address(config, options)?).retrying(),
+        ZmqRequestResponseSawtoothChannel::new(
+            "inmem",
+            &sawtooth_address(config, options)?,
+            HighestBlockValidatorSelector,
+        )?
+        .retrying(),
         FAMILY,
         VERSION,
     ))
@@ -74,14 +88,14 @@ fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, Sign
 fn in_mem_ledger(
     _config: &Config,
     _options: &ArgMatches,
-) -> Result<crate::api::inmem::EmbeddedChronicleTp, SignerError> {
-    Ok(crate::api::inmem::EmbeddedChronicleTp::new())
+) -> Result<crate::api::inmem::EmbeddedChronicleTp, ApiError> {
+    Ok(crate::api::inmem::EmbeddedChronicleTp::new()?)
 }
 
 #[cfg(feature = "inmem")]
 #[allow(dead_code)]
-fn ledger() -> Result<EmbeddedChronicleTp, std::convert::Infallible> {
-    Ok(EmbeddedChronicleTp::new())
+fn ledger() -> Result<EmbeddedChronicleTp, ApiError> {
+    Ok(EmbeddedChronicleTp::new()?)
 }
 
 #[derive(Debug, Clone)]
@@ -157,10 +171,10 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
     policy_name: Option<String>,
-) -> Result<ApiDispatch, ApiError> {
+) -> Result<ApiDispatch, CliError> {
     let ledger = ledger(config, options)?;
 
-    Api::new(
+    Ok(Api::new(
         pool.clone(),
         ledger,
         &config.secrets.path,
@@ -168,7 +182,7 @@ pub async fn api(
         config.namespace_bindings.clone(),
         policy_name,
     )
-    .await
+    .await?)
 }
 
 #[cfg(feature = "inmem")]
@@ -667,7 +681,7 @@ pub async fn bootstrap<Query, Mutation>(
 #[cfg(test)]
 pub mod test {
     use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
-    use async_sawtooth_sdk::protobuf::Message;
+    use async_sawtooth_sdk::prost::Message;
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::TemporaryDatabase,
@@ -681,7 +695,6 @@ pub mod test {
         signing::DirectoryStoredKeys,
     };
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-    use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -743,34 +756,24 @@ pub mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let mut buf = vec![];
-        Setting {
-            entries: vec![Setting_Entry {
+        let buf = async_sawtooth_sdk::messages::Setting {
+            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
                 key: "chronicle.opa.policy_name".to_string(),
                 value: "allow_transactions".to_string(),
-                ..Default::default()
-            }]
-            .into(),
-            ..Default::default()
+            }],
         }
-        .write_to_vec(&mut buf)
-        .unwrap();
+        .encode_to_vec();
         let setting_id = (
             chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
             buf,
         );
-        let mut buf = vec![];
-        Setting {
-            entries: vec![Setting_Entry {
+        let buf = async_sawtooth_sdk::messages::Setting {
+            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
                 key: "chronicle.opa.entrypoint".to_string(),
                 value: "allow_transactions.allowed_users".to_string(),
-                ..Default::default()
-            }]
-            .into(),
-            ..Default::default()
+            }],
         }
-        .write_to_vec(&mut buf)
-        .unwrap();
+        .encode_to_vec();
 
         let setting_entrypoint = (
             chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
@@ -798,7 +801,8 @@ pub mod test {
             ]
             .into_iter()
             .collect(),
-        );
+        )
+        .unwrap();
 
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();

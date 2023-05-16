@@ -18,7 +18,7 @@ doc = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+async-sawtooth-sdk = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }

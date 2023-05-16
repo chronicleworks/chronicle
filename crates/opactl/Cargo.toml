@@ -17,7 +17,6 @@ futures             = { workspace = true }
 k256                = { workspace = true }
 lazy_static         = { workspace = true }
 opa-tp-protocol     = { path = "../opa-tp-protocol" }
-pin-project         = { workspace = true }
 rand                = { workspace = true }
 rand_core           = { workspace = true }
 sawtooth-sdk        = { workspace = true }
@@ -30,12 +29,20 @@ tokio-stream        = { workspace = true }
 tracing             = { workspace = true }
 url                 = { workspace = true }
 user-error          = { workspace = true }
+uuid                = { workspace = true }
+
 
 [dev-dependencies]
-hex        = { workspace = true }
-insta      = { workspace = true, features = ["yaml"] }
-opa-tp     = { path = "../opa-tp" }
-prost      = { workspace = true }
-protobuf   = { workspace = true }
-serde_json = { workspace = true }
-tempfile   = { workspace = true }
+hex          = { workspace = true }
+insta        = { workspace = true, features = ["yaml"] }
+opa-tp       = { path = "../opa-tp" }
+portpicker   = { workspace = true }
+prost        = { workspace = true }
+protobuf     = { workspace = true }
+sawtooth-sdk = { workspace = true }
+serde_json   = { workspace = true }
+tempfile     = { workspace = true }
+tmq          = { workspace = true }
+
+[features]
+tokio-tracing = ["chronicle-telemetry/tokio-tracing"]

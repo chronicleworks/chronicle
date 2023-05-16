@@ -3,7 +3,6 @@ use async_sawtooth_sdk::{
     sawtooth::MessageBuilder,
 };
 use k256::ecdsa::SigningKey;
-use sawtooth_sdk::messages::transaction::Transaction;
 
 use crate::{
     messages::Submission,
@@ -107,7 +106,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
     async fn as_sawtooth_tx(
         &self,
         message_builder: &MessageBuilder,
-    ) -> (Transaction, TransactionId) {
+    ) -> (async_sawtooth_sdk::messages::Transaction, TransactionId) {
         message_builder
             .make_sawtooth_transaction(
                 self.addresses(),

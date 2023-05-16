@@ -295,7 +295,7 @@ where
                 signer: signing.clone(),
                 ledger_writer: Arc::new(BlockingLedgerWriter::new(ledger)),
                 store: store.clone(),
-                uuid_source: PhantomData::default(),
+                uuid_source: PhantomData,
                 policy_name,
             };
 
@@ -309,7 +309,6 @@ where
                 if let Err(e) = state_updates {
                     error!(subscribe_to_events = ?e);
                     tokio::time::sleep(Duration::from_secs(2)).await;
-                    reuse_reader.reconnect().await;
                     continue;
                 }
 
@@ -321,8 +320,7 @@ where
 
                                 match state {
                                   None => {
-                                    error!("Ledger reader disconnected");
-                                    reuse_reader.reconnect().await;
+                                    debug!("Ledger reader stream ended");
                                     break;
                                   }
                                   // Ledger contradicted or error, so nothing to
@@ -338,7 +336,7 @@ where
                                   Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,block_id,_position,_span )) => {
 
                                         debug!(committed = ?tx);
-                                        debug!(delta = %commit.to_json().compact().await.unwrap().pretty());
+                                        debug!(delta = %serde_json::to_string_pretty(&commit.to_json().compact().await.unwrap()).unwrap());
 
                                         api.sync( commit.clone().into(), &block_id,ChronicleTransactionId::from(tx.as_str()))
                                             .instrument(info_span!("Incoming confirmation", offset = ?block_id, tx_id = %tx))
@@ -1585,7 +1583,6 @@ mod test {
 
     use crate::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
 
-    use async_sawtooth_sdk::protobuf::Message;
     use chrono::{TimeZone, Utc};
     use common::{
         attributes::{Attribute, Attributes},
@@ -1609,6 +1606,7 @@ mod test {
         signing::DirectoryStoredKeys,
     };
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
+    use protobuf::Message;
     use rand_core::SeedableRng;
     use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
 
@@ -1721,6 +1719,7 @@ mod test {
             .into_iter()
             .collect(),
         )
+        .unwrap()
     }
 
     async fn test_api<'a>() -> TestDispatch<'a> {

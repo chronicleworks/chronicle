@@ -14,7 +14,7 @@ async-graphql = { workspace = true, features = [
   "uuid",
 ] }
 async-graphql-poem = { workspace = true }
-async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+async-sawtooth-sdk = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
@@ -39,6 +39,9 @@ opa = { workspace = true }
 opentelemetry = { workspace = true }
 parking_lot = { workspace = true }
 poem = { workspace = true }
+portpicker = { workspace = true }
+prost = { workspace = true }
+protobuf = { workspace = true }
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
@@ -50,6 +53,7 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 static-iref = { workspace = true }
 thiserror = { workspace = true }
+tmq = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
@@ -58,8 +62,8 @@ user-error = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-chronicle-protocol = { path = "../chronicle-protocol" }
 assert_fs          = { workspace = true }
+chronicle-protocol = { path = "../chronicle-protocol" }
 insta              = { workspace = true, features = ["json", "yaml"] }
 opa-tp-protocol    = { path = "../opa-tp-protocol" }
 tempfile           = { workspace = true }
