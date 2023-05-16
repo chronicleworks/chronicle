@@ -10,8 +10,10 @@ async-sawtooth-sdk  = { path = "../async-sawtooth-sdk" }
 async-trait         = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap                = { version = "4.1.1", features = ["env"] }
+const_format        = { workspace = true }
 futures             = { workspace = true }
 k256                = { workspace = true }
+lazy_static         = { workspace = true }
 opa-tp-protocol     = { path = "../opa-tp-protocol" }
 pin-project         = { workspace = true }
 rand                = { workspace = true }
@@ -28,6 +30,7 @@ url                 = { workspace = true }
 user-error          = { workspace = true }
 
 [dev-dependencies]
+hex        = { workspace = true }
 insta      = { workspace = true, features = ["yaml"] }
 opa-tp     = { path = "../opa-tp" }
 prost      = { workspace = true }

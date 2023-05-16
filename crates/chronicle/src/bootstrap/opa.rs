@@ -58,7 +58,7 @@ pub async fn opa_executor_from_sawtooth_settings(
     validator_address: &Url,
 ) -> Result<(ExecutorContext, OpaSettings), CliError> {
     let settings = SettingsReader::new(SawtoothLedger::new(
-        ZmqRequestResponseSawtoothChannel::new(validator_address),
+        ZmqRequestResponseSawtoothChannel::new(validator_address).retrying(),
         FAMILY,
         VERSION,
     ));

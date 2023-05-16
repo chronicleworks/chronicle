@@ -5,6 +5,8 @@ use protobuf::ProtobufError;
 use sawtooth_sdk::messaging::stream::ReceiveError;
 use thiserror::Error;
 
+use crate::ledger::BlockIdError;
+
 #[derive(Error, Debug)]
 pub enum SawtoothCommunicationError {
     #[error("ZMQ error: {0}")]
@@ -29,6 +31,8 @@ pub enum SawtoothCommunicationError {
     MissingTransactionId,
     #[error("Cannot determine block number for event")]
     MissingBlockNum,
+    #[error("Cannot determine block id for event")]
+    MissingBlockId,
     #[error("Unexpected message structure")]
     MalformedMessage,
     #[error("Json: {0}")]
@@ -53,4 +57,13 @@ pub enum SawtoothCommunicationError {
         #[from]
         source: FromUtf8Error,
     },
+
+    #[error("BlockId {source}")]
+    BlockId {
+        #[from]
+        source: BlockIdError,
+    },
+
+    #[error("Infallible {0}")]
+    Infallible(#[from] std::convert::Infallible),
 }

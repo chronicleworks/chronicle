@@ -7,12 +7,19 @@ use sawtooth_sdk::processor::TransactionProcessor;
 use ::chronicle_telemetry::ConsoleLogging;
 use chronicle_telemetry::telemetry;
 use tp::OpaTransactionHandler;
+use tracing::info;
 use url::Url;
+
+pub const LONG_VERSION: &str = const_format::formatcp!(
+    "{}:{}",
+    env!("CARGO_PKG_VERSION"),
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION"))
+);
 
 #[tokio::main]
 async fn main() {
     let matches = Command::new("opa-tp")
-        .version("1.0")
+        .version(LONG_VERSION)
         .author("Blockchain Technology Partners")
         .about("PKI and OPA rule storage")
         .arg(
@@ -60,6 +67,8 @@ async fn main() {
             _ => ConsoleLogging::Off,
         },
     );
+
+    info!(opa_tp_version = LONG_VERSION);
 
     let handler = OpaTransactionHandler::new();
     let mut processor = TransactionProcessor::new({

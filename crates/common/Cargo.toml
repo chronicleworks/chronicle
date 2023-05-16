@@ -17,6 +17,7 @@ async-graphql = { workspace = true, features = [
 ] }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+const_format = { workspace = true }
 custom_error = { workspace = true }
 derivative = { workspace = true }
 diesel = { workspace = true }

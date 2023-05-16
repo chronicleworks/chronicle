@@ -63,7 +63,7 @@ fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Url, Signer
 #[cfg(not(feature = "inmem"))]
 fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, SignerError> {
     Ok(ChronicleLedger::new(
-        ZmqRequestResponseSawtoothChannel::new(&sawtooth_address(config, options)?),
+        ZmqRequestResponseSawtoothChannel::new(&sawtooth_address(config, options)?).retrying(),
         FAMILY,
         VERSION,
     ))

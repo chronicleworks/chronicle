@@ -138,12 +138,16 @@ $(1): $(1)-$(2)-build
 endif
 endif
 
-build: $(1)
+build: .VERSION $(1)
 
 build-native: $(1)-$(HOST_ARCHITECTURE)-build
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
+
+.PHONY: .VERSION
+.VERSION:
+	git describe --tags > .VERSION
 
 clean_containers:
 	$(COMPOSE) -f docker/chronicle.yaml rm -f || true
@@ -186,6 +190,7 @@ OPA_DOWNLOAD_URL=https://openpolicyagent.org/downloads/$(OPA_VERSION)/opa_$(OS)_
 build/opa:
 	curl -sSL -o build/opa $(OPA_DOWNLOAD_URL)
 	chmod 755 build/opa
+
 
 build: policies/bundle.tar.gz
 

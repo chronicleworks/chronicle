@@ -1,8 +1,12 @@
-use std::time::Duration;
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use derivative::Derivative;
 use futures::{
-    future,
+    future::{self},
     stream::{self, BoxStream},
     StreamExt,
 };
@@ -11,11 +15,14 @@ use k256::ecdsa::SigningKey;
 use protobuf::Message;
 use sawtooth_sdk::messages::{
     batch::Batch,
-    block::BlockHeader,
+    block::{Block, BlockHeader},
     client_batch_submit::{
         ClientBatchSubmitRequest, ClientBatchSubmitResponse, ClientBatchSubmitResponse_Status,
     },
-    client_block::{ClientBlockListResponse, ClientBlockListResponse_Status},
+    client_block::{
+        ClientBlockGetResponse, ClientBlockGetResponse_Status, ClientBlockListResponse,
+        ClientBlockListResponse_Status,
+    },
     client_event::{ClientEventsSubscribeResponse, ClientEventsSubscribeResponse_Status},
     client_state::{ClientStateGetResponse, ClientStateGetResponse_Status},
     events::EventList,
@@ -24,19 +31,53 @@ use sawtooth_sdk::messages::{
 };
 use serde::{Deserialize, Serialize};
 
-use tracing::{debug, error, instrument};
+use thiserror::Error;
+use tracing::{debug, error, instrument, trace};
 
 use crate::{
     error::SawtoothCommunicationError, sawtooth::MessageBuilder,
     zmq_client::RequestResponseSawtoothChannel,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct BlockId(String);
+#[derive(Debug, Error)]
+pub enum BlockIdError {
+    #[error("Not hex")]
+    Hex(#[from] hex::FromHexError),
+
+    #[error("Not 32 bytes")]
+    Size(#[from] std::array::TryFromSliceError),
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum BlockId {
+    Marker, //Block ids can be null, empty string etc
+    Block([u8; 32]),
+}
+
+impl TryFrom<String> for BlockId {
+    type Error = Infallible;
+
+    /// Sawtooth uses a special marker value for the first block, which is not
+    /// parsable as a hash - 8 hex zero bytes.
+    #[instrument(level = "trace", ret(Debug))]
+    fn try_from(s: String) -> Result<BlockId, Infallible> {
+        Ok(hex::decode(s)
+            .map_err(BlockIdError::from)
+            .and_then(|x| {
+                x.as_slice()
+                    .try_into()
+                    .map_err(BlockIdError::from)
+                    .map(BlockId::Block)
+            })
+            .unwrap_or(BlockId::Marker))
+    }
+}
 
 impl std::fmt::Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        match self {
+            BlockId::Marker => write!(f, "Marker"),
+            BlockId::Block(bytes) => write!(f, "{}", hex::encode(bytes)),
+        }
     }
 }
 
@@ -66,35 +107,39 @@ impl std::fmt::Display for TransactionId {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Offset {
+pub enum Position {
     Genesis,
-    Identity(u64),
+    Height(u64),
 }
 
-impl From<u64> for Offset {
-    fn from(x: u64) -> Self {
-        Offset::Identity(x)
+impl From<u64> for Position {
+    fn from(height: u64) -> Self {
+        Position::Height(height)
     }
 }
 
-impl PartialOrd for Offset {
+impl PartialOrd for Position {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
-            (Offset::Genesis, Offset::Genesis) => Some(std::cmp::Ordering::Equal),
-            (Offset::Genesis, Offset::Identity(_)) => Some(std::cmp::Ordering::Less),
-            (Offset::Identity(_), Offset::Genesis) => Some(std::cmp::Ordering::Greater),
-            (Offset::Identity(x), Offset::Identity(y)) => x.partial_cmp(y),
+            (Position::Genesis, Position::Genesis) => Some(std::cmp::Ordering::Equal),
+            (Position::Genesis, Position::Height(_)) => Some(std::cmp::Ordering::Less),
+            (Position::Height(_x), Position::Genesis) => Some(std::cmp::Ordering::Greater),
+            (Position::Height(x), Position::Height(y)) => x.partial_cmp(y),
         }
     }
 }
 
-impl Offset {
+impl Position {
+    pub fn new(height: u64) -> Self {
+        Position::Height(height)
+    }
+
     pub fn map<T, F>(&self, f: F) -> Option<T>
     where
         F: FnOnce(&u64) -> T,
     {
-        if let Offset::Identity(x) = self {
-            Some(f(x))
+        if let Position::Height(num) = self {
+            Some(f(num))
         } else {
             None
         }
@@ -102,17 +147,17 @@ impl Offset {
 
     pub fn distance(&self, other: &Self) -> u64 {
         match (self, other) {
-            (Offset::Genesis, Offset::Genesis) => 0,
-            (Offset::Genesis, Offset::Identity(x)) => *x,
-            (Offset::Identity(x), Offset::Genesis) => *x,
-            (Offset::Identity(x), Offset::Identity(y)) => x.saturating_sub(*y),
+            (Position::Genesis, Position::Genesis) => 0,
+            (Position::Genesis, Position::Height(x)) => *x,
+            (Position::Height(x), Position::Genesis) => *x,
+            (Position::Height(x), Position::Height(y)) => x.saturating_sub(*y),
         }
     }
 }
 
 // An application specific ledger event with its corresponding transaction id,
 // block height and trace span
-pub type LedgerEventContext<Event> = (Event, TransactionId, Offset, u64);
+pub type LedgerEventContext<Event> = (Event, TransactionId, BlockId, Position, u64);
 
 #[async_trait::async_trait]
 pub trait LedgerEvent {
@@ -162,6 +207,16 @@ where
     reader: R,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum FromBlock {
+    // Do not attempt to catch up, start from the current head
+    Head,
+    // Discover the genesis block and start from there
+    Genesis,
+    // Start from the given block
+    BlockId(BlockId),
+}
+
 impl<R> BlockingLedgerReader<R>
 where
     R: LedgerReader + Send,
@@ -174,19 +229,19 @@ where
         tokio::runtime::Handle::current().block_on(self.reader.get_state_entry(address))
     }
 
-    pub fn block_height(&self) -> Result<(Offset, BlockId), R::Error> {
+    pub fn block_height(&self) -> Result<(Position, BlockId), R::Error> {
         tokio::runtime::Handle::current().block_on(self.reader.block_height())
     }
 
     pub fn state_updates(
         &self,
         event_type: &str,
-        from_offset: Option<Offset>,
+        from_block: FromBlock,
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<R::Event>>, R::Error> {
         tokio::runtime::Handle::current().block_on(self.reader.state_updates(
             event_type,
-            from_offset,
+            from_block,
             number_of_blocks,
         ))
     }
@@ -237,15 +292,15 @@ pub trait LedgerReader {
     /// Get the state entry at `address`
     async fn get_state_entry(&self, address: &str) -> Result<Vec<u8>, Self::Error>;
     // Get the block height of the ledger, and the id of the highest block
-    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error>;
+    async fn block_height(&self) -> Result<(Position, BlockId), Self::Error>;
     /// Subscribe to state updates from this ledger, starting at `offset`, and
     /// ending the stream after `number_of_blocks` blocks have been processed.
     async fn state_updates(
         &self,
         // The application event type to subscribe to
         event_type: &str,
-        // The offset to start from, or `None` to start from the current block
-        from_offset: Option<Offset>,
+        // The block to start from
+        from_block: FromBlock,
         // The number of blocks to process before ending the stream
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error>;
@@ -264,6 +319,7 @@ pub struct SawtoothLedger<
 {
     builder: MessageBuilder,
     channel: Channel,
+    last_seen_block: Arc<Mutex<Option<(BlockId, Position)>>>,
     _e: std::marker::PhantomData<LedgerEvent>,
     _t: std::marker::PhantomData<Transaction>,
 }
@@ -279,6 +335,7 @@ impl<
         SawtoothLedger {
             builder,
             channel,
+            last_seen_block: Default::default(),
             _e: std::marker::PhantomData::default(),
             _t: std::marker::PhantomData::default(),
         }
@@ -308,7 +365,7 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn get_block_height(&self) -> Result<(u64, String), SawtoothCommunicationError> {
+    async fn get_block_height(&self) -> Result<(Position, BlockId), SawtoothCommunicationError> {
         let request = self.builder.make_block_height_request();
         let response: ClientBlockListResponse = self
             .channel
@@ -325,7 +382,10 @@ impl<
                 .ok_or(SawtoothCommunicationError::NoBlocksReturned)?;
 
             let header = BlockHeader::parse_from_bytes(&block.header)?;
-            Ok((header.block_num, header.previous_block_id))
+            Ok((
+                header.block_num.into(),
+                header.previous_block_id.try_into()?,
+            ))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
@@ -333,16 +393,48 @@ impl<
         }
     }
 
+    #[instrument(level = "info", skip(self))]
+    // Get the actual genesis block id from sawtooth if we are passed Position::Genesis
+    async fn get_genesis_block(&self) -> Result<BlockId, SawtoothCommunicationError> {
+        let block: Block = loop {
+            let req = self.builder.get_genesis_block_id_request();
+
+            let response: Result<ClientBlockGetResponse, _> = self
+                .channel
+                .send_and_recv_one(
+                    req,
+                    Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST,
+                    Duration::from_secs(10),
+                )
+                .await;
+
+            if let Ok(response) = response {
+                trace!(block_by_num_response = ?response);
+                match (response.status, response.block.into_option()) {
+                    (ClientBlockGetResponse_Status::OK, Some(block)) => break block,
+                    (e, _) => {
+                        error!(head_block_status = ?e)
+                    }
+                };
+            }
+
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        };
+
+        Ok(BlockId::try_from(
+            BlockHeader::parse_from_bytes(block.header.as_slice())?.previous_block_id,
+        )?)
+    }
+
     #[instrument(skip(self))]
     async fn get_events_from(
         &self,
         event_type: &str,
-        offset: &Offset,
-        offset_id: &Option<BlockId>,
+        from_block: BlockId,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
         let subscription_request = self
             .builder
-            .make_subscription_request(offset_id, vec![event_type.into()]);
+            .make_subscription_request(&from_block, vec![event_type.into()]);
         debug!(subscription_request = ?subscription_request);
         let sub = self
             .channel
@@ -359,39 +451,52 @@ impl<
             });
         }
 
-        self.event_stream(event_type, *offset).await
+        self.event_stream(event_type, from_block).await
     }
 
     async fn event_stream(
         &self,
         event_type: &str,
-        block: Offset,
+        from_block: BlockId,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, SawtoothCommunicationError> {
         let event_type = event_type.to_owned();
         #[derive(Debug)]
         enum ParsedEvent<Event> {
-            Block(u64),
+            Block(BlockId, Position),
             Operation(Event, TransactionId, u64),
         }
 
         let channel = self.channel.clone();
-
+        let from_block = from_block;
         let event_stream = channel.recv_stream::<EventList>().await?;
         let event_stream = event_stream.then(move |events| {
             let event_type = event_type.clone();
-
             async move {
-                debug!(?events, "Received events");
+                debug!(received_events = ?events);
                 let mut updates = vec![];
                 for event in events.events {
                     updates.push(match &*event.event_type {
-                        "sawtooth/block-commit" => event
-                            .attributes
-                            .iter()
-                            .find(|attr| attr.key == "block_num")
-                            .ok_or(SawtoothCommunicationError::MissingBlockNum)
-                            .and_then(|attr| attr.value.parse().map_err(Into::into))
-                            .map(|attr| Some(ParsedEvent::Block(attr))),
+                        "sawtooth/block-commit" => {
+                            let position: Result<u64, _> = event
+                                .attributes
+                                .iter()
+                                .find(|attr| attr.key == "block_num")
+                                .ok_or(SawtoothCommunicationError::MissingBlockNum)
+                                .and_then(|attr| attr.value.parse::<u64>().map_err(Into::into));
+
+                            let block_id: Result<BlockId, _> = event
+                                .attributes
+                                .iter()
+                                .find(|attr| attr.key == "block_id")
+                                .ok_or(SawtoothCommunicationError::MissingBlockId)
+                                .and_then(|attr| {
+                                    BlockId::try_from(attr.value.clone()).map_err(Into::into)
+                                });
+
+                            position.and_then(|id| {
+                                block_id.map(|block| Some(ParsedEvent::Block(block, id.into())))
+                            })
+                        }
                         x if *x == *event_type => {
                             let transaction_id = event
                                 .attributes
@@ -419,15 +524,19 @@ impl<
                     });
                 }
 
-                debug!(?updates, "Parsed events");
+                debug!(parsed_events = ?updates);
 
                 // Fold the updates into a vector of operations and their block num
-                updates
-                    .into_iter()
-                    .fold((vec![], block), |(mut operations, block), event| {
+                let updates: (Vec<_>, _) = updates.into_iter().fold(
+                    (vec![], *self.last_seen_block.lock().unwrap()),
+                    |(mut operations, block), event| {
+                        trace!(combining_event= ?event);
                         match event {
                             // Next block num
-                            Ok(Some(ParsedEvent::Block(next))) => (operations, Offset::from(next)),
+                            Ok(Some(ParsedEvent::Block(id, num))) => {
+                                debug!(last_seen_block = ?(id,num));
+                                (operations, Some((id, num)))
+                            }
                             Ok(Some(ParsedEvent::Operation(
                                 next_operation,
                                 transaction_id,
@@ -442,14 +551,32 @@ impl<
                             }
                             _ => (operations, block),
                         }
-                    })
+                    },
+                );
+
+                debug!(combined_events = ?updates);
+
+                updates
             }
         });
 
         let events_with_block = event_stream
-            .flat_map(|events_for_block| {
-                stream::iter(events_for_block.0)
-                    .map(move |event| (event.0, event.1, events_for_block.1, event.2))
+            .flat_map(move |events_for_block| {
+                let last_block = (
+                    events_for_block.1.map(|x| x.0).unwrap_or(from_block),
+                    events_for_block.1.map(|x| x.1).unwrap_or(Position::Genesis),
+                );
+                //position
+                *self.last_seen_block.lock().unwrap() = Some(last_block);
+                stream::iter(events_for_block.0).map(move |event| {
+                    (
+                        event.0, //Event
+                        event.1, //Transaction Id
+                        last_block.0,
+                        last_block.1,
+                        event.2, //span
+                    )
+                })
             })
             .boxed();
 
@@ -488,40 +615,45 @@ impl<
         }
     }
 
-    async fn block_height(&self) -> Result<(Offset, BlockId), Self::Error> {
+    async fn block_height(&self) -> Result<(Position, BlockId), Self::Error> {
         let (block, id) = self.get_block_height().await?;
-        Ok((Offset::from(block), BlockId(id)))
+        Ok((block, id))
     }
 
     #[instrument(skip(self), level = "debug")]
     async fn state_updates(
         &self,
         event_type: &str,
-        from_offset: Option<Offset>,
+        from_block_id: FromBlock,
         number_of_blocks: Option<u64>,
     ) -> Result<BoxStream<LedgerEventContext<Event>>, Self::Error> {
-        let self_clone = self.clone();
-
-        let (from_offset, from_block_id) = match from_offset {
-            None => (Offset::Genesis, None),
-            Some(from_offset) => {
-                let (_num, id) = self_clone.get_block_height().await?;
-                (from_offset, Some(BlockId(id)))
+        let (from_block_id, from_position) = {
+            match &from_block_id {
+                FromBlock::Genesis => {
+                    let genesis_block = self.get_genesis_block().await?;
+                    debug!(genesis_block = ?genesis_block);
+                    (genesis_block, None)
+                }
+                FromBlock::Head => {
+                    let (block_num, block_id) = self.get_block_height().await?;
+                    debug!(block_height = ?block_num, block_id = ?block_id);
+                    (block_id, Some(block_num))
+                }
+                FromBlock::BlockId(block_id) => (*block_id, None),
             }
         };
 
-        debug!(?from_offset, ?from_block_id);
+        debug!(?from_position, ?from_block_id);
 
-        let subscribe = self
-            .get_events_from(event_type, &from_offset, &from_block_id)
-            .await?;
+        let subscribe = self.get_events_from(event_type, from_block_id).await?;
 
         Ok(subscribe
-            .take_while(move |(_, _, offset, _)| {
-                future::ready(if let Some(number_of_blocks) = number_of_blocks {
-                    offset.distance(&from_offset) <= number_of_blocks
-                } else {
-                    true
+            .take_while(move |(_, _, _offset, position, _span)| {
+                future::ready(match (number_of_blocks, from_position) {
+                    (Some(number_of_blocks), Some(from_position)) => {
+                        position.distance(&from_position) <= number_of_blocks
+                    }
+                    _ => true,
                 })
             })
             .boxed())

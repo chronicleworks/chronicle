@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use chronicle_protocol::async_sawtooth_sdk::ledger::Offset;
+use async_sawtooth_sdk::ledger::{BlockId, BlockIdError};
 use chrono::DateTime;
 
 use chrono::Utc;
@@ -61,8 +61,10 @@ pub enum StoreError {
 
     #[error("Could not find namespace")]
     InvalidNamespace,
-    #[error("Parse offset {0}")]
-    ParseIntError(#[from] std::num::ParseIntError),
+    #[error("Parse blockid {0}")]
+    ParseBlockId(#[from] BlockIdError),
+    #[error("Infallible")]
+    Infallible(#[from] std::convert::Infallible),
 }
 
 #[derive(Debug)]
@@ -953,20 +955,17 @@ impl Store {
 
     /// Get the last fully synchronized offset
     #[instrument]
-    pub(crate) fn get_last_offset(&self) -> Result<Option<(Offset, String)>, StoreError> {
+    pub(crate) fn get_last_block_id(&self) -> Result<Option<BlockId>, StoreError> {
         use schema::ledgersync::dsl;
         self.connection()?.build_transaction().run(|connection| {
-            let offset_and_tx = schema::ledgersync::table
+            let block_id_and_tx = schema::ledgersync::table
                 .order_by(dsl::sync_time)
                 .select((dsl::bc_offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)?;
 
-            if let Some(offset) = offset_and_tx.0 {
-                Ok(Some((
-                    Offset::from(offset.parse::<u64>().map_err(StoreError::from)?),
-                    offset_and_tx.1,
-                )))
+            if let Some(block_id) = block_id_and_tx.0 {
+                Ok(Some(BlockId::try_from(block_id)?))
             } else {
                 Ok(None)
             }
@@ -1331,30 +1330,26 @@ impl Store {
 
     /// Set the last fully synchronized offset
     #[instrument]
-    pub(crate) fn set_last_offset(
+    pub(crate) fn set_last_block_id(
         &self,
-        offset: Offset,
+        block_id: &BlockId,
         tx_id: ChronicleTransactionId,
     ) -> Result<(), StoreError> {
         use schema::ledgersync as dsl;
 
-        if let Offset::Identity(offset) = offset {
-            Ok(self.connection()?.build_transaction().run(|connection| {
-                diesel::insert_into(dsl::table)
-                    .values((
-                        dsl::bc_offset.eq(offset.to_string()),
-                        dsl::tx_id.eq(&*tx_id.to_string()),
-                        (dsl::sync_time.eq(Utc::now().naive_utc())),
-                    ))
-                    .on_conflict(dsl::tx_id)
-                    .do_update()
-                    .set(dsl::sync_time.eq(Utc::now().naive_utc()))
-                    .execute(connection)
-                    .map(|_| ())
-            })?)
-        } else {
-            Ok(())
-        }
+        Ok(self.connection()?.build_transaction().run(|connection| {
+            diesel::insert_into(dsl::table)
+                .values((
+                    dsl::bc_offset.eq(block_id.to_string()),
+                    dsl::tx_id.eq(&*tx_id.to_string()),
+                    (dsl::sync_time.eq(Utc::now().naive_utc())),
+                ))
+                .on_conflict(dsl::tx_id)
+                .do_update()
+                .set(dsl::sync_time.eq(Utc::now().naive_utc()))
+                .execute(connection)
+                .map(|_| ())
+        })?)
     }
 
     #[instrument(skip(connection))]

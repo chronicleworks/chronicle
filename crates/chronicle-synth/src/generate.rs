@@ -171,8 +171,7 @@ fn append_to_exclude_list(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::BufReader;
+    use std::{fs::File, io::BufReader};
 
     use assert_fs::prelude::*;
 

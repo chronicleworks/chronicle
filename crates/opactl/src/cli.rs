@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use clap::{
     builder::{NonEmptyStringValueParser, PathBufValueParser},
     parser::ValueSource,
@@ -6,6 +8,7 @@ use clap::{
 use k256::{pkcs8::DecodePrivateKey, SecretKey};
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
+use tracing::{error, info};
 use url::Url;
 
 // Generate an ephemeral key if no key is provided
@@ -273,9 +276,16 @@ fn get_policy() -> Command {
         )
 }
 
+pub const LONG_VERSION: &str = const_format::formatcp!(
+    "{}:{}",
+    env!("CARGO_PKG_VERSION"),
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION"))
+);
+
 pub fn cli() -> Command {
+    info!(chronicle_version = LONG_VERSION);
     Command::new("opactl")
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(LONG_VERSION)
         .author("Blockchain Technology Partners")
         .about("A command line tool for interacting with the OPA transaction processor")
         .arg(
@@ -309,8 +319,10 @@ pub(crate) fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey
     match key {
         ValueSource::CommandLine | ValueSource::DefaultValue => {
             let path: &String = matches.get_one(name).unwrap();
-            let key = std::fs::read_to_string(path)
-                .unwrap_or_else(|_| panic!("Unable to read file {path}"));
+            let key = std::fs::read_to_string(path).unwrap_or_else(|_| {
+                error!("Unable to read file {path}");
+                exit(1)
+            });
             SecretKey::from_pkcs8_pem(key.trim()).unwrap()
         }
         ValueSource::EnvVariable => {

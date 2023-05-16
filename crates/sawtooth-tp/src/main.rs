@@ -10,10 +10,16 @@ use tp::ChronicleTransactionHandler;
 use tracing::info;
 use url::Url;
 
+pub const LONG_VERSION: &str = const_format::formatcp!(
+    "{}:{}",
+    env!("CARGO_PKG_VERSION"),
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION"))
+);
+
 #[tokio::main]
 async fn main() {
     let matches = Command::new("chronicle-sawtooth-tp")
-        .version("1.0")
+        .version(LONG_VERSION)
         .author("Blockchain Technology Partners")
         .about("Write and query provenance data to distributed ledgers")
         .arg(
@@ -62,6 +68,8 @@ async fn main() {
             _ => ConsoleLogging::Off,
         },
     );
+
+    info!(chronicle_tp_version = LONG_VERSION);
 
     let (bootstrap_policy, bootstrap_entrypoint) =
         ("allow_transactions", "allow_transactions.allowed_users");

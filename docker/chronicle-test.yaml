@@ -122,6 +122,7 @@ services:
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty verify-keystore
+        sleep 10
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty \
@@ -179,12 +180,13 @@ services:
     entrypoint: /bin/bash
     environment:
       - RUST_BACKTRACE=full
-      - RUST_LOG=info,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
+      - RUST_LOG=debug,cranelift_codegen=off,wasmtime_cranelift=off,regalloc2::ion=off,cranelift_wasm=off
     volumes:
       - ${PWD}/policies:/policies
     command:
       - -exc
       - |
+        sleep 10
         cd /tmp
         /usr/local/bin/opactl generate --output ./root.pem
         /usr/local/bin/opactl \
