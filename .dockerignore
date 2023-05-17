@@ -7,3 +7,4 @@
 !policies
 !docker/chronicle-config
 !docker/chronicle-test
+!docker/chronicle-helm-test

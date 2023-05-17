@@ -1,0 +1,67 @@
+#!/bin/env sh
+set -e
+
+echo "HOST: $HOST"
+echo "PORT: $PORT"
+
+issueGraphQLQuery() {
+    url=$1
+    query=$2
+
+    gq "$url" -q "$query"
+}
+
+random_externalId=$(openssl rand -hex 8)
+
+subscriptionQuery="subscription {
+    commitNotifications {
+    stage
+    txId
+    }
+}"
+
+subscriptionOutput=$(mktemp)
+
+issueGraphQLQuery "http://$HOST:$PORT/ws" "$subscriptionQuery" > "$subscriptionOutput" &
+
+mutationQuery="mutation {
+    defineAgent(
+    externalId: \"$random_externalId\",
+    attributes: {}
+    ) {
+    txId
+    }
+}"
+
+submissionResponse=$(issueGraphQLQuery "http://$HOST:$PORT" "$mutationQuery")
+
+echo "Waiting for subscription response"
+
+timeout=10
+elapsed=0
+while [ $elapsed -lt $timeout ]; do
+    sleep 1
+    if grep -q '"stage": "COMMIT"' "$subscriptionOutput"; then
+        break
+    fi
+    elapsed=$((elapsed + 1))
+done
+
+echo "Subscription responses:"
+echo "$subscriptionOutput"
+
+submitTxId=$(echo "$submissionResponse" | jq -r '.data.defineAgent.txId')
+
+# Read the txId value from the subscription endpoint, making sure SUBMIT AND COMMIT have the same txId
+subscribeTxId=$(jq -r '.data.commitNotifications.txId' "$subscriptionOutput" | awk '!seen[$0]++')
+
+echo "submitted: $submitTxId"
+echo "committed: $subscribeTxId"
+
+if [ "$submitTxId" = "$subscribeTxId" ]; then
+    echo "Test passes"
+    exit 0
+else
+    echo "Error: submit and commit TxId mismatch"
+    exit 1
+fi

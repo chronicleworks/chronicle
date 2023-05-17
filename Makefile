@@ -125,22 +125,30 @@ $(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
 		--target $(1) \
 		--load
 
+chronicle-helm-api-test-$(2)-build: $(2)-ensure-context
+	docker buildx build $(DOCKER_PROGRESS) \
+		-f ./docker/chronicle-helm-test/subscribe-submit-test.dockerfile \
+		-t chronicle-helm-api-test:latest . \
+		--builder ctx-$(ISOLATION_ID)-$(2) \
+		--platform linux/$(2) \
+		--load
+
 $(1)-manifest: $(1)-$(2)-manifest
 $(1)-$(2)-manifest: $(1)-$(2)-build
 	docker manifest create $(1):$(ISOLATION_ID) \
 		-a $(1)-$(2):$(ISOLATION_ID)
 
 ifeq ($(RELEASABLE), yes)
-$(1): $(1)-$(2)-build
+$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build
 else
 ifeq ($(2), $(HOST_ARCHITECTURE))
-$(1): $(1)-$(2)-build
+$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build
 endif
 endif
 
 build: .VERSION $(1)
 
-build-native: $(1)-$(HOST_ARCHITECTURE)-build
+build-native: $(1)-$(HOST_ARCHITECTURE)-build chronicle-helm-api-test-$(HOST_ARCHITECTURE)-build
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
