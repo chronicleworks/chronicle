@@ -61,7 +61,7 @@ fn generate() -> Command {
                 .num_args(0..=1)
                 .value_hint(ValueHint::FilePath)
                 .value_parser(PathBufValueParser::new())
-                .help("The path to write the policy to, if not specified then the key is written to stdout"),
+                .help("The path to write the key to, if not specified then the key is written to stdout"),
         )
         .about("Generate a new private key and write it to stdout")
 }
