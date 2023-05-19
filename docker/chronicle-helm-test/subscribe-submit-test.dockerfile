@@ -23,6 +23,7 @@ RUN apt-get install -y nodejs
 RUN npm install -g -f graphqurl --yes
 RUN npm install --yes
 
+COPY docker/chronicle-helm-test/wait-for-it /usr/local/bin/wait-for-it
 COPY docker/chronicle-helm-test/subscribe-submit-test /usr/local/bin/subscribe-submit-test
 
 RUN chmod +rx /usr/local/bin/*
