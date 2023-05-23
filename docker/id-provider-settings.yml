@@ -1,0 +1,11 @@
+server:
+  port: 8090
+oidc:
+  tokenExpirationSeconds: 36000
+  users:
+    rmalina1:
+      password: "test-password"
+      sub: "user-525"
+      given_name: "Ruairidh"
+      family_name: "Malina"
+      email: "r.malina@example.com"
