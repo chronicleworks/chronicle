@@ -87,6 +87,10 @@ async fn ambient_transactions<
     // Set up a oneshot channel to notify the returned task
     let (notify_tx, notify_rx) = oneshot::channel::<Waited>();
 
+    // And a oneshot channel to ensure we are receiving events from the chain
+    // before we return
+    let (receiving_events_tx, receiving_events_rx) = oneshot::channel::<()>();
+
     Handle::current().spawn(async move {
         // We can immediately return if we are not waiting
         debug!(waiting_for=?goal_tx_id, max_steps=?max_steps);
@@ -109,6 +113,9 @@ async fn ambient_transactions<
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         };
+
+        receiving_events_tx.send(()).ok();
+
         while let Some((op, tx, _block_id, _position, _span)) = stream.next().await {
             info!(tx=?tx, op=?op);
             if tx == goal_clone {
@@ -125,6 +132,9 @@ async fn ambient_transactions<
             }
         }
     });
+
+    // Wait for the task to start receiving events
+    let _ = receiving_events_rx.await;
 
     async move { notify_rx.await }
 }

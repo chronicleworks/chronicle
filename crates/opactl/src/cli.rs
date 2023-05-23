@@ -341,11 +341,9 @@ pub(crate) enum Wait {
 
 impl Wait {
     pub(crate) fn from_matches(matches: &ArgMatches) -> Self {
-        if matches.get_one::<u64>("wait").is_some() {
-            let blocks = matches.get_one::<u64>("wait").unwrap();
-            Wait::NumberOfBlocks(*blocks)
-        } else {
-            Wait::NoWait
+        match matches.get_one::<u64>("wait") {
+            Some(blocks) if *blocks > 0 => Wait::NumberOfBlocks(*blocks),
+            _ => Wait::NoWait,
         }
     }
 }
