@@ -4,6 +4,14 @@ set -e
 echo "HOST: $HOST"
 echo "PORT: $PORT"
 
+TIMEOUT=60
+echo "Wait for stack"
+if ! wait-for-it -h $HOST -p $PORT -t $TIMEOUT; then
+  echo "Timed out waiting for $HOST"
+  exit 1
+fi
+sleep 20
+
 issueGraphQLQuery() {
     url=$1
     query=$2
