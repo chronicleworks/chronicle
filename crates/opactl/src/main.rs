@@ -3,7 +3,7 @@ use async_sawtooth_sdk::zmq_client::{
 };
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
-use futures::{channel::oneshot, Future, StreamExt};
+use futures::{channel::oneshot, Future, FutureExt, StreamExt};
 use k256::{
     ecdsa::SigningKey,
     pkcs8::{EncodePrivateKey, LineEnding},
@@ -118,19 +118,30 @@ async fn ambient_transactions<
 
         receiving_events_tx.send(()).ok();
 
-        while let Some((op, tx, _block_id, _position, _span)) = stream.next().await {
-            info!(tx=?tx, op=?op);
-            if tx == goal_clone {
-                if let OpaOperationEvent::Error(_) = op {
-                    debug!(not_found_tx=?tx, op=?op);
+        loop {
+            futures::select! {
+              next_block = stream.next().fuse() => {
+                if let Some((op,tx, block_id, position,_)) = next_block {
+                info!(tx=?tx, op=?op, block_id=?block_id, position=?position);
+                if tx == goal_clone {
+                    if let OpaOperationEvent::Error(_) = op {
+                        debug!(not_found_tx=?tx, op=?op);
+                        notify_tx
+                            .send(Waited::WaitedAndOperationFailed(op))
+                            .map_err(|e| error!(e=?e))
+                            .ok();
+                        break;
+                    }
+                    debug!(found_tx=?tx, op=?op);
                     notify_tx
-                        .send(Waited::WaitedAndOperationFailed(op))
-                        .unwrap();
+                        .send(Waited::WaitedAndFound(op))
+                        .map_err(|e| error!(e=?e))
+                        .ok();
                     break;
+                  }
                 }
-                debug!(found_tx=?tx, op=?op);
-                notify_tx.send(Waited::WaitedAndFound(op)).unwrap();
-                break;
+              },
+              complete => break
             }
         }
     });
