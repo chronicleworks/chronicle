@@ -1,4 +1,6 @@
-use async_sawtooth_sdk::zmq_client::ZmqRequestResponseSawtoothChannel;
+use async_sawtooth_sdk::zmq_client::{
+    RequestResponseSawtoothChannel, ZmqRequestResponseSawtoothChannel,
+};
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
 use futures::{channel::oneshot, Future, StreamExt};
@@ -360,6 +362,7 @@ async fn main() {
         .map_err(|opactl| {
             error!(?opactl);
             opactl.into_ufe().print();
+            client.close();
             std::process::exit(1);
         })
         .map(|waited| {
@@ -371,6 +374,8 @@ async fn main() {
             }
         })
         .ok();
+
+    client.close();
 }
 
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`
