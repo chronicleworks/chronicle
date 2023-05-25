@@ -4,8 +4,8 @@
 
 component ChronicleBuilder as "Chronicle build image"
 file Domain as "domain.yaml"
-component Chronicle as "Domain specific Chronicle"
-component ChronicleStandalone as "Domain specific stand-alone Chronicle"
+component Chronicle as "Domain-specific Chronicle"
+component ChronicleStandalone as "Domain-specific standalone Chronicle"
 
 ChronicleBuilder -> Domain : references
 ChronicleBuilder -> Chronicle: builds

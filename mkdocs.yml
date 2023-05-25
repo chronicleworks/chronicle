@@ -38,11 +38,12 @@ nav:
       - Untyped Chronicle: untyped_chronicle.md
   - Testing:
       - Building your domain: building.md
+  - Installing:
+      - Installing with Sextant: sextant.md
+      - Security settings via Helm: helm-jwks-opa.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
       - Establishing identity: auth.md
       - Access control policy: opa.md
-  - Installing:
-      - Installing with Sextant: sextant.md
   - Upgrading: upgrading.md

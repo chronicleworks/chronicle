@@ -1,0 +1,23 @@
+@startuml
+
+!include ../include/default.iuml
+
+participant "opactl command" as OpaCtl
+participant "OPA transaction\nprocessor" as OpaTp
+participant "Sawtooth\ndistributed ledger" as Sawtooth
+participant "Chronicle" as Chronicle
+
+participant "OIDC identity\nprovider" as IdProvider
+participant "API user" as User
+
+OpaCtl -> OpaTp: set policy
+OpaTp -> Sawtooth: write policy
+Sawtooth -> Chronicle: read policy
+
+IdProvider <-> User: bearer token
+User -> Chronicle: authorized request
+Chronicle <-> IdProvider: verify token
+
+Chronicle -> Chronicle: decides on request\ngiven bearer token\nand defined policy
+
+@enduml
