@@ -112,7 +112,7 @@ impl JwtChecker {
                 drop(cache);
                 let request = self
                     .client
-                    .post(userinfo_uri)
+                    .get(userinfo_uri)
                     .header("Authorization", format!("Bearer {token}"));
                 let response = request.send().await?;
                 cache = self.userinfo_cache.lock().await;
