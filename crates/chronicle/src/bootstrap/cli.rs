@@ -982,6 +982,29 @@ impl SubCommand for CliModel {
                     .help("Name of the database")
                     .default_value("chronicle"),
             )
+            .arg(
+                Arg::new("opa-bundle-address")
+                .long("opa-bundle-address")
+                .takes_value(true)
+                .help("URL or path for loading OPA policy bundle")
+            )
+            .arg(
+                Arg::with_name("opa-policy-name")
+                    .long("opa-policy-name")
+                    .help("Name of the OPA policy to be used")
+                    .takes_value(true)
+            )
+            .arg(
+                Arg::with_name("opa-policy-entrypoint")
+                    .long("opa-policy-entrypoint")
+                    .help("Entrypoint to the named OPA policy")
+                    .takes_value(true)
+            )
+            .group(
+                ArgGroup::with_name("opa-bundle-address-args")
+                    .args(&["opa-bundle-address"])
+                    .requires_all(&["opa-policy-name", "opa-policy-entrypoint"]),
+            )
             .subcommand(
                 Command::new("completions")
                     .about("Generate shell completions and exit")

@@ -237,6 +237,7 @@ fn construct_db_uri(matches: &ArgMatches) -> String {
 pub enum ConfiguredOpa {
     Embedded(ExecutorContext),
     Remote(ExecutorContext, chronicle_protocol::settings::OpaSettings),
+    Url(ExecutorContext),
 }
 
 impl ConfiguredOpa {
@@ -244,6 +245,7 @@ impl ConfiguredOpa {
         match self {
             ConfiguredOpa::Embedded(context) => context,
             ConfiguredOpa::Remote(context, _) => context,
+            ConfiguredOpa::Url(context) => context,
         }
     }
 
@@ -251,6 +253,7 @@ impl ConfiguredOpa {
         match self {
             ConfiguredOpa::Embedded(_) => None,
             ConfiguredOpa::Remote(_, settings) => Some(settings.policy_name.clone()),
+            ConfiguredOpa::Url(_) => None,
         }
     }
 }
@@ -278,6 +281,15 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
             "Chronicle operating in an insecure mode with an embedded default OPA policy"
         );
         Ok(ConfiguredOpa::Embedded(opa))
+    } else if let Some(url) = options.value_of("opa-bundle-address") {
+        let (policy_name, entrypoint) = (
+            options.value_of("opa-policy-name").unwrap(),
+            options.value_of("opa-policy-entrypoint").unwrap(),
+        );
+        let opa = self::opa::opa_executor_from_url(url, policy_name, entrypoint).await?;
+        tracing::info!("Chronicle operating with OPA policy from URL");
+
+        Ok(ConfiguredOpa::Url(opa))
     } else {
         let (opa, settings) =
             self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(config, options)?)
@@ -287,6 +299,7 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
         Ok(ConfiguredOpa::Remote(opa, settings))
     }
 }
+
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
