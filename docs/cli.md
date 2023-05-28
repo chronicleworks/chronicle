@@ -123,3 +123,51 @@ chronicle \
 
 Chronicle will also generate subcommands for recording provenance, derived from
 your [domain configuration](./domain_modeling.md).
+
+## Load OPA Policy from URL or File Arguments
+
+### `--opa-bundle-address <address>`
+
+To load an OPA policy from a provided HTTP URL, file URL, or file path, you can
+use the `--opa-bundle-address` option. The `--opa-bundle-address` argument must
+be a valid URL or a valid file path.
+
+Note that `--opa-bundle-address` requires both the `--opa-policy-name` and
+`--opa-policy-entrypoint` arguments to be provided.
+
+#### `--opa-policy-name <name>`
+
+The `--opa-policy-name` option specifies the name of the OPA policy.
+
+#### `--opa-policy-entrypoint <entrypoint>`
+
+The `--opa-policy-entrypoint` option specifies the entrypoint within the policy.
+
+#### Examples
+
+Loading from an HTTP URL:
+
+```text
+--opa-bundle-address https://example.com/bundle.tar.gz --opa-policy-name my_policy --opa-policy-entrypoint entrypoint1
+```
+
+Replace `https://example.com/bundle.tar.gz` with the actual URL of the OPA policy
+bundle you want to load.
+
+Loading from a file URL:
+
+```text
+--opa-bundle-address file:///example.com/bundle.tar.gz --opa-policy-name my_policy --opa-policy-entrypoint entrypoint1
+```
+
+Replace `file:///example.com/bundle.tar.gz` with the actual file URL of the OPA
+policy bundle you want to load.
+
+Loading from a file path:
+
+```text
+--opa-bundle-address /path/to/bundle.tar.gz --opa-policy-name my_policy --opa-policy-entrypoint entrypoint1
+```
+
+Replace `/path/to/bundle.tar.gz` with the actual file path of the OPA policy
+bundle you want to load.

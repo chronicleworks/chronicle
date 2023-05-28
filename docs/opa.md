@@ -479,3 +479,36 @@ chronicle.opa.entrypoint=allow_transactions.allowed_users
 
 Once this has been set, you should restart Chronicle for them to be applied, the
 transaction processor should not need to be restarted.
+
+### Load OPA Policy Bundle from a URL or File Path
+
+To configure Chronicle to use an OPA policy bundle loaded from a URL or a file
+path, follow these steps:
+
+Start Chronicle with the `--opa-bundle-address` option, providing the URL or file
+path as the argument value.
+
+For example:
+
+```text
+--opa-bundle-address https://example.com/policy-bundle.tar.gz
+```
+
+or
+
+```text
+--opa-bundle-address /path/to/policy-bundle.tar.gz
+```
+
+Make sure to replace `https://example.com/policy-bundle.tar.gz` with the actual
+URL or `/path/to/policy-bundle.tar.gz` with the actual file path of the OPA policy
+bundle you want to load.
+
+Note that when using `--opa-bundle-address` option, the `--opa-policy-name` and
+`--opa-policy-entrypoint` options must be provided.
+
+For example:
+
+```text
+--opa-policy-name my_policy --opa-policy-entrypoint entrypoint1
+```
