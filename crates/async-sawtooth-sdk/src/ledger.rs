@@ -32,7 +32,7 @@ use sawtooth_sdk::messages::{
 use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     error::SawtoothCommunicationError, sawtooth::MessageBuilder,
@@ -47,10 +47,10 @@ pub enum BlockIdError {
     #[error("Not 32 bytes")]
     Size(#[from] std::array::TryFromSliceError),
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BlockId {
     Marker, //Block ids can be null, empty string etc
-    Block([u8; 32]),
+    Block([u8; 64]),
 }
 
 impl TryFrom<String> for BlockId {
@@ -58,17 +58,50 @@ impl TryFrom<String> for BlockId {
 
     /// Sawtooth uses a special marker value for the first block, which is not
     /// parsable as a hash - 8 hex zero bytes.
+    ///
+    /// # Examples
+    ///
+    /// Correct string to BlockId conversion:
+    ///
+    /// ```
+    /// use std::convert::TryInto;
+    /// use async_sawtooth_sdk::ledger::BlockId;
+    ///
+    /// let s = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234".to_string();
+    /// let block_id: BlockId = s.try_into().unwrap();
+    /// match block_id {
+    ///     BlockId::Block(_) => println!("Correct conversion"),
+    ///     _ => panic!("Incorrect conversion"),
+    /// }
+    /// ```
+    ///
+    /// Handling special marker case:
+    ///
+    /// ```
+    /// use std::convert::TryInto;
+    /// use async_sawtooth_sdk::ledger::BlockId;
+    ///
+    /// let s = "00000000000000000000".to_string();
+    /// let block_id: BlockId = s.try_into().unwrap();
+    /// match block_id {
+    ///     BlockId::Marker => println!("Correct conversion to Marker"),
+    ///     _ => panic!("Incorrect conversion, expected Marker"),
+    /// }
+    /// ```
     #[instrument(level = "trace", ret(Debug))]
     fn try_from(s: String) -> Result<BlockId, Infallible> {
-        Ok(hex::decode(s)
-            .map_err(BlockIdError::from)
-            .and_then(|x| {
-                x.as_slice()
-                    .try_into()
-                    .map_err(BlockIdError::from)
-                    .map(BlockId::Block)
-            })
-            .unwrap_or(BlockId::Marker))
+        let res = hex::decode(&s).map_err(BlockIdError::from).and_then(|x| {
+            x.as_slice()
+                .try_into()
+                .map_err(BlockIdError::from)
+                .map(BlockId::Block)
+        });
+        if let Err(e) = res {
+            warn!(try_parse_block_id=%s,parse_block_error=?e);
+            Ok(BlockId::Marker)
+        } else {
+            Ok(res.unwrap())
+        }
     }
 }
 
@@ -107,50 +140,43 @@ impl std::fmt::Display for TransactionId {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Position {
-    Genesis,
-    Height(u64),
-}
+pub struct Position(u64);
 
 impl From<u64> for Position {
     fn from(height: u64) -> Self {
-        Position::Height(height)
+        Position(height)
     }
 }
 
 impl PartialOrd for Position {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (Position::Genesis, Position::Genesis) => Some(std::cmp::Ordering::Equal),
-            (Position::Genesis, Position::Height(_)) => Some(std::cmp::Ordering::Less),
-            (Position::Height(_x), Position::Genesis) => Some(std::cmp::Ordering::Greater),
-            (Position::Height(x), Position::Height(y)) => x.partial_cmp(y),
-        }
+        let (Position(x), Position(y)) = (self, other);
+        x.partial_cmp(y)
     }
 }
 
 impl Position {
     pub fn new(height: u64) -> Self {
-        Position::Height(height)
+        Position(height)
     }
 
-    pub fn map<T, F>(&self, f: F) -> Option<T>
+    pub fn map<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&u64) -> T,
     {
-        if let Position::Height(num) = self {
-            Some(f(num))
-        } else {
-            None
-        }
+        f(&self.0)
     }
 
     pub fn distance(&self, other: &Self) -> u64 {
-        match (self, other) {
-            (Position::Genesis, Position::Genesis) => 0,
-            (Position::Genesis, Position::Height(x)) => *x,
-            (Position::Height(x), Position::Genesis) => *x,
-            (Position::Height(x), Position::Height(y)) => x.saturating_sub(*y),
+        let (Position(x), Position(y)) = (self, other);
+        x.saturating_sub(*y)
+    }
+}
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Position(x) => f.write_str(&format!("{}", x)),
         }
     }
 }
@@ -211,8 +237,8 @@ where
 pub enum FromBlock {
     // Do not attempt to catch up, start from the current head
     Head,
-    // Discover the genesis block and start from there
-    Genesis,
+    // Discover the first useful block and start from there
+    First,
     // Start from the given block
     BlockId(BlockId),
 }
@@ -384,7 +410,7 @@ impl<
             let header = BlockHeader::parse_from_bytes(&block.header)?;
             Ok((
                 header.block_num.into(),
-                header.previous_block_id.try_into()?,
+                block.header_signature.clone().try_into()?,
             ))
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
@@ -394,10 +420,10 @@ impl<
     }
 
     #[instrument(level = "info", skip(self))]
-    // Get the actual genesis block id from sawtooth if we are passed Position::Genesis
-    async fn get_genesis_block(&self) -> Result<BlockId, SawtoothCommunicationError> {
+    // Get the first usable block id from sawtooth
+    async fn get_first_block(&self) -> Result<BlockId, SawtoothCommunicationError> {
         let block: Block = loop {
-            let req = self.builder.get_genesis_block_id_request();
+            let req = self.builder.get_first_block_id_request();
 
             let response: Result<ClientBlockGetResponse, _> = self
                 .channel
@@ -421,9 +447,7 @@ impl<
             tokio::time::sleep(Duration::from_secs(2)).await;
         };
 
-        Ok(BlockId::try_from(
-            BlockHeader::parse_from_bytes(block.header.as_slice())?.previous_block_id,
-        )?)
+        Ok(BlockId::try_from(block.header_signature)?)
     }
 
     #[instrument(skip(self))]
@@ -534,7 +558,7 @@ impl<
                         match event {
                             // Next block num
                             Ok(Some(ParsedEvent::Block(id, num))) => {
-                                debug!(last_seen_block = ?(id,num));
+                                debug!(last_seen_block = %id, position= %num);
                                 (operations, Some((id, num)))
                             }
                             Ok(Some(ParsedEvent::Operation(
@@ -554,8 +578,6 @@ impl<
                     },
                 );
 
-                debug!(combined_events = ?updates);
-
                 updates
             }
         });
@@ -564,18 +586,24 @@ impl<
             .flat_map(move |events_for_block| {
                 let last_block = (
                     events_for_block.1.map(|x| x.0).unwrap_or(from_block),
-                    events_for_block.1.map(|x| x.1).unwrap_or(Position::Genesis),
+                    events_for_block.1.map(|x| x.1).unwrap_or(Position::from(0)),
                 );
                 //position
+
                 *self.last_seen_block.lock().unwrap() = Some(last_block);
+                info!(last_seen_block = %last_block.0, position= %last_block.1);
+
                 stream::iter(events_for_block.0).map(move |event| {
-                    (
+                    let ev = (
                         event.0, //Event
                         event.1, //Transaction Id
                         last_block.0,
                         last_block.1,
                         event.2, //span
-                    )
+                    );
+                    debug!(yield_event=?ev);
+
+                    ev
                 })
             })
             .boxed();
@@ -629,14 +657,14 @@ impl<
     ) -> Result<BoxStream<LedgerEventContext<Event>>, Self::Error> {
         let (from_block_id, from_position) = {
             match &from_block_id {
-                FromBlock::Genesis => {
-                    let genesis_block = self.get_genesis_block().await?;
-                    debug!(genesis_block = ?genesis_block);
-                    (genesis_block, None)
+                FromBlock::First => {
+                    let first_block = self.get_first_block().await?;
+                    debug!(first_block = %first_block);
+                    (first_block, None)
                 }
                 FromBlock::Head => {
                     let (block_num, block_id) = self.get_block_height().await?;
-                    debug!(block_height = ?block_num, block_id = ?block_id);
+                    debug!(block_height = %block_num, block_id = %block_id);
                     (block_id, Some(block_num))
                 }
                 FromBlock::BlockId(block_id) => (*block_id, None),
@@ -651,7 +679,11 @@ impl<
             .take_while(move |(_, _, _offset, position, _span)| {
                 future::ready(match (number_of_blocks, from_position) {
                     (Some(number_of_blocks), Some(from_position)) => {
-                        position.distance(&from_position) <= number_of_blocks
+                        let distance = from_position.distance(position);
+                        let remaining_blocks_before_timeout = number_of_blocks - distance;
+                        debug!(remaining_blocks_before_timeout);
+
+                        remaining_blocks_before_timeout > 0
                     }
                     _ => true,
                 })

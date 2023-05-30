@@ -3,7 +3,7 @@ use async_sawtooth_sdk::zmq_client::{
 };
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
-use futures::{channel::oneshot, Future, FutureExt, StreamExt};
+use futures::{channel::oneshot, join, Future, FutureExt, StreamExt};
 use k256::{
     ecdsa::SigningKey,
     pkcs8::{EncodePrivateKey, LineEnding},
@@ -118,30 +118,32 @@ async fn ambient_transactions<
 
         receiving_events_tx.send(()).ok();
 
+
         loop {
             futures::select! {
               next_block = stream.next().fuse() => {
                 if let Some((op,tx, block_id, position,_)) = next_block {
-                info!(tx=?tx, op=?op, block_id=?block_id, position=?position);
+                info!(goal_tx_found=tx==goal_clone,tx=?tx, goal=%goal_clone, op=?op, block_id=%block_id, position=?position);
                 if tx == goal_clone {
                     if let OpaOperationEvent::Error(_) = op {
-                        debug!(not_found_tx=?tx, op=?op);
                         notify_tx
                             .send(Waited::WaitedAndOperationFailed(op))
                             .map_err(|e| error!(e=?e))
                             .ok();
-                        break;
+                        return;
                     }
-                    debug!(found_tx=?tx, op=?op);
                     notify_tx
                         .send(Waited::WaitedAndFound(op))
                         .map_err(|e| error!(e=?e))
                         .ok();
-                    break;
+                    return;
                   }
                 }
               },
-              complete => break
+              complete => {
+                debug!("Streams completed");
+                break;
+              }
             }
         }
     });
@@ -154,7 +156,7 @@ async fn ambient_transactions<
     async move { notify_rx.await }
 }
 
-#[instrument(skip(reader, writer, matches))]
+#[instrument(skip(reader, writer, matches, submission))]
 async fn handle_wait<
     R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
         + Clone
@@ -181,15 +183,18 @@ async fn handle_wait<
         Wait::NumberOfBlocks(blocks) => {
             debug!(submitting_tx=%tx_id, waiting_blocks=%blocks);
             let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
-            writer.submit(tx, transactor_key).await?;
+            let writer = writer.submit(tx, transactor_key);
 
-            match waiter.await {
-                Ok(Waited::WaitedAndDidNotFind) => Err(OpaCtlError::TransactionNotFound(tx_id)),
-                Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e))) => {
+            match join!(writer, waiter) {
+                (Err(e), _) => Err(e.into()),
+                (_, Ok(Waited::WaitedAndDidNotFind)) => {
+                    Err(OpaCtlError::TransactionNotFound(tx_id))
+                }
+                (_, Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e)))) => {
                     Err(OpaCtlError::TransactionFailed(e))
                 }
-                Ok(x) => Ok(x),
-                Err(e) => Err(OpaCtlError::Cancelled(e)),
+                (_, Ok(x)) => Ok(x),
+                (_, Err(e)) => Err(OpaCtlError::Cancelled(e)),
             }
         }
     }

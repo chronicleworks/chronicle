@@ -222,8 +222,8 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
                         .rx
                         .lock()
                         .unwrap()
-                        .recv_timeout(Duration::from_secs(30));
-                    debug!(?response);
+                        .recv_timeout(Duration::from_secs(10));
+                    debug!(have_response=?response);
                     (channel, response)
                 })
                 .await;

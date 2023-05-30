@@ -91,7 +91,7 @@ impl MessageBuilder {
             })
             .into(),
             sorting: vec![ClientSortControls {
-                reverse: true,
+                reverse: false,
                 keys: vec!["block_num".to_string()].into(),
                 ..Default::default()
             }]
@@ -100,9 +100,9 @@ impl MessageBuilder {
         }
     }
 
-    pub fn get_genesis_block_id_request(&self) -> ClientBlockGetByNumRequest {
+    pub fn get_first_block_id_request(&self) -> ClientBlockGetByNumRequest {
         ClientBlockGetByNumRequest {
-            block_num: 0,
+            block_num: 1,
             ..Default::default()
         }
     }
@@ -181,7 +181,7 @@ impl MessageBuilder {
         batch
     }
 
-    #[instrument]
+    #[instrument(skip(payload, signer), level = "trace")]
     pub async fn make_sawtooth_transaction<P: TransactionPayload + std::fmt::Debug>(
         &self,
         input_addresses: Vec<String>,
