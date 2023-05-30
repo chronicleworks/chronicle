@@ -11,7 +11,7 @@ use opa_tp_protocol::{
     OpaLedger,
 };
 use rust_embed::RustEmbed;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
@@ -22,14 +22,26 @@ pub enum PolicyLoaderError {
     #[error("Failed to read embedded OPA policies")]
     EmbeddedOpaPolicies,
 
+    #[error("HTTP error: {0}")]
+    HttpError(String),
+
+    #[error("Invalid path: {0}")]
+    InvalidPath(String),
+
     #[error("Policy not found: {0}")]
     MissingPolicy(String),
 
-    #[error("Io error: {0}")]
+    #[error("OPA bundle I/O error: {0}")]
     OpaBundleError(#[from] opa::bundle::Error),
 
     #[error("Error loading OPA policy: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
+
+    #[error("URL request error: {0}")]
+    UrlRequestError(#[from] reqwest::Error),
+
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 #[async_trait::async_trait]
@@ -162,7 +174,7 @@ impl PolicyLoader for SawtoothPolicyLoader {
 
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
         let bundle = self.load_bundle_from_chain().await?;
-        info!(loaded_policy_bytes=?bundle.len(), "Loaded policy");
+        info!(fetched_policy_bytes=?bundle.len(), "Fetched policy");
         if bundle.is_empty() {
             error!("Policy not found: {}", self.get_rule_name());
             return Err(PolicyLoaderError::MissingPolicy(
@@ -280,6 +292,106 @@ impl PolicyLoader for CliPolicyLoader {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct UrlPolicyLoader {
+    policy_id: String,
+    address: String,
+    policy: Vec<u8>,
+    entrypoint: String,
+}
+
+impl UrlPolicyLoader {
+    pub fn new(url: &str, policy_id: &str, entrypoint: &str) -> Self {
+        Self {
+            address: url.into(),
+            policy_id: policy_id.to_owned(),
+            entrypoint: entrypoint.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    async fn fetch_bundle_from_url(&mut self) -> Result<Vec<u8>, PolicyLoaderError> {
+        let response = reqwest::get(&self.address).await?;
+        if response.status().is_success() {
+            let bytes = response.bytes().await?;
+            Ok(bytes.to_vec())
+        } else {
+            Err(PolicyLoaderError::HttpError(response.status().to_string()))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl PolicyLoader for UrlPolicyLoader {
+    fn set_address(&mut self, address: &str) {
+        self.address = address.to_owned();
+    }
+
+    fn set_rule_name(&mut self, name: &str) {
+        self.policy_id = name.to_owned();
+    }
+
+    fn set_entrypoint(&mut self, entrypoint: &str) {
+        self.entrypoint = entrypoint.to_owned();
+    }
+
+    fn get_address(&self) -> &str {
+        &self.address
+    }
+
+    fn get_rule_name(&self) -> &str {
+        &self.policy_id
+    }
+
+    fn get_entrypoint(&self) -> &str {
+        &self.entrypoint
+    }
+
+    fn get_policy(&self) -> &[u8] {
+        &self.policy
+    }
+
+    fn load_policy_from_bytes(&mut self, policy: &[u8]) {
+        self.policy = policy.to_vec();
+    }
+
+    async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
+        let address = &self.address;
+        let bundle = match Url::parse(address) {
+            Ok(url) if url.scheme() == "file" => {
+                let file_path = url
+                    .to_file_path()
+                    .map_err(|_| PolicyLoaderError::InvalidPath(address.to_string()))?;
+                std::fs::read(file_path)?
+            }
+            Ok(_) => self.fetch_bundle_from_url().await?,
+            Err(_) => {
+                let path = Path::new(address);
+                if path.is_file() {
+                    std::fs::read(path)?
+                } else {
+                    return Err(PolicyLoaderError::InvalidPath(address.to_string()));
+                }
+            }
+        };
+
+        info!(loaded_policy_bytes=?bundle.len(), "Loaded policy bundle");
+
+        if bundle.is_empty() {
+            error!("Policy not found: {}", self.get_rule_name());
+            return Err(PolicyLoaderError::MissingPolicy(
+                self.get_rule_name().to_string(),
+            ));
+        }
+
+        self.load_policy_from_bundle(&Bundle::from_bytes(&*bundle)?)
+    }
+
+    fn hash(&self) -> String {
+        hex::encode(Sha256::digest(&self.policy))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum OpaExecutorError {
     #[error("Access denied")]
@@ -364,7 +476,7 @@ mod tests {
     use super::*;
     use crate::identity::IdentityContext;
     use serde_json::Value;
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, io::Write};
 
     fn chronicle_id() -> AuthId {
         AuthId::chronicle()
@@ -455,5 +567,125 @@ mod tests {
             _ => panic!("expected error"),
         }
         Ok(())
+    }
+
+    const BUNDLE_FILE: &str = "bundle.tar.gz";
+
+    fn embedded_policy_bundle() -> Result<Vec<u8>, PolicyLoaderError> {
+        EmbeddedOpaPolicies::get(BUNDLE_FILE)
+            .map(|file| file.data.to_vec())
+            .ok_or(PolicyLoaderError::EmbeddedOpaPolicies)
+    }
+
+    #[tokio::test]
+    async fn test_load_policy_from_http_url() {
+        let embedded_bundle = embedded_policy_bundle().unwrap();
+        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+
+        // Create a temporary HTTP server that serves a policy bundle
+        let mut server = mockito::Server::new_async().await;
+
+        // Start the mock server and define the response
+        let _m = server
+            .mock("GET", "/bundle.tar.gz")
+            .with_body(&embedded_bundle)
+            .create_async()
+            .await;
+
+        // Create the URL policy loader
+        let mut loader = UrlPolicyLoader::new(
+            &format!("{}/bundle.tar.gz", server.url()),
+            &rule,
+            &entrypoint,
+        );
+
+        // Load the policy
+        let result = loader.load_policy().await;
+        assert!(result.is_ok());
+
+        let bundle = Bundle::from_bytes(&embedded_bundle).unwrap();
+
+        // Extract the policy from the bundle we embedded in the binary
+        let policy_from_embedded_bundle = bundle
+            .wasm_policies
+            .iter()
+            .find(|p| p.entrypoint == rule)
+            .map(|p| p.bytes.as_ref())
+            .ok_or(PolicyLoaderError::MissingPolicy(rule.to_string()))
+            .unwrap();
+
+        // Get the loaded policy from the url
+        let policy_from_url = loader.get_policy();
+
+        assert_eq!(&policy_from_url, &policy_from_embedded_bundle);
+    }
+
+    #[tokio::test]
+    async fn test_load_policy_from_file_url() {
+        let embedded_bundle = embedded_policy_bundle().unwrap();
+        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let policy_path = temp_dir.path().join("bundle.tar.gz");
+        let mut file = std::fs::File::create(&policy_path).unwrap();
+        file.write_all(&embedded_bundle).unwrap();
+
+        // Create the file URL policy loader
+        let file_url = format!("file://{}", policy_path.to_string_lossy());
+        let mut loader = UrlPolicyLoader::new(&file_url, &rule, &entrypoint);
+
+        // Load the policy
+        let result = loader.load_policy().await;
+        assert!(result.is_ok());
+
+        let bundle = Bundle::from_bytes(&embedded_bundle).unwrap();
+
+        // Extract the policy from the bundle we embedded in the binary
+        let policy_from_embedded_bundle = bundle
+            .wasm_policies
+            .iter()
+            .find(|p| p.entrypoint == rule)
+            .map(|p| p.bytes.as_ref())
+            .ok_or(PolicyLoaderError::MissingPolicy(rule.to_string()))
+            .unwrap();
+
+        // Get the loaded policy from the file URL
+        let policy_from_file_url = loader.get_policy();
+
+        assert_eq!(policy_from_embedded_bundle, policy_from_file_url);
+    }
+
+    #[tokio::test]
+    async fn test_load_policy_from_bare_path() {
+        let embedded_bundle = embedded_policy_bundle().unwrap();
+        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let policy_path = temp_dir.path().join("bundle.tar.gz");
+        let mut file = std::fs::File::create(&policy_path).unwrap();
+        file.write_all(&embedded_bundle).unwrap();
+
+        // Create the bare path policy loader
+        let mut loader = UrlPolicyLoader::new(&policy_path.to_string_lossy(), &rule, &entrypoint);
+
+        // Load the policy
+        let result = loader.load_policy().await;
+        assert!(result.is_ok());
+
+        let bundle = Bundle::from_bytes(&embedded_bundle).unwrap();
+
+        // Extract the policy from the bundle we embedded in the binary
+        let policy_from_embedded_bundle = bundle
+            .wasm_policies
+            .iter()
+            .find(|p| p.entrypoint == rule)
+            .map(|p| p.bytes.as_ref())
+            .ok_or(PolicyLoaderError::MissingPolicy(rule.to_string()))
+            .unwrap();
+
+        // Get the loaded policy from the url
+        let policy_from_bare_path_url = loader.get_policy();
+
+        assert_eq!(policy_from_embedded_bundle, policy_from_bare_path_url);
     }
 }

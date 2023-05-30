@@ -4,7 +4,9 @@ use chronicle_protocol::{
     settings::{read_opa_settings, OpaSettings, SettingsReader},
 };
 use clap::ArgMatches;
-use common::opa::{CliPolicyLoader, ExecutorContext, PolicyLoader, SawtoothPolicyLoader};
+use common::opa::{
+    CliPolicyLoader, ExecutorContext, PolicyLoader, SawtoothPolicyLoader, UrlPolicyLoader,
+};
 use tracing::{debug, instrument};
 use url::Url;
 
@@ -71,4 +73,15 @@ pub async fn opa_executor_from_sawtooth_settings(
     );
     loader.load_policy().await?;
     Ok((ExecutorContext::from_loader(&loader)?, opa_settings))
+}
+
+#[instrument()]
+pub async fn opa_executor_from_url(
+    url: &str,
+    policy_name: &str,
+    entrypoint: &str,
+) -> Result<ExecutorContext, CliError> {
+    let mut loader = UrlPolicyLoader::new(url, policy_name, entrypoint);
+    loader.load_policy().await?;
+    Ok(ExecutorContext::from_loader(&loader)?)
 }

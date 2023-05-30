@@ -44,6 +44,7 @@ protobuf = { workspace = true }
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
+reqwest = { workspace = true }
 rdf-types = { workspace = true }
 rust-embed = { workspace = true }
 sawtooth-sdk = { workspace = true }
@@ -69,9 +70,11 @@ serde_json  = { workspace = true }
 [dev-dependencies]
 api          = { path = "../api" }
 criterion    = { workspace = true }
-insta        = { workspace = true }
+insta        = { workspace = true, features = ["json"] }
+mockito      = { workspace = true }
 proptest     = { workspace = true }
 sawtooth-sdk = { workspace = true }
+tempfile     = { workspace = true }
 
 [[bench]]
 harness = false
