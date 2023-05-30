@@ -32,9 +32,9 @@ Range: `chronicle:Identity`
 
 ## chronicle:Namespace
 
-An IRI containing an external id and uuid part, used for disambiguation.
-In order to work on the same namespace discrete Chronicle instances must share
-the uuid part.
+An IRI containing an external ID and UUID part, used for disambiguation.
+In order to work on the same [namespace](./namespaces.md), discrete Chronicle
+instances must share the UUID part.
 
 Domain: All prov and Chronicle resources
 
