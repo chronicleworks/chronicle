@@ -378,7 +378,7 @@ roles:
 ### ExternalId
 
 A string that names your domain, used to coordinate deployments that require
-multiple namespaces.
+multiple [namespaces](./namespaces.md).
 
 ```yaml
 name: evidence

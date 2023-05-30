@@ -982,7 +982,8 @@ operations to your JSON-LD file:
 
 To import data into Chronicle using the `import` command, you need to provide
 the `namespace-id` and `namespace-uuid` arguments. These arguments are required
-to specify the namespace to which the data will be imported.
+to specify the [namespace](./namespaces.md) into which the data will be
+imported.
 
 The `namespace-id` argument is a string that specifies the name of the namespace
 to which the data will be imported. This value should match the value of the

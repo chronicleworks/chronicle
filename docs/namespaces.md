@@ -24,16 +24,16 @@ namespace as 'default'.
 ### default
 
 The default namespace is the namespace that is used when you do not specify one
-in a graphql mutation or query. It can be bound to any UUID, and should be set
+in a GraphQL mutation or query. It can be bound to any UUID, and should be set
 up in configuration if you are using multiple Chronicle instances.
 
 ### chronicle-system
 
-This namespace uses the uuid "00000000-0000-0000-0000-000000000001" and is
+This namespace uses the UUID `00000000-0000-0000-0000-000000000001` and is
 reserved for Chronicle.
 
 ## Important
 
-You must not use the nil uuid '00000000-0000-0000-0000-000000000000' as a
+You must not use the nil UUID `00000000-0000-0000-0000-000000000000` as a
 binding in any circumstances, as this is used to indicate null values in the
 index database.
