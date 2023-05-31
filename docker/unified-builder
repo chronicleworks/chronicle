@@ -46,6 +46,7 @@ COPY Cargo.toml /app
 COPY crates /app/crates
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
+COPY docker/chronicle-test/wait-for-it /app/scripts/wait-for-it
 
 
 FROM hostbase AS crossbuild
@@ -183,6 +184,7 @@ COPY Cargo.toml /app
 COPY crates /app/crates
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
+COPY docker/chronicle-test/wait-for-it /app/scripts/wait-for-it
 
 WORKDIR /app
 RUN cargo fetch --locked
@@ -243,6 +245,11 @@ FROM final-base AS opa-tp
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
+COPY --from=chronicle-builder /app/scripts/wait-for-it /usr/local/bin/wait-for-it
+RUN chmod 755 /usr/local/bin/opa-tp \
+  && chown root:bin /usr/local/bin/opa-tp
+RUN chmod 755 /usr/local/bin/wait-for-it \
+  && chown root:bin /usr/local/bin/wait-for-it
 
 USER chronicle
 
@@ -253,6 +260,11 @@ ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
 COPY --from=chronicle-builder /app/policies/bundle.tar.gz /app/policies/bundle.tar.gz
+COPY --from=chronicle-builder /app/scripts/wait-for-it /usr/local/bin/wait-for-it
+RUN chmod 755 /usr/local/bin/opactl \
+  && chown root:bin /usr/local/bin/opactl
+RUN chmod 755 /usr/local/bin/wait-for-it \
+  && chown root:bin /usr/local/bin/wait-for-it
 
 USER chronicle
 
