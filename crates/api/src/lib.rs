@@ -282,7 +282,7 @@ where
         let start_from_block = if let Ok(Some(start_from_block)) = last_seen_block {
             FromBlock::BlockId(start_from_block)
         } else {
-            FromBlock::Genesis //Full catch up, as we have no last seen block
+            FromBlock::First //Full catch up, as we have no last seen block
         };
 
         debug!(start_from_block = ?start_from_block, "Starting from block");
