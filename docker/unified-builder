@@ -251,7 +251,7 @@ COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
 USER chronicle
 
 
-# Now to build the id-provider image
+# Build the id-provider image
 FROM --platform=${TARGETPLATFORM} debian-upgraded AS auth-server-requirements
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -286,7 +286,7 @@ COPY docker/id-provider-settings.yml src/main/resources/application.yml
 RUN mvn package
 
 
-FROM --platform=${TARGETPLATFORM} auth-server-requirements AS authentication-server
+FROM --platform=${TARGETPLATFORM} auth-server-requirements AS id-provider
 ARG TARGETARCH
 
 RUN useradd -m runner
@@ -295,6 +295,27 @@ USER runner
 COPY --from=artifacts /artifacts/${TARGETARCH}/oauth-token /usr/local/bin/
 COPY --from=auth-server-artifacts /home/builder/fake-oidc-server/target/fake_oidc_server.jar /home/runner/
 
-CMD java -jar fake_oidc_server.jar
+CMD java -jar ~/fake_oidc_server.jar
 
 EXPOSE 8090
+
+
+# Build the chronicle-helm-api-test image
+FROM --platform=${TARGETPLATFORM} debian-upgraded AS chronicle-helm-api-test
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get install --no-install-recommends -y \
+        ca-certificates \
+        curl \
+        jq \
+        wait-for-it
+
+RUN curl -fsLOS https://deb.nodesource.com/setup_lts.x
+RUN bash ./setup_lts.x
+RUN apt-get install -y nodejs
+RUN npm install -g -f graphqurl --yes
+
+COPY docker/helm-api-subscribe-submit-test /usr/local/bin/subscribe-submit-test
+
+CMD /usr/local/bin/subscribe-submit-test
