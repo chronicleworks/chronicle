@@ -8,7 +8,7 @@ use clap::{
 use k256::{pkcs8::DecodePrivateKey, SecretKey};
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use url::Url;
 
 // Generate an ephemeral key if no key is provided
@@ -309,25 +309,28 @@ pub fn cli() -> Command {
 // Keys are either file paths to a PEM encoded key or a PEM encoded key supplied
 // as an environment variable, so we need to load them based on the input type
 pub(crate) fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
-    if name == "transactor-key" && matches.value_source(name).is_none() {
-        return SecretKey::random(StdRng::from_entropy());
-    }
-
-    let key = matches.value_source(name).unwrap();
-    match key {
-        ValueSource::CommandLine | ValueSource::DefaultValue => {
-            let path: &String = matches.get_one(name).unwrap();
-            let key = std::fs::read_to_string(path).unwrap_or_else(|_| {
-                error!("Unable to read file {path}");
-                exit(1)
-            });
-            SecretKey::from_pkcs8_pem(key.trim()).unwrap()
+    if let Some(source) = matches.value_source(name) {
+        debug!(loading_key=%name, from=?source);
+        match source {
+            ValueSource::CommandLine | ValueSource::DefaultValue => {
+                let path: &String = matches.get_one(name).unwrap();
+                let key = std::fs::read_to_string(path).unwrap_or_else(|_| {
+                    error!("Unable to read file {path}");
+                    exit(1)
+                });
+                SecretKey::from_pkcs8_pem(key.trim()).unwrap()
+            }
+            ValueSource::EnvVariable => {
+                let key: &String = matches.get_one(name).unwrap();
+                SecretKey::from_pkcs8_pem(key.trim()).unwrap()
+            }
+            _ => unreachable!(),
         }
-        ValueSource::EnvVariable => {
-            let key: &String = matches.get_one(name).unwrap();
-            SecretKey::from_pkcs8_pem(key.trim()).unwrap()
-        }
-        _ => unreachable!(),
+    } else if name == "transactor-key" {
+        debug!("creating new transactor key");
+        SecretKey::random(StdRng::from_entropy())
+    } else {
+        panic!("no source for key \"{name}\"")
     }
 }
 

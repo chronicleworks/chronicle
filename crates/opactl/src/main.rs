@@ -32,7 +32,7 @@ use thiserror::Error;
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
-use tracing::{debug, error, info, instrument, span, Level};
+use tracing::{debug, error, info, instrument, span, trace, Level};
 use url::Url;
 use user_error::UFE;
 mod cli;
@@ -134,7 +134,9 @@ async fn ambient_transactions<
     });
 
     // Wait for the task to start receiving events
+    trace!("awaiting incoming event");
     let _ = receiving_events_rx.await;
+    trace!("event successfully received from the chain");
 
     async move { notify_rx.await }
 }
@@ -158,11 +160,13 @@ async fn handle_wait<
     let (tx_id, tx) = writer.pre_submit(&submission).await?;
     match wait {
         Wait::NoWait => {
+            debug!(submitting_tx=%tx_id);
             writer.submit(tx, transactor_key).await?;
 
             Ok(Waited::NoWait)
         }
         Wait::NumberOfBlocks(blocks) => {
+            debug!(submitting_tx=%tx_id, waiting_blocks=%blocks);
             let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
             writer.submit(tx, transactor_key).await?;
 
