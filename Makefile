@@ -6,7 +6,7 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
 
-IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl
+IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl id-provider
 ARCHS := amd64 arm64
 COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
@@ -125,6 +125,15 @@ $(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
 		--target $(1) \
 		--load
 
+id-provider-$(2)-build: $(2)-ensure-context
+	docker buildx build $(DOCKER_PROGRESS) \
+		-f docker/unified-builder \
+		-t id-provider-$(2):$(ISOLATION_ID) . \
+		--builder ctx-$(ISOLATION_ID)-$(2) \
+		--platform linux/$(2) \
+		--target authentication-server \
+		--load
+
 chronicle-helm-api-test-$(2)-build: $(2)-ensure-context
 	docker buildx build $(DOCKER_PROGRESS) \
 		-f ./docker/chronicle-helm-test/subscribe-submit-test.dockerfile \
@@ -139,16 +148,16 @@ $(1)-$(2)-manifest: $(1)-$(2)-build
 		-a $(1)-$(2):$(ISOLATION_ID)
 
 ifeq ($(RELEASABLE), yes)
-$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build
+$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build id-provider-$(2)-build
 else
 ifeq ($(2), $(HOST_ARCHITECTURE))
-$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build
+$(1): $(1)-$(2)-build chronicle-helm-api-test-$(2)-build id-provider-$(2)-build
 endif
 endif
 
 build: .VERSION $(1)
 
-build-native: $(1)-$(HOST_ARCHITECTURE)-build chronicle-helm-api-test-$(HOST_ARCHITECTURE)-build
+build-native: $(1)-$(HOST_ARCHITECTURE)-build chronicle-helm-api-test-$(HOST_ARCHITECTURE)-build id-provider-$(HOST_ARCHITECTURE)-build
 endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))

@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "oauth-token"
+version = "0.7.0"
+
+[dependencies]
+anyhow = { workspace = true }
+oauth2 = { workspace = true }
+url = { workspace = true }

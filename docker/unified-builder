@@ -125,7 +125,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
   && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle_sawtooth_tp /artifacts/${TARGETARCH} \
   && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle-domain-lint /artifacts/${TARGETARCH} \
   && mv -f target/${CARGO_BUILD_TARGET}/release/opactl /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/opa-tp /artifacts/${TARGETARCH}
+  && mv -f target/${CARGO_BUILD_TARGET}/release/opa-tp /artifacts/${TARGETARCH} \
+  && mv -f target/${CARGO_BUILD_TARGET}/release/oauth-token /artifacts/${TARGETARCH}
 
 
 FROM crossbuild AS testbase
@@ -183,13 +184,20 @@ WORKDIR /app
 RUN cargo fetch --locked
 
 
-FROM --platform=${TARGETPLATFORM} debian:bullseye-slim AS final-base
+FROM --platform=${TARGETPLATFORM} debian:bullseye-slim AS debian-upgraded
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+    && apt-get upgrade -y
+
+
+FROM debian-upgraded AS final-base
 ARG TARGETARCH
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update \
-  && apt-get install -y --no-install-recommends \
+  apt-get install -y --no-install-recommends \
   ca-certificates \
   libpq5
 
@@ -241,3 +249,52 @@ ARG TARGETARCH
 COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
 
 USER chronicle
+
+
+# Now to build the id-provider image
+FROM --platform=${TARGETPLATFORM} debian-upgraded AS auth-server-requirements
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get install --no-install-recommends -y \
+        curl \
+        openjdk-17-jre-headless
+
+
+FROM --platform=${TARGETPLATFORM} auth-server-requirements AS auth-server-build-requirements
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get install --no-install-recommends -y \
+        git \
+        maven \
+        openjdk-17-jdk-headless
+
+
+FROM --platform=${TARGETPLATFORM} auth-server-build-requirements AS auth-server-artifacts
+
+RUN useradd -m builder
+USER builder
+RUN mkdir /home/builder/fake-oidc-server/
+WORKDIR /home/builder/fake-oidc-server/
+
+RUN git init
+RUN git remote add origin https://github.com/CESNET/fake-oidc-server.git
+RUN git fetch origin 586a884d217e1eee7be2cc5951907745d4112165
+RUN git reset --hard FETCH_HEAD
+COPY docker/id-provider-settings.yml src/main/resources/application.yml
+RUN mvn package
+
+
+FROM --platform=${TARGETPLATFORM} auth-server-requirements AS authentication-server
+ARG TARGETARCH
+
+RUN useradd -m runner
+USER runner
+
+COPY --from=artifacts /artifacts/${TARGETARCH}/oauth-token /usr/local/bin/
+COPY --from=auth-server-artifacts /home/builder/fake-oidc-server/target/fake_oidc_server.jar /home/runner/
+
+CMD java -jar fake_oidc_server.jar
+
+EXPOSE 8090
