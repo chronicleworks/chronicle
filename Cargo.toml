@@ -108,7 +108,7 @@ rust-embed = { version = "6.6.0", features = [
   "debug-embed",
   "include-exclude",
 ] }
-sawtooth-sdk = { git = "https://github.com/blockchaintp/sawtooth-sdk-rust", branch = "fix/no-panic-channels" }
+sawtooth-sdk = { git = "https://github.com/hyperledger/sawtooth-sdk-rust", rev = "f781db6" }
 serde = "1.0.152"
 serde_cbor = "0.11.2"
 serde_derive = "1.0.152"
