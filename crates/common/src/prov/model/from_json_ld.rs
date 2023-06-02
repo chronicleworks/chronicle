@@ -972,15 +972,6 @@ impl ChronicleOperation {
                     id,
                     activity,
                 }))
-            } else if o.has_type(&id_from_iri(&ChronicleOperations::WasInformedBy)) {
-                let namespace = o.namespace();
-                let activity = o.activity();
-                let informing_activity = o.informing_activity();
-                Ok(ChronicleOperation::WasInformedBy(WasInformedBy {
-                    namespace,
-                    activity,
-                    informing_activity,
-                }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityHasEvidence)) {
                 let namespace = o.namespace();
                 let id = o.entity();
