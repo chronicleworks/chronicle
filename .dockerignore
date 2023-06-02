@@ -7,5 +7,5 @@
 !policies
 !docker/chronicle-config
 !docker/chronicle-test
-!docker/chronicle-helm-test
+!docker/helm-api-subscribe-submit-test
 !docker/id-provider-settings.yml
