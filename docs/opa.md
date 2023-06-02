@@ -455,6 +455,18 @@ opactl get-policy -i my_policy -o /path/to/output
 By default, an embedded policy is used that allows all graphql operations and
 transactions. To use a custom policy you must:
 
+### Bundle your policy to target WASM
+
+Build your custom Rego files into a bundle. For example, using the `opa`
+command-line tool that can be downloaded from the
+[Open Policy Agent](https://www.openpolicyagent.org/) project:
+
+```bash
+opa build -t wasm -o policies/bundle.tar.gz -b policies -e allow_transactions
+```
+
+Listed entry points (after `-e`) must be defined in your custom policy.
+
 ### Load a policy bundle using opactl
 
 The policy id here must match the rego.
