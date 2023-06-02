@@ -247,6 +247,7 @@ FROM --platform=${TARGETPLATFORM} final-base AS opactl
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
+COPY --from=chronicle-builder /app/policies/bundle.tar.gz /app/policies/bundle.tar.gz
 
 USER chronicle
 
