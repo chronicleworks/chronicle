@@ -10,6 +10,7 @@ members = [
   "crates/chronicle-domain-test",
   "crates/chronicle-protocol",
   "crates/chronicle-synth",
+  "crates/gq-subscribe",
   "crates/id-provider",
   "crates/opa-tp-protocol",
   "crates/opactl",
@@ -53,6 +54,7 @@ genco = "0.16.1"
 glob = "0.3.0"
 hashbrown = "0.13"
 hex = "0.4.3"
+http = "0.2.9"
 insta = { version = "1.26.0", features = ["redactions", "toml"] }
 iref = "2.2"
 iref-enum = "2.1"
@@ -137,6 +139,7 @@ tracing-subscriber = { version = "0.3.15", features = [
   "env-filter",
   "json",
 ] }
+tungstenite = "0.19"
 url = "2.3.1"
 user-error = "1.2.8"
 uuid = "1.2.2"
