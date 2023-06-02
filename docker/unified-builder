@@ -121,12 +121,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
   exit 1; \
   fi \
   && cargo build --locked --release --target ${CARGO_BUILD_TARGET} ${BUILD_ARGS} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle_sawtooth_tp /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/chronicle-domain-lint /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/opactl /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/opa-tp /artifacts/${TARGETARCH} \
-  && mv -f target/${CARGO_BUILD_TARGET}/release/oauth-token /artifacts/${TARGETARCH}
+  && for i in chronicle chronicle_sawtooth_tp chronicle-domain-lint opactl opa-tp oauth-token gq-ws; \
+  do mv -f target/${CARGO_BUILD_TARGET}/release/$i /artifacts/${TARGETARCH}; \
+  done
 
 
 FROM crossbuild AS testbase
@@ -303,6 +300,7 @@ EXPOSE 8090
 
 # Build the chronicle-helm-api-test image
 FROM --platform=${TARGETPLATFORM} debian-upgraded AS chronicle-helm-api-test
+ARG TARGETARCH
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -317,6 +315,7 @@ RUN bash ./setup_lts.x
 RUN apt-get install -y nodejs
 RUN npm install -g -f graphqurl --yes
 
+COPY --from=artifacts /artifacts/${TARGETARCH}/gq-ws /usr/local/bin/
 COPY docker/helm-api-subscribe-submit-test /usr/local/bin/subscribe-submit-test
 
 CMD /usr/local/bin/subscribe-submit-test
