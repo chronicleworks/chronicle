@@ -153,7 +153,7 @@ async fn ambient_transactions<
     let _ = receiving_events_rx.await;
     trace!("event successfully received from the chain");
 
-    async move { notify_rx.await }
+    notify_rx
 }
 
 #[instrument(skip(reader, writer, matches, submission))]
