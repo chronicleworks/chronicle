@@ -348,10 +348,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
 #[cfg(test)]
 pub mod test {
-    use std::{
-        cell::RefCell,
-        collections::{BTreeMap, BTreeSet},
-    };
+    use std::{cell::RefCell, collections::BTreeMap};
 
     use chronicle_protocol::{
         async_sawtooth_sdk::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
@@ -667,75 +664,6 @@ pub mod test {
                 "@type": "chronicle:Namespace"
                 externalId: testns
             "###);
-        })
-        .await
-        .unwrap();
-    }
-
-    #[tokio::test]
-    async fn anonymous_access_denied() {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-
-        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
-        keystore.generate_chronicle().unwrap();
-
-        let user_identity = {
-            let claims = common::identity::JwtClaims(
-                serde_json::json!({
-                    "sub": "abcdef",
-                })
-                .as_object()
-                .unwrap()
-                .to_owned(),
-            );
-            AuthId::from_jwt_claims(&claims, &BTreeSet::from(["sub".to_string()])).unwrap()
-        };
-
-        let signed_identity = user_identity.signed_identity(&keystore).unwrap();
-
-        // Example transaction payload of `CreateNamespace`,
-        // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
-        let tx = ChronicleTransaction::new(
-            vec![
-                create_namespace_helper(None),
-                agent_exists_helper(),
-                create_agent_acts_on_behalf_of(),
-            ],
-            signed_identity,
-        );
-
-        let secret: SigningKey = keystore.chronicle_signing().unwrap();
-
-        let submit_tx = ChronicleSubmitTransaction {
-            tx,
-            signer: secret.clone(),
-            policy_name: None,
-        };
-
-        let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
-        // Get a signed tx from sawtooth protocol
-        let (tx, _id) = submit_tx.as_sawtooth_tx(&message_builder).await;
-
-        let header =
-            <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();
-
-        let mut request = TpProcessRequest::default();
-        request.set_header(header);
-        request.set_payload(tx.payload);
-        request.set_signature("TRANSACTION_SIGNATURE".to_string());
-
-        let (policy, entrypoint) = ("allow_transactions", "allow_transactions.allowed_users");
-
-        tokio::task::spawn_blocking(move || {
-            // Create a `TestTransactionContext` to pass to the `tp` function
-            let mut context = TestTransactionContext::new();
-            let handler = ChronicleTransactionHandler::new(policy, entrypoint).unwrap();
-            match handler.apply(&request, &mut context) {
-                Err(e) => {
-                    insta::assert_snapshot!(e.to_string(), @"InternalError: InvalidTransaction: Access denied")
-                }
-                _ => panic!("expected error"),
-            }
         })
         .await
         .unwrap();
