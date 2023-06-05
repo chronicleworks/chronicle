@@ -23,7 +23,7 @@ query {
     nodes {
       ...on ContractorAgent {
         id
-        location
+        locationAttribute
       }
     }
   }
