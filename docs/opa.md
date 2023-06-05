@@ -398,7 +398,8 @@ arguments:
 
 - `--id` (`-i`): A required argument that specifies the ID of the new policy.
 
-- `--policy` (`-p`): A required argument that specifies the path of the policy.
+- `--policy` (`-p`): A required argument that specifies the path or url of the
+  policy bundle.
 
 - `--root-key` (`-k`): A required argument that specifies the path of a
   PEM-encoded private key that has access to the root.
@@ -411,6 +412,22 @@ arguments:
 ```bash
 opactl set-policy -i my_policy \
                  -p /path/to/policy.bundle.tar.gz \
+                 -k /path/to/private/key
+```
+
+Or
+
+```bash
+opactl set-policy -i my_policy \
+                 -p file://$PWD/relative/path/to/policy.bundle.tar.gz \
+                 -k /path/to/private/key
+```
+
+Or
+
+```bash
+opactl set-policy -i my_policy \
+                 -p https://server.address/path/to/policy.bundle.tar.gz \
                  -k /path/to/private/key
 ```
 

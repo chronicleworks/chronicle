@@ -1,7 +1,7 @@
 use std::process::exit;
 
 use clap::{
-    builder::{NonEmptyStringValueParser, PathBufValueParser},
+    builder::{NonEmptyStringValueParser, PathBufValueParser, StringValueParser},
     parser::ValueSource,
     Arg, ArgAction, ArgMatches, Command, ValueHint,
 };
@@ -207,9 +207,9 @@ fn set_policy() -> Command {
                     .long("policy")
                     .num_args(1)
                     .required(true)
-                    .value_hint(ValueHint::FilePath)
-                    .value_parser(PathBufValueParser::new())
-                    .help("The path of the policy wasm to register"),
+                    .value_hint(ValueHint::Url)
+                    .value_parser(StringValueParser::new())
+                    .help("A path or url to a policy bundle"),
             )
             .arg(
                 Arg::new("root-key")

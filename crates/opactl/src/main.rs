@@ -35,7 +35,7 @@ use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
 use tracing::{debug, error, info, instrument, span, trace, Level};
-use url::Url;
+use url::{ParseError, Url};
 use user_error::UFE;
 mod cli;
 
@@ -57,6 +57,15 @@ pub enum OpaCtlError {
     TransactionFailed(String),
     #[error("Operation cancelled {0}")]
     Cancelled(oneshot::Canceled),
+
+    #[error("Load from url error: {0}")]
+    LoadFromUrl(#[from] reqwest::Error),
+
+    #[error("Policy url has invalid scheme: {0}")]
+    InvalidPolicyUrlScheme(String),
+
+    #[error("Invalid policy url {0}")]
+    InvalidPolicyUrl(#[from] ParseError),
 }
 
 impl UFE for OpaCtlError {}
@@ -312,10 +321,37 @@ async fn dispatch_args<
         Some(("set-policy", matches)) => {
             let root_key: SigningKey = load_key_from_match("root-key", matches).into();
             let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let policy: &PathBuf = matches.get_one("policy").unwrap();
-            let mut policy_file = File::open(policy)?;
-            let mut policy = vec![];
-            policy_file.read_to_end(&mut policy)?;
+            let policy: &String = matches.get_one("policy").unwrap();
+
+            enum UrlOrFile {
+                Url(Url),
+                File(PathBuf),
+            }
+
+            let policy = match policy.parse::<Url>() {
+                Ok(url) => UrlOrFile::Url(url),
+                Err(_) => UrlOrFile::File(PathBuf::from(policy)),
+            };
+
+            let policy = match policy {
+                UrlOrFile::File(path) => {
+                    let mut file = File::open(path)?;
+                    let mut policy = Vec::new();
+                    file.read_to_end(&mut policy)?;
+                    Ok(policy)
+                }
+                UrlOrFile::Url(url) => match url.scheme() {
+                    "file" => {
+                        let mut file = File::open(url.path())?;
+                        let mut policy = Vec::new();
+                        file.read_to_end(&mut policy)?;
+                        Ok(policy)
+                    }
+                    "http" | "https" => Ok(reqwest::get(url).await?.bytes().await?.into()),
+                    _ => Err(OpaCtlError::InvalidPolicyUrlScheme(url.scheme().to_owned())),
+                },
+            }?;
+
             let id = matches.get_one::<String>("id").unwrap();
 
             let bootstrap = SubmissionBuilder::set_policy(id, policy, root_key).build(span_id);
