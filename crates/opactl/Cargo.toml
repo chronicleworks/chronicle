@@ -18,6 +18,7 @@ opa-tp-protocol     = { path = "../opa-tp-protocol" }
 pin-project         = { workspace = true }
 rand                = { workspace = true }
 rand_core           = { workspace = true }
+reqwest             = { workspace = true }
 sawtooth-sdk        = { workspace = true }
 serde               = { workspace = true }
 serde_derive        = { workspace = true }
