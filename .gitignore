@@ -4,6 +4,7 @@ markers
 build
 .buildx-cache
 .artifacts
+.VERSION
 
 # some plugin
 .scannerwork

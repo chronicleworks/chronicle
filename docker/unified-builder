@@ -170,6 +170,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle-domain-lint /usr/local/bin
 
+COPY .VERSION /app/.VERSION
 COPY .cargo /app/.cargo
 COPY Cargo.lock /app
 COPY Cargo.toml /app
@@ -184,9 +185,9 @@ RUN cargo fetch --locked
 FROM --platform=${TARGETPLATFORM} debian:bullseye-slim AS debian-upgraded
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update \
-    && apt-get upgrade -y
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && apt-get upgrade -y
 
 
 FROM debian-upgraded AS final-base
@@ -253,20 +254,20 @@ USER chronicle
 FROM --platform=${TARGETPLATFORM} debian-upgraded AS auth-server-requirements
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get install --no-install-recommends -y \
-        curl \
-        openjdk-17-jre-headless
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install --no-install-recommends -y \
+  curl \
+  openjdk-17-jre-headless
 
 
 FROM --platform=${TARGETPLATFORM} auth-server-requirements AS auth-server-build-requirements
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get install --no-install-recommends -y \
-        git \
-        maven \
-        openjdk-17-jdk-headless
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install --no-install-recommends -y \
+  git \
+  maven \
+  openjdk-17-jdk-headless
 
 
 FROM --platform=${TARGETPLATFORM} auth-server-build-requirements AS auth-server-artifacts
@@ -303,12 +304,12 @@ FROM --platform=${TARGETPLATFORM} debian-upgraded AS chronicle-helm-api-test
 ARG TARGETARCH
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get install --no-install-recommends -y \
-        ca-certificates \
-        curl \
-        jq \
-        wait-for-it
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install --no-install-recommends -y \
+  ca-certificates \
+  curl \
+  jq \
+  wait-for-it
 
 RUN curl -fsLOS https://deb.nodesource.com/setup_lts.x
 RUN bash ./setup_lts.x
