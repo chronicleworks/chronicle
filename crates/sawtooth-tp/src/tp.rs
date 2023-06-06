@@ -20,7 +20,7 @@ use sawtooth_sdk::{
     messages::processor::TpProcessRequest,
     processor::handler::{ApplyError, TransactionContext, TransactionHandler},
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{error, info, instrument, trace};
 
 use crate::{
     abstract_tp::{TPSideEffects, TP},
@@ -123,6 +123,8 @@ impl TP for ChronicleTransactionHandler {
         let span = submission.span_id;
         let id = request.get_signature().to_owned();
 
+        info!(transaction_id = %id, span = %span, operation_count = %operations.tx.len(), identity = %submission.identity);
+
         //pre compute dependencies
         let deps = operations
             .tx
@@ -135,7 +137,7 @@ impl TP for ChronicleTransactionHandler {
             .map(SawtoothAddress::from)
             .collect::<HashSet<_>>();
 
-        debug!(
+        trace!(
             input_chronicle_addresses=?deps,
         );
 
@@ -176,7 +178,7 @@ impl TP for ChronicleTransactionHandler {
                         tx_output
                             .into_iter()
                             .map(|output| {
-                                debug!(output_state = %output.data);
+                                trace!(output_state = %output.data);
                                 (SawtoothAddress::from(&output.address), Some(output.data))
                             })
                             .collect::<BTreeMap<_, _>>()
@@ -189,7 +191,7 @@ impl TP for ChronicleTransactionHandler {
 
         let dirty = state.dirty().collect::<Vec<_>>();
 
-        debug!(dirty = ?dirty);
+        trace!(dirty = ?dirty);
 
         let mut delta = ProvModel::default();
         for output in dirty
@@ -299,6 +301,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
     #[instrument(
         name = "apply",
+        level = "debug",
         skip(request,context),
         fields(
             transaction_id = %request.signature,
@@ -321,6 +324,8 @@ impl TransactionHandler for ChronicleTransactionHandler {
             futures::executor::block_on(
                 async move { Self::tp_operations(submission.clone()).await },
             )?;
+
+        info!(transaction_id = %request.signature, operation_count = %operations.tx.len());
 
         let state = Self::tp_state(context, &operations)?;
         let effects = futures::executor::block_on(async move {
