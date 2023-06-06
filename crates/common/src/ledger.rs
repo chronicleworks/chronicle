@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use opa_tp_protocol::async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::BlockId};
-use tracing::{debug, instrument};
+use tracing::{instrument, trace};
 
 use crate::{
     identity::SignedIdentity,
@@ -582,7 +582,7 @@ impl ChronicleOperation {
     ) -> Result<serde_json::Value, ProcessorError> {
         for input in input {
             let graph: serde_json::Value = serde_json::from_str(&input.data)?;
-            debug!(input_model=%serde_json::to_string_pretty(&graph).map_or_else(|e| format!("error: {e}"), |x| x));
+            trace!(input_model=%serde_json::to_string_pretty(&graph).map_or_else(|e| format!("error: {e}"), |x| x));
             let resource = serde_json::json!({
                 "@graph": [graph],
             });

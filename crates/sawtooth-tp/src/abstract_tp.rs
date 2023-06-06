@@ -81,7 +81,7 @@ impl TPSideEffects {
         });
     }
 
-    #[instrument(name = "apply_effects", level = "debug", skip(self, ctx), fields (effects = ?self.effects))]
+    #[instrument(name = "apply_effects", level = "trace", skip(self, ctx), fields (effects = ?self.effects))]
     pub fn apply(self, ctx: &mut dyn TransactionContext) -> Result<(), ContextError> {
         for effect in self.effects.into_iter() {
             match effect {

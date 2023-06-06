@@ -779,7 +779,7 @@ impl ProvModel {
     /// If a statement requires a subject or object that does not currently exist in the model, then we create it
     /// If an operation contradicts a previous statement, then we record the
     /// contradiction, but attempt to apply as much of the operation as possible
-    #[instrument(skip(self,tx), level = "debug", name="apply_chronicle_operation", fields(op = ?tx, model= ?self), ret(Debug))]
+    #[instrument(skip(self,tx), level = "trace", name="apply_chronicle_operation", fields(op = ?tx, model= ?self), ret(Debug))]
     pub fn apply(&mut self, tx: &ChronicleOperation) -> Result<(), Contradiction> {
         let tx = tx.to_owned();
         match tx {
