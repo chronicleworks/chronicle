@@ -3,7 +3,7 @@ use http::{HeaderValue, StatusCode};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde_json::{json, Value};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use tungstenite::{client::IntoClientRequest, connect, Message};
 
 fn main() -> Result<(), anyhow::Error> {
@@ -31,7 +31,7 @@ fn main() -> Result<(), anyhow::Error> {
                 .long("chronicle-address")
                 .short('a')
                 .takes_value(true)
-                .default_value("127.0.0.1:9982")
+                .default_value("localhost:9982")
                 .help("the network address of the Chronicle API"),
         )
         .arg(
@@ -45,7 +45,12 @@ fn main() -> Result<(), anyhow::Error> {
 
     let subscription_query = args.value_of("request").unwrap();
     let notification_count: u32 = args.value_of("count").unwrap().parse()?;
-    let chronicle_address: SocketAddr = args.value_of("address").unwrap().parse()?;
+    let chronicle_address: SocketAddr = args
+        .value_of("address")
+        .unwrap()
+        .to_socket_addrs()?
+        .next()
+        .expect("network address required for Chronicle API");
     let bearer_token = args.value_of("token");
 
     // generate random ID for subscription
@@ -80,8 +85,8 @@ fn main() -> Result<(), anyhow::Error> {
         "type": "connection_init"
     });
     let conn_init_msg = Message::Text(serde_json::to_string(&conn_init_json)?);
-    socket.write_message(conn_init_msg)?;
-    let conn_response = socket.read_message()?;
+    socket.send(conn_init_msg)?;
+    let conn_response = socket.read()?;
     if let Value::Object(map) = serde_json::from_str::<Value>(&conn_response.clone().into_text()?)?
     {
         if map.get("type") == Some(&Value::String("connection_ack".to_string())) {
@@ -94,7 +99,7 @@ fn main() -> Result<(), anyhow::Error> {
                 }
             });
             let subscription_msg = Message::Text(serde_json::to_string(&subscription_json)?);
-            socket.write_message(subscription_msg)?;
+            socket.send(subscription_msg)?;
 
             // receive and print notifications
             let data_json = Value::String("data".to_string());
@@ -102,7 +107,7 @@ fn main() -> Result<(), anyhow::Error> {
             let mut remaining = notification_count;
             while remaining > 0 {
                 remaining -= 1;
-                let notification_msg = socket.read_message()?;
+                let notification_msg = socket.read()?;
                 let notification_json =
                     serde_json::from_str::<Value>(&notification_msg.into_text()?)?;
 
