@@ -260,7 +260,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   openjdk-17-jre-headless
 
 
-FROM --platform=${TARGETPLATFORM} auth-server-requirements AS auth-server-build-requirements
+FROM --platform=${BUILDPLATFORM} auth-server-requirements AS auth-server-build-requirements
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -270,7 +270,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   openjdk-17-jdk-headless
 
 
-FROM --platform=${TARGETPLATFORM} auth-server-build-requirements AS auth-server-artifacts
+FROM --platform=${BUILDPLATFORM} auth-server-build-requirements AS auth-server-artifacts
 
 RUN useradd -m builder
 USER builder
@@ -282,7 +282,7 @@ RUN git remote add origin https://github.com/CESNET/fake-oidc-server.git
 RUN git fetch origin 586a884d217e1eee7be2cc5951907745d4112165
 RUN git reset --hard FETCH_HEAD
 COPY docker/id-provider-settings.yml src/main/resources/application.yml
-RUN mvn package
+RUN mvn -B package
 
 
 FROM --platform=${TARGETPLATFORM} auth-server-requirements AS id-provider
