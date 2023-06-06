@@ -1,7 +1,8 @@
 [package]
-name = "chronicle-synth"
-version = "0.7.0"
+build   = "build.rs"
 edition = "2021"
+name    = "chronicle-synth"
+version = "0.7.0"
 
 [lib]
 name = "chronicle_synth"
@@ -12,15 +13,15 @@ name = "chronicle-synth"
 path = "src/generate.rs"
 
 [dependencies]
-chronicle = { path = "../chronicle" }
-maplit = {  workspace = true }
+chronicle  = { path = "../chronicle" }
+maplit     = { workspace = true }
 owo-colors = { workspace = true }
-serde = { workspace = true }
+serde      = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-structopt = { workspace = true }
-thiserror = { workspace = true }
+structopt  = { workspace = true }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-insta = { workspace = true, features = ["json"] }
+insta     = { workspace = true, features = ["json"] }

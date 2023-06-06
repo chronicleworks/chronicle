@@ -1,4 +1,5 @@
 [package]
+build   = "build.rs"
 edition = "2021"
 name    = "chronicle-domain-lint"
 version = "0.7.0"
