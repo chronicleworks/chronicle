@@ -84,49 +84,27 @@ Define with Helm values, substituting for your identity provider's endpoints,
 typically available from its configuration interface:
 
 ```yaml
-chronicle:
-  idProvider: id.example.com
-
 auth:
-  scheme: https
   jwks:
-    port: 80
-    endpoint: .well-known/jwks.json
+    enabled: true
+    url: https://id.example.com:80/.well-known/jwks.json
   userinfo:
-    port: 80
-    endpoint: userinfo
+    url: https://id.example.com:80/userinfo
+
 ```
-
-would define the endpoints as being at,
-
-- JWKS: `https://id.example.com:80/.well-known/jwks.json`
-- userinfo: `https://id.example.com:80/userinfo`
 
 Setting the JWKS URL is required if Chronicle may be provided a JWT with the
 request's `Authorization:` or by the OIDC's userinfo endpoint, because it
-requires JWKS to verify the JWT. The URL may be omitted only if the user
-provides an opaque access token from which the userinfo endpoint then provides
-profile information as a plain, unsigned JSON object, so neither is a JWT. In
-that case, rather than setting its `port` and `endpoint`, instead use,
-
-```yaml
-auth:
-  jwks:
-    enabled: false
-```
+requires JWKS to verify the JWT. The URL, and its `jwks:` section, may be
+omitted only if the user provides an opaque access token from which the
+userinfo endpoint then provides profile information as a plain, unsigned JSON
+object, so neither is a JWT.
 
 Setting the userinfo URL is required if Chronicle is to pass the bearer token
 from the request's `Authorization:` to an OIDC userinfo endpoint. This
 provides user profile information for OPA's policy engine to use in applying
-the access rules. The URL may be omitted if the provided token is a JWT that
-already includes all required claims. In that case, rather than setting its
-`port` and `endpoint`, instead use,
-
-```yaml
-auth:
-  userinfo:
-    enabled: false
-```
+the access rules. The URL, and its `userinfo:` section, may be omitted if the
+provided token is a JWT that already includes all required claims.
 
 The applicability of the above depends on the configuration of your OIDC
 server, and the rules in your OPA access policy. At least one of the above
