@@ -509,6 +509,14 @@ chronicle.opa.entrypoint=allow_transactions.allowed_users
 Once this has been set, you should restart Chronicle for them to be applied, the
 transaction processor should not need to be restarted.
 
+### Update the policy bundle already in effect
+
+Once a policy is set, one would not expect that it would often need changing.
+When a new policy is required, repeating the above operations with
+`opactl set-policy` and/or `sawset`, then restarting Chronicle, will cause
+your new policy to take effect. It is advised to always restart Chronicle
+after the policy is changed.
+
 ### Load OPA Policy Bundle from a URL or File Path
 
 To configure Chronicle to use an OPA policy bundle loaded from a URL or a file

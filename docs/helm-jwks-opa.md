@@ -85,21 +85,48 @@ typically available from its configuration interface:
 
 ```yaml
 chronicle:
-  jwksUrl: "https://id.example.com/.well-known/jwks.json"
-  userinfoUrl: "https://id.example.com/userinfo"
+  idProvider: id.example.com
+
+auth:
+  scheme: https
+  jwks:
+    port: 80
+    endpoint: .well-known/jwks.json
+  userinfo:
+    port: 80
+    endpoint: userinfo
 ```
+
+would define the endpoints as being at,
+
+- JWKS: `https://id.example.com:80/.well-known/jwks.json`
+- userinfo: `https://id.example.com:80/userinfo`
 
 Setting the JWKS URL is required if Chronicle may be provided a JWT with the
 request's `Authorization:` or by the OIDC's userinfo endpoint, because it
 requires JWKS to verify the JWT. The URL may be omitted only if the user
 provides an opaque access token from which the userinfo endpoint then provides
-profile information as a plain, unsigned JSON object, so neither is a JWT.
+profile information as a plain, unsigned JSON object, so neither is a JWT. In
+that case, rather than setting its `port` and `endpoint`, instead use,
+
+```yaml
+auth:
+  jwks:
+    enabled: false
+```
 
 Setting the userinfo URL is required if Chronicle is to pass the bearer token
 from the request's `Authorization:` to an OIDC userinfo endpoint. This
 provides user profile information for OPA's policy engine to use in applying
 the access rules. The URL may be omitted if the provided token is a JWT that
-already includes all required claims.
+already includes all required claims. In that case, rather than setting its
+`port` and `endpoint`, instead use,
+
+```yaml
+auth:
+  userinfo:
+    enabled: false
+```
 
 The applicability of the above depends on the configuration of your OIDC
 server, and the rules in your OPA access policy. At least one of the above
@@ -129,15 +156,14 @@ See [establishing user identity](./auth.md) for more information.
 The rules for the OPA engine must target WASM and they must be bundled for
 fetching when the blockchain is initialized with the access control policy.
 
-The Helm values depend on how you have defined your access control policy and
-from where your built policy bundle can be fetched:
+The Helm values depend on how you have defined your access control policy.
 
 ```yaml
 opa:
   policy:
     id: my_policy
     entrypoint: my_policy.is_permitted
-    bundleUrl: https://example.com/my-opa-bundle.tar.gz
+    url: https://example.com/my-opa-bundle.tar.gz
 ```
 
 With OIDC also enabled, it can be prudent to have one's Rego file require the
@@ -146,7 +172,12 @@ was issued by the appropriate identity provider for use by Chronicle. All
 provided claims are made available to the policy engine for rule evaluation.
 
 See [controlling access](./opa.md) for more information on creating and
-bundling your own access control policy.
+bundling your own access control policy. Note the [use of `opactl set-policy`
+and `sawset`](./opa.md#configuring-chronicle-to-use-opa) to set the policy on
+the blockchain for Chronicle to read. It is anticipated that, with an
+appropriate policy, typical access control changes can then be effected by
+managing users and roles in the OIDC server, without needing to change the
+policy further.
 
 ### OIDC but not OPA: allow everything, recording identity
 
@@ -173,6 +204,10 @@ disable OIDC:
 ```yaml
 auth:
   required: false
+  jwks:
+    enabled: false
+  userinfo:
+    enabled: false
 ```
 
 ### Neither OIDC nor OPA: any controls are wholly external
@@ -184,6 +219,10 @@ transactions, both OIDC and OPA may be disabled for the Helm installation:
 ```yaml
 auth:
   required: false
+  jwks:
+    enabled: false
+  userinfo:
+    enabled: false
 
 opa:
   enabled: false
