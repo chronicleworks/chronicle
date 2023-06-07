@@ -1,8 +1,16 @@
 # CHANGELOG
 
+## v0.7.2
+
+fromto 1=v0.7.1 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+* fix(docker): remove superfluous --platform declarations [view commit](https://github.com/btpworks/chronicle/commit/26158b0b4585905a1b8f02e947706bd4a1fa9501)
+* fix(docker): id-provider maven build should be BUILDPLATFORM [view commit](https://github.com/btpworks/chronicle/commit/9d94839a26e899a21576f456750f692fc15c843f)
+* docs(helm-jwks-opa.md): adjust how oidc endpoints are set with helm [view commit](https://github.com/btpworks/chronicle/commit/122063a7129bb73a980b14e6e09b740cc3d09c0f)
+* feat(sawtooth-tp): increase transaction logging [view commit](https://github.com/btpworks/chronicle/commit/28665bd6ced71fbdb6353426f87ed02351975268)
+
 ## v0.7.1
 
-fromto 1=v0.7.0 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+fromto 1=v0.7.0 2=v0.7.1 3=https://github.com/btpworks/chronicle/commit
 * chore: Add .VERSION to builder image [view commit](https://github.com/btpworks/chronicle/commit/a4a6a6b273f059ef7d6756db585c5dbdcf364cd5)
 * feat(gq-subscribe): resolve hostnames to ip addresses [view commit](https://github.com/btpworks/chronicle/commit/b0bfd3134df154bde7d93386d4af85d2fad9d603)
 * chore: Remove the type alias as it's deprecated [view commit](https://github.com/btpworks/chronicle/commit/378a3723ae28a2b9c4f2c7c7bde5c50103076b1f)
