@@ -182,10 +182,6 @@ disable OIDC:
 ```yaml
 auth:
   required: false
-  jwks:
-    enabled: false
-  userinfo:
-    enabled: false
 ```
 
 ### Neither OIDC nor OPA: any controls are wholly external
@@ -197,10 +193,6 @@ transactions, both OIDC and OPA may be disabled for the Helm installation:
 ```yaml
 auth:
   required: false
-  jwks:
-    enabled: false
-  userinfo:
-    enabled: false
 
 opa:
   enabled: false
