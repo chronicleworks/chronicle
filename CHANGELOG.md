@@ -3,6 +3,7 @@
 ## v0.7.2
 
 fromto 1=v0.7.1 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+* fix(docker): always apt-get update to deal with changing repos [view commit](https://github.com/btpworks/chronicle/commit/f3e9c8ce64929b10d1abb845d72e0ea4b768c8e8)
 * fix(docker): remove superfluous --platform declarations [view commit](https://github.com/btpworks/chronicle/commit/26158b0b4585905a1b8f02e947706bd4a1fa9501)
 * fix(docker): id-provider maven build should be BUILDPLATFORM [view commit](https://github.com/btpworks/chronicle/commit/9d94839a26e899a21576f456750f692fc15c843f)
 * docs(helm-jwks-opa.md): adjust how oidc endpoints are set with helm [view commit](https://github.com/btpworks/chronicle/commit/122063a7129bb73a980b14e6e09b740cc3d09c0f)
