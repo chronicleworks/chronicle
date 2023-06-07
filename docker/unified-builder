@@ -48,7 +48,7 @@ COPY domain_docs /app/domain_docs
 COPY policies /app/policies
 
 
-FROM --platform=${BUILDPLATFORM} hostbase AS crossbuild
+FROM hostbase AS crossbuild
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG TARGETARCH
@@ -106,6 +106,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   libzmq3-dev:${TARGETARCH} ; \
   fi
 
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  mkdir -p /artifacts/${TARGETARCH} \
+  && chown -R tester \
+  /usr/local/cargo/registry
+
 # Finally we build the target architecture binaries
 # If our target is the host architecture, then this is the
 # first build, otherwise it is the second
@@ -139,7 +144,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   docker-ce-cli
 
 
-FROM --platform=${BUILDPLATFORM} testbase AS test
+FROM testbase AS test
 
 # Test on the host only
 WORKDIR /app
@@ -210,7 +215,7 @@ WORKDIR /
 
 
 # Copy untyped chronicle to image
-FROM --platform=${TARGETPLATFORM} final-base AS chronicle
+FROM final-base AS chronicle
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle /usr/local/bin
@@ -221,7 +226,7 @@ USER chronicle
 
 
 # Copy tp to image
-FROM --platform=${TARGETPLATFORM} final-base AS chronicle-tp
+FROM final-base AS chronicle-tp
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
@@ -232,7 +237,7 @@ USER chronicle
 
 
 # Copy opa-tp to image
-FROM --platform=${TARGETPLATFORM} final-base AS opa-tp
+FROM final-base AS opa-tp
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
@@ -241,7 +246,7 @@ USER chronicle
 
 
 # Copy opactl to image
-FROM --platform=${TARGETPLATFORM} final-base AS opactl
+FROM final-base AS opactl
 ARG TARGETARCH
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
@@ -251,7 +256,7 @@ USER chronicle
 
 
 # Build the id-provider image
-FROM --platform=${TARGETPLATFORM} debian-upgraded AS auth-server-requirements
+FROM debian-upgraded AS auth-server-requirements
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -260,17 +265,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   openjdk-17-jre-headless
 
 
-FROM --platform=${TARGETPLATFORM} auth-server-requirements AS auth-server-build-requirements
+FROM hostbase AS auth-server-artifacts
 
+USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get install --no-install-recommends -y \
   git \
   maven \
   openjdk-17-jdk-headless
-
-
-FROM --platform=${TARGETPLATFORM} auth-server-build-requirements AS auth-server-artifacts
 
 RUN useradd -m builder
 USER builder
@@ -282,10 +285,10 @@ RUN git remote add origin https://github.com/CESNET/fake-oidc-server.git
 RUN git fetch origin 586a884d217e1eee7be2cc5951907745d4112165
 RUN git reset --hard FETCH_HEAD
 COPY docker/id-provider-settings.yml src/main/resources/application.yml
-RUN mvn package
+RUN mvn -B package
 
 
-FROM --platform=${TARGETPLATFORM} auth-server-requirements AS id-provider
+FROM auth-server-requirements AS id-provider
 ARG TARGETARCH
 
 RUN useradd -m runner
@@ -300,7 +303,7 @@ EXPOSE 8090
 
 
 # Build the chronicle-helm-api-test image
-FROM --platform=${TARGETPLATFORM} debian-upgraded AS chronicle-helm-api-test
+FROM debian-upgraded AS chronicle-helm-api-test
 ARG TARGETARCH
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
