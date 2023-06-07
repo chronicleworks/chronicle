@@ -66,7 +66,7 @@ package common_rules
 import future.keywords.in
 import input
 
-allowed := {"chronicle", "anonymous"}
+allowed := {"chronicle", "anonymous", "jwt"}
 
 allowed_users {
   input.type in allowed
@@ -80,21 +80,12 @@ allow_defines {
 
 - `allowed_users`: This rule determines whether users of specific types
   are allowed to access resources or perform actions. In the current
-  implementation, users with the types `"chronicle"` and `"anonymous"` are
-  allowed.
+  implementation, users with the types `"chronicle"`, `"anonymous"`, and
+  `"jwt"` are allowed.
 
 - `allow_defines`: This rule specifies whether users can execute
   Chronicle's `define` Mutation and Submission operations. It checks the
   operation type and verifies if the state starts with the string `"define"`.
-
-### Default Policy and JWKS Authorization
-
-The default policy implemented in Chronicle does not allow access to
-users authenticated using JWKS authorization. Users of type `"jwt"`
-will be denied access under the default policy. This is because the
-default policy does not include rules specific to JWKS authorization. If
-you want to enable access for JWKS-authorized users, you need to modify
-the policy accordingly.
 
 ### Modifying the Default Policy
 
