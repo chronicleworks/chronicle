@@ -37,7 +37,7 @@ ifeq ($(RELEASABLE), yes)
 	container_id=$$(docker create chronicle-arm64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/arm64; \
 		docker rm $$container_id;
-		$(GH_RELEASE) upload $(VERSION) target/*
+	#$(GH_RELEASE) upload $(VERSION) target/*
 endif
 
 .PHONY: build-end-to-end-test
