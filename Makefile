@@ -145,7 +145,6 @@ endef
 
 $(foreach image,$(IMAGES),$(foreach arch,$(ARCHS),$(eval $(call multi-arch-docker,$(image),$(arch)))))
 
-.PHONY: .VERSION
 .VERSION:
 	git describe --tags > .VERSION
 
