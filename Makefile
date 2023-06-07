@@ -84,7 +84,7 @@ tested-$(ISOLATION_ID): test-prep-$(ISOLATION_ID)
 		tested-artifacts:${ISOLATION_ID} sleep 1d); \
 		docker exec --user root $$container_id groupadd -g $(DOCKER_GID) docker \
 		&& docker exec --user root $$container_id usermod -aG docker tester \
-		&& docker exec $$container_id cargo test --locked --release \
+		&& docker exec $$container_id cargo test --locked --release --target x86_64-unknown-linux-gnu  \
 		&& docker rm -f $$container_id
 
 	rm -rf .artifacts

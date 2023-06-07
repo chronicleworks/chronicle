@@ -3,6 +3,8 @@ use std::{env, fs, io::Result, path::PathBuf};
 include!("./src/context.rs");
 
 fn main() -> Result<()> {
+    println!("cargo:rerun-if-changed=build.rs");
+
     let out_str = env::var("OUT_DIR").unwrap();
     let out_path = PathBuf::from(&out_str);
     let mut out_path = out_path.ancestors().nth(3).unwrap().to_owned();
