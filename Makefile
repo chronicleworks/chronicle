@@ -100,6 +100,7 @@ define arch-contexts =
 .PHONY: $(1)-ensure-context
 $(1)-ensure-context: $(MARKERS)/binfmt
 	docker buildx create --name ctx-$(ISOLATION_ID)-$(1) \
+		--config buildkit.toml \
 		--driver docker-container \
 		--bootstrap || true
 	docker buildx use ctx-$(ISOLATION_ID)-$(1)
