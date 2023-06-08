@@ -1,9 +1,22 @@
 # CHANGELOG
 
+## v0.7.3
+
+fromto 1=v0.7.2 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+* docs(helm-jwks-opa.md): if no oidc then do not need to disable endpoints [view commit](https://github.com/btpworks/chronicle/commit/5f062163d4a40b0a50af7f060bb94531391e0aeb)
+* docs(opa): fix sections on default opa disallowing jwt users [view commit](https://github.com/btpworks/chronicle/commit/bec44a73fa91cf7cc84e8abdc224f6ca3ccf52e2)
+* fix(policies): allow jwt users [view commit](https://github.com/btpworks/chronicle/commit/ea23af09f649fd1b79684f09a4dfd8a838fc2f4c)
+* fix: add buildkit.toml [view commit](https://github.com/btpworks/chronicle/commit/861811f064e527056f3d2fd859ad750dd0a51339)
+* build(docker): add wait-for-it script to opactl and opa-tp images [view commit](https://github.com/btpworks/chronicle/commit/d6c965980318e294ddae87bad67610e280353d92)
+
 ## v0.7.2
 
-fromto 1=v0.7.1 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+fromto 1=0.7.2 2=v0.7.2 3=https://github.com/btpworks/chronicle/commit
 * build(make): disable gh release artifact upload [view commit](https://github.com/btpworks/chronicle/commit/45eac9c379607fd95354bfabcfbfa1a71a1443fb)
+
+## 0.7.2
+
+fromto 1=v0.7.1 2=0.7.2 3=https://github.com/btpworks/chronicle/commit
 * fix(docker): always apt-get update to deal with changing repos [view commit](https://github.com/btpworks/chronicle/commit/f3e9c8ce64929b10d1abb845d72e0ea4b768c8e8)
 * fix(docker): remove superfluous --platform declarations [view commit](https://github.com/btpworks/chronicle/commit/26158b0b4585905a1b8f02e947706bd4a1fa9501)
 * fix(docker): id-provider maven build should be BUILDPLATFORM [view commit](https://github.com/btpworks/chronicle/commit/9d94839a26e899a21576f456750f692fc15c843f)
