@@ -490,7 +490,7 @@ mod tests {
         ))
     }
 
-    fn allow_chronicle_and_anonymous() -> (String, String) {
+    fn allow_all_users() -> (String, String) {
         let policy_name = "allow_transactions".to_string();
         let entrypoint = "allow_transactions/allowed_users".to_string();
         (policy_name, entrypoint)
@@ -506,35 +506,6 @@ mod tests {
             Value::default(),
             Value::default(),
         ))
-    }
-
-    #[test]
-    fn policy_loader_invalid_rule() {
-        let (_policy, entrypoint) = allow_chronicle_and_anonymous();
-        let invalid_rule = "a_rule_that_does_not_exist";
-        match CliPolicyLoader::from_embedded_policy(invalid_rule, &entrypoint) {
-            Err(e) => {
-                insta::assert_snapshot!(e.to_string(), @"Policy not found: a_rule_that_does_not_exist")
-            }
-            _ => panic!("expected error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn opa_executor_allow_chronicle_and_anonymous() -> Result<(), OpaExecutorError> {
-        let (policy, entrypoint) = allow_chronicle_and_anonymous();
-        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
-        assert!(executor
-            .evaluate(&chronicle_id(), &chronicle_user_opa_data())
-            .await
-            .is_ok());
-
-        assert!(executor
-            .evaluate(&anonymous_user(), &anonymous_user_opa_data())
-            .await
-            .is_ok());
-        Ok(())
     }
 
     fn jwt_user() -> AuthId {
@@ -557,15 +528,51 @@ mod tests {
         ))
     }
 
-    #[tokio::test]
-    async fn opa_executor_deny_unauthorized() -> Result<(), OpaExecutorError> {
-        let (policy, entrypoint) = allow_chronicle_and_anonymous();
-        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
-        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
-        match executor.evaluate(&jwt_user(), &jwt_user_opa_data()).await {
-            Err(e) => assert_eq!(e.to_string(), OpaExecutorError::AccessDenied.to_string()),
+    #[test]
+    fn policy_loader_invalid_rule() {
+        let (_policy, entrypoint) = allow_all_users();
+        let invalid_rule = "a_rule_that_does_not_exist";
+        match CliPolicyLoader::from_embedded_policy(invalid_rule, &entrypoint) {
+            Err(e) => {
+                insta::assert_snapshot!(e.to_string(), @"Policy not found: a_rule_that_does_not_exist")
+            }
             _ => panic!("expected error"),
         }
+    }
+
+    #[tokio::test]
+    async fn opa_executor_allow_chronicle_users() -> Result<(), OpaExecutorError> {
+        let (policy, entrypoint) = allow_all_users();
+        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
+        let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        assert!(executor
+            .evaluate(&chronicle_id(), &chronicle_user_opa_data())
+            .await
+            .is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn opa_executor_allow_anonymous_users() -> Result<(), OpaExecutorError> {
+        let (policy, entrypoint) = allow_all_users();
+        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
+        let mut executor = WasmtimeOpaExecutor::from_loader(&loader).unwrap();
+        assert!(executor
+            .evaluate(&anonymous_user(), &anonymous_user_opa_data())
+            .await
+            .is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn opa_executor_allow_jwt_users() -> Result<(), OpaExecutorError> {
+        let (policy, entrypoint) = allow_all_users();
+        let loader = CliPolicyLoader::from_embedded_policy(&policy, &entrypoint)?;
+        let mut executor = WasmtimeOpaExecutor::from_loader(&loader)?;
+        assert!(executor
+            .evaluate(&jwt_user(), &jwt_user_opa_data())
+            .await
+            .is_ok());
         Ok(())
     }
 
@@ -580,7 +587,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_policy_from_http_url() {
         let embedded_bundle = embedded_policy_bundle().unwrap();
-        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+        let (rule, entrypoint) = allow_all_users();
 
         // Create a temporary HTTP server that serves a policy bundle
         let mut server = mockito::Server::new_async().await;
@@ -623,7 +630,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_policy_from_file_url() {
         let embedded_bundle = embedded_policy_bundle().unwrap();
-        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+        let (rule, entrypoint) = allow_all_users();
 
         let temp_dir = tempfile::tempdir().unwrap();
         let policy_path = temp_dir.path().join("bundle.tar.gz");
@@ -658,7 +665,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_policy_from_bare_path() {
         let embedded_bundle = embedded_policy_bundle().unwrap();
-        let (rule, entrypoint) = allow_chronicle_and_anonymous();
+        let (rule, entrypoint) = allow_all_users();
 
         let temp_dir = tempfile::tempdir().unwrap();
         let policy_path = temp_dir.path().join("bundle.tar.gz");
