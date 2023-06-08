@@ -120,9 +120,12 @@ To your `auth:` section add a further Helm value:
 ```
 
 The claims listed in this value name the fields that determine the user's
-Chronicle identity. This setting can typically be omitted because the default
-of `iss sub` often suffices but any fields are permitted that, in combination,
-identify the user.
+Chronicle identity. The default of `email` will work for many sites, where
+the user presents an ID token, or they present an access token and a userinfo
+endpoint is configured. In other cases, the alternative of `iss sub` is often
+a safe choice because those fields are registered in the JWT Claims Registry,
+are often included in both access and ID tokens, and, in combination, would
+be expected to identify the user uniquely.
 
 ##### Further reading
 
