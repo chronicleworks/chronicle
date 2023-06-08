@@ -85,12 +85,12 @@ typically available from its configuration interface:
 
 ```yaml
 auth:
+  required: true
   jwks:
     enabled: true
     url: https://id.example.com:80/.well-known/jwks.json
   userinfo:
     url: https://id.example.com:80/userinfo
-
 ```
 
 Setting the JWKS URL is required if Chronicle may be provided a JWT with the
@@ -112,12 +112,11 @@ URLs must be set for Chronicle to accept a user's authorization.
 
 ##### Claims fields
 
-Define with a Helm value:
+To your `auth:` section add a further Helm value:
 
 ```yaml
-auth:
   id:
-    claims: "iss sub"
+    claims: iss sub
 ```
 
 The claims listed in this value name the fields that determine the user's
@@ -197,3 +196,44 @@ auth:
 opa:
   enabled: false
 ```
+
+### Mock OIDC server
+
+Chronicle provides a mock OIDC server that can be used for simple testing.
+
+#### Production deployments
+
+Production clusters should not deploy any mock services so they should
+use the Helm value:
+
+```yaml
+devIdProvider:
+  enabled: false
+```
+
+#### OIDC testing
+
+By default, to assist testing, an additional chronicle-test-id-provider pod
+runs alongside Chronicle. This provides a mock OIDC server listening on its
+TCP port 8090, offering a JWKS endpoint at path `/jwks` and a userinfo
+endpoint at path `/userinfo`. With OIDC configuation no more than,
+
+```yaml
+devIdProvider:
+  enabled: true
+
+auth:
+  enabled: true
+```
+
+and no OIDC endpoints set in the `auth:` section, Chronicle will use the mock
+OIDC server for verifying JWTs. In that server's pod, its `id-provider`
+container includes an `oauth-token` executable that can be used to obtain JWTs
+for use in testing. Chronicle will accept requests bearing the HTTP header
+`Authorization: Bearer <token>` with such a test JWT substituted for
+`<token>` if it has not yet expired.
+
+Alternatively, to obtain JWTs with your own OIDC client, it must connect to
+that mock OIDC server. Login credentials for a dummy user can be obtained from
+the `id-provider` container's logs where the `OidcController` notes its
+config on startup.
