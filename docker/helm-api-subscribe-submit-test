@@ -1,10 +1,16 @@
 #!/usr/bin/env sh
 set -e
-
+# shellcheck disable=SC2153
+jwt="$TOKEN"
 echo "HOST: $HOST"
 echo "PORT: $PORT"
+if [ "$REQUIRE_AUTH" = "true" ]; then
+  echo "REQUIRE_AUTH: $REQUIRE_AUTH"
+else
+  echo "Testing without authorization header ..."
+fi
 
-TIMEOUT=60
+TIMEOUT=0
 echo "Wait for stack"
 if ! wait-for-it -h "$HOST" -p "$PORT" -t $TIMEOUT; then
   echo "Timed out waiting for $HOST"
@@ -12,64 +18,92 @@ if ! wait-for-it -h "$HOST" -p "$PORT" -t $TIMEOUT; then
 fi
 sleep 20
 
-issueGraphQLQuery() {
-    url=$1
-    query=$2
+issueGraphQLSubscription() {
+  url=$1
+  query=$2
 
+  if [ "$REQUIRE_AUTH" = "true" ]; then
+    token="$jwt"
+
+    gq-ws \
+      -a "$url" \
+      -c 3 \
+      -s "$query" \
+      -t "$token"
+  else
+    gq-ws \
+      -a "$url" \
+      -c 3 \
+      -s "$query"
+  fi
+}
+
+issueGraphQLQuery() {
+  url=$1
+  query=$2
+
+  if [ "$REQUIRE_AUTH" = "true" ]; then
+    authorization_header="Authorization: Bearer $jwt"
+
+    gq "$url" \
+      -H "$authorization_header" \
+      -q "$query"
+  else
     gq "$url" -q "$query"
+  fi
 }
 
 random_externalId=$(openssl rand -hex 8)
 
 subscriptionQuery="subscription {
-    commitNotifications {
+  commitNotifications {
     stage
     txId
-    }
+  }
 }"
 
 subscriptionOutput=$(mktemp)
 
-issueGraphQLQuery "http://$HOST:$PORT/ws" "$subscriptionQuery" > "$subscriptionOutput" &
+echo "Starting subscription ..."
+issueGraphQLSubscription "$HOST:$PORT" "$subscriptionQuery" >"$subscriptionOutput" &
 
 mutationQuery="mutation {
-    defineAgent(
+  defineAgent(
     externalId: \"$random_externalId\",
+    namespace: \"helm-api-subscribe-submit-test\",
     attributes: {}
-    ) {
+  ) {
     txId
-    }
+  }
 }"
 
+echo "Issuing mutation ..."
 submissionResponse=$(issueGraphQLQuery "http://$HOST:$PORT" "$mutationQuery")
 
-echo "Waiting for subscription response"
+echo "Waiting for subscription response ..."
 
 timeout=10
 elapsed=0
 while [ $elapsed -lt $timeout ]; do
-    sleep 1
-    if grep -q '"stage": "COMMIT"' "$subscriptionOutput"; then
-        break
-    fi
-    elapsed=$((elapsed + 1))
+  sleep 1
+  if grep -q '"stage": "COMMIT"' "$subscriptionOutput"; then
+    break
+  fi
+  elapsed=$((elapsed + 1))
 done
 
-echo "Subscription responses:"
-echo "$subscriptionOutput"
-
-submitTxId=$(echo "$submissionResponse" | jq -r '.data.defineAgent.txId')
+submitTxId=$(echo "$submissionResponse" | jq -r 'try .data.defineAgent.txId catch ""')
 
 # Read the txId value from the subscription endpoint, making sure SUBMIT AND COMMIT have the same txId
-subscribeTxId=$(jq -r '.data.commitNotifications.txId' "$subscriptionOutput" | awk '!seen[$0]++')
+subscribeTxId=$(jq -r 'try .data.commitNotifications.txId catch ""' "$subscriptionOutput" | awk '!seen[$0]++')
 
 echo "submitted: $submitTxId"
 echo "committed: $subscribeTxId"
 
 if [ "$submitTxId" = "$subscribeTxId" ]; then
-    echo "Test passes"
-    exit 0
+  echo "Test passes"
+  exit 0
 else
-    echo "Error: submit and commit TxId mismatch"
-    exit 1
+  echo "Error: submit and commit TxId mismatch"
+  exit 1
 fi
