@@ -1,0 +1,68 @@
+!include ../include/default.iuml
+
+@startuml
+
+:API receives request;
+if (Authorization header?) then (absent)
+  if (--require-auth?
+  or auth.required?) then (absent)
+    :user is
+    anonymous;
+  else (present)
+    #darkred:reject
+    request;
+    detach
+  endif
+else (present)
+  if (token is JWT?) then (no)
+    #darkcyan:(U)
+    if (any claims from
+    userinfo?) then (no)
+      #darkred:reject
+      request;
+      detach
+    else (yes)
+      :accept claims;
+    endif
+  else (yes)
+    #darkcyan:(J)
+    :accept claims;
+    #darkcyan:(U)
+    if (any claims from
+    userinfo?) then (no)
+    else (yes)
+      :accept claims;
+    endif
+  endif
+  if (enough claims to
+  establish identity?) then (no)
+    if (--require-auth?
+    or auth.required?) then (absent)
+      :user is
+      anonymous;
+    else (present)
+      #darkred:reject
+      request;
+      detach
+    endif
+  else (yes)
+    :determine
+    user identity;
+  endif
+endif
+
+if (OPA enabled?) then (no)
+else (yes)
+  if (accepted by
+  access policy?) then (no)
+        #darkred:reject
+        request;
+        detach
+  else (yes)
+  endif
+endif
+
+#green:process request;
+end
+
+@enduml

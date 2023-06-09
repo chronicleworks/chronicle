@@ -1,0 +1,23 @@
+!include ../include/default.iuml
+
+@startuml
+
+#darkcyan:(J)
+:received JWT;
+if (--jwks-address?
+or auth.jwks.uri?) then (absent)
+  #darkred:reject
+  request;
+  detach
+else (present)
+  if (JWT verifies?) then (no)
+    #darkred:reject
+    request;
+    detach
+  else (yes)
+    :valid JWT;
+  endif
+endif
+stop
+
+@enduml

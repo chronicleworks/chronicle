@@ -1,0 +1,24 @@
+!include ../include/default.iuml
+
+@startuml
+
+#darkcyan:(U)
+:received token;
+if (--userinfo-address?
+or auth.userinfo.uri?) then (absent)
+  :no claims;
+else (present)
+  switch (userinfo\nresponse\nto token)
+  case (JWT)
+    #darkcyan:(J)
+  case (JSON object)
+  case (other)
+    #darkred:reject
+    request;
+    detach
+  endswitch
+  :valid claims;
+endif
+stop
+
+@enduml
