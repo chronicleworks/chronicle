@@ -1,4 +1,4 @@
-site_name: chronicle
+site_name: Chronicle
 site_author: BTP
 theme:
   name: material
@@ -41,6 +41,8 @@ nav:
   - Installing:
       - Installing with Sextant: sextant.md
       - Security settings via Helm: helm-jwks-opa.md
+      - Helm scenarios enumerated: helm-scenarios.md
+      - Authorization checking: oidc-opa-flow.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
