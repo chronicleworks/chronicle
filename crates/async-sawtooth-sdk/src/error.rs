@@ -66,4 +66,7 @@ pub enum SawtoothCommunicationError {
 
     #[error("Infallible {0}")]
     Infallible(#[from] std::convert::Infallible),
+
+    #[error("Resource not found")]
+    ResourceNotFound,
 }

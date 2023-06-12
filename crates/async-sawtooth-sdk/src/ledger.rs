@@ -638,6 +638,8 @@ impl<
 
         if response.status == ClientStateGetResponse_Status::OK {
             Ok(response.value)
+        } else if response.status == ClientStateGetResponse_Status::NO_RESOURCE {
+            Err(SawtoothCommunicationError::ResourceNotFound)
         } else {
             Err(SawtoothCommunicationError::UnexpectedStatus {
                 status: response.status as i32,
