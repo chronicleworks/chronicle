@@ -385,9 +385,16 @@ async fn dispatch_args<
             Ok((Waited::NoWait, reader))
         }
         Some(("get-policy", matches)) => {
-            let policy: Vec<u8> = reader
+            let policy: Result<Vec<u8>, _> = reader
                 .get_state_entry(&policy_address(matches.get_one::<String>("id").unwrap()))
-                .await?;
+                .await;
+
+            if let Err(SawtoothCommunicationError::ResourceNotFound) = policy {
+                print!("No policy found");
+                return Ok((Waited::NoWait, reader));
+            }
+
+            let policy = policy?;
 
             if let Some(path) = matches.get_one::<String>("output") {
                 let mut file = File::create(path).unwrap();
