@@ -1038,7 +1038,7 @@ impl SubCommand for CliModel {
                     ).arg(
                         Arg::new("require-auth")
                             .long("require-auth")
-                            .requires("jwks-address")
+                            .requires("oidc-endpoint-address")
                             .help("if JWT must be provided, preventing anonymous requests"),
                     ).arg(
                         Arg::new("jwks-address")
@@ -1054,6 +1054,10 @@ impl SubCommand for CliModel {
                             .env("USERINFO_URI")
                             .help("URI of the OIDC UserInfo endpoint")
                     }
+                    ).group(
+                        ArgGroup::new("oidc-endpoint-address")
+                            .args(&["jwks-address", "userinfo-address"])
+                            .multiple(true)
                     ).arg(
                         Arg::new("id-claims")
                             .long("id-claims")
