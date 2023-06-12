@@ -42,10 +42,10 @@ nav:
       - Installing with Sextant: sextant.md
       - Security settings via Helm: helm-jwks-opa.md
       - Helm scenarios enumerated: helm-scenarios.md
-      - Authorization checking: oidc-opa-flow.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
       - Establishing identity: auth.md
       - Access control policy: opa.md
+      - Authorization checking: oidc-opa-flow.md
   - Upgrading: upgrading.md

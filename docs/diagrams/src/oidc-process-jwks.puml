@@ -10,6 +10,10 @@ or auth.jwks.uri?) then (absent)
   request;
   detach
 else (present)
+  if (JWT result\ncached?) then (no)
+    :query JWKS endpoint;
+  else (yes)
+  endif
   if (JWT verifies?) then (no)
     #darkred:reject
     request;
