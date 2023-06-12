@@ -19,7 +19,8 @@ Set available from the
 [configured JWKS address URI](./cli.md#jwks-address-uri). If a
 [userinfo address](./cli.md#userinfo-address) is configured then provided
 tokens must be accepted by that endpoint. If either test fails then the
-request is refused.
+request is refused. Any JWKS or userinfo endpoint provided must be
+[OIDC-compliant](https://openid.net/specs/openid-connect-core-1_0.html).
 
 If a bearer token is provided, it may be an access token or an ID token.
 Access tokens may be opaque but, if so, a userinfo endpoint must be configured
