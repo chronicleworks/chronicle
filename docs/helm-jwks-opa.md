@@ -12,7 +12,7 @@ with an OIDC-compliant identity provider. The token authenticates the
 requesting user and may be a JWT that includes information about the user's
 roles or permissions.
 
-Alternatively, if authorization is not enabled then incoming requests are
+Alternatively, if authorization is not required then incoming requests are
 regarded as being anonymous. Any user- or role-based access control must be
 enforced by other means of securing access to Chronicle's API because
 Chronicle itself would have no basis for enforcing such.
@@ -87,7 +87,6 @@ typically available from its configuration interface:
 auth:
   required: true
   jwks:
-    enabled: true
     url: https://id.example.com:80/.well-known/jwks.json
   userinfo:
     url: https://id.example.com:80/userinfo
@@ -120,12 +119,13 @@ To your `auth:` section add a further Helm value:
 ```
 
 The claims listed in this value name the fields that determine the user's
-Chronicle identity. The default of `email` will work for many sites, where
-the user presents an ID token, or they present an access token and a userinfo
-endpoint is configured. In other cases, the alternative of `iss sub` is often
-a safe choice because those fields are registered in the JWT Claims Registry,
-are often included in both access and ID tokens, and, in combination, would
-be expected to identify the user uniquely.
+Chronicle identity. The default Chronicle Helm Chart value is `nil`, which can
+be set and overridden by the user. If no value is provided, Chronicle defaults
+to providing `iss sub`. `iss sub` is often a safe choice because those fields
+are registered in the JWT Claims Registry, are often included in both access
+and ID tokens, and, in combination, would be expected to identify the user
+uniquely. `email` will work for many sites, where the user presents an ID
+token, or they present an access token and a userinfo endpoint is configured.
 
 ##### Further reading
 
@@ -226,7 +226,7 @@ devIdProvider:
   enabled: true
 
 auth:
-  enabled: true
+  required: true
 ```
 
 and no OIDC endpoints set in the `auth:` section, Chronicle will use the mock
