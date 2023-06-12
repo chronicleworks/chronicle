@@ -1,5 +1,3 @@
-use std::process::Command;
-
 fn main() {
     //Create a .VERSION file containing 'local' if it does not exist
 

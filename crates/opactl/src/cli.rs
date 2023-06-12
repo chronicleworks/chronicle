@@ -27,7 +27,7 @@ fn wait_args(command: Command) -> Command {
         Arg::new("wait")
             .long("wait")
             .num_args(0..=1)
-            .value_parser(clap::value_parser!(u64).range(1..))
+            .value_parser(clap::value_parser!(u64).range(0..))
             .default_value("5")
             .default_missing_value("5")
             .help("Wait for the specified number of blocks to be committed before exiting"),

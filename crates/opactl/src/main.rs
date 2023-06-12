@@ -179,7 +179,7 @@ async fn handle_wait<
     writer: W,
     submission: OpaSubmitTransaction,
     transactor_key: &SigningKey,
-) -> Result<Waited, OpaCtlError> {
+) -> Result<(Waited, R), OpaCtlError> {
     let wait = Wait::from_matches(matches);
     let (tx_id, tx) = writer.pre_submit(&submission).await?;
     match wait {
@@ -187,7 +187,7 @@ async fn handle_wait<
             debug!(submitting_tx=%tx_id);
             writer.submit(tx, transactor_key).await?;
 
-            Ok(Waited::NoWait)
+            Ok((Waited::NoWait, reader))
         }
         Wait::NumberOfBlocks(blocks) => {
             debug!(submitting_tx=%tx_id, waiting_blocks=%blocks);
@@ -202,7 +202,7 @@ async fn handle_wait<
                 (_, Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e)))) => {
                     Err(OpaCtlError::TransactionFailed(e))
                 }
-                (_, Ok(x)) => Ok(x),
+                (_, Ok(x)) => Ok((x, reader)),
                 (_, Err(e)) => Err(OpaCtlError::Cancelled(e)),
             }
         }
@@ -220,7 +220,7 @@ async fn dispatch_args<
     matches: ArgMatches,
     writer: W,
     reader: R,
-) -> Result<Waited, OpaCtlError> {
+) -> Result<(Waited, R), OpaCtlError> {
     let span = span!(Level::TRACE, "dispatch_args");
     let _entered = span.enter();
     let span_id = span.id().map(|x| x.into_u64()).unwrap_or(u64::MAX);
@@ -250,7 +250,7 @@ async fn dispatch_args<
                 print!("{}", *key);
             }
 
-            Ok(Waited::NoWait)
+            Ok((Waited::NoWait, reader))
         }
         Some(("rotate-root", matches)) => {
             let current_root_key: SigningKey =
@@ -382,7 +382,7 @@ async fn dispatch_args<
                 print!("{key}");
             }
 
-            Ok(Waited::NoWait)
+            Ok((Waited::NoWait, reader))
         }
         Some(("get-policy", matches)) => {
             let policy: Vec<u8> = reader
@@ -394,9 +394,9 @@ async fn dispatch_args<
                 file.write_all(&policy).unwrap();
             }
 
-            Ok(Waited::NoWait)
+            Ok((Waited::NoWait, reader))
         }
-        _ => Ok(Waited::NoWait),
+        _ => Ok((Waited::NoWait, reader)),
     }
 }
 
@@ -417,7 +417,8 @@ async fn main() {
             client.close();
             std::process::exit(1);
         })
-        .map(|waited| {
+        .map(|(waited, reader)| {
+            reader.shutdown();
             if let Waited::WaitedAndFound(op) = waited {
                 println!(
                     "{}",
@@ -426,8 +427,6 @@ async fn main() {
             }
         })
         .ok();
-
-    client.close();
 }
 
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`
@@ -1034,7 +1033,7 @@ pub mod test {
         insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
-            .unwrap(), @r###"
+            .unwrap().0, @r###"
         ---
         NoWait
         "###);
@@ -1064,7 +1063,7 @@ pub mod test {
         insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
-            .unwrap(), {
+            .unwrap().0, {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         } ,@r###"
@@ -1119,7 +1118,7 @@ pub mod test {
         insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
-            .unwrap(), {
+            .unwrap().0, {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         },@r###"
@@ -1173,7 +1172,7 @@ pub mod test {
         insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
-            .unwrap(), {
+            .unwrap().0, {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         } ,@r###"
@@ -1236,7 +1235,7 @@ pub mod test {
             opa_tp.ledger.clone()
         )
         .await
-        .unwrap(), {
+        .unwrap().0, {
           ".**.date" => "[date]"
         }, @r###"
         ---
@@ -1281,7 +1280,7 @@ pub mod test {
 
         insta::assert_yaml_snapshot!(dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
-            .unwrap(), {
+            .unwrap().0, {
               ".**.date" => "[date]"
             }, @r###"
         ---

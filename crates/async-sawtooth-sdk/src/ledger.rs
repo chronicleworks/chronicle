@@ -332,6 +332,8 @@ pub trait LedgerReader {
     ) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error>;
 
     async fn reconnect(&self) {}
+
+    fn shutdown(&self) {}
 }
 
 #[derive(Derivative)]
@@ -695,6 +697,11 @@ impl<
         debug!("Reconnect ZMQ channel");
         self.channel.close();
         self.channel.reconnect();
+    }
+
+    fn shutdown(&self) {
+        debug!("Shutdown ZMQ channel");
+        self.channel.close();
     }
 }
 
