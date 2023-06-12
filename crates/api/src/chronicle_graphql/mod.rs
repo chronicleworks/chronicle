@@ -1,8 +1,8 @@
 use async_graphql::{
     extensions::OpenTelemetry,
     http::{playground_source, GraphQLPlaygroundConfig, ALL_WEBSOCKET_PROTOCOLS},
-    scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, SimpleObject,
-    Subscription, SubscriptionType,
+    scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, ServerError,
+    SimpleObject, Subscription, SubscriptionType,
 };
 use async_graphql_poem::{
     GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLProtocol, GraphQLSubscription,
@@ -10,7 +10,7 @@ use async_graphql_poem::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use common::{
-    identity::{AuthId, JwtClaims, OpaData, SignedIdentity},
+    identity::{AuthId, IdentityError, JwtClaims, OpaData, SignedIdentity},
     k256::schnorr::signature::Signature,
     ledger::{SubmissionError, SubmissionStage},
     opa::{ExecutorContext, OpaExecutorError},
@@ -49,7 +49,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{error, instrument};
+use tracing::{debug, error, instrument, warn};
 use url::Url;
 
 use self::authorization::TokenChecker;
@@ -987,12 +987,13 @@ impl Endpoint for LdContextEndpoint {
 #[derive(Clone, Debug)]
 pub struct AuthFromJwt {
     id_claims: BTreeSet<String>,
+    allow_anonymous: bool,
 }
 
 impl AuthFromJwt {
     #[instrument(level = "debug", ret(Debug))]
-    fn identity(&self, claims: &JwtClaims) -> Option<AuthId> {
-        AuthId::from_jwt_claims(claims, &self.id_claims).ok()
+    fn identity(&self, claims: &JwtClaims) -> Result<AuthId, IdentityError> {
+        AuthId::from_jwt_claims(claims, &self.id_claims)
     }
 }
 
@@ -1005,8 +1006,18 @@ impl async_graphql::extensions::Extension for AuthFromJwt {
         next: async_graphql::extensions::NextPrepareRequest<'_>,
     ) -> async_graphql::ServerResult<async_graphql::Request> {
         if let Some(claims) = ctx.data_opt::<JwtClaims>() {
-            if let Some(chronicle_id) = self.identity(claims) {
-                request = request.data(chronicle_id);
+            match self.identity(claims) {
+                Ok(chronicle_id) => request = request.data(chronicle_id),
+                Err(error) if self.allow_anonymous => {
+                    debug!("Identity could not be determined: {:?}", error)
+                }
+                Err(error) => {
+                    warn!(
+                        "Rejecting request because required identity could not be determined: {:?}",
+                        error
+                    );
+                    return Err(ServerError::new("Authorization header present but identity could not be determined from bearer token", None));
+                }
             }
         }
         next.run(ctx, request).await
@@ -1018,6 +1029,7 @@ impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
     fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
         Arc::new(AuthFromJwt {
             id_claims: self.id_claims.clone(),
+            allow_anonymous: self.allow_anonymous,
         })
     }
 }
@@ -1092,7 +1104,10 @@ where
         serve_graphql: bool,
         serve_data: bool,
     ) -> Result<(), ApiError> {
-        let claim_parser = sec.id_claims.map(|id_claims| AuthFromJwt { id_claims });
+        let claim_parser = sec.id_claims.map(|id_claims| AuthFromJwt {
+            id_claims,
+            allow_anonymous: sec.allow_anonymous,
+        });
         let mut schema = Schema::build(self.query, self.mutation, Subscription)
             .extension(OpenTelemetry::new(opentelemetry::global::tracer(
                 "chronicle-api-gql",
