@@ -159,13 +159,17 @@ spec:
           command: [ "bash", "-ec"]
           args:
             - |
-              if opactl \
-                  --sawtooth-address tcp://$HOST:$PORT \
-                    get-policy \
-                      --id {{ .Values.opa.policy.id }} \
-                      --output policy.bin >/dev/null 2>&1; then
+              echo "Attempting to get policy."
+              opactl \
+                --sawtooth-address tcp://$HOST:$PORT \
+                  get-policy \
+                    --id {{ .Values.opa.policy.id }} \
+                    --output /shared-data/policy.bin
+
+              if [ -f "/shared-data/policy.bin" ]; then
                 echo "Policy already set."
                 touch /shared-data/policy-already-set
+                exit 0
               else
                 echo "Policy not found."
                 exit 0
