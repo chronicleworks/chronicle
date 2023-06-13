@@ -8,6 +8,10 @@ if (--userinfo-address?
 or auth.userinfo.uri?) then (absent)
   :no claims;
 else (present)
+  if (userinfo\nresult cached?) then (no)
+    :query userinfo endpoint;
+  else (yes)
+  endif
   switch (userinfo\nresponse\nto token)
   case (JWT)
     #darkcyan:(J)
