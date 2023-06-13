@@ -38,28 +38,30 @@ pub enum Error {
     UserInfoResponse { server: String, status: StatusCode },
 }
 
-pub struct JwtChecker {
+pub struct TokenChecker {
     client: reqwest::Client,
-    verifier: RemoteJwksVerifier,
+    verifier: Option<RemoteJwksVerifier>,
     userinfo_uri: Option<String>,
     userinfo_cache: Arc<Mutex<TimedCache<String, Map<String, Value>>>>,
 }
 
-impl JwtChecker {
+impl TokenChecker {
     #[instrument(level = "debug")]
     pub fn new(
-        jwks_uri: &JwksUri,
+        jwks_uri: Option<&JwksUri>,
         userinfo_uri: Option<&UserInfoUri>,
         cache_expiry_seconds: u32,
     ) -> Self {
         Self {
             client: reqwest::Client::new(),
-            verifier: RemoteJwksVerifier::new(
-                jwks_uri.uri.to_string(),
-                None,
-                Duration::from_secs(cache_expiry_seconds.into()),
-            ),
-            userinfo_uri: userinfo_uri.map(|s| s.uri.to_string()),
+            verifier: jwks_uri.map(|uri| {
+                RemoteJwksVerifier::new(
+                    uri.full_uri(),
+                    None,
+                    Duration::from_secs(cache_expiry_seconds.into()),
+                )
+            }),
+            userinfo_uri: userinfo_uri.map(UserInfoUri::full_uri),
             userinfo_cache: Arc::new(Mutex::new(TimedCache::with_lifespan(
                 cache_expiry_seconds.into(),
             ))),
@@ -68,20 +70,27 @@ impl JwtChecker {
 
     #[instrument(level = "trace", skip_all, err)]
     async fn attempt_jwt(&self, token: &str) -> Result<Map<String, Value>, Error> {
-        let base64_engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::engine::general_purpose::{GeneralPurpose, URL_SAFE_NO_PAD};
+        const BASE64_ENGINE: GeneralPurpose = URL_SAFE_NO_PAD;
+
+        if let Some(verifier) = &self.verifier {
+            verifier.verify::<Map<String, Value>>(token).await?;
+        } else {
+            return Err(Error::Format {
+                message: "no JWKS endpoint configured".to_string(),
+            });
+        }
 
         // JWT is composed of three base64-encoded components
         let components = token
             .split('.')
-            .map(|component| base64_engine.decode(component))
+            .map(|component| BASE64_ENGINE.decode(component))
             .collect::<Result<Vec<Vec<u8>>, base64::DecodeError>>()?;
         if components.len() != 3 {
             return Err(Error::Format {
                 message: format!("JWT has unexpected format: {token}"),
             });
         };
-
-        self.verifier.verify::<Map<String, Value>>(token).await?;
 
         if let Value::Object(claims) = serde_json::from_slice(components[1].as_slice())? {
             Ok(claims)

@@ -52,7 +52,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, instrument};
 use url::Url;
 
-use self::authorization::JwtChecker;
+use self::authorization::TokenChecker;
 use crate::{ApiDispatch, ApiError, StoreError};
 
 #[macro_use]
@@ -461,6 +461,11 @@ impl JwksUri {
     pub fn new(uri: Url) -> Self {
         Self { uri }
     }
+
+    // not ToString to prevent accidental disclosure of credentials
+    pub fn full_uri(&self) -> String {
+        self.uri.to_string()
+    }
 }
 
 impl std::fmt::Debug for JwksUri {
@@ -488,6 +493,11 @@ pub struct UserInfoUri {
 impl UserInfoUri {
     pub fn new(uri: Url) -> Self {
         Self { uri }
+    }
+
+    // not ToString to prevent accidental disclosure of credentials
+    pub fn full_uri(&self) -> String {
+        self.uri.to_string()
     }
 }
 
@@ -664,14 +674,14 @@ async fn execute_opa_check(
 }
 
 struct EndpointSecurityConfiguration {
-    checker: JwtChecker,
+    checker: TokenChecker,
     must_claim: HashMap<String, String>,
     allow_anonymous: bool,
 }
 
 impl EndpointSecurityConfiguration {
     fn new(
-        checker: JwtChecker,
+        checker: TokenChecker,
         must_claim: HashMap<String, String>,
         allow_anonymous: bool,
     ) -> Self {
@@ -1109,14 +1119,38 @@ where
 
         let mut app = Route::new();
 
-        match &sec.jwks_uri {
-            Some(jwks_uri) => {
+        match (&sec.jwks_uri, &sec.userinfo_uri) {
+            (None, None) => {
+                tracing::warn!("API endpoint uses no authentication");
+
+                if serve_graphql {
+                    app = app
+                        .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
+                        .at("/ws", get(GraphQLSubscription::new(schema)))
+                };
+                if serve_data {
+                    app = app
+                        .at("/context", get(LdContextEndpoint))
+                        .at("/data/:iri", get(iri_endpoint(None)))
+                        .at("/data/:ns/:iri", get(iri_endpoint(None)))
+                };
+            }
+            (jwks_uri, userinfo_uri) => {
                 const CACHE_EXPIRY_SECONDS: u32 = 100;
-                tracing::debug!("API endpoint authentication uses {jwks_uri:?}");
+                if let Some(uri) = jwks_uri {
+                    tracing::debug!(oidc_jwks_endpoint = ?uri);
+                }
+                if let Some(uri) = userinfo_uri {
+                    tracing::debug!(oidc_userinfo_endpoint = ?uri);
+                }
 
                 let secconf = || {
                     EndpointSecurityConfiguration::new(
-                        JwtChecker::new(jwks_uri, sec.userinfo_uri.as_ref(), CACHE_EXPIRY_SECONDS),
+                        TokenChecker::new(
+                            jwks_uri.as_ref(),
+                            userinfo_uri.as_ref(),
+                            CACHE_EXPIRY_SECONDS,
+                        ),
                         sec.jwt_must_claim.clone(),
                         sec.allow_anonymous,
                     )
@@ -1144,21 +1178,6 @@ where
                         .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
                         .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
-                };
-            }
-            None => {
-                tracing::warn!("API endpoint uses no authentication");
-
-                if serve_graphql {
-                    app = app
-                        .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
-                        .at("/ws", get(GraphQLSubscription::new(schema)))
-                };
-                if serve_data {
-                    app = app
-                        .at("/context", get(LdContextEndpoint))
-                        .at("/data/:iri", get(iri_endpoint(None)))
-                        .at("/data/:ns/:iri", get(iri_endpoint(None)))
                 };
             }
         }
