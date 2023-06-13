@@ -241,11 +241,13 @@ async fn dispatch_args<
         }
         Some(("generate", matches)) => {
             let key = SecretKey::random(StdRng::from_entropy());
-            let key = key.to_pkcs8_pem(LineEnding::CRLF).unwrap();
+            let key = key
+                .to_pkcs8_pem(LineEnding::CRLF)
+                .map_err(|_| OpaCtlError::Pkcs8)?;
 
             if let Some(path) = matches.get_one::<PathBuf>("output") {
-                let mut file = File::create(path).unwrap();
-                file.write_all(key.as_bytes()).unwrap();
+                let mut file = File::create(path)?;
+                file.write_all(key.as_bytes())?;
             } else {
                 print!("{}", *key);
             }
@@ -376,8 +378,8 @@ async fn dispatch_args<
             let key = key.current.key;
 
             if let Some(path) = matches.get_one::<String>("output") {
-                let mut file = File::create(path).unwrap();
-                file.write_all(key.as_bytes()).unwrap();
+                let mut file = File::create(path)?;
+                file.write_all(key.as_bytes())?;
             } else {
                 print!("{key}");
             }
@@ -397,8 +399,8 @@ async fn dispatch_args<
             let policy = policy?;
 
             if let Some(path) = matches.get_one::<String>("output") {
-                let mut file = File::create(path).unwrap();
-                file.write_all(&policy).unwrap();
+                let mut file = File::create(path)?;
+                file.write_all(&policy)?;
             }
 
             Ok((Waited::NoWait, reader))
