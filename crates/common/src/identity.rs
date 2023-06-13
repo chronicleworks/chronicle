@@ -112,8 +112,9 @@ impl AuthId {
                 hasher.update(claim_value.as_bytes());
                 hasher.update(&ZERO);
             } else {
+                let keys_available: Vec<&String> = claims.keys().collect();
                 warn!(
-                    "For constructing Chronicle identity no {id_key:?} field among JWT claims: {claims:#?}"
+                    "For constructing Chronicle identity no {id_key:?} field among JWT claims: {keys_available:?}"
                 );
                 return Err(IdentityError::JwtClaims);
             }
