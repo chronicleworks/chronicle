@@ -1039,6 +1039,7 @@ impl SubCommand for CliModel {
                         Arg::new("require-auth")
                             .long("require-auth")
                             .requires("oidc-endpoint-address")
+                            .env("REQUIRE_AUTH")
                             .help("if JWT must be provided, preventing anonymous requests"),
                     ).arg(
                         Arg::new("jwks-address")
