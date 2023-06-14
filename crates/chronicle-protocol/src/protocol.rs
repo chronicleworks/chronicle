@@ -58,9 +58,15 @@ impl LedgerEvent for ChronicleOperationEvent {
             }
         };
 
-        let identity = serde_json::from_str(&event.identity)
-            .map_err(|e| SawtoothCommunicationError::LedgerEventParse { source: e.into() })?;
-
+        let identity = {
+            if event.identity.is_empty() {
+                SignedIdentity::new_no_identity()
+            } else {
+                serde_json::from_str(&event.identity).map_err(|e| {
+                    SawtoothCommunicationError::LedgerEventParse { source: e.into() }
+                })?
+            }
+        };
         Ok((Self(model, identity), span_id.into_u64()))
     }
 }

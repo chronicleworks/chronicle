@@ -321,8 +321,14 @@ impl From<SignedIdentity> for CommitIdentity {
     fn from(identity: SignedIdentity) -> Self {
         CommitIdentity {
             identity: identity.identity,
-            signature: hex::encode(identity.signature.as_bytes()),
-            verifying_key: hex::encode(identity.verifying_key.to_bytes()),
+            signature: identity
+                .signature
+                .map(|x| hex::encode(x.as_bytes()))
+                .unwrap_or_else(|| "".to_string()),
+            verifying_key: identity
+                .verifying_key
+                .map(|x| hex::encode(x.to_bytes()))
+                .unwrap_or_else(|| "".to_string()),
         }
     }
 }
