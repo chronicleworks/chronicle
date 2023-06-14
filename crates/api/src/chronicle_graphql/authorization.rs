@@ -102,7 +102,7 @@ impl TokenChecker {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    pub async fn verify_jwt(&self, token: &str) -> Result<Map<String, Value>, Error> {
+    pub async fn verify_token(&self, token: &str) -> Result<Map<String, Value>, Error> {
         let mut claims = Map::new();
         let mut error = None;
         match self.attempt_jwt(token).await {
