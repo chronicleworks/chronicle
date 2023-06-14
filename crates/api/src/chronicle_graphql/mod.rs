@@ -616,7 +616,7 @@ async fn check_claims(
         if let Ok(authorization) = HeaderValue::from_str(authorization) {
             let bearer_token_maybe: Option<Bearer> = Credentials::decode(&authorization);
             if let Some(bearer_token) = bearer_token_maybe {
-                if let Ok(claims) = secconf.checker.verify_jwt(bearer_token.token()).await {
+                if let Ok(claims) = secconf.checker.verify_token(bearer_token.token()).await {
                     if check_required_claims(&secconf.must_claim, &claims) {
                         return Ok(Some(JwtClaims(claims)));
                     }
