@@ -224,8 +224,8 @@ impl OpaData {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SignedIdentity {
     pub identity: String,
-    pub signature: Signature,
-    pub verifying_key: VerifyingKey,
+    pub signature: Option<Signature>,
+    pub verifying_key: Option<VerifyingKey>,
 }
 
 impl SignedIdentity {
@@ -236,9 +236,17 @@ impl SignedIdentity {
     ) -> Result<Self, IdentityError> {
         Ok(Self {
             identity: serde_json::to_string(&id)?,
-            signature,
-            verifying_key,
+            signature: Some(signature),
+            verifying_key: Some(verifying_key),
         })
+    }
+
+    pub fn new_no_identity() -> Self {
+        Self {
+            identity: "none".to_string(),
+            signature: None,
+            verifying_key: None,
+        }
     }
 }
 
