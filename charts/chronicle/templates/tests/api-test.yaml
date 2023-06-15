@@ -58,7 +58,7 @@ spec:
                 echo "Id-provider is ready. Exiting."
                 exit 0
               else
-                echo "Timeout occurred. Please check if the correct JWKS URL has been provided."
+                echo "Timeout occurred. Please check if the correct URL has been provided."
                 exit 1
               fi
         - name: token-loader
