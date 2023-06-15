@@ -55,8 +55,12 @@ chronicle: {{ include "common.names.fullname" . }}
 {{ include "common.names.fullname" . }}-test-id-provider
 {{- end -}}
 
-{{- define "chronicle.id-provider.service.url" -}}
+{{- define "chronicle.id-provider.service.jwks.url" -}}
 http://{{ include "chronicle.id-provider.service" . }}:8090/jwks
+{{- end -}}
+
+{{- define "chronicle.id-provider.service.userinfo.url" -}}
+http://{{ include "chronicle.id-provider.service" . }}:8090/userinfo
 {{- end -}}
 
 {{- define "chronicle.id-claims" -}}
@@ -77,7 +81,7 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/jwks
 {{- end -}}
 {{- else -}}
 {{- if .Values.devIdProvider.enabled -}}
-{{ include "chronicle.id-provider.service.url" . }}
+{{ include "chronicle.id-provider.service.jwks.url" . }}
 {{- else -}}
 {{/* Do nothing */}}
 {{- end -}}
@@ -101,7 +105,7 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/jwks
 {{- end -}}
 {{- else -}}
 {{- if .Values.devIdProvider.enabled -}}
-{{ include "chronicle.id-provider.service.url" . }}
+{{ include "chronicle.id-provider.service.userinfo.url" . }}
 {{- else -}}
 {{/* Do nothing */}}
 {{- end -}}
