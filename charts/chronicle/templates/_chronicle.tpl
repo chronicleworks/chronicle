@@ -82,17 +82,20 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/userinfo
 {{- else -}}
 {{- if .Values.devIdProvider.enabled -}}
 {{ include "chronicle.id-provider.service.jwks.url" . }}
-{{- else -}}
-{{/* Do nothing */}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
 
 {{- define "chronicle.jwks-url.cli" -}}
-{{- if or (.Values.auth.jwks.url) (.Values.devIdProvider.enabled) -}}
+{{- if or (.Values.auth.jwks.url) (.Values.auth.userinfo.url) -}}
+{{- if .Values.auth.jwks.url -}}
 --jwks-address {{ include "chronicle.jwks-url.url" . }} \
 {{- end -}}
-{{/* Do nothing */}}
+{{- else -}}
+{{- if .Values.devIdProvider.enabled -}}
+--jwks-address {{ include "chronicle.jwks-url.url" . }} \
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/* The JWKS and userinfo URLs are connected. */}}
@@ -106,17 +109,20 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/userinfo
 {{- else -}}
 {{- if .Values.devIdProvider.enabled -}}
 {{ include "chronicle.id-provider.service.userinfo.url" . }}
-{{- else -}}
-{{/* Do nothing */}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
 
 {{- define "chronicle.userinfo-url.cli" -}}
-{{- if or (.Values.auth.userinfo.url) (.Values.devIdProvider.enabled) -}}
+{{- if or (.Values.auth.jwks.url) (.Values.auth.userinfo.url) -}}
+{{- if .Values.auth.userinfo.url -}}
 --userinfo-address {{ include "chronicle.userinfo-url" . }} \
 {{- end -}}
-{{/* Do nothing */}}
+{{- else -}}
+{{- if .Values.devIdProvider.enabled -}}
+--userinfo-address {{ include "chronicle.userinfo-url" . }} \
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "chronicle.root-key.secret" -}}
