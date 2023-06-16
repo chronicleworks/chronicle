@@ -115,6 +115,35 @@ mutation {
 }
 ```
 
+### Representing Mutability
+
+Working through our [example domain definitions](https://examples.btp.works/),
+one may notice that some define attributes like "location" that may seem as if
+they could be mutable. They are *not* mutable: the above rules on
+contradiction hold firm. Such examples use entities or agents in fixed
+locations, and illustrate other facets of modeling domains in Chronicle.
+
+With attributes like the location of an entity or an agent, in cases where
+they may need updating, one approach is to instead model the locations as
+entities in their own right. Then, for example, a person could engage in the
+*activity* of "entering" or "leaving" a location. By marking the activity with
+a [time](./provenance_concepts.md#start-and-end), even a duration, one may
+then [query the activity timeline](./querying_provenance.md#activity-timeline)
+to retrieve the history of when the person was where.
+
+Similarly, in revising the description of an artifact, each description can
+be an entity derived from the artifact itself. An agent can engage in the
+activities of "inserting" one of the descriptions and "removing" the other.
+As above, the history of an artifact's descriptions is available for query.
+
+Using activities in this way allows changes over time to be represented while
+the value for every attribute remains constant. If one chooses to take this
+approach then it is only through an activity, happening at a specific time,
+that a person is linked to their location, or an artifact to its description.
+Through this sequence of related activities, the *provenance* of each state
+change and their outcome is *recorded immutably*. They can be assembled into
+the story of how things were and how they came to reach their current state.
+
 ## Operations
 
 ### Example Domain
