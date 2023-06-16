@@ -6,4 +6,5 @@ version = "0.7.0"
 [dependencies]
 anyhow = { workspace = true }
 oauth2 = { workspace = true }
+open = "2.0.1"
 url = { workspace = true }
