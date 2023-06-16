@@ -36,6 +36,26 @@ The API Test Job includes the following test steps:
 - Wait for the API to be ready.
 - Execute the tests using the `subscribe-submit-test` script.
 
+### Auth Endpoints Test Job
+
+The Auth Endpoints Test Job verifies the availability and correctness of the
+authentication endpoints used in the Chronicle application. The Job checks the
+JWKS endpoint and userinfo endpoint, either using the provided URLs or the
+`devIdProvider` if enabled. The `Job` is defined in the Helm Chart under the
+condition:
+
+```yaml
+test:
+  auth:
+    enabled: true
+```
+
+The Auth Endpoints Test Job includes the following test steps:
+
+- Checks the JWKS endpoint for a valid JSON response.
+- Checks the userinfo endpoint for a valid JSON response, using the provided
+  `test.auth.token` or the token obtained from the `devIdProvider`.
+
 ### `devIdProvider` (optional)
 
 The `devIdProvider` is an optional component used for authentication during
@@ -69,23 +89,32 @@ file. Specifically:
   `test.auth.token`.
 - `test.api.enabled`: Specifies whether the API test functionality is enabled (`true`)
   or not (`false`).
+- `test.auth.enabled`: Specifies whether the Auth Endpoints test functionality is
+  enabled (`true`) or not (`false`).
 - `test.auth.token`: Provides a token that can be used for authentication-related
   testing. This value can be set to a specific token for testing authentication scenarios.
 - `devIdProvider.enabled`: Specifies whether the `devIdProvider` is
   enabled (`true`) or not (`false`).
+- `auth.jwks.url`: Specifies the URL of the JWKS endpoint for third-party authentication.
+- `auth.userinfo.url`: Specifies the URL of the userinfo endpoint for third-party
+  authentication.
 
 ```yaml
-auth:
-  required: true
-
-devIdProvider:
-  enabled: true
-
 test:
   api:
     enabled: true
   auth:
-    token:
+    enabled: true
+
+auth:
+  required: true
+  jwks:
+    url:
+  userinfo:
+    url:
+
+devIdProvider:
+  enabled: true
 ```
 
 ## Testing Scenarios
@@ -99,10 +128,12 @@ auth:
 test:
   api:
     enabled: true
+  auth:
+    enabled: true
 ```
 
 These are Chronicle's default `values.yaml` settings. Running `helm test <installation>`
-will run the api-test without using an authorization token.
+will run the API test and Auth Endpoints test without using an authorization token.
 
 ### Auth Required, Using `devIdProvider`
 
@@ -121,13 +152,15 @@ test:
   api:
     enabled: true
   auth:
+    enabled: true
+  auth:
     token:
 ```
 
 The test uses the `devIdProvider` to acquire a token, which it passes in the
-authorization header to the api-test. Chronicle has been initialized with the default
-`devIdProvider` auth endpoints. If `test.auth.token` is not provided and
-`auth.required: true`, then `devIdProvider` must be enabled.
+authorization header to both the API test and Auth Endpoints test. Chronicle has
+been initialized with the default `devIdProvider` auth endpoints. If `test.auth.token`
+is not provided and `auth.required: true`, then `devIdProvider` must be enabled.
 
 ### Auth Required, Third Party Auth Service
 
@@ -146,9 +179,11 @@ test:
   api:
     enabled: true
   auth:
+    enabled: true
+  auth:
     token: eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiaXNzIjoiaHR0cHM6Ly9kZXYtY2hhLTlhZXQudXMuYXV0aDAuY29tLyJ9..wSM9N-paE7lA_YaL.T8Mla-PJ5VcFWdBX6SaxCkzq5LVFnEGg2eiMNc-rCXgCd6CUTFQ9Ra_JbuFZrfVZA0JxaaeY5XHJYVBJ6Gwjq25qU5XxXrXk64ZdHNIBgUYhkHoKOvEIjqYpvv8pl1A4MndAbE8NqFpyYgkaWVhSk0X9zSMWTZ6D_Y4lwMr4ihCNqJ4nd8KuyswwDYrHCnQbmBDE6u0yGmLQEIoLm1ZaCnhgDTzdnX2RgcluOrZR5a-yW8Vw6VogsGHwh6-2gsDHxgdmjpZlfR0jGHkceeCw9xl-ccVaLmTH2DS49nrhiYBfrx8oZ5dTKdj9d0ZWJ91c4CI.beiznku1urlYppbo8WHoCg
 ```
 
-The user provides a token and auth endpoints. Note, in this scenario it does not
-matter whether the `devIdProvider` is enabled or not, but that testing requires
-that the user provides a token that will work with their third-party auth service.
+The user provides a token and auth endpoints. Note that in this scenario, it does
+not matter whether the devIdProvider is enabled or not, but testing requires that
+the user provides a token that will work with their third-party auth service.
