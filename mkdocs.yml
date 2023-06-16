@@ -38,6 +38,7 @@ nav:
       - Untyped Chronicle: untyped_chronicle.md
   - Testing:
       - Building your domain: building.md
+      - Helm Testing: helm_testing.md
   - Installing:
       - Installing with Sextant: sextant.md
       - Security settings via Helm: helm-jwks-opa.md
