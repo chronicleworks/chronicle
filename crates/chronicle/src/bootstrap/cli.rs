@@ -2,13 +2,17 @@ use std::{collections::BTreeMap, convert::Infallible, path::PathBuf};
 
 use api::ApiError;
 use chronicle_protocol::async_sawtooth_sdk::error::SawtoothCommunicationError;
-use clap::{builder::PossibleValuesParser, *};
+use clap::{
+    builder::{PossibleValuesParser, StringValueParser},
+    *,
+};
 use common::{
     attributes::{Attribute, Attributes},
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
         PathOrFile,
     },
+    import::FromUrlError,
     opa::{OpaExecutorError, PolicyLoaderError},
     prov::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
@@ -94,6 +98,12 @@ pub enum CliError {
         #[from]
         source: SawtoothCommunicationError,
     },
+
+    #[error("Error loading from URL: {0}")]
+    UrlError(#[from] FromUrlError),
+
+    #[error("UTF-8 error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -1103,10 +1113,12 @@ impl SubCommand for CliModel {
                             .required(true)
                     )
                     .arg(
-                        Arg::new("path")
-                            .value_name("PATH")
-                            .help("Path to data import file")
-                            .value_hint(ValueHint::FilePath)
+                        Arg::new("url")
+                            .value_name("URL")
+                            .default_value("import.json")
+                            .value_hint(ValueHint::Url)
+                            .value_parser(StringValueParser::new())
+                            .help("A path or url to data import file"),
                     )
             );
 

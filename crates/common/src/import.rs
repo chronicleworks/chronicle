@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{
+    fs::File,
+    io::{self, Read},
+    path::PathBuf,
+};
 
 use thiserror::Error;
 use url::Url;
@@ -46,4 +50,11 @@ pub async fn load_bytes_from_url(url: &str) -> Result<Vec<u8>, FromUrlError> {
     }?;
 
     Ok(content)
+}
+
+pub fn load_bytes_from_stdin() -> Result<Vec<u8>, io::Error> {
+    let mut buffer = Vec::new();
+    let mut stdin = io::stdin();
+    let _ = stdin.read_to_end(&mut buffer)?;
+    Ok(buffer)
 }
