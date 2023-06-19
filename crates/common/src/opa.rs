@@ -1,4 +1,7 @@
-use crate::identity::{AuthId, IdentityError, OpaData};
+use crate::{
+    identity::{AuthId, IdentityError, OpaData},
+    url::{load_bytes_from_url, FromUrlError},
+};
 use k256::sha2::{Digest, Sha256};
 use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::{
@@ -11,7 +14,7 @@ use opa_tp_protocol::{
     OpaLedger,
 };
 use rust_embed::RustEmbed;
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
@@ -22,12 +25,6 @@ pub enum PolicyLoaderError {
     #[error("Failed to read embedded OPA policies")]
     EmbeddedOpaPolicies,
 
-    #[error("HTTP error: {0}")]
-    HttpError(String),
-
-    #[error("Invalid path: {0}")]
-    InvalidPath(String),
-
     #[error("Policy not found: {0}")]
     MissingPolicy(String),
 
@@ -37,11 +34,8 @@ pub enum PolicyLoaderError {
     #[error("Error loading OPA policy: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
 
-    #[error("URL request error: {0}")]
-    UrlRequestError(#[from] reqwest::Error),
-
-    #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
+    #[error("Error loading policy bundle from URL: {0}")]
+    UrlError(#[from] FromUrlError),
 }
 
 #[async_trait::async_trait]
@@ -309,16 +303,6 @@ impl UrlPolicyLoader {
             ..Default::default()
         }
     }
-
-    async fn fetch_bundle_from_url(&mut self) -> Result<Vec<u8>, PolicyLoaderError> {
-        let response = reqwest::get(&self.address).await?;
-        if response.status().is_success() {
-            let bytes = response.bytes().await?;
-            Ok(bytes.to_vec())
-        } else {
-            Err(PolicyLoaderError::HttpError(response.status().to_string()))
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -357,23 +341,7 @@ impl PolicyLoader for UrlPolicyLoader {
 
     async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
         let address = &self.address;
-        let bundle = match Url::parse(address) {
-            Ok(url) if url.scheme() == "file" => {
-                let file_path = url
-                    .to_file_path()
-                    .map_err(|_| PolicyLoaderError::InvalidPath(address.to_string()))?;
-                std::fs::read(file_path)?
-            }
-            Ok(_) => self.fetch_bundle_from_url().await?,
-            Err(_) => {
-                let path = Path::new(address);
-                if path.is_file() {
-                    std::fs::read(path)?
-                } else {
-                    return Err(PolicyLoaderError::InvalidPath(address.to_string()));
-                }
-            }
-        };
+        let bundle = load_bytes_from_url(address).await?;
 
         info!(loaded_policy_bytes=?bundle.len(), "Loaded policy bundle");
 

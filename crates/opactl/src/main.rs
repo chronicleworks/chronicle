@@ -3,6 +3,7 @@ use async_sawtooth_sdk::zmq_client::{
 };
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
+use common::url::{load_bytes_from_url, FromUrlError};
 use futures::{channel::oneshot, join, Future, FutureExt, StreamExt};
 use k256::{
     ecdsa::SigningKey,
@@ -22,50 +23,45 @@ use opa_tp_protocol::{
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-    str::from_utf8,
-    time::Duration,
-};
+use std::{fs::File, io::Write, path::PathBuf, str::from_utf8, time::Duration};
 use thiserror::Error;
+use url::Url;
 
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
 use tracing::{debug, error, info, instrument, span, trace, Level};
-use url::{ParseError, Url};
 use user_error::UFE;
 mod cli;
 
 #[derive(Error, Debug)]
 pub enum OpaCtlError {
-    #[error("Communication error: {0}")]
-    Communication(#[from] SawtoothCommunicationError),
-    #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("Pkcs8 error")]
-    Pkcs8,
-    #[error("Utf8 error: {0}")]
-    Utf8(#[from] std::str::Utf8Error),
-    #[error("Json error: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("Transaction not found after wait {0}")]
-    TransactionNotFound(TransactionId),
-    #[error("Transaction failed {0}")]
-    TransactionFailed(String),
     #[error("Operation cancelled {0}")]
     Cancelled(oneshot::Canceled),
 
-    #[error("Load from url error: {0}")]
-    LoadFromUrl(#[from] reqwest::Error),
+    #[error("Communication error: {0}")]
+    Communication(#[from] SawtoothCommunicationError),
 
-    #[error("Policy url has invalid scheme: {0}")]
-    InvalidPolicyUrlScheme(String),
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
 
-    #[error("Invalid policy url {0}")]
-    InvalidPolicyUrl(#[from] ParseError),
+    #[error("Json error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("Pkcs8 error")]
+    Pkcs8,
+
+    #[error("Transaction failed: {0}")]
+    TransactionFailed(String),
+
+    #[error("Transaction not found after wait: {0}")]
+    TransactionNotFound(TransactionId),
+
+    #[error("Error loading from URL: {0}")]
+    Url(#[from] FromUrlError),
+
+    #[error("Utf8 error: {0}")]
+    Utf8(#[from] std::str::Utf8Error),
 }
 
 impl UFE for OpaCtlError {}
@@ -325,34 +321,7 @@ async fn dispatch_args<
             let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
             let policy: &String = matches.get_one("policy").unwrap();
 
-            enum UrlOrFile {
-                Url(Url),
-                File(PathBuf),
-            }
-
-            let policy = match policy.parse::<Url>() {
-                Ok(url) => UrlOrFile::Url(url),
-                Err(_) => UrlOrFile::File(PathBuf::from(policy)),
-            };
-
-            let policy = match policy {
-                UrlOrFile::File(path) => {
-                    let mut file = File::open(path)?;
-                    let mut policy = Vec::new();
-                    file.read_to_end(&mut policy)?;
-                    Ok(policy)
-                }
-                UrlOrFile::Url(url) => match url.scheme() {
-                    "file" => {
-                        let mut file = File::open(url.path())?;
-                        let mut policy = Vec::new();
-                        file.read_to_end(&mut policy)?;
-                        Ok(policy)
-                    }
-                    "http" | "https" => Ok(reqwest::get(url).await?.bytes().await?.into()),
-                    _ => Err(OpaCtlError::InvalidPolicyUrlScheme(url.scheme().to_owned())),
-                },
-            }?;
+            let policy = load_bytes_from_url(policy).await?;
 
             let id = matches.get_one::<String>("id").unwrap();
 

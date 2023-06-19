@@ -13,5 +13,6 @@ pub mod ledger;
 pub mod opa;
 pub mod prov;
 pub mod signing;
+pub mod url;
 
 pub use k256;
