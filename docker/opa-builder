@@ -99,13 +99,13 @@ FROM  alpine:3.16.3 as tested-artifacts
 COPY --from=tested --link /artifacts /artifacts
 
 # Copy opa-tp to image
-FROM debian:bullseye-slim AS opa-tp
+FROM debian:bookworm-slim AS opa-tp
 ARG TARGETARCH
 WORKDIR /
 COPY .artifacts/artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
 
 # Copy opactl to image
-FROM debian:bullseye-slim AS opactl
+FROM debian:bookworm-slim AS opactl
 ARG TARGETARCH
 WORKDIR /
 COPY .artifacts/artifacts/${TARGETARCH}/opactl /usr/local/bin/opactl
