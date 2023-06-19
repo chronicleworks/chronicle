@@ -143,7 +143,10 @@ test:
       repository: blockchaintp/chronicle-helm-api-test-amd64
       ## @md | `test.api.image.tag` | the image tag | latest |
       tag: BTP2.1.0-0.7.3
+  ## @md | `test.auth` | test the chronicle auth server API |
   auth:
+    ## @md | `test.auth.enabled` | true to enable auth-related testing | true |
+    enabled: true
     ## @md | `test.auth.token` | provide a token for auth-related testing | nil |
     token:
 
