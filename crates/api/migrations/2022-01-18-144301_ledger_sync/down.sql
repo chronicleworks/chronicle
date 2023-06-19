@@ -1,4 +1,5 @@
 -- This file should undo anything in `up.sql`
+
 drop table activity_attribute;
 drop table agent_attribute;
 drop table entity_attribute;
@@ -7,7 +8,7 @@ drop table hadidentity;
 drop table wasinformedby;
 drop table usage;
 drop table association;
-drop table attribution;
+drop table if exists attribution;
 drop table generation;
 drop table derivation;
 drop table delegation;
