@@ -43,6 +43,7 @@ nav:
       - Installing with Sextant: sextant.md
       - Security settings via Helm: helm-jwks-opa.md
       - Helm scenarios enumerated: helm-scenarios.md
+      - External PostgreSQL: external-postgres.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
