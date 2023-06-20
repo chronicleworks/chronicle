@@ -29,16 +29,16 @@ pub async fn load_bytes_from_url(url: &str) -> Result<Vec<u8>, FromUrlError> {
     let content = match path_or_url {
         PathOrUrl::File(path) => {
             let mut file = File::open(path)?;
-            let mut policy = Vec::new();
-            file.read_to_end(&mut policy)?;
-            Ok(policy)
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)?;
+            Ok(buf)
         }
         PathOrUrl::Url(url) => match url.scheme() {
             "file" => {
                 let mut file = File::open(url.path())?;
-                let mut policy = Vec::new();
-                file.read_to_end(&mut policy)?;
-                Ok(policy)
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf)?;
+                Ok(buf)
             }
             "http" | "https" => Ok(reqwest::get(url).await?.bytes().await?.into()),
             _ => Err(FromUrlError::InvalidUrlScheme(url.scheme().to_owned())),
