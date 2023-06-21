@@ -1,8 +1,55 @@
 # CHANGELOG
 
+## v0.7.4
+
+fromto 1=v0.7.3 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+* fix(chronicle-synth): fix generate script to work from chronicle root dir [view commit](https://github.com/btpworks/chronicle/commit/0961ba52b1e1f754a4a5b051db898ba65dd0aac7)
+* feat(bootstrap): add load from url support for data import [view commit](https://github.com/btpworks/chronicle/commit/3ae8b7fc4acd466d372063abd95f2e0c34170991)
+* docs(cli, recording_provenance): update data import sections [view commit](https://github.com/btpworks/chronicle/commit/23c015aed76086b4399d6cf4b3e0adb4de04bfec)
+* fix(url): fix refactoring errors in PR#365 [view commit](https://github.com/btpworks/chronicle/commit/2b148e97bb23592f4ae68e263cdb8a811c217027)
+* docs(installing): add instructions for using external Postgres db [view commit](https://github.com/btpworks/chronicle/commit/66cc72d6cda46ac79849882115baf9886a4eb834)
+* docs(recording_provenance.md): how to record changes without contradiction [view commit](https://github.com/btpworks/chronicle/commit/a1392f6278c456335a629bce61bace824521fed4)
+* refactor(common): refactor url http and file handling to common library [view commit](https://github.com/btpworks/chronicle/commit/0fc4ae1dfa123538c7cbcd5c305de854746d1be9)
+* build(unified-builder): have maven build share artifact cache [view commit](https://github.com/btpworks/chronicle/commit/5967b31ac65d472a5d033c7a2318cf06bea9968a)
+* docs(helm_testing): add documentation on auth endpoints test [view commit](https://github.com/btpworks/chronicle/commit/67bc526944f70663418928055ef8fe906acb7bed)
+* test(charts): add auth endpoints helm chart test [view commit](https://github.com/btpworks/chronicle/commit/6118ce534645e58dbdae4a317a0d6c3c1b6e7465)
+* fix(id-provider): undo id-provider fixes [view commit](https://github.com/btpworks/chronicle/commit/d35fa1e894d25a4525cad2c200635c39b1f02f29)
+* fix(id-provider): fix id-provider to login to get token [view commit](https://github.com/btpworks/chronicle/commit/b92553a3d9ffbe04f3ab9f8a8625bd1bafe6a5a5)
+* build(unified-builder): install ca-certificates-java with openjdk [view commit](https://github.com/btpworks/chronicle/commit/a840fc7523a4ad464525ce662e9c3b2201249651)
+* build(docker): bump docker image bases up to new debian stable [view commit](https://github.com/btpworks/chronicle/commit/f91d86e10dc2879e4e77b94c2d9936341f221d33)
+* docs(helm_testing): add helm testing documentation [view commit](https://github.com/btpworks/chronicle/commit/2fa4115d16d37af4f6456a166a16a0bd389a12b8)
+* fix(charts): allow helm api test to support 3rd party auth service [view commit](https://github.com/btpworks/chronicle/commit/76abbd9379c8e8316153698fff41ec88e5792c7b)
+* fix(migrations): cover for that attribution table may not exist yet [view commit](https://github.com/btpworks/chronicle/commit/73478c34188f8a9b041cdd690ae41d1092e74307)
+* build(unified-builder): install ca-certificates-java before openjdk [view commit](https://github.com/btpworks/chronicle/commit/303aaaa3c2982438c2d69cf2f048263d5be9cfcf)
+* fix(charts): fix auth endpoints cli templating [view commit](https://github.com/btpworks/chronicle/commit/f6b5eee287fdb35324de65c7760e2d996e48d364)
+* fix(charts): update chart version and api-test [view commit](https://github.com/btpworks/chronicle/commit/02a796a4a93010fd3a330ad70c1c793134e4a41e)
+* build(_chronicle.tpl): dev id provider offers two different oidc endpoints [view commit](https://github.com/btpworks/chronicle/commit/8957d25610852270219357492903e4cf11189a64)
+* fix: Handle lack of identity on event [view commit](https://github.com/btpworks/chronicle/commit/4b85d9792b84b451a3b82da623c83f19fd84d014)
+* refactor(authorization.rs): rename fn verify_jwt to verify_token [view commit](https://github.com/btpworks/chronicle/commit/5f5f115b0cddff8136bc09bb41a7d836896727d6)
+* fix(chronicle_graphql): reject request if require-auth and id claims not found [view commit](https://github.com/btpworks/chronicle/commit/57ebfe891842c019258fc3833306fe047bb29f4a)
+* fix(bootstrap): add env variable for require-auth cli flag [view commit](https://github.com/btpworks/chronicle/commit/ab2b5fe5b17e0fbf6f91a695fbcac53c4a0b669e)
+* fix(identity.rs): do not log jwt claim values at warn level [view commit](https://github.com/btpworks/chronicle/commit/21b5b4381adddb170fdce1be5db9238e77de48b6)
+* fix(authorization.rs): allow userinfo endpoint to be set without jwks [view commit](https://github.com/btpworks/chronicle/commit/e03cf3ca4045050e99c1e53b29723bc3fea6f61a)
+* docs(oidc-opa-flow.md): add endpoint response caching to flowcharts [view commit](https://github.com/btpworks/chronicle/commit/304863eb685ba0e4c58ef0a03295618bf7f00f39)
+* fix: File system operations as result / try [view commit](https://github.com/btpworks/chronicle/commit/bbbd245a0f5f4bbaf186681ea09aa6df1445fb3d)
+* fix(charts): fix handling of auth args [view commit](https://github.com/btpworks/chronicle/commit/f8ad51aaaa102ea64db68a69e7bf57e4afefabef)
+* docs(helm-jwks-opa): document auth options changes [view commit](https://github.com/btpworks/chronicle/commit/6802d3c697f64069a20076e77dacbf63ce972189)
+* fix(charts): increment chart version [view commit](https://github.com/btpworks/chronicle/commit/979292db517e52415edd1caa48a2ad4141224b30)
+* docs(auth.md): link to oidc spec [view commit](https://github.com/btpworks/chronicle/commit/84a22b1b00bb20556f0d4ae3767f416931bc3158)
+* fix: Exit 0 on no policy found with get-policy [view commit](https://github.com/btpworks/chronicle/commit/1e4ef3de16c07e6793942f40bb64b3a9c68addb2)
+* docs(mkdocs.yml): chronicle site name should be lower-case [view commit](https://github.com/btpworks/chronicle/commit/b8829922533007e07a375bacfd5a6d8a6d74066c)
+* fix: opactl shutdown [view commit](https://github.com/btpworks/chronicle/commit/94dcc7d745a52a557b6eb1e86ba90ed8863e6061)
+* docs(docs): expand oidc and opa documentation for installers [view commit](https://github.com/btpworks/chronicle/commit/1493691a55ccd787fb2188f0178765ffc103ca88)
+* docs: add resetting and connection instructions [view commit](https://github.com/btpworks/chronicle/commit/201fb02bfd0d322626fe1245c4a0f2699a0e8a09)
+* build(unified-builder): do not copy artifacts with --link [view commit](https://github.com/btpworks/chronicle/commit/4346fe8719b9d1f57d824c24cf36ae3ad1f4b586)
+* docs(helm-jwks-opa.md): correct default for auth.id.claims [view commit](https://github.com/btpworks/chronicle/commit/f21a12412cf319ffa6dcf87a00a5b176ecbd5068)
+* docs(helm-jwks-opa.md): add information on dev-id-provider [view commit](https://github.com/btpworks/chronicle/commit/d4edd0bcb8436294a3cf1f61a7b55bd9f06aeae4)
+* fix(charts): update Chronicle chart to v0.7.3 [view commit](https://github.com/btpworks/chronicle/commit/1ebee67a03944931ee26725ac277294df288e617)
+* fix(charts): update chronicle chart dependency on sawtooth chart [view commit](https://github.com/btpworks/chronicle/commit/ecaabb3ff35bbd9cab5ea8e4910e44f280dfb278)
+
 ## v0.7.3
 
-fromto 1=v0.7.2 2=HEAD 3=https://github.com/btpworks/chronicle/commit
+fromto 1=v0.7.2 2=v0.7.3 3=https://github.com/btpworks/chronicle/commit
 * docs(helm-jwks-opa.md): if no oidc then do not need to disable endpoints [view commit](https://github.com/btpworks/chronicle/commit/5f062163d4a40b0a50af7f060bb94531391e0aeb)
 * docs(opa): fix sections on default opa disallowing jwt users [view commit](https://github.com/btpworks/chronicle/commit/bec44a73fa91cf7cc84e8abdc224f6ca3ccf52e2)
 * fix(policies): allow jwt users [view commit](https://github.com/btpworks/chronicle/commit/ea23af09f649fd1b79684f09a4dfd8a838fc2f4c)
