@@ -919,14 +919,14 @@ To import data into Chronicle, follow these steps:
 - Run the following command:
 
   ```bash
-  chronicle --bin chronicle -- import <namespace-id> <namespace-uuid> <path-to-json-file>
+  chronicle --bin chronicle -- import <namespace-id> <namespace-uuid> <json-file-url>
   ```
 
   where:
 
   `<namespace-id>`: the name of the namespace to which the data will be imported.
   `<namespace-uuid>`: the UUID of the namespace to which the data will be imported.
-  `<path-to-json-file>`: the path to the JSON-LD file containing the Chronicle Operations.
+  `<json-file-url>`: the URL of the JSON-LD file containing the Chronicle Operations.
 
 - If the data is successfully imported, the Chronicle Operations will be added
   to the Chronicle database.

@@ -22,6 +22,7 @@ use common::{
     commands::ApiResponse,
     database::{get_connection_with_retry, DatabaseConnector},
     identity::AuthId,
+    import::{load_bytes_from_stdin, load_bytes_from_url},
     ledger::SubmissionStage,
     opa::ExecutorContext,
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
@@ -41,9 +42,8 @@ use url::Url;
 
 use std::{
     collections::{BTreeSet, HashMap},
-    io::{self, Read},
+    io,
     net::{SocketAddr, ToSocketAddrs},
-    path::PathBuf,
     str::FromStr,
 };
 
@@ -394,27 +394,28 @@ where
     } else if let Some(matches) = matches.subcommand_matches("import") {
         let namespace = get_namespace(matches);
 
-        let data = if let Some(path) = matches.value_of("path") {
-            let path = PathBuf::from(path);
-            let data = std::fs::read_to_string(&path)?;
-            info!("Loaded import data from {:?}", path);
+        let data = if let Some(url) = matches.value_of("url") {
+            let data = load_bytes_from_url(url).await?;
+            info!("Loaded import data from {:?}", url);
             data
         } else {
             if atty::is(atty::Stream::Stdin) {
                 eprintln!("Attempting to import data from standard input, press Ctrl-D to finish.");
             }
             info!("Attempting to read import data from stdin...");
-            let data = read_import_data()?;
+            let data = load_bytes_from_stdin()?;
             info!("Loaded {} bytes of import data from stdin", data.len());
             data
         };
+
+        let data = std::str::from_utf8(&data)?;
 
         if data.trim().is_empty() {
             eprintln!("Import data is empty, nothing to import");
             return Ok((ApiResponse::Unit, ret_api));
         }
 
-        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&data)?;
+        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(data)?;
 
         let mut operations = Vec::new();
         for value in json_array.into_iter() {
@@ -451,13 +452,6 @@ fn get_namespace(matches: &ArgMatches) -> NamespaceId {
     let uuid = uuid::Uuid::try_parse(namespace_uuid)
         .unwrap_or_else(|_| panic!("cannot parse namespace UUID: {}", namespace_uuid));
     NamespaceId::from_external_id(namespace_id, uuid)
-}
-
-fn read_import_data() -> Result<String, io::Error> {
-    let mut buffer = String::new();
-    let mut stdin = io::stdin();
-    let _ = stdin.read_to_string(&mut buffer)?;
-    Ok(buffer)
 }
 
 async fn config_and_exec<Query, Mutation>(

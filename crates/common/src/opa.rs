@@ -1,6 +1,6 @@
 use crate::{
     identity::{AuthId, IdentityError, OpaData},
-    url::{load_bytes_from_url, FromUrlError},
+    import::{load_bytes_from_url, FromUrlError},
 };
 use k256::sha2::{Digest, Sha256};
 use opa::{bundle::Bundle, wasm::Opa};

@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{
+    fs::File,
+    io::{self, Read},
+    path::PathBuf,
+};
 
 use thiserror::Error;
 use url::Url;
@@ -29,16 +33,16 @@ pub async fn load_bytes_from_url(url: &str) -> Result<Vec<u8>, FromUrlError> {
     let content = match path_or_url {
         PathOrUrl::File(path) => {
             let mut file = File::open(path)?;
-            let mut policy = Vec::new();
-            file.read_to_end(&mut policy)?;
-            Ok(policy)
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)?;
+            Ok(buf)
         }
         PathOrUrl::Url(url) => match url.scheme() {
             "file" => {
                 let mut file = File::open(url.path())?;
-                let mut policy = Vec::new();
-                file.read_to_end(&mut policy)?;
-                Ok(policy)
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf)?;
+                Ok(buf)
             }
             "http" | "https" => Ok(reqwest::get(url).await?.bytes().await?.into()),
             _ => Err(FromUrlError::InvalidUrlScheme(url.scheme().to_owned())),
@@ -46,4 +50,11 @@ pub async fn load_bytes_from_url(url: &str) -> Result<Vec<u8>, FromUrlError> {
     }?;
 
     Ok(content)
+}
+
+pub fn load_bytes_from_stdin() -> Result<Vec<u8>, io::Error> {
+    let mut buffer = Vec::new();
+    let mut stdin = io::stdin();
+    let _ = stdin.read_to_end(&mut buffer)?;
+    Ok(buffer)
 }

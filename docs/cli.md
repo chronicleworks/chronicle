@@ -80,7 +80,7 @@ Write the GraphQL SDL for Chronicle to stdout and exit.
 
 Installs shell completions for bash, zsh, or fish.
 
-### `import` <`namespace-id`> <`namespace-uuid`> <`path`>
+### `import` <`namespace-id`> <`namespace-uuid`> <`url`>
 
 The import command is used to load data from a JSON-LD file containing an
 array of Chronicle Operations. This command requires two arguments:
@@ -92,8 +92,8 @@ conflicts when importing data. Data not matching the given namespace is
 ignored.
 
 By default, `import` will use standard input as its data source. Users can
-also use an optional `path` argument to specify the file path of a JSON-LD
-file to be imported.
+also use an optional `url` argument to specify the URL or file path of a
+JSON-LD file to be imported.
 
 Once the data has been successfully imported, the Chronicle Operations will
 be added to the Chronicle database under the specified namespace.

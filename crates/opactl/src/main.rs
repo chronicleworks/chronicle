@@ -3,7 +3,7 @@ use async_sawtooth_sdk::zmq_client::{
 };
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
-use common::url::{load_bytes_from_url, FromUrlError};
+use common::import::{load_bytes_from_url, FromUrlError};
 use futures::{channel::oneshot, join, Future, FutureExt, StreamExt};
 use k256::{
     ecdsa::SigningKey,
