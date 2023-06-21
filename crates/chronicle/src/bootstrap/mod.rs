@@ -28,6 +28,7 @@ use common::{
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
     signing::{DirectoryStoredKeys, SignerError},
 };
+use is_terminal::IsTerminal;
 use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
@@ -399,7 +400,7 @@ where
             info!("Loaded import data from {:?}", url);
             data
         } else {
-            if atty::is(atty::Stream::Stdin) {
+            if std::io::stdin().is_terminal() {
                 eprintln!("Attempting to import data from standard input, press Ctrl-D to finish.");
             }
             info!("Attempting to read import data from stdin...");
