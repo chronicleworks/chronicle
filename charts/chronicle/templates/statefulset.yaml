@@ -87,7 +87,7 @@ spec:
                   name: {{ .Values.postgres.existingPasswordSecret }}
                   key: {{ .Values.postgres.existingPasswordSecretKey }}
               {{- else }}
-              value: {{ .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
               {{- end }}
               {{- include "lib.safeToYaml" .Values.postgres.env | nindent 12 }}
           volumeMounts:
@@ -140,7 +140,7 @@ spec:
                   name: {{ .Values.postgres.existingPasswordSecret }}
                   key: {{ .Values.postgres.existingPasswordSecretKey }}
               {{- else }}
-              value: {{ .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
               {{- end }}
             {{- include "lib.safeToYaml" .Values.postgres.env | nindent 12 }}
           resources: {{- include "lib.safeToYaml" .Values.resources | nindent 12 }}
