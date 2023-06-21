@@ -10,7 +10,6 @@ version = "0.7.0"
 Inflector            = { workspace = true }
 api                  = { path = "../api" }
 async-graphql        = { workspace = true }
-atty                 = { workspace = true }
 cfg-if               = { workspace = true }
 chronicle-protocol   = { path = "../chronicle-protocol" }
 chronicle-telemetry  = { path = "../chronicle-telemetry" }
@@ -26,6 +25,7 @@ futures              = { workspace = true }
 genco                = { workspace = true }
 hex                  = { workspace = true }
 iref                 = { workspace = true }
+is-terminal          = { workspace = true }
 jsonschema           = { workspace = true }
 opa                  = { workspace = true }
 opentelemetry        = { workspace = true }

@@ -12,9 +12,9 @@ use chronicle_synth::{
     domain::TypesAttributesRoles,
     error::ChronicleSynthError,
 };
+use clap::StructOpt;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 
 #[derive(StructOpt)]
 #[structopt(
