@@ -34,7 +34,7 @@ devIdProvider:
     ## @md | `devIdProvider.image.repository` | the image repository | blockchaintp/id-provider |
     repository: blockchaintp/id-provider-amd64
     ## @md | `devIdProvider.image.tag` | the image tag | latest |
-    tag: BTP2.1.0-0.7.3
+    tag: BTP2.1.0-0.7.4
 
 ## @md | `extraVolumes` | a list of additional volumes to add to chronicle | [] |
 extraVolumes: []
@@ -45,7 +45,7 @@ image:
   ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
   repository: blockchaintp/chronicle-amd64
   ## @md | `image.tag`| the tag of the image to use | latest |
-  tag: BTP2.1.0-0.7.3
+  tag: BTP2.1.0-0.7.4
   ## @md | `image.pullPolicy` | the image pull policy to use | IfNotPresent |
   pullPolicy: IfNotPresent
 
@@ -98,7 +98,7 @@ opa:
       ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
       repository: blockchaintp/opactl-amd64
       ## @md | `image.tag`| the tag of the image to use | latest |
-      tag: BTP2.1.0-0.7.3
+      tag: BTP2.1.0-0.7.4
   policy:
     entrypoint: allow_transactions.allowed_users
     id: allow_transactions
@@ -108,7 +108,7 @@ opa:
       ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
       repository: blockchaintp/opa-tp-amd64
       ## @md | `image.tag`| the tag of the image to use | latest |
-      tag: BTP2.1.0-0.7.3
+      tag: BTP2.1.0-0.7.4
       ## @md | `image.pullPolicy` | the image pull policy to use | IfNotPresent |
       pullPolicy: IfNotPresent
     ## @md | `opa.tp.resources` | resources | map | nil |
@@ -142,7 +142,7 @@ test:
       ## @md | `test.api.image.repository` | the image repository | blockchaintp/chronicle-helm-api-test |
       repository: blockchaintp/chronicle-helm-api-test-amd64
       ## @md | `test.api.image.tag` | the image tag | latest |
-      tag: BTP2.1.0-0.7.3
+      tag: BTP2.1.0-0.7.4
   ## @md | `test.auth` | test the chronicle auth server API |
   auth:
     ## @md | `test.auth.enabled` | true to enable auth-related testing | true |
@@ -218,7 +218,7 @@ tp:
     ## @md | `tp.image.repository` | the image repository | blockchaintp/chronicle-tp |
     repository: blockchaintp/chronicle-tp-amd64
     ## @md | `tp.image.tag` | the image tag | latest |
-    tag: BTP2.1.0-0.7.3
+    tag: BTP2.1.0-0.7.4
   ## @md | `tp.extraVolumes` | extra volumes declarations for the chronicle-tp deployment | list | nil
   extraVolumes:
   ## @md | `tp.extraVolumeMounts` | extra volume mounts for chronicle-tp deployment | list | nil
