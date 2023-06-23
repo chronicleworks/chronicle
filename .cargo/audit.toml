@@ -2,15 +2,5 @@
 ignore = [
   # `time` localtime_r segfault
   # No current known workarounds as it is a libc issue
-  "RUSTSEC-2020-0071",
-
-  # `chrono` localtime_r segfault
-  # No current known workarounds as it is a libc issue
-  "RUSTSEC-2020-0159",
-
-  # Await patch in 2.x
-  "RUSTSEC-2021-0037",
-
-  #CBOR will be replaced with proto for TP events before long
-  "RUSTSEC-2021-0127"
+  "RUSTSEC-2020-0071"
 ]
