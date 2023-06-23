@@ -3,12 +3,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  annotations:
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
   name: {{ include "common.names.fullname" . }}-init
   labels: {{ include "chronicle.labels" . | nindent 4 }}
     component: chronicle
 spec:
+  ttlSecondsAfterFinished: 100
   template:
     metadata:
       labels: {{ include "chronicle.labels" . | nindent 8 }}
