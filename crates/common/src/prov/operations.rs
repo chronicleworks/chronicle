@@ -59,6 +59,20 @@ where
     }
 }
 
+impl TryFrom<i32> for DerivationType {
+    type Error = &'static str;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            -1 => Ok(DerivationType::None),
+            1 => Ok(DerivationType::Revision),
+            2 => Ok(DerivationType::Quotation),
+            3 => Ok(DerivationType::PrimarySource),
+            _ => Err("Unrecognized enum variant when converting from 'i32'"),
+        }
+    }
+}
+
 impl DerivationType {
     pub fn revision() -> Self {
         Self::Revision

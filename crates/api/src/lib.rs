@@ -448,6 +448,8 @@ where
             if state_with_effects != *state {
                 transactions.push(tx.clone());
                 state.apply(tx)?;
+            } else {
+                info!(?tx, "Transaction has no effect, data already recorded");
             }
         }
 
