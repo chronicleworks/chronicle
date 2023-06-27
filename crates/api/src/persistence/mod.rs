@@ -11,10 +11,11 @@ use chrono::Utc;
 use common::{
     attributes::Attribute,
     prov::{
-        Activity, ActivityId, Agent, AgentId, Association, Attachment, Attribution,
-        ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
-        Entity, EntityId, EvidenceId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId,
-        Namespace, NamespaceId, ProvModel, PublicKeyPart, Role, SignaturePart, Usage,
+        operations::DerivationType, Activity, ActivityId, Agent, AgentId, Association, Attachment,
+        Attribution, ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation,
+        DomaintypeId, Entity, EntityId, EvidenceId, ExternalId, ExternalIdPart, Generation,
+        Identity, IdentityId, Namespace, NamespaceId, ProvModel, PublicKeyPart, Role,
+        SignaturePart, Usage,
     },
 };
 use derivative::*;
@@ -47,11 +48,22 @@ pub enum StoreError {
     #[error("Connection pool error: {0}")]
     DbPool(#[from] r2d2::Error),
 
-    #[error("Invalid UUID: {0}")]
-    Uuid(#[from] uuid::Error),
+    #[error("Infallible")]
+    Infallible(#[from] std::convert::Infallible),
+
+    #[error(
+        "Integer returned from database was an unrecognized 'DerivationType' enum variant: {0}"
+    )]
+    InvalidDerivationTypeRecord(i32),
+
+    #[error("Could not find namespace")]
+    InvalidNamespace,
 
     #[error("Unreadable Attribute: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("Parse blockid: {0}")]
+    ParseBlockId(#[from] BlockIdError),
 
     #[error("Invalid transaction ID: {0}")]
     TransactionId(#[from] ChronicleTransactionIdError),
@@ -59,12 +71,8 @@ pub enum StoreError {
     #[error("Could not locate record in store")]
     RecordNotFound,
 
-    #[error("Could not find namespace")]
-    InvalidNamespace,
-    #[error("Parse blockid {0}")]
-    ParseBlockId(#[from] BlockIdError),
-    #[error("Infallible")]
-    Infallible(#[from] std::convert::Infallible),
+    #[error("Invalid UUID: {0}")]
+    Uuid(#[from] uuid::Error),
 }
 
 #[derive(Debug)]
@@ -1223,7 +1231,7 @@ impl Store {
     pub(crate) fn prov_model_for_entity(
         &self,
         entity: query::Entity,
-        namespaceid: &NamespaceId,
+        namespace_id: &NamespaceId,
         model: &mut ProvModel,
         connection: &mut PgConnection,
     ) -> Result<(), StoreError> {
@@ -1237,7 +1245,7 @@ impl Store {
             attachment_id: _,
         } = entity;
 
-        let entity_id: EntityId = EntityId::from_external_id(&external_id);
+        let entity_id = EntityId::from_external_id(&external_id);
 
         for (agent, role) in schema::attribution::table
             .filter(schema::attribution::entity_id.eq(&id))
@@ -1247,7 +1255,7 @@ impl Store {
             .load::<(String, String)>(connection)?
         {
             model.qualified_attribution(
-                namespaceid,
+                namespace_id,
                 &entity_id,
                 &AgentId::from_external_id(agent),
                 {
@@ -1265,10 +1273,10 @@ impl Store {
             .load::<query::EntityAttribute>(connection)?;
 
         model.entities.insert(
-            (namespaceid.clone(), entity_id.clone()),
+            (namespace_id.clone(), entity_id.clone()),
             Entity {
-                id: entity_id,
-                namespaceid: namespaceid.clone(),
+                id: entity_id.clone(),
+                namespaceid: namespace_id.clone(),
                 external_id: external_id.into(),
                 domaintypeid: domaintype.map(DomaintypeId::from_external_id),
                 attributes: attributes
@@ -1287,6 +1295,41 @@ impl Store {
                     .collect::<Result<BTreeMap<_, _>, _>>()?,
             },
         );
+
+        for (activity_id, activity_external_id, used_entity_id, typ) in schema::derivation::table
+            .filter(schema::derivation::generated_entity_id.eq(&id))
+            .order(schema::derivation::generated_entity_id.asc())
+            .inner_join(
+                schema::activity::table
+                    .on(schema::derivation::activity_id.eq(schema::activity::id)),
+            )
+            .inner_join(
+                schema::entity::table.on(schema::derivation::used_entity_id.eq(schema::entity::id)),
+            )
+            .select((
+                schema::derivation::activity_id,
+                schema::activity::external_id,
+                schema::entity::external_id,
+                schema::derivation::typ,
+            ))
+            .load::<(i32, String, String, i32)>(connection)?
+        {
+            let typ = DerivationType::try_from(typ)
+                .map_err(|_| StoreError::InvalidDerivationTypeRecord(typ))?;
+
+            model.was_derived_from(
+                namespace_id.clone(),
+                typ,
+                EntityId::from_external_id(used_entity_id),
+                entity_id.clone(),
+                {
+                    match activity_id {
+                        -1 => None,
+                        _ => Some(ActivityId::from_external_id(activity_external_id)),
+                    }
+                },
+            );
+        }
 
         Ok(())
     }
