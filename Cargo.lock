@@ -158,7 +158,7 @@ checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
 name = "api"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "assert_fs",
  "async-graphql",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "async-sawtooth-sdk"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -660,7 +660,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chronicle"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "Inflector",
  "api",
@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-domain"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "chronicle",
  "insta",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-domain-lint"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "chronicle",
  "clap 3.2.25",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-example"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "chronicle",
  "chronicle-protocol",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-protocol"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-synth"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "assert_fs",
  "chronicle",
@@ -802,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "chronicle-telemetry"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "anyhow",
  "api",
@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "gq-ws"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
@@ -3181,7 +3181,7 @@ dependencies = [
 
 [[package]]
 name = "oauth-token"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "anyhow",
  "oauth2",
@@ -3252,7 +3252,7 @@ dependencies = [
 
 [[package]]
 name = "opa-tp"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -3280,7 +3280,7 @@ dependencies = [
 
 [[package]]
 name = "opa-tp-protocol"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "anyhow",
  "async-sawtooth-sdk",
@@ -3312,7 +3312,7 @@ dependencies = [
 
 [[package]]
 name = "opactl"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
@@ -4552,7 +4552,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth_tp"
-version = "0.7.0"
+version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",

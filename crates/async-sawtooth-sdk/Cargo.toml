@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name    = "async-sawtooth-sdk"
-version = "0.7.0"
+version = "0.7.5"
 
 [lib]
 name = "async_sawtooth_sdk"
