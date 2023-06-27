@@ -2,7 +2,7 @@
 build   = "build.rs"
 edition = "2021"
 name    = "opactl"
-version = "0.7.0"
+version = "0.7.5"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
