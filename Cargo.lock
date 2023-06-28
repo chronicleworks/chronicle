@@ -4533,7 +4533,7 @@ dependencies = [
 [[package]]
 name = "sawtooth-sdk"
 version = "0.5.3"
-source = "git+https://github.com/hyperledger/sawtooth-sdk-rust?rev=5a300de#5a300de293666aa056a2970a39651d4dd5098885"
+source = "git+https://github.com/hyperledger/sawtooth-sdk-rust#b73db966793743c166cbcc543fdb507ea83d8e8e"
 dependencies = [
  "ctrlc",
  "glob",
