@@ -2,10 +2,27 @@
 
 ## Configuring Chronicle
 
+### Chronicle Configuration File
+
 Chronicle's `config.toml` file contains settings for where to store secret
 keys, how to connect to the Sawtooth validator, and any namespace bindings. If
 a configuration file does not yet exist, Chronicle will create one before its
 API service starts up.
+
+You may also specify an existing configuration file to use via the `--config`
+cli argument.
+
+```bash
+--config /path/to/config.toml
+```
+
+Or via the `CHRONICLE_CONFIG` environment variable.
+
+```bash
+CHRONICLE_CONFIG=/path/to/config.toml
+```
+
+### Chronicle Configuration Options
 
 Additionally, the [command-line interface](./cli.md) offers various arguments,
 many of which have an associated environment variable that can be used to set
