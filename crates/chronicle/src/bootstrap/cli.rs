@@ -937,7 +937,8 @@ impl SubCommand for CliModel {
                     .value_hint(ValueHint::FilePath)
                     .default_value("~/.chronicle/config.toml")
                     .help("Sets a custom config file")
-                    .takes_value(true),
+                    .takes_value(true)
+                    .env("CHRONICLE_CONFIG"),
             )
             .arg(
                 Arg::new("instrument")
