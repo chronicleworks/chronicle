@@ -190,3 +190,23 @@ test:
 The user provides a token and auth endpoints. Note that in this scenario, it does
 not matter whether the devIdProvider is enabled or not, but testing requires that
 the user provides a token that will work with their third-party auth service.
+
+#### Note on Default Settings
+
+If you provide your own `auth.userinfo.url` Chronicle's Helm Chart
+`auth-endpoints-test` requires `test.auth.token`. This is because failing to
+provide this will require reinstallation of the Chart in order to enable testing
+of a third-party userinfo URL.
+
+Add the following settings to your `values.yaml` to disable the tests:
+
+```yaml
+test:
+  api:
+    enabled: false
+  auth:
+    enabled: false
+```
+
+Alternatively, provide `test.auth.token` in your `values.yaml`, as described in
+[Auth Required, Third Party Auth Service](#auth-required-third-party-auth-service).
