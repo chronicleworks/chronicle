@@ -41,6 +41,12 @@ extraVolumes: []
 ## @md | `extraVolumeMounts` | a list of additional volume mounts to add to chronicle | [] |
 extraVolumeMounts: []
 
+healthCheck:
+  ## @md | `healthCheck.enabled` | if true enable the liveness depth charge check | false |
+  enabled: false
+  ## @md | `healthCheck.interval` | the interval between health checks | "1800" |
+  interval:
+
 image:
   ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
   repository: blockchaintp/chronicle-amd64

@@ -123,6 +123,9 @@ spec:
                 {{- end }}
                 serve-api \
                   --interface 0.0.0.0:{{ .Values.port }} \
+                  {{- if .Values.healthCheck.enabled }}
+                  --liveness-check {{ .Values.healthCheck.interval }} \
+                  {{- end }}
                   {{- if .Values.auth.required }}
                   --require-auth \
                   {{- end }}
