@@ -38,11 +38,13 @@ nav:
       - Untyped Chronicle: untyped_chronicle.md
   - Testing:
       - Building your domain: building.md
+      - Health Checks and Testing: health-checks-and-testing.md
       - Helm Testing: helm_testing.md
   - Installing:
       - Installing with Sextant: sextant.md
       - Security settings via Helm: helm-jwks-opa.md
       - Helm scenarios enumerated: helm-scenarios.md
+      - Other Helm Options: helm-options.md
       - External PostgreSQL: external-postgres.md
   - Operating:
       - CLI: cli.md
