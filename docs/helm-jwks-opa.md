@@ -240,3 +240,6 @@ Alternatively, to obtain JWTs with your own OIDC client, it must connect to
 that mock OIDC server. Login credentials for a dummy user can be obtained from
 the `id-provider` container's logs where the `OidcController` notes its
 config on startup.
+
+See [here](./helm_testing.md#testing-scenarios) for more on Chronicle Helm
+testing scenarios.

@@ -134,3 +134,6 @@ You may instead choose to disable OPA with,
 opa:
   enabled: false
 ```
+
+See [here](./helm_testing.md#testing-scenarios) for more on Chronicle
+Helm testing scenarios.
