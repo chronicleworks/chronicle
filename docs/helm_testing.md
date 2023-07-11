@@ -36,6 +36,9 @@ The API Test Job includes the following test steps:
 - Wait for the API to be ready.
 - Execute the tests using the `subscribe-submit-test` script.
 
+Note, the Chronicle Helm Chart API test uses the reserved
+[`chronicle-system` namespace](./namespaces.md#chronicle-system).
+
 ### Auth Endpoints Test Job
 
 The Auth Endpoints Test Job verifies the availability and correctness of the
