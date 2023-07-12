@@ -42,6 +42,10 @@ omitted. Similarly, if the claims determining Chronicle identity are `iss sub`
 then `id:` can also be omitted as those are the default. To also allow
 anonymous requests, without an `Authorization:` header, also omit `required:`.
 
+**Note**: By default, if `auth.userinfo.url` is provided, `test.auth.token` is
+required. To learn more about testing with Helm and default settings, see
+this [Note on Default Settings](./helm_testing.md#note-on-default-settings).
+
 ### OIDC but not OPA: allow everything, recording identity
 
 Chronicle can record who performed transactions while permitting them all:
@@ -134,3 +138,6 @@ You may instead choose to disable OPA with,
 opa:
   enabled: false
 ```
+
+For more on Chronicle Helm testing scenarios, see our documentation on
+[Helm Testing Scenarios](./helm_testing.md#testing-scenarios).

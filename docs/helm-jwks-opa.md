@@ -109,6 +109,10 @@ The applicability of the above depends on the configuration of your OIDC
 server, and the rules in your OPA access policy. At least one of the above
 URLs must be set for Chronicle to accept a user's authorization.
 
+**Note**: By default, if `auth.userinfo.url` is provided, `test.auth.token` is
+required. To learn more about testing with Helm and default settings, see
+this [Note on Default Settings](./helm_testing.md#note-on-default-settings).
+
 ##### Claims fields
 
 To your `auth:` section add a further Helm value:
@@ -240,3 +244,6 @@ Alternatively, to obtain JWTs with your own OIDC client, it must connect to
 that mock OIDC server. Login credentials for a dummy user can be obtained from
 the `id-provider` container's logs where the `OidcController` notes its
 config on startup.
+
+For more on Chronicle Helm testing scenarios, see our documentation on
+[Helm Testing Scenarios](./helm_testing.md#testing-scenarios).
