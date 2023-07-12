@@ -37,18 +37,6 @@ lazy_static! {
             "@id": "chronicle:hasPublicKey",
         },
 
-        "source": {
-            "@id": "chronicle:entityLocator",
-        },
-
-        "signature": {
-            "@id": "chronicle:entitySignature",
-        },
-
-        "signedAtTime": {
-            "@id": "chronicle:signedAtTime",
-        },
-
         "identity": {
             "@id": "chronicle:hasIdentity",
             "@type" : "@id",
@@ -56,18 +44,6 @@ lazy_static! {
 
         "previousIdentities": {
             "@id": "chronicle:hadIdentity",
-            "@type" : "@id",
-            "@container": "@set"
-        },
-
-
-        "attachment": {
-            "@id": "chronicle:hasAttachment",
-            "@type" : "@id",
-        },
-
-        "previousAttachments": {
-            "@id": "chronicle:hadAttachment",
             "@type" : "@id",
             "@container": "@set"
         },

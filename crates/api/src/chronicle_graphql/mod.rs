@@ -8,7 +8,7 @@ use async_graphql_poem::{
     GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLProtocol, GraphQLSubscription,
     GraphQLWebSocket,
 };
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use common::{
     identity::{AuthId, IdentityError, JwtClaims, OpaData, SignedIdentity},
     k256::schnorr::signature::Signature,
@@ -113,38 +113,6 @@ pub struct Entity {
     pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
-    pub attachment_id: Option<i32>,
-}
-
-#[derive(Queryable, Selectable)]
-#[diesel(table_name = crate::persistence::schema::attachment)]
-#[allow(dead_code)]
-pub struct Evidence {
-    id: i32,
-    namespace_id: i32,
-    signature_time: NaiveDateTime,
-    signature: String,
-    signer_id: i32,
-    locator: Option<String>,
-}
-
-#[Object]
-/// # `chronicle:Evidence`
-///
-/// `Evidence` is a Chronicle-specific provenance feature that simplifies the
-/// association of a cryptographic signature with an `Entity`.
-impl Evidence {
-    async fn signature_time(&self) -> DateTime<Utc> {
-        DateTime::from_utc(self.signature_time, Utc)
-    }
-
-    async fn signature(&self) -> &str {
-        &self.signature
-    }
-
-    async fn locator(&self) -> Option<&str> {
-        self.locator.as_deref()
-    }
 }
 
 #[derive(Default, Queryable)]

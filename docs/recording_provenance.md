@@ -888,23 +888,6 @@ yet be set via a mutation.
 When it can be updated, agents' previous identities will remain recorded,
 along with the corresponding public keys.
 
-#### Evidence
-
-Evidence is planned to be a Chronicle-specific provenance feature that
-simplifies the association of a cryptographic signature with an entity.
-A user would need a GraphQL client with multipart support for submitting the
-attachment.
-
-The signature will be recorded. If an entity's evidence is updated
-subsequently, details of the previous evidence and their signatures will remain
-recorded, just like above wherein agents' past identities remain recorded.
-
-The attachment itself is not preserved, just the details of its location
-and signing.
-
-The current `hasAttachment` mutation is intended for recording but is not yet
-usable.
-
 ## Importing Data into Chronicle
 
 Chronicle provides a CLI command `import` to load data from a JSON-LD file that

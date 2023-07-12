@@ -8,12 +8,11 @@ use crate::{
     prov::{
         operations::*, to_json_ld::ToJson, ActivityId, AgentId, Association, AssociationId,
         Attribution, Contradiction, Delegation, DelegationId, Derivation, DomaintypeId, EntityId,
-        ExternalId, ExternalIdPart, Generation, IdentityId, NamespaceId, ProvModel, Role, Usage,
-        UuidPart,
+        ExternalId, ExternalIdPart, Generation, NamespaceId, ProvModel, Role, Usage, UuidPart,
     },
 };
 
-use super::{ActivityUses, ActsOnBehalfOf, EntityDerive, EntityHasEvidence, StartActivity};
+use super::{ActivityUses, ActsOnBehalfOf, EntityDerive, StartActivity};
 
 prop_compose! {
     fn an_external_id()(external_id in "[A-Za-z]") -> ExternalId {
@@ -153,34 +152,6 @@ prop_compose! {
         EntityExists {
             namespace,
             external_id,
-        }
-    }
-}
-
-prop_compose! {
-    fn entity_attach() (
-        offset in (0..10u32),
-        signature in "[0-9a-f]{64}",
-        locator in proptest::option::of(any::<String>()),
-        agent_name in external_id(),
-        external_id in external_id(),
-        namespace in namespace(),
-        public_key in "[0-9a-f]{64}",
-    ) -> EntityHasEvidence {
-        let id = EntityId::from_external_id(&external_id);
-        let agent: AgentId = AgentId::from_external_id(&agent_name);
-        let identityid = IdentityId::from_external_id(&agent_name , &*public_key);
-
-        let signature_time = Utc::now().date_naive().and_hms_micro_opt(offset, 0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
-
-        EntityHasEvidence {
-            namespace,
-            id,
-            locator,
-            agent,
-            signature: Some(signature),
-            identityid: Some(identityid),
-            signature_time: Some(signature_time),
         }
     }
 }
@@ -339,7 +310,6 @@ fn transaction() -> impl Strategy<Value = ChronicleOperation> {
         1 => end_activity().prop_map(ChronicleOperation::EndActivity),
         1 => used().prop_map(ChronicleOperation::ActivityUses),
         1 => create_entity().prop_map(ChronicleOperation::EntityExists),
-        1 => entity_attach().prop_map(ChronicleOperation::EntityHasEvidence),
         1 => entity_derive().prop_map(ChronicleOperation::EntityDerive),
         1 => acted_on_behalf_of().prop_map(ChronicleOperation::AgentActsOnBehalfOf),
         1 => was_associated_with().prop_map(ChronicleOperation::WasAssociatedWith),
@@ -605,29 +575,6 @@ proptest! {
                         .contains(&(namespace.to_owned(), informing_activity.to_owned()));
 
                     prop_assert!(was_informed_by);
-                },
-                ChronicleOperation::EntityHasEvidence(
-                    EntityHasEvidence{
-                    namespace,
-                    identityid: _,
-                    id,
-                    locator: _,
-                    agent,
-                    signature: _,
-                    signature_time: _
-                }) =>  {
-                    let agent_id = agent;
-                    let entity = &prov.entities.get(&(namespace.to_owned(),id.to_owned()));
-                    prop_assert!(entity.is_some());
-                    let entity = entity.unwrap();
-                    prop_assert_eq!(&entity.external_id, id.external_id_part());
-                    prop_assert_eq!(&entity.namespaceid, namespace);
-
-                    let agent = &prov.agents.get(&(namespace.to_owned(),agent.to_owned()));
-                    prop_assert!(agent.is_some());
-                    let agent = agent.unwrap();
-                    prop_assert_eq!(&agent.external_id, agent_id.external_id_part());
-                    prop_assert_eq!(&agent.namespaceid, namespace);
                 },
                 ChronicleOperation::EntityDerive(EntityDerive {
                   namespace,

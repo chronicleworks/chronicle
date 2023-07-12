@@ -13,7 +13,7 @@ use crate::attributes::Attributes;
 
 use super::{
     ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, ExternalId,
-    IdentityId, NamespaceId, Role,
+    NamespaceId, Role,
 };
 
 #[derive(
@@ -273,31 +273,6 @@ impl WasAttributedTo {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct EntityHasEvidence {
-    pub namespace: NamespaceId,
-    pub id: EntityId,
-    pub agent: AgentId,
-    pub identityid: Option<IdentityId>,
-    pub signature: Option<String>,
-    pub locator: Option<String>,
-    pub signature_time: Option<DateTime<Utc>>,
-}
-
-impl std::fmt::Debug for EntityHasEvidence {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        fmt.debug_struct("EntityHasEvidence")
-            .field("namespace", &self.namespace)
-            .field("id", &self.id)
-            .field("agent", &self.agent)
-            .field("identityid", &self.identityid)
-            .field("signature", &"***SECRET***")
-            .field("locator", &self.locator)
-            .field("signature_time", &self.signature_time)
-            .finish()
-    }
-}
-
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasInformedBy {
     pub namespace: NamespaceId,
@@ -337,7 +312,6 @@ pub enum ChronicleOperation {
     EntityExists(EntityExists),
     WasGeneratedBy(WasGeneratedBy),
     EntityDerive(EntityDerive),
-    EntityHasEvidence(EntityHasEvidence),
     SetAttributes(SetAttributes),
     WasAssociatedWith(WasAssociatedWith),
     WasAttributedTo(WasAttributedTo),
@@ -359,7 +333,6 @@ impl ChronicleOperation {
             ChronicleOperation::EntityExists(o) => &o.namespace,
             ChronicleOperation::WasGeneratedBy(o) => &o.namespace,
             ChronicleOperation::EntityDerive(o) => &o.namespace,
-            ChronicleOperation::EntityHasEvidence(o) => &o.namespace,
             ChronicleOperation::SetAttributes(o) => match o {
                 SetAttributes::Activity { namespace, .. } => namespace,
                 SetAttributes::Agent { namespace, .. } => namespace,
@@ -369,82 +342,5 @@ impl ChronicleOperation {
             ChronicleOperation::WasAttributedTo(o) => &o.namespace,
             ChronicleOperation::WasInformedBy(o) => &o.namespace,
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use chrono::{TimeZone, Utc};
-    use uuid::Uuid;
-
-    use api::UuidGen;
-
-    use crate::prov::{operations::EntityHasEvidence, AgentId, EntityId, IdentityId, NamespaceId};
-
-    #[derive(Debug, Clone)]
-    struct SameUuid;
-
-    impl UuidGen for SameUuid {
-        fn uuid() -> Uuid {
-            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
-        }
-    }
-
-    #[test]
-    fn entity_has_evidence_custom_debug() {
-        let namespace = NamespaceId::from_external_id("test_namespace", SameUuid::uuid());
-        let id = EntityId::from_external_id("test_external_id");
-        let locator = Some("test_locator".to_string());
-        let agent = AgentId::from_external_id("test_agent");
-        let pk = "some_public_key".to_string();
-        let signature = "test_signature".to_string();
-        let identity_id = IdentityId::from_external_id("test_agent", &pk);
-        let signature_time = Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
-
-        let entity_has_evidence = EntityHasEvidence {
-            namespace,
-            id,
-            locator,
-            agent,
-            signature: Some(signature),
-            identityid: Some(identity_id),
-            signature_time: Some(signature_time),
-        };
-
-        insta::assert_debug_snapshot!(entity_has_evidence, @r###"
-        EntityHasEvidence {
-            namespace: NamespaceId {
-                external_id: ExternalId(
-                    "test_namespace",
-                ),
-                uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea,
-            },
-            id: EntityId(
-                ExternalId(
-                    "test_external_id",
-                ),
-            ),
-            agent: AgentId(
-                ExternalId(
-                    "test_agent",
-                ),
-            ),
-            identityid: Some(
-                IdentityId {
-                    external_id: ExternalId(
-                        "test_agent",
-                    ),
-                    public_key: "some_public_key",
-                },
-            ),
-            signature: "***SECRET***",
-            locator: Some(
-                "test_locator",
-            ),
-            signature_time: Some(
-                2014-07-08T09:10:11Z,
-            ),
-        }
-        "###);
     }
 }

@@ -29,13 +29,11 @@ use super::{
     id,
     operations::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-        CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-        EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-        WasGeneratedBy, WasInformedBy,
+        CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+        SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, AttributionId, ChronicleIri, DelegationId, DomaintypeId,
-    EntityId, EvidenceId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, PublicKeyPart, Role,
-    UuidPart,
+    EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, Role, UuidPart,
 };
 
 pub mod to_json_ld;
@@ -251,36 +249,6 @@ impl Activity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Attachment {
-    pub id: EvidenceId,
-    pub namespaceid: NamespaceId,
-    pub signature: String,
-    pub signer: IdentityId,
-    pub locator: Option<String>,
-    pub signature_time: DateTime<Utc>,
-}
-
-impl Attachment {
-    fn new(
-        namespace: NamespaceId,
-        entity: &EntityId,
-        signer: &IdentityId,
-        signature: &str,
-        locator: Option<String>,
-        signature_time: DateTime<Utc>,
-    ) -> Attachment {
-        Self {
-            id: EvidenceId::from_external_id(entity.external_id_part(), signature),
-            namespaceid: namespace,
-            signature: signature.to_owned(),
-            signer: signer.clone(),
-            locator,
-            signature_time,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entity {
     pub id: EntityId,
     pub namespaceid: NamespaceId,
@@ -434,7 +402,6 @@ type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 type NamespacedIdentity = NamespacedId<IdentityId>;
-type NamespacedAttachment = NamespacedId<EvidenceId>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
@@ -443,11 +410,8 @@ pub struct ProvModel {
     pub activities: BTreeMap<NamespacedActivity, Activity>,
     pub entities: BTreeMap<NamespacedEntity, Entity>,
     pub identities: BTreeMap<NamespacedIdentity, Identity>,
-    pub attachments: BTreeMap<NamespacedAttachment, Attachment>,
     pub has_identity: BTreeMap<NamespacedAgent, NamespacedIdentity>,
     pub had_identity: BTreeMap<NamespacedAgent, BTreeSet<NamespacedIdentity>>,
-    pub has_evidence: BTreeMap<NamespacedEntity, NamespacedAttachment>,
-    pub had_attachment: BTreeMap<NamespacedEntity, BTreeSet<NamespacedAttachment>>,
     pub association: BTreeMap<NamespacedActivity, BTreeSet<Association>>,
     pub derivation: BTreeMap<NamespacedEntity, BTreeSet<Derivation>>,
     pub delegation: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
@@ -627,57 +591,6 @@ impl ProvModel {
             (namespace.clone(), agent.clone()),
             (namespace, identity.clone()),
         );
-    }
-
-    pub fn had_attachment(
-        &mut self,
-        namespace: NamespaceId,
-        entity: EntityId,
-        attachment: &EvidenceId,
-    ) {
-        self.had_attachment
-            .entry((namespace.clone(), entity))
-            .or_insert_with(BTreeSet::new)
-            .insert((namespace, attachment.clone()));
-    }
-
-    pub fn has_attachment(
-        &mut self,
-        namespace: NamespaceId,
-        entity: EntityId,
-        attachment: &EvidenceId,
-    ) {
-        self.has_evidence
-            .insert((namespace.clone(), entity), (namespace, attachment.clone()));
-    }
-
-    fn sign(
-        &mut self,
-        namespace: NamespaceId,
-        signer: &IdentityId,
-        entity: &EntityId,
-        signature: &str,
-        locator: Option<String>,
-        signature_time: DateTime<Utc>,
-    ) {
-        let new_attachment = Attachment::new(
-            namespace.clone(),
-            entity,
-            signer,
-            signature,
-            locator,
-            signature_time,
-        );
-
-        if let Some((_, old_attachment)) = self
-            .has_evidence
-            .remove(&(namespace.clone(), entity.clone()))
-        {
-            self.had_attachment(namespace.clone(), entity.clone(), &old_attachment);
-        }
-
-        self.has_attachment(namespace, entity.clone(), &new_attachment.id);
-        self.add_attachment(new_attachment);
     }
 
     fn new_identity(&mut self, namespace: &NamespaceId, agent: &AgentId, signature: &str) {
@@ -1008,46 +921,6 @@ impl ProvModel {
 
                 Ok(())
             }
-            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                namespace,
-                id,
-                agent,
-                identityid,
-                signature,
-                locator,
-                signature_time,
-            }) => {
-                self.namespace_context(&namespace);
-
-                self.entity_context(&namespace, &id);
-                self.agent_context(&namespace, &agent);
-
-                let identity_key = (namespace.clone(), identityid.as_ref().unwrap().clone());
-
-                if !self.identities.contains_key(&identity_key) {
-                    let agent = self
-                        .agents
-                        .get(&(namespace.clone(), agent))
-                        .unwrap()
-                        .id
-                        .clone();
-                    let id = identityid.clone().unwrap();
-                    let public_key = &id.public_key_part().to_owned();
-                    self.add_identity(Identity::new(&namespace, &agent, public_key));
-                    self.has_identity(namespace.clone(), &agent, &id);
-                }
-
-                self.sign(
-                    namespace,
-                    &identityid.unwrap(),
-                    &id,
-                    &signature.unwrap(),
-                    locator,
-                    signature_time.unwrap(),
-                );
-
-                Ok(())
-            }
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
                 id,
@@ -1192,13 +1065,6 @@ impl ProvModel {
                 contradictions,
             ))
         }
-    }
-
-    pub(crate) fn add_attachment(&mut self, attachment: Attachment) {
-        self.attachments.insert(
-            (attachment.namespaceid.clone(), attachment.id.clone()),
-            attachment,
-        );
     }
 
     pub(crate) fn add_identity(&mut self, identity: Identity) {

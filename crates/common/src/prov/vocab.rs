@@ -49,12 +49,8 @@ pub enum ChronicleOperations {
     ActivityUses,
     #[iri("chronicleop:entityName")]
     EntityName,
-    #[iri("chronicleop:signature")]
-    Signature,
     #[iri("chronicleop:identity")]
     Identity,
-    #[iri("chronicleop:signatureTime")]
-    SignatureTime,
     #[iri("chronicleop:locator")]
     Locator,
     #[iri("chronicleop:role")]
@@ -67,8 +63,6 @@ pub enum ChronicleOperations {
     EntityDerive,
     #[iri("chronicleop:derivationType")]
     DerivationType,
-    #[iri("chronicleop:EntityHasEvidence")]
-    EntityHasEvidence,
     #[iri("chronicleop:usedEntityName")]
     UsedEntityName,
     #[iri("chronicleop:SetAttributes")]
@@ -161,22 +155,8 @@ pub enum Chronicle {
     Namespace,
     #[iri("chronicle:hasNamespace")]
     HasNamespace,
-    #[iri("chronicle:Evidence")]
-    Evidence,
-    #[iri("chronicle:hasEvidence")]
-    HasEvidence,
-    #[iri("chronicle:hadEvidence")]
-    HadEvidence,
     #[iri("chronicle:publicKey")]
     PublicKey,
-    #[iri("chronicle:entitySignature")]
-    Signature,
-    #[iri("chronicle:entityLocator")]
-    Locator,
-    #[iri("chronicle:signedAtTime")]
-    SignedAtTime,
-    #[iri("chronicle:signedBy")]
-    SignedBy,
     #[iri("chronicle:value")]
     Value,
     #[iri("chronicle:wasInformedBy")]
@@ -236,16 +216,6 @@ impl Chronicle {
             "{}domaintype:{}",
             Self::PREFIX,
             Self::encode(external_id.as_str())
-        ))
-        .unwrap()
-    }
-
-    pub fn attachment(entity_name: &ExternalId, signature: impl AsRef<str>) -> IriBuf {
-        IriBuf::new(&format!(
-            "{}evidence:{}:{}",
-            Self::PREFIX,
-            Self::encode(entity_name.as_str()),
-            Self::encode(signature.as_ref())
         ))
         .unwrap()
     }

@@ -1,26 +1,9 @@
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use iref::Iri;
 
-use super::{ActivityId, AgentId, ChronicleJSON, DomaintypeId, EntityId, EvidenceId, IdentityId};
+use super::{ActivityId, AgentId, ChronicleJSON, DomaintypeId, EntityId, IdentityId};
 
 async_graphql::scalar!(ChronicleJSON);
-
-#[Scalar(name = "AttachmentID")]
-impl ScalarType for EvidenceId {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = value {
-            // Parse the integer value
-            Ok(EvidenceId::try_from(Iri::from_str(&value)?)?)
-        } else {
-            // If the type does not match
-            Err(InputValueError::expected_type(value))
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.to_string())
-    }
-}
 
 #[Scalar(name = "IdentityID")]
 impl ScalarType for IdentityId {

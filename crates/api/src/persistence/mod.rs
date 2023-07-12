@@ -7,11 +7,10 @@ use chrono::Utc;
 use common::{
     attributes::Attribute,
     prov::{
-        operations::DerivationType, Activity, ActivityId, Agent, AgentId, Association, Attachment,
-        Attribution, ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation,
-        DomaintypeId, Entity, EntityId, EvidenceId, ExternalId, ExternalIdPart, Generation,
-        Identity, IdentityId, Namespace, NamespaceId, ProvModel, PublicKeyPart, Role,
-        SignaturePart, Usage,
+        operations::DerivationType, Activity, ActivityId, Agent, AgentId, Association, Attribution,
+        ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
+        Entity, EntityId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
+        NamespaceId, ProvModel, PublicKeyPart, Role, Usage,
     },
 };
 use derivative::*;
@@ -324,53 +323,6 @@ impl Store {
     }
 
     #[instrument(level = "trace", skip(self, connection), ret(Debug))]
-    fn apply_attachment(
-        &self,
-        connection: &mut PgConnection,
-        Attachment {
-            namespaceid,
-            signature,
-            signer,
-            locator,
-            signature_time,
-            ..
-        }: &Attachment,
-        ns: &BTreeMap<NamespaceId, Namespace>,
-    ) -> Result<(), StoreError> {
-        let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-        let (_, nsid) =
-            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-        let (agent_external_id, public_key) = (signer.external_id_part(), signer.public_key_part());
-
-        use schema::{agent::dsl as agentdsl, identity::dsl as identitydsl};
-        let signer_id = agentdsl::agent
-            .inner_join(identitydsl::identity)
-            .filter(
-                agentdsl::external_id
-                    .eq(agent_external_id)
-                    .and(agentdsl::namespace_id.eq(nsid))
-                    .and(identitydsl::public_key.eq(public_key)),
-            )
-            .select(identitydsl::id)
-            .first::<i32>(connection)?;
-
-        use schema::attachment::dsl;
-
-        diesel::insert_into(schema::attachment::table)
-            .values((
-                dsl::namespace_id.eq(nsid),
-                dsl::signature.eq(signature),
-                dsl::signer_id.eq(signer_id),
-                dsl::locator.eq(locator),
-                dsl::signature_time.eq(Utc::now().naive_utc()),
-            ))
-            .on_conflict_do_nothing()
-            .execute(connection)?;
-
-        Ok(())
-    }
-
-    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
     fn apply_entity(
         &self,
         connection: &mut PgConnection,
@@ -426,60 +378,6 @@ impl Store {
                     })
                     .collect::<Vec<_>>(),
             )
-            .on_conflict_do_nothing()
-            .execute(connection)?;
-
-        Ok(())
-    }
-
-    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
-    fn apply_has_evidence(
-        &self,
-        connection: &mut PgConnection,
-        model: &ProvModel,
-        namespaceid: &NamespaceId,
-        entity: &EntityId,
-        evidence: &EvidenceId,
-    ) -> Result<(), StoreError> {
-        let (_, nsid) =
-            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-        let attachment = self.attachment_by(connection, namespaceid, evidence)?;
-        use schema::entity::dsl;
-
-        diesel::update(schema::entity::table)
-            .filter(
-                dsl::external_id
-                    .eq(entity.external_id_part())
-                    .and(dsl::namespace_id.eq(nsid)),
-            )
-            .set(dsl::attachment_id.eq(attachment.id))
-            .execute(connection)?;
-
-        Ok(())
-    }
-
-    #[instrument(level = "trace", skip(self, connection), ret(Debug))]
-    fn apply_had_evidence(
-        &self,
-        connection: &mut PgConnection,
-        model: &ProvModel,
-        namespaceid: &NamespaceId,
-        entity: &EntityId,
-        attachment: &EvidenceId,
-    ) -> Result<(), StoreError> {
-        let attachment = self.attachment_by(connection, namespaceid, attachment)?;
-        let entity = self.entity_by_entity_external_id_and_namespace(
-            connection,
-            entity.external_id_part(),
-            namespaceid,
-        )?;
-        use schema::hadattachment::dsl;
-
-        diesel::insert_into(schema::hadattachment::table)
-            .values((
-                dsl::entity_id.eq(entity.id),
-                dsl::attachment_id.eq(attachment.id),
-            ))
             .on_conflict_do_nothing()
             .execute(connection)?;
 
@@ -582,9 +480,6 @@ impl Store {
         for (_, identity) in model.identities.iter() {
             self.apply_identity(connection, identity, &model.namespaces)?
         }
-        for (_, attachment) in model.attachments.iter() {
-            self.apply_attachment(connection, attachment, &model.namespaces)?
-        }
 
         for ((namespaceid, agent_id), (_, identity_id)) in model.has_identity.iter() {
             self.apply_has_identity(connection, model, namespaceid, agent_id, identity_id)?;
@@ -593,16 +488,6 @@ impl Store {
         for ((namespaceid, agent_id), identity_id) in model.had_identity.iter() {
             for (_, identity_id) in identity_id {
                 self.apply_had_identity(connection, model, namespaceid, agent_id, identity_id)?;
-            }
-        }
-
-        for ((namespaceid, entity_id), (_, evidence_id)) in model.has_evidence.iter() {
-            self.apply_has_evidence(connection, model, namespaceid, entity_id, evidence_id)?;
-        }
-
-        for ((namespaceid, entity_id), attachment_id) in model.had_attachment.iter() {
-            for (_, attachment_id) in attachment_id {
-                self.apply_had_evidence(connection, model, namespaceid, entity_id, attachment_id)?;
             }
         }
 
@@ -998,27 +883,6 @@ impl Store {
     }
 
     #[instrument(skip(connection))]
-    pub(crate) fn attachment_by(
-        &self,
-        connection: &mut PgConnection,
-        namespaceid: &NamespaceId,
-        attachment: &EvidenceId,
-    ) -> Result<query::Attachment, StoreError> {
-        use self::schema::attachment::dsl;
-        let (_, nsid) =
-            self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-        let id_signature = attachment.signature_part();
-
-        Ok(dsl::attachment
-            .filter(
-                dsl::signature
-                    .eq(id_signature)
-                    .and(dsl::namespace_id.eq(nsid)),
-            )
-            .first::<query::Attachment>(connection)?)
-    }
-
-    #[instrument(skip(connection))]
     pub(crate) fn identity_by(
         &self,
         connection: &mut PgConnection,
@@ -1238,7 +1102,6 @@ impl Store {
             namespace_id: _,
             domaintype,
             external_id,
-            attachment_id: _,
         } = entity;
 
         let entity_id = EntityId::from_external_id(&external_id);

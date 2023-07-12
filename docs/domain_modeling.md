@@ -153,8 +153,6 @@ Stakeholders. Publication produces a digital artifact that can be signed.
   the PublishedGuidance has a primary source of the Guidance
 - [endedAtTime](./recording_provenance.md#ended-at-time) specifies the
   Published process happened at a point in time
-- [hadEvidence](./recording_provenance.md#had-evidence) attaches a signature of
-  the published PDF document to the PublishedGuidance activity
 
 This process represented as provenance will look like:
 
@@ -234,8 +232,8 @@ Has attributes:
 
 #### PublishedGuidance
 
-A published guidance document, containing a digital signature of the released
-PDF.
+A published guidance document. In the future, Chronicle will support having
+this entity contain a digital signature of the released PDF.
 
 Has no attributes.
 

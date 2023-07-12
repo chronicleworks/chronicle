@@ -10,7 +10,6 @@ use common::{
     attributes::{Attribute, Attributes},
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
-        PathOrFile,
     },
     import::FromUrlError,
     opa::{OpaExecutorError, PolicyLoaderError},
@@ -761,95 +760,49 @@ impl SubCommand for EntityCliModel {
             define = define.arg(attr.as_arg());
         }
 
-        cmd.subcommand(define)
-            .subcommand(
-                Command::new("derive")
-                    .about("Derivation of entities from other entities")
-                    .arg(
-                        Arg::new("subtype")
-                            .help("The derivation subtype")
-                            .long("subtype")
-                            .required(false)
-                            .takes_value(true)
-                            .value_parser(PossibleValuesParser::new([
-                                "revision",
-                                "quotation",
-                                "primary-source",
-                            ])),
-                    )
-                    .arg(
-                        Arg::new("generated_entity_id")
-                            .help("A valid chronicle entity IRI for the generated entity")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::new("used_entity_id")
-                            .help("A valid chronicle entity IRI for the used entity")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::new("activity_id")
-                            .help("The activity IRI that generated the entity")
-                            .long("activity")
-                            .takes_value(true)
-                            .required(false),
-                    )
-                    .arg(
-                        Arg::new("namespace")
-                            .short('n')
-                            .long("namespace")
-                            .default_value("default")
-                            .required(false)
-                            .takes_value(true),
-                    ),
-            )
-            .subcommand(
-                Command::new("attach")
-                    .about("Sign the input file and record it against the entity")
-                    .arg(
-                        Arg::new("entity_id")
-                            .help("A valid chronicle entity IRI")
-                            .takes_value(true),
-                    )
-                    .arg(
-                        Arg::new("namespace")
-                            .short('n')
-                            .long("namespace")
-                            .default_value("default")
-                            .required(false)
-                            .takes_value(true),
-                    )
-                    .arg(
-                        Arg::new("file")
-                            .short('f')
-                            .help("A path to the file to be signed and attached")
-                            .long("file")
-                            .value_hint(ValueHint::FilePath)
-                            .required(true)
-                            .takes_value(true),
-                    )
-                    .arg(
-                        Arg::new("locator")
-                            .short('l')
-                            .long("locator")
-                            .help("A url or other way of identifying the attachment")
-                            .value_hint(ValueHint::Url)
-                            .required(false)
-                            .takes_value(true),
-                    )
-                    .arg(
-                        Arg::new("agent_id")
-                            .help("A valid chronicle agent IRI")
-                            .takes_value(true),
-                    )
-                    .group(
-                        ArgGroup::new("identifier")
-                            .args(&["agent_id", "entity_id"])
-                            .required(true),
-                    ),
-            )
+        cmd.subcommand(define).subcommand(
+            Command::new("derive")
+                .about("Derivation of entities from other entities")
+                .arg(
+                    Arg::new("subtype")
+                        .help("The derivation subtype")
+                        .long("subtype")
+                        .required(false)
+                        .takes_value(true)
+                        .value_parser(PossibleValuesParser::new([
+                            "revision",
+                            "quotation",
+                            "primary-source",
+                        ])),
+                )
+                .arg(
+                    Arg::new("generated_entity_id")
+                        .help("A valid chronicle entity IRI for the generated entity")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("used_entity_id")
+                        .help("A valid chronicle entity IRI for the used entity")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("activity_id")
+                        .help("The activity IRI that generated the entity")
+                        .long("activity")
+                        .takes_value(true)
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .default_value("default")
+                        .required(false)
+                        .takes_value(true),
+                ),
+        )
     }
 
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
@@ -876,16 +829,6 @@ impl SubCommand for EntityCliModel {
                     .unwrap_or(DerivationType::None),
                 activity: id_from_option(matches, "activity_id")?,
                 used_entity: id_from(matches, "used_entity_id")?,
-            })));
-        }
-
-        if let Some(matches) = matches.subcommand_matches("attach") {
-            return Ok(Some(ApiCommand::Entity(EntityCommand::Attach {
-                id: id_from(matches, "entity_id")?,
-                namespace: namespace_from(matches)?,
-                file: PathOrFile::Path(matches.get_one::<PathBuf>("file").unwrap().to_owned()),
-                agent: id_from_option(matches, "agent_id")?,
-                locator: matches.get_one::<String>("locator").map(|x| x.to_owned()),
             })));
         }
 
