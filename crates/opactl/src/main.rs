@@ -1,5 +1,5 @@
 use async_sawtooth_sdk::zmq_client::{
-    RequestResponseSawtoothChannel, ZmqRequestResponseSawtoothChannel,
+    HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
 };
 use clap::ArgMatches;
 use cli::{load_key_from_match, Wait};
@@ -23,14 +23,14 @@ use opa_tp_protocol::{
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
-use std::{fs::File, io::Write, path::PathBuf, str::from_utf8, time::Duration};
+use std::{fs::File, io::Write, net::ToSocketAddrs, path::PathBuf, str::from_utf8, time::Duration};
 use thiserror::Error;
 use url::Url;
 
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
-use tracing::{debug, error, info, instrument, span, trace, Level};
+use tracing::{debug, error, info, instrument, span, trace, Instrument, Level};
 use user_error::UFE;
 mod cli;
 
@@ -70,7 +70,6 @@ impl UFE for OpaCtlError {}
 pub enum Waited {
     NoWait,
     WaitedAndFound(OpaOperationEvent),
-
     WaitedAndOperationFailed(OpaOperationEvent),
     WaitedAndDidNotFind,
 }
@@ -89,7 +88,6 @@ async fn ambient_transactions<
     max_steps: u64,
 ) -> impl Future<Output = Result<Waited, oneshot::Canceled>> {
     let span = span!(Level::DEBUG, "wait_for_opa_transaction");
-    let _entered = span.enter();
 
     // Set up a oneshot channel to notify the returned task
     let (notify_tx, notify_rx) = oneshot::channel::<Waited>();
@@ -123,7 +121,6 @@ async fn ambient_transactions<
 
         receiving_events_tx.send(()).ok();
 
-
         loop {
             futures::select! {
               next_block = stream.next().fuse() => {
@@ -151,7 +148,7 @@ async fn ambient_transactions<
               }
             }
         }
-    });
+    }.instrument(span));
 
     // Wait for the task to start receiving events
     trace!("awaiting incoming event");
@@ -383,8 +380,23 @@ async fn main() {
     chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
     let args = cli::cli().get_matches();
     let address: &Url = args.get_one("sawtooth-address").unwrap();
-    let client = ZmqRequestResponseSawtoothChannel::new(address);
-    let reader = OpaLedger::new(client.clone(), FAMILY, VERSION);
+    let client = ZmqRequestResponseSawtoothChannel::new(
+        &format!("opactl-{}", uuid::Uuid::new_v4()),
+        &[format!(
+            "{}:{}",
+            address.host().expect("host").to_owned(),
+            address.port().unwrap_or(4004)
+        )
+        .to_socket_addrs()
+        .unwrap()
+        .next()
+        .unwrap()],
+        HighestBlockValidatorSelector,
+    )
+    .unwrap()
+    .retrying();
+
+    let reader = OpaLedger::new(client, FAMILY, VERSION);
     let writer = reader.clone();
 
     dispatch_args(args, writer, reader)
@@ -392,11 +404,9 @@ async fn main() {
         .map_err(|opactl| {
             error!(?opactl);
             opactl.into_ufe().print();
-            client.close();
             std::process::exit(1);
         })
-        .map(|(waited, reader)| {
-            reader.shutdown();
+        .map(|(waited, _reader)| {
             if let Waited::WaitedAndFound(op) = waited {
                 println!(
                     "{}",
@@ -411,24 +421,22 @@ async fn main() {
 #[cfg(test)]
 pub mod test {
     use async_sawtooth_sdk::{
-        error::SawtoothCommunicationError, ledger::SawtoothLedger,
-        zmq_client::RequestResponseSawtoothChannel,
+        error::SawtoothCommunicationError,
+        ledger::SawtoothLedger,
+        messages::{
+            message::MessageType, BlockHeader, ClientBatchSubmitResponse,
+            ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockListResponse,
+            ClientEventsSubscribeResponse, ClientStateGetRequest, ClientStateGetResponse,
+        },
+        zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
     };
     use clap::ArgMatches;
-    use futures::{Stream, StreamExt};
+    use futures::{select, FutureExt, SinkExt, StreamExt};
     use opa_tp_protocol::{
         address::{FAMILY, VERSION},
         messages::OpaEvent,
         state::OpaOperationEvent,
         transaction::OpaSubmitTransaction,
-    };
-    use sawtooth_sdk::messages::{
-        client_block::{
-            ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockGetResponse_Status,
-        },
-        client_state::{
-            ClientStateGetRequest, ClientStateGetResponse, ClientStateGetResponse_Status,
-        },
     };
 
     use k256::{
@@ -437,36 +445,29 @@ pub mod test {
     };
     use opa_tp::{abstract_tp::TP, tp::OpaTransactionHandler};
 
-    use protobuf::Message;
+    use prost::Message;
     use rand::rngs::StdRng;
     use rand_core::SeedableRng;
     use sawtooth_sdk::{
-        messages::{
-            block::{Block, BlockHeader},
-            client_batch_submit::{
-                ClientBatchSubmitRequest, ClientBatchSubmitResponse,
-                ClientBatchSubmitResponse_Status,
-            },
-            client_block::{ClientBlockListResponse, ClientBlockListResponse_Status},
-            client_event::{ClientEventsSubscribeResponse, ClientEventsSubscribeResponse_Status},
-            processor::TpProcessRequest,
-            transaction::TransactionHeader,
-            validator::Message_MessageType,
-        },
+        messages::client_batch_submit::ClientBatchSubmitRequest,
         processor::handler::{ContextError, TransactionContext},
     };
     use serde_json::{self, Value};
+    use tmq::{router, Context, Multipart};
+    use tokio::runtime;
+    use uuid::Uuid;
 
     use std::{
         cell::RefCell,
         collections::BTreeMap,
         io::Write,
-        pin::Pin,
+        net::{Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
+        thread,
     };
     use tempfile::NamedTempFile;
     use tokio_stream::wrappers::UnboundedReceiverStream;
-    use tracing::{debug, instrument};
+    use tracing::{debug, error, info, instrument};
 
     use crate::{cli, dispatch_args};
 
@@ -475,61 +476,13 @@ pub mod test {
     pub trait SimulatedSawtoothBehavior {
         fn handle_request(
             &self,
-            message_type: Message_MessageType,
+            message_type: MessageType,
             request: Vec<u8>,
-        ) -> Result<Vec<u8>, SawtoothCommunicationError>;
-    }
-
-    type ChannelHolder = Arc<Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Option<Vec<u8>>>>>>;
-    // A simulation of zmq transport + routing, using a function that takes a
-    // request buffer and returns a response buffer.
-    #[derive(Clone)]
-    pub struct SimulatedSubmissionChannel {
-        behavior: Arc<Box<dyn SimulatedSawtoothBehavior + Send + Sync>>,
-        rx: ChannelHolder,
-    }
-
-    impl SimulatedSubmissionChannel {
-        pub fn new(
-            behavior: Box<dyn SimulatedSawtoothBehavior + Send + Sync + 'static>,
-            rx: tokio::sync::mpsc::UnboundedReceiver<Option<Vec<u8>>>,
-        ) -> Self {
-            Self {
-                behavior: Arc::new(behavior),
-                rx: Arc::new(Some(rx).into()),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl RequestResponseSawtoothChannel for SimulatedSubmissionChannel {
-        #[instrument(skip(self) ret(Debug))]
-        async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
-            &self,
-            tx: TX,
-            message_type: Message_MessageType,
-            _timeout: std::time::Duration,
-        ) -> Result<RX, SawtoothCommunicationError> {
-            let mut in_buf = vec![];
-            tx.write_to_vec(&mut in_buf).unwrap();
-            let out_buf: Vec<u8> = self.behavior.handle_request(message_type, in_buf)?;
-            Ok(RX::parse_from_bytes(&out_buf).unwrap())
-        }
-
-        #[instrument(skip(self))]
-        async fn recv_stream<RX: protobuf::Message>(
-            self,
-        ) -> Result<Pin<Box<dyn Stream<Item = RX> + Send>>, SawtoothCommunicationError> {
-            Ok(
-                UnboundedReceiverStream::new(self.rx.lock().unwrap().take().unwrap())
-                    .map(|rx| RX::parse_from_bytes(&rx.unwrap()).unwrap())
-                    .boxed(),
-            )
-        }
+        ) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError>;
     }
 
     pub type OpaLedger =
-        SawtoothLedger<SimulatedSubmissionChannel, OpaOperationEvent, OpaSubmitTransaction>;
+        SawtoothLedger<ZmqRequestResponseSawtoothChannel, OpaOperationEvent, OpaSubmitTransaction>;
 
     type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
 
@@ -537,11 +490,11 @@ pub mod test {
     pub struct TestTransactionContext {
         pub state: RefCell<BTreeMap<String, Vec<u8>>>,
         pub events: RefCell<TestTxEvents>,
-        tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>,
+        tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
     }
 
     impl TestTransactionContext {
-        pub fn new(tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>) -> Self {
+        pub fn new(tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>) -> Self {
             Self {
                 state: RefCell::new(BTreeMap::new()),
                 events: RefCell::new(vec![]),
@@ -550,7 +503,7 @@ pub mod test {
         }
 
         pub fn new_with_state(
-            tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>,
+            tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
             state: BTreeMap<String, Vec<u8>>,
         ) -> Self {
             Self {
@@ -603,7 +556,7 @@ pub mod test {
         }
     }
 
-    impl TransactionContext for TestTransactionContext {
+    impl sawtooth_sdk::processor::handler::TransactionContext for TestTransactionContext {
         fn add_receipt_data(
             self: &TestTransactionContext,
             _data: &[u8],
@@ -618,26 +571,25 @@ pub mod test {
             attributes: Vec<(String, String)>,
             data: &[u8],
         ) -> Result<(), ContextError> {
-            let stl_event = sawtooth_sdk::messages::events::Event {
+            let stl_event = async_sawtooth_sdk::messages::Event {
                 event_type: event_type.clone(),
                 attributes: attributes
                     .iter()
-                    .map(|(k, v)| sawtooth_sdk::messages::events::Event_Attribute {
+                    .map(|(k, v)| async_sawtooth_sdk::messages::event::Attribute {
                         key: k.clone(),
                         value: v.clone(),
-                        ..Default::default()
                     })
                     .collect(),
                 data: data.to_vec(),
-                ..Default::default()
             };
-            let list = sawtooth_sdk::messages::events::EventList {
-                events: vec![stl_event].into(),
-                ..Default::default()
+            let list = async_sawtooth_sdk::messages::EventList {
+                events: vec![stl_event],
             };
-            let stl_event = list.write_to_bytes().unwrap();
+            let stl_event: Vec<u8> = list.encode_to_vec();
 
-            self.tx.send(Some(stl_event)).unwrap();
+            self.tx
+                .send(Some((MessageType::ClientEvents, stl_event)))
+                .unwrap();
 
             self.events
                 .borrow_mut()
@@ -684,9 +636,9 @@ pub mod test {
         transactions: &[sawtooth_sdk::messages::transaction::Transaction],
     ) {
         for tx in transactions {
-            let req = TpProcessRequest {
+            let req = sawtooth_sdk::messages::processor::TpProcessRequest {
                 payload: tx.get_payload().to_vec(),
-                header: Some(TransactionHeader::parse_from_bytes(tx.get_header()).unwrap()).into(),
+                header: Some(protobuf::Message::parse_from_bytes(tx.get_header()).unwrap()).into(),
                 signature: tx.get_header_signature().to_string(),
                 ..Default::default()
             };
@@ -697,9 +649,9 @@ pub mod test {
     fn get_sorted_transactions(
         batch: &mut sawtooth_sdk::messages::batch::Batch,
     ) -> Vec<sawtooth_sdk::messages::transaction::Transaction> {
-        let mut transactions = batch.take_transactions().into_vec();
-        transactions.sort_by_key(|tx| tx.write_to_bytes().unwrap());
-        transactions
+        let mut transactions = batch.transactions.clone();
+        transactions.sort_by_key(|tx| tx.header_signature.clone());
+        transactions.to_vec()
     }
 
     fn process_transactions(
@@ -758,8 +710,9 @@ pub mod test {
         /// Submits a batch of transactions to the validator and performs determinism checks.
         fn submit_batch(&self, request: &[u8]) -> Result<Vec<u8>, SawtoothCommunicationError> {
             // Parse the request into a `ClientBatchSubmitRequest` object and extract the first batch.
-            let mut req = ClientBatchSubmitRequest::parse_from_bytes(request).unwrap();
-            let mut batch = req.take_batches().into_iter().next().unwrap();
+            let req: ClientBatchSubmitRequest =
+                protobuf::Message::parse_from_bytes(request).unwrap();
+            let mut batch = req.batches.into_iter().next().unwrap();
 
             // Log some debug information about the batch and sort its transactions.
             debug!(received_batch = ?batch, transactions = ?batch.transactions);
@@ -775,14 +728,14 @@ pub mod test {
             let number_of_determinism_checking_cycles = 5;
             let context = { TestTransactionContext::clone(&self.context.lock().unwrap()) };
             let expected_contexts = test_determinism(
-                &transactions,
+                transactions.as_slice(),
                 &context,
                 number_of_determinism_checking_cycles,
             );
 
             // Update the context and perform an output determinism check.
             let mut context = self.context.lock().unwrap();
-            apply_transactions(&self.handler, &mut context, &transactions);
+            apply_transactions(&self.handler, &mut context, transactions.as_slice());
             let updated_readable_state_and_events =
                 (context.readable_state(), context.readable_events());
             assert_ne!(
@@ -792,11 +745,10 @@ pub mod test {
             assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
 
             // Create a response with an "OK" status and write it to a byte vector.
-            let mut response = ClientBatchSubmitResponse::new();
-            response.set_status(ClientBatchSubmitResponse_Status::OK);
-            let mut buf = vec![];
-            response.write_to_vec(&mut buf)?;
-            Ok(buf)
+            let mut response = ClientBatchSubmitResponse::default();
+            response
+                .set_status(async_sawtooth_sdk::messages::client_batch_submit_response::Status::Ok);
+            Ok(response.encode_to_vec())
         }
     }
 
@@ -804,47 +756,50 @@ pub mod test {
         #[instrument(skip(self, request))]
         fn handle_request(
             &self,
-            message_type: Message_MessageType,
+            message_type: MessageType,
             request: Vec<u8>,
-        ) -> Result<Vec<u8>, SawtoothCommunicationError> {
+        ) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError> {
             match message_type {
                 // Batch submit request, decode and apply the transactions
                 // in the batch
-                Message_MessageType::CLIENT_BATCH_SUBMIT_REQUEST => {
+                MessageType::ClientBatchSubmitRequest => {
                     let buf = self.submit_batch(&request)?;
-                    Ok(buf)
+                    Ok((MessageType::ClientBatchSubmitResponse, buf))
                 }
                 // Always respond with a block height of one
-                Message_MessageType::CLIENT_BLOCK_LIST_REQUEST => {
-                    let mut response = ClientBlockListResponse::new();
+                MessageType::ClientBlockListRequest => {
+                    let mut response = ClientBlockListResponse::default();
                     let block_header = BlockHeader {
                         block_num: 1,
                         ..Default::default()
                     };
-                    let block_header_bytes = block_header.write_to_bytes().unwrap();
-                    response.set_blocks(
-                        vec![Block {
-                            header: block_header_bytes,
-                            ..Default::default()
-                        }]
-                        .into(),
+                    let block_header_bytes = block_header.encode_to_vec();
+                    response.blocks = vec![async_sawtooth_sdk::messages::Block {
+                        header: block_header_bytes,
+                        ..Default::default()
+                    }];
+                    response.set_status(
+                        async_sawtooth_sdk::messages::client_block_list_response::Status::Ok,
                     );
-                    response.set_status(ClientBlockListResponse_Status::OK);
-                    let mut buf = vec![];
-                    response.write_to_vec(&mut buf).unwrap();
-                    Ok(buf)
+                    Ok((
+                        MessageType::ClientBlockListResponse,
+                        response.encode_to_vec(),
+                    ))
                 }
                 // We can just return Ok here, no need to fake routing
-                Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST => {
-                    let mut response = ClientEventsSubscribeResponse::new();
-                    response.set_status(ClientEventsSubscribeResponse_Status::OK);
-                    let mut buf = vec![];
-                    response.write_to_vec(&mut buf).unwrap();
-                    Ok(buf)
+                MessageType::ClientEventsSubscribeRequest => {
+                    let mut response = ClientEventsSubscribeResponse::default();
+                    response.set_status(
+                        async_sawtooth_sdk::messages::client_events_subscribe_response::Status::Ok,
+                    );
+                    Ok((
+                        MessageType::ClientEventsSubscribeResponse,
+                        response.encode_to_vec(),
+                    ))
                 }
-                Message_MessageType::CLIENT_STATE_GET_REQUEST => {
-                    let mut request = ClientStateGetRequest::parse_from_bytes(&request).unwrap();
-                    let address = request.take_address();
+                MessageType::ClientStateGetRequest => {
+                    let request = ClientStateGetRequest::decode(&*request).unwrap();
+                    let address = request.address;
 
                     let state = self
                         .context
@@ -854,37 +809,39 @@ pub mod test {
                         .unwrap();
 
                     let mut response = ClientStateGetResponse {
-                        status: ClientStateGetResponse_Status::OK,
+                        status: async_sawtooth_sdk::messages::client_state_get_response::Status::Ok
+                            as i32,
                         ..Default::default()
                     };
 
                     if state.is_empty() {
-                        response.set_status(ClientStateGetResponse_Status::NO_RESOURCE);
+                        response.set_status(async_sawtooth_sdk::messages::client_state_get_response::Status::NoResource);
                     } else {
-                        response.set_value(state[0].1.clone());
+                        response.value = state[0].1.clone();
                     }
 
-                    let mut buf = vec![];
-                    response.write_to_vec(&mut buf).unwrap();
-                    Ok(buf)
+                    let buf = response.encode_to_vec();
+                    Ok((MessageType::ClientStateGetResponse, buf))
                 }
-                Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST => {
-                    let req = ClientBlockGetByNumRequest::parse_from_bytes(&request).unwrap();
-                    let mut response = ClientBlockGetResponse::new();
+                MessageType::ClientBlockGetByNumRequest => {
+                    let req = ClientBlockGetByNumRequest::decode(&*request).unwrap();
+                    let mut response = ClientBlockGetResponse::default();
                     let block_header = BlockHeader {
-                        block_num: req.get_block_num(),
+                        block_num: req.block_num,
                         previous_block_id: hex::encode([0; 32]),
                         ..Default::default()
                     };
-                    let block_header_bytes = block_header.write_to_bytes().unwrap();
-                    response.set_block(Block {
+                    let block_header_bytes = block_header.encode_to_vec();
+                    response.block = Some(async_sawtooth_sdk::messages::Block {
                         header: block_header_bytes,
                         ..Default::default()
                     });
-                    response.set_status(ClientBlockGetResponse_Status::OK);
-                    let mut buf = vec![];
-                    response.write_to_vec(&mut buf).unwrap();
-                    Ok(buf)
+
+                    response.set_status(
+                        async_sawtooth_sdk::messages::client_block_get_response::Status::Ok,
+                    );
+                    let buf = response.encode_to_vec();
+                    Ok((MessageType::ClientBlockListResponse, buf))
                 }
                 _ => panic!("Unexpected message type {} received", message_type as i32),
             }
@@ -897,9 +854,14 @@ pub mod test {
     }
 
     impl EmbeddedOpaTp {
-        pub fn new() -> Self {
+        pub fn new_with_state(
+            state: BTreeMap<String, Vec<u8>>,
+        ) -> Result<Self, SawtoothCommunicationError> {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-            let context = Arc::new(Mutex::new(TestTransactionContext::new(tx)));
+
+            let context = Arc::new(Mutex::new(TestTransactionContext::new_with_state(
+                tx, state,
+            )));
 
             let handler = Arc::new(OpaTransactionHandler::new());
 
@@ -908,18 +870,112 @@ pub mod test {
                 context: context.clone(),
             };
 
-            EmbeddedOpaTp {
-                ledger: OpaLedger::new(
-                    SimulatedSubmissionChannel::new(Box::new(behavior), rx),
-                    FAMILY,
-                    VERSION,
-                ),
+            let listen_port = portpicker::pick_unused_port().expect("No ports free");
+            let listen_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+            let connect_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+
+            let behavior_clone = behavior;
+            thread::spawn(move || {
+                let rt = runtime::Builder::new_current_thread()
+                    .enable_io()
+                    .enable_time()
+                    .build()
+                    .unwrap();
+                let mut rx = UnboundedReceiverStream::new(rx);
+                let local = tokio::task::LocalSet::new();
+
+                let task = local.run_until(async move {
+                tokio::task::spawn_local(async move {
+                    let (mut router_tx, mut router_rx) = router(&Context::new())
+                        .bind(&format!("tcp://{}", listen_addr))
+                        .unwrap()
+                        .split();
+
+                    debug!(listen_addr = ?listen_addr, "Embedded TP listening");
+                    let mut last_address = vec![];
+                    loop {
+                        select! {
+                            message = router_rx.next().fuse() => {
+                              if message.is_none() {
+                                break;
+                              }
+
+                              let multipart = message.unwrap().unwrap();
+
+                              debug!(request = ?multipart);
+                              last_address =  multipart[0].to_vec();
+                              let request: async_sawtooth_sdk::messages::Message =
+                                  async_sawtooth_sdk::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
+
+                              let response = behavior_clone
+                                  .handle_request(
+                                      MessageType::from_i32(request.message_type).unwrap(),
+                                      request.content,
+                                  )
+                                  .unwrap();
+
+
+                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                                message_type: response.0 as i32,
+                                tx_id: request.tx_id,
+                                content: response.1
+                              };
+
+                              let mut multipart = Multipart::default();
+                              multipart.push_back(last_address.clone().into());
+                              multipart.push_back(tmq::Message::from(prost::Message::encode_to_vec(&message_wrapper)));
+
+                              debug!(response = ?multipart);
+                              router_tx.send(multipart).await.ok();
+                            },
+                            unsolicited_message = rx.next().fuse() => {
+                              if unsolicited_message.is_none() {
+                                break;
+                              }
+                              tracing::trace!(unsolicited_message=?unsolicited_message);
+
+                              let unsolicited_message = unsolicited_message.unwrap().unwrap();
+                              debug!(unsolicited_message = ?unsolicited_message);
+                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                                message_type: unsolicited_message.0 as i32,
+                                tx_id: "".to_string(),
+                                content: unsolicited_message.1
+                              };
+                              let mut multipart = Multipart::default();
+                              multipart.push_back(last_address.clone().into());
+
+                              multipart.push_back(tmq::Message::from(prost::Message::encode_to_vec(&message_wrapper)));
+                              router_tx.send(multipart).await.ok();
+                            },
+                            complete => {
+                              info!("close embedded router");
+                            }
+                        }
+                    }
+                })
+                .await
+            });
+                rt.block_on(task).ok();
+            });
+
+            let channel = ZmqRequestResponseSawtoothChannel::new(
+                &format!("test_{}", Uuid::new_v4()),
+                &[connect_addr],
+                HighestBlockValidatorSelector,
+            )?;
+
+            Ok(Self {
+                ledger: OpaLedger::new(channel, FAMILY, VERSION),
                 context,
-            }
+            })
         }
 
         pub fn readable_state(&self) -> Vec<(String, Value)> {
             self.context.lock().unwrap().readable_state()
+        }
+
+        pub fn new() -> Self {
+            EmbeddedOpaTp::new_with_state(BTreeMap::new()).unwrap()
         }
     }
 
@@ -930,28 +986,7 @@ pub mod test {
 
     fn reuse_opa_tp_state(tp: EmbeddedOpaTp) -> EmbeddedOpaTp {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let context = Arc::new(Mutex::new(TestTransactionContext::new_with_state(
-            tx,
-            tp.context.lock().unwrap().state.borrow().clone(),
-        )));
-
-        let handler = Arc::new(OpaTransactionHandler::new());
-
-        let behavior = WellBehavedBehavior {
-            handler,
-            context: context.clone(),
-        };
-
-        EmbeddedOpaTp {
-            ledger: OpaLedger::new(
-                SimulatedSubmissionChannel::new(Box::new(behavior), rx),
-                FAMILY,
-                VERSION,
-            ),
-            context,
-        }
+        EmbeddedOpaTp::new_with_state(tp.context.lock().unwrap().state.borrow().clone()).unwrap()
     }
 
     fn get_opactl_cmd(command_line: &str) -> ArgMatches {
@@ -976,6 +1011,7 @@ pub mod test {
 
         let opa_tp = embed_opa_tp();
 
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap();
@@ -1001,6 +1037,8 @@ pub mod test {
         "###);
 
         let opa_tp = reuse_opa_tp_state(opa_tp);
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         let out_keyfile = NamedTempFile::new().unwrap();
 

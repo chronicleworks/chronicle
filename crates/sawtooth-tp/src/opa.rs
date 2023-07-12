@@ -1,6 +1,6 @@
-use async_sawtooth_sdk::protobuf::Message;
 use chronicle_protocol::settings::sawtooth_settings_address;
 use common::opa::{CliPolicyLoader, ExecutorContext};
+use protobuf::Message;
 use sawtooth_sdk::{
     messages::setting::Setting,
     processor::handler::{ApplyError, TransactionContext},

@@ -8,7 +8,7 @@ version = "0.7.5"
 
 [dependencies]
 anyhow             = { workspace = true }
-async-sawtooth-sdk = { path = "../async-sawtooth-sdk" }
+async-sawtooth-sdk = { workspace = true }
 async-trait        = { workspace = true }
 chrono             = { workspace = true, features = ["serde"] }
 derivative         = { workspace = true }
@@ -19,10 +19,8 @@ lazy_static        = { workspace = true }
 openssl            = { workspace = true }
 prost              = { workspace = true }
 prost-types        = { workspace = true }
-protobuf           = { workspace = true }
 rand               = { workspace = true }
 rand_core          = { workspace = true }
-sawtooth-sdk       = { workspace = true }
 serde              = { workspace = true, features = ["derive"] }
 serde_json         = { workspace = true }
 thiserror          = { workspace = true }

@@ -1,8 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    str::FromStr,
-    time::Duration,
-};
+use std::{collections::BTreeMap, str::FromStr, time::Duration};
 
 use async_sawtooth_sdk::ledger::{BlockId, BlockIdError};
 use chrono::DateTime;
@@ -192,7 +188,7 @@ impl Store {
             attributes,
             ..
         }: &Activity,
-        ns: &HashMap<NamespaceId, Namespace>,
+        ns: &BTreeMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::activity as dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
@@ -275,7 +271,7 @@ impl Store {
             attributes,
             ..
         }: &Agent,
-        ns: &HashMap<NamespaceId, Namespace>,
+        ns: &BTreeMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::agent::dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
@@ -339,7 +335,7 @@ impl Store {
             signature_time,
             ..
         }: &Attachment,
-        ns: &HashMap<NamespaceId, Namespace>,
+        ns: &BTreeMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
         let (_, nsid) =
@@ -385,7 +381,7 @@ impl Store {
             domaintypeid,
             attributes,
         }: &Entity,
-        ns: &HashMap<NamespaceId, Namespace>,
+        ns: &BTreeMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::entity::dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
@@ -551,7 +547,7 @@ impl Store {
             public_key,
             ..
         }: &Identity,
-        ns: &HashMap<NamespaceId, Namespace>,
+        ns: &BTreeMap<NamespaceId, Namespace>,
     ) -> Result<(), StoreError> {
         use schema::identity::dsl;
         let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;

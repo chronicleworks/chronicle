@@ -1,4 +1,7 @@
-use async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::LedgerEvent};
+use async_sawtooth_sdk::{
+    error::SawtoothCommunicationError,
+    ledger::{LedgerEvent, Span},
+};
 use prost::Message;
 use serde_json::json;
 
@@ -9,7 +12,7 @@ use crate::{
 
 #[async_trait::async_trait]
 impl LedgerEvent for OpaOperationEvent {
-    async fn deserialize(buf: &[u8]) -> Result<(Self, u64), SawtoothCommunicationError>
+    async fn deserialize(buf: &[u8]) -> Result<(Self, Span), SawtoothCommunicationError>
     where
         Self: Sized,
     {
@@ -18,10 +21,10 @@ impl LedgerEvent for OpaOperationEvent {
             match payload {
                 messages::opa_event::Payload::Operation(value) => {
                     let value = serde_json::from_str(&value)?;
-                    Ok((value, ev.span_id))
+                    Ok((value, Span::Span(ev.span_id)))
                 }
                 messages::opa_event::Payload::Error(value) => {
-                    Ok((OpaOperationEvent::Error(value), ev.span_id))
+                    Ok((OpaOperationEvent::Error(value), Span::Span(ev.span_id)))
                 }
             }
         } else {

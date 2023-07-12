@@ -1,10 +1,10 @@
 use std::iter::repeat;
 
 use async_sawtooth_sdk::{
-    error::SawtoothCommunicationError, ledger::LedgerReader, protobuf::Message,
+    error::SawtoothCommunicationError, ledger::LedgerReader, messages::Setting,
 };
 use k256::sha2::{Digest, Sha256};
-use sawtooth_sdk::messages::setting::Setting;
+use prost::Message;
 use tracing::error;
 
 use crate::ChronicleLedger;
@@ -81,12 +81,11 @@ impl SettingsReader {
 
             if let Err(e) = res {
                 error!("Error reading settings: {}", e);
-                self.0.reconnect().await;
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 continue;
             }
 
-            return Ok(Message::parse_from_bytes(&res.unwrap())?);
+            return Ok(Setting::decode(&*res.unwrap())?);
         }
     }
 }
@@ -103,14 +102,12 @@ pub async fn read_opa_settings(
     let policy_id = settings.read_settings("chronicle.opa.policy_name").await?;
     let entrypoint = settings.read_settings("chronicle.opa.entrypoint").await?;
     let policy_id = policy_id
-        .get_entries()
-        .iter()
-        .next()
+        .entries
+        .first()
         .ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
     let entrypoint = entrypoint
-        .get_entries()
-        .iter()
-        .next()
+        .entries
+        .first()
         .ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
     Ok(OpaSettings {
         policy_name: policy_id.value.clone(),

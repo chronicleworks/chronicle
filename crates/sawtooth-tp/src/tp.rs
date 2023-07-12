@@ -251,12 +251,10 @@ impl TP for ChronicleTransactionHandler {
             .map_err(|e| ApplyError::InternalError(ProcessorError::SerdeJson(e).to_string()))?;
 
         // Set up Context for OPA rule check
-        let operation = tx
-            .to_json()
-            .compact()
-            .await
-            .map_err(|e| ApplyError::InternalError(ProcessorError::Compaction(e).to_string()))?
-            .0;
+        let operation =
+            tx.to_json().compact().await.map_err(|e| {
+                ApplyError::InternalError(ProcessorError::Compaction(e).to_string())
+            })?;
 
         // Get the dependencies
         let deps = tx

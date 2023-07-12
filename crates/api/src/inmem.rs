@@ -1,12 +1,14 @@
 use async_sawtooth_sdk::{
-    error::SawtoothCommunicationError, ledger::SawtoothLedger, protobuf, protobuf::Message,
-    zmq_client::RequestResponseSawtoothChannel,
+    error::SawtoothCommunicationError,
+    ledger::SawtoothLedger,
+    zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
 };
 use chronicle_protocol::address::{FAMILY, VERSION};
+use protobuf::{self, Message, ProtobufEnum};
 
 use chronicle_protocol::{messages::ChronicleSubmitTransaction, protocol::ChronicleOperationEvent};
 use chronicle_sawtooth_tp::tp::ChronicleTransactionHandler;
-use futures::{Stream, StreamExt};
+use futures::{select, FutureExt, SinkExt, StreamExt};
 use sawtooth_sdk::{
     messages::{
         block::{Block, BlockHeader},
@@ -31,11 +33,15 @@ use serde_json::Value;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
-    pin::Pin,
+    net::{Ipv4Addr, SocketAddr},
     sync::{Arc, Mutex},
+    thread::{self},
 };
+use tmq::{router, Context, Multipart};
+use tokio::runtime;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, instrument};
+use tracing::{debug, error, info, instrument};
+use uuid::Uuid;
 
 type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
 
@@ -44,68 +50,25 @@ pub trait SimulatedSawtoothBehavior {
         &self,
         message_type: Message_MessageType,
         request: Vec<u8>,
-    ) -> Result<Vec<u8>, SawtoothCommunicationError>;
+    ) -> Result<(Message_MessageType, Vec<u8>), SawtoothCommunicationError>;
 }
 
-type ChannelHolder = Arc<Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Option<Vec<u8>>>>>>;
-// A simulation of zmq transport + routing, using a function that takes a
-// request buffer and returns a response buffer.
-#[derive(Clone)]
-pub struct SimulatedSubmissionChannel {
-    behavior: Arc<Box<dyn SimulatedSawtoothBehavior + Send + Sync>>,
-    rx: ChannelHolder,
-}
-
-impl SimulatedSubmissionChannel {
-    pub fn new(
-        behavior: Box<dyn SimulatedSawtoothBehavior + Send + Sync + 'static>,
-        rx: tokio::sync::mpsc::UnboundedReceiver<Option<Vec<u8>>>,
-    ) -> Self {
-        Self {
-            behavior: Arc::new(behavior),
-            rx: Arc::new(Some(rx).into()),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl RequestResponseSawtoothChannel for SimulatedSubmissionChannel {
-    #[instrument(skip(self), level = "trace", ret(Debug))]
-    async fn send_and_recv_one<RX: protobuf::Message, TX: protobuf::Message>(
-        &self,
-        tx: TX,
-        message_type: Message_MessageType,
-        _timeout: std::time::Duration,
-    ) -> Result<RX, SawtoothCommunicationError> {
-        let mut in_buf = vec![];
-        tx.write_to_vec(&mut in_buf).unwrap();
-        let out_buf: Vec<u8> = self.behavior.handle_request(message_type, in_buf)?;
-        Ok(RX::parse_from_bytes(&out_buf).unwrap())
-    }
-
-    #[instrument(skip(self))]
-    async fn recv_stream<RX: protobuf::Message>(
-        self,
-    ) -> Result<Pin<Box<dyn Stream<Item = RX> + Send>>, SawtoothCommunicationError> {
-        Ok(
-            UnboundedReceiverStream::new(self.rx.lock().unwrap().take().unwrap())
-                .map(|rx| RX::parse_from_bytes(&rx.unwrap()).unwrap())
-                .boxed(),
-        )
-    }
-}
-
-pub type InMemLedger =
-    SawtoothLedger<SimulatedSubmissionChannel, ChronicleOperationEvent, ChronicleSubmitTransaction>;
+pub type InMemLedger = SawtoothLedger<
+    ZmqRequestResponseSawtoothChannel,
+    ChronicleOperationEvent,
+    ChronicleSubmitTransaction,
+>;
 
 pub struct SimulatedTransactionContext {
     pub state: RefCell<BTreeMap<String, Vec<u8>>>,
     pub events: RefCell<TestTxEvents>,
-    tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>,
+    tx: tokio::sync::mpsc::UnboundedSender<Option<(Message_MessageType, Vec<u8>)>>,
 }
 
 impl SimulatedTransactionContext {
-    pub fn new(tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>) -> Self {
+    pub fn new(
+        tx: tokio::sync::mpsc::UnboundedSender<Option<(Message_MessageType, Vec<u8>)>>,
+    ) -> Self {
         Self {
             state: RefCell::new(BTreeMap::new()),
             events: RefCell::new(vec![]),
@@ -114,7 +77,7 @@ impl SimulatedTransactionContext {
     }
 
     pub fn new_with_state(
-        tx: tokio::sync::mpsc::UnboundedSender<Option<Vec<u8>>>,
+        tx: tokio::sync::mpsc::UnboundedSender<Option<(Message_MessageType, Vec<u8>)>>,
         state: BTreeMap<String, Vec<u8>>,
     ) -> Self {
         Self {
@@ -177,7 +140,9 @@ impl TransactionContext for SimulatedTransactionContext {
         };
         let stl_event = list.write_to_bytes().unwrap();
 
-        self.tx.send(Some(stl_event)).unwrap();
+        self.tx
+            .send(Some((Message_MessageType::CLIENT_EVENTS, stl_event)))
+            .unwrap();
 
         self.events
             .borrow_mut()
@@ -218,6 +183,7 @@ impl TransactionContext for SimulatedTransactionContext {
     }
 }
 
+#[derive(Clone)]
 pub struct WellBehavedBehavior {
     handler: Arc<ChronicleTransactionHandler>,
     context: Arc<Mutex<SimulatedTransactionContext>>,
@@ -229,7 +195,7 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
         &self,
         message_type: Message_MessageType,
         request: Vec<u8>,
-    ) -> Result<Vec<u8>, SawtoothCommunicationError> {
+    ) -> Result<(Message_MessageType, Vec<u8>), SawtoothCommunicationError> {
         match message_type {
             // Batch submit request, decode and apply the transactions
             // in the batch
@@ -258,10 +224,11 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
                 response.set_status(ClientBatchSubmitResponse_Status::OK);
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
-                Ok(buf)
+                Ok((Message_MessageType::CLIENT_BATCH_SUBMIT_RESPONSE, buf))
             }
             Message_MessageType::CLIENT_BLOCK_GET_BY_NUM_REQUEST => {
                 let req = ClientBlockGetByNumRequest::parse_from_bytes(&request).unwrap();
+                debug!(get_block=?req);
                 let mut response = ClientBlockGetResponse::new();
                 let block_header = BlockHeader {
                     block_num: req.get_block_num(),
@@ -276,7 +243,7 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
                 response.set_status(ClientBlockGetResponse_Status::OK);
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
-                Ok(buf)
+                Ok((Message_MessageType::CLIENT_BLOCK_GET_RESPONSE, buf))
             }
             // Always respond with a block height of one
             Message_MessageType::CLIENT_BLOCK_LIST_REQUEST => {
@@ -296,7 +263,7 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
                 response.set_status(ClientBlockListResponse_Status::OK);
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
-                Ok(buf)
+                Ok((Message_MessageType::CLIENT_BLOCK_LIST_RESPONSE, buf))
             }
             // We can just return Ok here, no need to fake routing
             Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_REQUEST => {
@@ -304,7 +271,7 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
                 response.set_status(ClientEventsSubscribeResponse_Status::OK);
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
-                Ok(buf)
+                Ok((Message_MessageType::CLIENT_EVENTS_SUBSCRIBE_RESPONSE, buf))
             }
             Message_MessageType::CLIENT_STATE_GET_REQUEST => {
                 let mut request = ClientStateGetRequest::parse_from_bytes(&request).unwrap();
@@ -330,7 +297,7 @@ impl SimulatedSawtoothBehavior for WellBehavedBehavior {
 
                 let mut buf = vec![];
                 response.write_to_vec(&mut buf).unwrap();
-                Ok(buf)
+                Ok((Message_MessageType::CLIENT_STATE_GET_RESPONSE, buf))
             }
             _ => panic!("Unexpected message type {} received", message_type as i32),
         }
@@ -343,7 +310,9 @@ pub struct EmbeddedChronicleTp {
 }
 
 impl EmbeddedChronicleTp {
-    pub fn new_with_state(state: BTreeMap<String, Vec<u8>>) -> Self {
+    pub fn new_with_state(
+        state: BTreeMap<String, Vec<u8>>,
+    ) -> Result<Self, SawtoothCommunicationError> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let context = Arc::new(Mutex::new(SimulatedTransactionContext::new_with_state(
@@ -359,27 +328,115 @@ impl EmbeddedChronicleTp {
             context: context.clone(),
         };
 
-        Self {
+        let listen_port = portpicker::pick_unused_port().expect("No ports free");
+        let listen_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+        let connect_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+
+        let behavior_clone = behavior;
+        thread::spawn(move || {
+            let rt = runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .unwrap();
+            let mut rx = UnboundedReceiverStream::new(rx);
+            let local = tokio::task::LocalSet::new();
+
+            let task = local.run_until(async move {
+                tokio::task::spawn_local(async move {
+                    let (mut router_tx, mut router_rx) = router(&Context::new())
+                        .bind(&format!("tcp://{}", listen_addr))
+                        .unwrap()
+                        .split();
+
+                    debug!(listen_addr = ?listen_addr, "Embedded TP listening");
+                    let mut last_address = vec![];
+                    loop {
+                        select! {
+                            message = router_rx.next().fuse() => {
+                              if message.is_none() {
+                                break;
+                              }
+
+                              let multipart = message.unwrap().unwrap();
+
+                              debug!(request = ?multipart);
+                              last_address =  multipart[0].to_vec();
+                              let request: async_sawtooth_sdk::messages::Message =
+                                  async_sawtooth_sdk::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
+
+                              debug!(request = ?request);
+
+                              let response = behavior_clone
+                                  .handle_request(
+                                      Message_MessageType::from_i32(request.message_type).unwrap(),
+                                      request.content,
+                                  )
+                                  .unwrap();
+
+
+                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                                message_type: response.0 as i32,
+                                tx_id: request.tx_id,
+                                content: response.1
+                              };
+
+                              let mut multipart = Multipart::default();
+                              multipart.push_back(last_address.clone().into());
+                              multipart.push_back(tmq::Message::from(prost::Message::encode_to_vec(&message_wrapper)));
+
+                              debug!(response = ?multipart);
+                              router_tx.send(multipart).await.ok();
+                            },
+                            unsolicited_message = rx.next().fuse() => {
+                              if unsolicited_message.is_none() {
+                                break;
+                              }
+                              tracing::trace!(unsolicited_message=?unsolicited_message);
+
+                              let unsolicited_message = unsolicited_message.unwrap().unwrap();
+                              debug!(unsolicited_message = ?unsolicited_message);
+                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                                message_type: unsolicited_message.0 as i32,
+                                tx_id: "".to_string(),
+                                content: unsolicited_message.1
+                              };
+                              let mut multipart = Multipart::default();
+                              multipart.push_back(last_address.clone().into());
+
+                              multipart.push_back(tmq::Message::from(prost::Message::encode_to_vec(&message_wrapper)));
+                              router_tx.send(multipart).await.ok();
+                            },
+                            complete => {
+                              info!("close embedded router");
+                            }
+                        }
+                    }
+                })
+                .await
+            });
+            rt.block_on(task).ok();
+        });
+
+        Ok(Self {
             ledger: InMemLedger::new(
-                SimulatedSubmissionChannel::new(Box::new(behavior), rx),
+                ZmqRequestResponseSawtoothChannel::new(
+                    &format!("test_{}", Uuid::new_v4()),
+                    &[connect_addr],
+                    HighestBlockValidatorSelector,
+                )?,
                 FAMILY,
                 VERSION,
             ),
             context,
-        }
+        })
     }
 
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, SawtoothCommunicationError> {
         Self::new_with_state(BTreeMap::new())
     }
 
     pub fn readable_state(&self) -> Vec<(String, Value)> {
         self.context.lock().unwrap().readable_state()
-    }
-}
-
-impl Default for EmbeddedChronicleTp {
-    fn default() -> Self {
-        Self::new()
     }
 }

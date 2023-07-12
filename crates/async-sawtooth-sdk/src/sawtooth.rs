@@ -6,23 +6,21 @@ use std::{
 use k256::{
     ecdsa::{Signature, SigningKey},
     schnorr::signature::Signer,
-    sha2::{Digest, Sha256},
+    sha2::{Digest, Sha256, Sha512},
 };
-use openssl::sha::Sha512;
-use protobuf::Message as ProtobufMessage;
+use prost::Message;
 use rand::{prelude::StdRng, Rng, SeedableRng};
-use sawtooth_sdk::messages::{
-    batch::{Batch, BatchHeader},
-    client_block::{ClientBlockGetByNumRequest, ClientBlockListRequest},
-    client_event::ClientEventsSubscribeRequest,
-    client_list_control::{ClientPagingControls, ClientSortControls},
-    client_state::ClientStateGetRequest,
-    events::{EventFilter, EventFilter_FilterType, EventSubscription},
-    transaction::{Transaction, TransactionHeader},
-};
 use tracing::{debug, instrument, trace};
 
-use crate::ledger::{BlockId, TransactionId};
+use crate::{
+    ledger::{BlockId, TransactionId},
+    messages::{
+        event_filter::FilterType, Batch, BatchHeader, ClientBlockGetByNumRequest,
+        ClientBlockListRequest, ClientEventsSubscribeRequest, ClientPagingControls,
+        ClientSortControls, ClientStateGetRequest, EventFilter, EventSubscription, Transaction,
+        TransactionHeader,
+    },
+};
 
 #[async_trait::async_trait]
 pub trait TransactionPayload {
@@ -84,27 +82,21 @@ impl MessageBuilder {
     // limit of 1.
     pub fn make_block_height_request(&self) -> ClientBlockListRequest {
         ClientBlockListRequest {
-            block_ids: vec![].into(),
+            block_ids: vec![],
             paging: Some(ClientPagingControls {
                 limit: 1,
                 ..Default::default()
-            })
-            .into(),
+            }),
             sorting: vec![ClientSortControls {
                 reverse: false,
-                keys: vec!["block_num".to_string()].into(),
-                ..Default::default()
-            }]
-            .into(),
+                keys: vec!["block_num".to_string()],
+            }],
             ..Default::default()
         }
     }
 
     pub fn get_first_block_id_request(&self) -> ClientBlockGetByNumRequest {
-        ClientBlockGetByNumRequest {
-            block_num: 1,
-            ..Default::default()
-        }
+        ClientBlockGetByNumRequest { block_num: 1 }
     }
 
     pub fn make_state_request(&self, address: &str) -> ClientStateGetRequest {
@@ -126,32 +118,29 @@ impl MessageBuilder {
         let filter_address = EventFilter {
             key: "address".to_string(),
             match_string: self.prefix.clone(),
-            filter_type: EventFilter_FilterType::REGEX_ALL as _,
-            ..Default::default()
+            filter_type: FilterType::RegexAll as _,
         };
 
         let mut operation_subscriptions = event_types
             .into_iter()
             .map(|event_type| EventSubscription {
-                filters: vec![filter_address.clone()].into(),
+                filters: vec![filter_address.clone()],
                 event_type,
-                ..Default::default()
             })
             .collect::<Vec<_>>();
 
         let block_subscription = EventSubscription {
             event_type: "sawtooth/block-commit".to_owned(),
-            filters: vec![].into(),
-            ..Default::default()
+            filters: vec![],
         };
 
         if let BlockId::Block(_) = from_block_id {
-            request.last_known_block_ids = vec![from_block_id.to_string()].into();
+            request.last_known_block_ids = vec![from_block_id.to_string()];
         }
 
         operation_subscriptions.push(block_subscription);
 
-        request.subscriptions = operation_subscriptions.into();
+        request.subscriptions = operation_subscriptions;
 
         request
     }
@@ -163,18 +152,17 @@ impl MessageBuilder {
         let mut header = BatchHeader::default();
 
         let pubkey = hex::encode(signer.verifying_key().to_bytes());
-        header.transaction_ids = vec![tx.header_signature.clone()].into();
+        header.transaction_ids = vec![tx.header_signature.clone()];
         header.signer_public_key = pubkey;
 
-        let mut encoded_header = vec![];
-        ProtobufMessage::write_to_vec(&header, &mut encoded_header).unwrap();
+        let encoded_header = header.encode_to_vec();
         let s: Signature = signer.sign(&encoded_header);
         let s = s.normalize_s().unwrap_or(s);
         let s = hex::encode(s.as_ref());
 
         trace!(batch_header=?header, batch_header_signature=?s, transactions = ?tx);
 
-        batch.transactions = vec![tx].into();
+        batch.transactions = vec![tx];
         batch.header = encoded_header;
         batch.header_signature = s;
 
@@ -199,19 +187,17 @@ impl MessageBuilder {
 
         let header = TransactionHeader {
             batcher_public_key: pubkey.clone(),
-            dependencies: dependencies.into(),
+            dependencies,
             family_name: self.family_name.clone(),
             family_version: self.family_version.clone(),
-            inputs: input_addresses.into(),
+            inputs: input_addresses,
             nonce: self.generate_nonce(),
-            outputs: output_addresses.into(),
-            payload_sha512: hex::encode(hasher.finish()),
+            outputs: output_addresses,
+            payload_sha512: hex::encode(hasher.finalize()),
             signer_public_key: pubkey,
-            ..Default::default()
         };
 
-        let mut encoded_header = vec![];
-        ProtobufMessage::write_to_vec(&header, &mut encoded_header).unwrap();
+        let encoded_header = header.encode_to_vec();
         let s: Signature = signer.sign(&encoded_header);
         let s = s.normalize_s().unwrap_or(s);
 
@@ -224,7 +210,6 @@ impl MessageBuilder {
                 header: encoded_header,
                 header_signature: s.clone(),
                 payload: bytes,
-                ..Default::default()
             },
             TransactionId::new(s),
         )

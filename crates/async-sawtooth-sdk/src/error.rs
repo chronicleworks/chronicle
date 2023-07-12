@@ -1,11 +1,8 @@
 use std::string::FromUtf8Error;
 
-use futures::channel::mpsc::SendError;
-use protobuf::ProtobufError;
-use sawtooth_sdk::messaging::stream::ReceiveError;
 use thiserror::Error;
 
-use crate::ledger::BlockIdError;
+use crate::{ledger::BlockIdError, messages::message::MessageType};
 
 #[derive(Error, Debug)]
 pub enum SawtoothCommunicationError {
@@ -13,18 +10,18 @@ pub enum SawtoothCommunicationError {
     ZMQ(#[from] zmq::Error),
 
     #[error("Send error: {0}")]
-    SendChannel(#[from] SendError),
+    SendMpsc(#[from] futures::channel::mpsc::SendError),
 
-    #[error("Sawtooth receive error: {0}")]
-    ReceiveSawtooth(#[from] ReceiveError),
+    #[error("Timeout error: {0}")]
+    Elapsed(#[from] tokio::time::error::Elapsed),
 
-    #[error("Sawtooth send error: {0}")]
-    SendSawtooth(#[from] sawtooth_sdk::messaging::stream::SendError),
+    #[error("Oneshot receive error: {0}")]
+    ReceiveOneshot(#[from] tokio::sync::oneshot::error::RecvError),
+    #[error("Send socket command")]
+    SendSocketCommand,
 
-    #[error("Protobuf error: {0}")]
-    Protobuf(#[from] ProtobufError),
     #[error("Protobuf decode error: {0}")]
-    ProtobufProst(#[from] prost::DecodeError),
+    ProtobufDecode(#[from] prost::DecodeError),
     #[error("Unexpected Status: {status:?}")]
     UnexpectedStatus { status: i32 },
     #[error("No transaction id for event")]
@@ -69,4 +66,19 @@ pub enum SawtoothCommunicationError {
 
     #[error("Resource not found")]
     ResourceNotFound,
+
+    #[error("Invalid message type: expected {expected:?}, got {got:?}")]
+    InvalidMessageType {
+        expected: MessageType,
+        got: MessageType,
+    },
+
+    #[error("No connected validators")]
+    NoConnectedValidators,
+
+    #[error("Sending to disconnected validator")]
+    SendingToDisconnectedValidator,
+
+    #[error("Tmq {0}")]
+    TmqError(#[from] tmq::TmqError),
 }

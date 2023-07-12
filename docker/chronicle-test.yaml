@@ -122,7 +122,6 @@ services:
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty verify-keystore
-        sleep 10
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty \
@@ -186,7 +185,6 @@ services:
     command:
       - -exc
       - |
-        sleep 10
         cd /tmp
         /usr/local/bin/opactl generate --output ./root.pem
         /usr/local/bin/opactl \

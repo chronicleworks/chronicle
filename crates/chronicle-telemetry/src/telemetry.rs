@@ -11,7 +11,16 @@ pub enum ConsoleLogging {
     Json,
 }
 
+#[cfg(feature = "tokio-tracing")]
 macro_rules! console_layer {
+    () => {
+        console_subscriber::ConsoleLayer::builder()
+            .with_default_env()
+            .spawn()
+    };
+}
+
+macro_rules! stdio_layer {
     () => {
         tracing_subscriber::fmt::layer()
             .with_level(true)
@@ -41,7 +50,7 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLoggin
                 Registry::default()
                     .with(env_filter)
                     .with(apm_layer!(otel))
-                    .with(console_layer!().json()),
+                    .with(stdio_layer!().json()),
             )
             .ok();
         }
@@ -50,7 +59,7 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLoggin
                 Registry::default()
                     .with(env_filter)
                     .with(apm_layer!(otel.as_str()))
-                    .with(console_layer!().pretty()),
+                    .with(stdio_layer!().pretty()),
             )
             .ok();
         }
@@ -66,17 +75,27 @@ pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLoggin
             set_global_default(
                 Registry::default()
                     .with(env_filter)
-                    .with(console_layer!().json()),
+                    .with(stdio_layer!().json()),
             )
             .ok();
         }
         (None, ConsoleLogging::Pretty) => {
-            set_global_default(
-                Registry::default()
-                    .with(env_filter)
-                    .with(console_layer!().pretty()),
-            )
-            .ok();
+            cfg_if::cfg_if! {
+              if #[cfg(feature = "tokio-tracing")] {
+                let layers = Registry::default()
+                  .with(env_filter)
+                  .with(stdio_layer!().pretty())
+                  .with(console_layer!());
+
+                set_global_default(layers).ok();
+
+              } else {
+                let layers = Registry::default()
+                  .with(env_filter)
+                  .with(stdio_layer!().pretty());
+                set_global_default(layers).ok();
+              }
+            }
         }
         _ => (),
     }

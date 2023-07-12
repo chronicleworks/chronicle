@@ -1,6 +1,9 @@
 use std::io::Cursor;
 
-use async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::LedgerEvent};
+use async_sawtooth_sdk::{
+    error::SawtoothCommunicationError,
+    ledger::{LedgerEvent, Span},
+};
 use common::{
     identity::SignedIdentity,
     prov::{
@@ -28,7 +31,7 @@ impl From<ChronicleOperationEvent> for Result<ProvModel, Contradiction> {
 impl LedgerEvent for ChronicleOperationEvent {
     async fn deserialize(
         buf: &[u8],
-    ) -> Result<(Self, u64), async_sawtooth_sdk::error::SawtoothCommunicationError>
+    ) -> Result<(Self, Span), async_sawtooth_sdk::error::SawtoothCommunicationError>
     where
         Self: Sized,
     {
@@ -67,7 +70,7 @@ impl LedgerEvent for ChronicleOperationEvent {
                 })?
             }
         };
-        Ok((Self(model, identity), span_id.into_u64()))
+        Ok((Self(model, identity), Span::Span(span_id.into_u64())))
     }
 }
 

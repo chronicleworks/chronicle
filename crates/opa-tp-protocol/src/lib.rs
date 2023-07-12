@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-use async_sawtooth_sdk::{ledger::SawtoothLedger, zmq_client::ZmqRequestResponseSawtoothChannel};
+use async_sawtooth_sdk::{
+    ledger::SawtoothLedger,
+    zmq_client::{RetryingRequestResponseChannel, ZmqRequestResponseSawtoothChannel},
+};
 use state::OpaOperationEvent;
 use transaction::OpaSubmitTransaction;
 pub mod address;
@@ -13,8 +16,11 @@ pub use async_sawtooth_sdk;
 
 static PROTOCOL_VERSION: &str = "1";
 
-pub type OpaLedger =
-    SawtoothLedger<ZmqRequestResponseSawtoothChannel, OpaOperationEvent, OpaSubmitTransaction>;
+pub type OpaLedger = SawtoothLedger<
+    RetryingRequestResponseChannel<ZmqRequestResponseSawtoothChannel>,
+    OpaOperationEvent,
+    OpaSubmitTransaction,
+>;
 
 // generated from ./protos/
 pub mod messages {
