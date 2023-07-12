@@ -312,6 +312,11 @@ pub struct QueryCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthChargeCommand {
+    pub namespace: NamespaceId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportCommand {
     pub namespace: NamespaceId,
     pub operations: Vec<ChronicleOperation>,
@@ -324,6 +329,7 @@ pub enum ApiCommand {
     Activity(ActivityCommand),
     Entity(EntityCommand),
     Query(QueryCommand),
+    DepthCharge(DepthChargeCommand),
     Import(ImportCommand),
 }
 
@@ -349,6 +355,8 @@ pub enum ApiResponse {
         prov: Box<ProvModel>,
         tx_id: ChronicleTransactionId,
     },
+    /// The api has submitted the depth charge transaction to a ledger
+    DepthChargeSubmitted { tx_id: ChronicleTransactionId },
 }
 
 impl ApiResponse {
@@ -379,6 +387,10 @@ impl ApiResponse {
             subject: subject.into(),
             prov: Box::new(prov),
         }
+    }
+
+    pub fn depth_charge_submission(tx_id: ChronicleTransactionId) -> Self {
+        ApiResponse::DepthChargeSubmitted { tx_id }
     }
 
     pub fn import_submitted(prov: ProvModel, tx_id: ChronicleTransactionId) -> Self {

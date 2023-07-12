@@ -1053,6 +1053,13 @@ impl SubCommand for CliModel {
                             .env("REQUIRE_AUTH")
                             .help("if JWT must be provided, preventing anonymous requests"),
                     ).arg(
+                        Arg::new("liveness-check")
+                            .long("liveness-check")
+                            .help("Turn on liveness depth charge checks and specify the interval in seconds")
+                            .takes_value(true)
+                            .value_name("interval")
+                            .default_missing_value("1800"),
+                    ).arg(
                         Arg::new("jwks-address")
                             .long("jwks-address")
                             .takes_value(true)

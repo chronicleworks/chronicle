@@ -35,6 +35,8 @@ iref = { workspace = true }
 iref-enum = { workspace = true }
 json-ld = { workspace = true }
 jwtk = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 opa = { workspace = true }
 opentelemetry = { workspace = true }
 parking_lot = { workspace = true }
