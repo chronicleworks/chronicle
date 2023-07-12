@@ -64,6 +64,23 @@ typically suffixed `/userinfo`. If this option is supplied then the endpoint
 must supply any additional claims in response to the same `Authorization:`
 header that was provided by a user in making their API request.
 
+##### Liveness Health Check
+
+###### `--liveness-check <interval>`
+
+Enables liveness depth charge checks and specifies the interval in seconds.
+
+For more details, see our documentation on the
+[Liveness Health Check](./health-checks-and-testing.md#liveness-health-check).
+
+The `interval` argument specifies the time duration in seconds between
+consecutive checks and is set to 1800 seconds (or 30 minutes) by default.
+
+By default, liveness checks are disabled.
+
+For configuration via Helm Chart, see our documentation on
+[Helm Options and the Liveness Health Check](./helm-options.md#liveness-health-check).
+
 ##### Deprecated Options
 
 Options may be removed in the next release of Chronicle.

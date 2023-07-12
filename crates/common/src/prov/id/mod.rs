@@ -970,3 +970,9 @@ impl From<ActivityIdOrExternal> for ActivityId {
         }
     }
 }
+
+/// A `Namespace` ID reserved for Chronicle system use.
+pub const SYSTEM_ID: &str = "chronicle-system";
+
+/// A `Namespace` UUID reserved for Chronicle system use.
+pub const SYSTEM_UUID: &str = "00000000-0000-0000-0000-000000000001";

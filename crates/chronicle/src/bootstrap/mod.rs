@@ -28,7 +28,7 @@ use common::{
     signing::DirectoryStoredKeys,
 };
 use is_terminal::IsTerminal;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 
 use config::*;
@@ -171,6 +171,7 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
     policy_name: Option<String>,
+    liveness_check_interval: Option<u64>,
 ) -> Result<ApiDispatch, CliError> {
     let ledger = ledger(config, options)?;
 
@@ -181,6 +182,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         policy_name,
+        liveness_check_interval,
     )
     .await?)
 }
@@ -191,6 +193,7 @@ pub async fn api(
     _options: &ArgMatches,
     config: &Config,
     remote_opa: Option<String>,
+    liveness_check_interval: Option<u64>,
 ) -> Result<api::ApiDispatch, ApiError> {
     let embedded_tp = in_mem_ledger(config, _options)?;
 
@@ -201,6 +204,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         remote_opa,
+        liveness_check_interval,
     )
     .await
 }
@@ -315,6 +319,28 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
     }
 }
 
+/// If `--liveness-check` is set, we use either the interval in seconds provided or the default of 1800.
+/// Otherwise, we use `None` to disable the depth charge.
+fn configure_depth_charge(matches: &ArgMatches) -> Option<u64> {
+    if let Some(serve_api_matches) = matches.subcommand_matches("serve-api") {
+        if let Some(interval) = serve_api_matches.value_of("liveness-check") {
+            let parsed_interval = interval.parse::<u64>().unwrap_or_else(|e| {
+                warn!("Failed to parse '--liveness-check' value: {e}");
+                1800
+            });
+
+            if parsed_interval == 1800 {
+                debug!("Using default liveness health check interval value: 1800");
+            } else {
+                debug!("Using custom liveness health check interval value: {parsed_interval}");
+            }
+            return Some(parsed_interval);
+        }
+    }
+    debug!("Liveness health check disabled");
+    None
+}
+
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
@@ -332,7 +358,17 @@ where
     let pool = pool_remote(&construct_db_uri(&matches)).await?;
 
     let opa = configure_opa(&config, &matches).await?;
-    let api = api(&pool, &matches, &config, opa.remote_settings()).await?;
+
+    let liveness_check_interval = configure_depth_charge(&matches);
+
+    let api = api(
+        &pool,
+        &matches,
+        &config,
+        opa.remote_settings(),
+        liveness_check_interval,
+    )
+    .await?;
     let ret_api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-api") {
@@ -596,6 +632,9 @@ where
                 }
             }
         }
+        (ApiResponse::DepthChargeSubmitted { tx_id }, _) => error!(
+            "DepthChargeSubmitted is an unexpected API response for transaction: {tx_id}. Depth charge not implemented."
+        ),
     };
     Ok(())
 }
@@ -807,6 +846,8 @@ pub mod test {
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
+        let liveness_check_interval = None;
+
         let dispatch = Api::new(
             pool,
             embedded_tp.ledger.clone(),
@@ -814,6 +855,7 @@ pub mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".to_owned()),
+            liveness_check_interval,
         )
         .await
         .unwrap();

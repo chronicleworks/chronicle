@@ -32,6 +32,13 @@ up in configuration if you are using multiple Chronicle instances.
 This namespace uses the UUID `00000000-0000-0000-0000-000000000001` and is
 reserved for Chronicle.
 
+```rust
+//! crates/common/src/prov/id/mod.rs
+
+pub const SYSTEM_ID: &str = "chronicle-system";
+pub const SYSTEM_UUID: &str = "00000000-0000-0000-0000-000000000001";
+```
+
 ## Important
 
 You must not use the nil UUID `00000000-0000-0000-0000-000000000000` as a

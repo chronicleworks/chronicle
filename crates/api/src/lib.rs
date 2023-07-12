@@ -34,17 +34,24 @@ use common::{
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
         Contradiction, EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId,
-        ProcessorError, ProvModel, Role,
+        ProcessorError, ProvModel, Role, SYSTEM_ID, SYSTEM_UUID,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
 
+use metrics::histogram;
+use metrics_exporter_prometheus::PrometheusBuilder;
 pub use persistence::StoreError;
 use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
 use std::{
-    collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
-    path::Path, sync::Arc, time::Duration,
+    collections::HashMap,
+    convert::Infallible,
+    marker::PhantomData,
+    net::AddrParseError,
+    path::Path,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 use tokio::{
@@ -225,6 +232,52 @@ impl ApiDispatch {
         )
         .await
     }
+
+    #[instrument]
+    pub async fn handle_depth_charge(
+        &self,
+        namespace: &str,
+        uuid: &Uuid,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch_depth_charge(
+            AuthId::Chronicle,
+            NamespaceId::from_external_id(namespace, *uuid),
+        )
+        .await
+    }
+
+    #[instrument]
+    async fn dispatch_depth_charge(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch(
+            ApiCommand::DepthCharge(DepthChargeCommand { namespace }),
+            identity.clone(),
+        )
+        .await
+    }
+}
+
+fn install_prometheus_metrics_exporter() {
+    let metrics_endpoint = "127.0.0.1:9000";
+    let metrics_listen_socket = match metrics_endpoint.parse::<std::net::SocketAddrV4>() {
+        Ok(addr) => addr,
+        Err(e) => {
+            error!("Unable to parse metrics listen socket address: {e:?}");
+            return;
+        }
+    };
+
+    if let Err(e) = PrometheusBuilder::new()
+        .with_http_listener(metrics_listen_socket)
+        .install()
+    {
+        error!("Prometheus exporter installation for liveness check metrics failed: {e:?}");
+    } else {
+        debug!("Liveness check metrics Prometheus exporter installed with endpoint on {metrics_endpoint}/metrics");
+    }
 }
 
 impl<U, LEDGER> Api<U, LEDGER>
@@ -245,6 +298,7 @@ where
         uuidgen: U,
         namespace_bindings: HashMap<String, Uuid>,
         policy_name: Option<String>,
+        liveness_check_interval: Option<u64>,
     ) -> Result<ApiDispatch, ApiError> {
         let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -266,11 +320,10 @@ where
             .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
             .map_err(|migration| StoreError::DbMigration(migration))?;
 
+        let system_namespace_uuid = (SYSTEM_ID, Uuid::try_from(SYSTEM_UUID).unwrap());
+
         // Append namespace bindings and system namespace
-        store.namespace_binding(
-            "chronicle-system",
-            Uuid::try_from("00000000-0000-0000-0000-000000000001").unwrap(),
-        )?;
+        store.namespace_binding(system_namespace_uuid.0, system_namespace_uuid.1)?;
         for (ns, uuid) in namespace_bindings {
             store.namespace_binding(&ns, uuid)?
         }
@@ -371,6 +424,90 @@ where
                 }
             }
         });
+
+        if let Some(interval) = liveness_check_interval {
+            debug!("Starting liveness depth charge task");
+
+            let depth_charge_api = dispatch.clone();
+
+            tokio::task::spawn(async move {
+                // Configure and install Prometheus exporter
+                install_prometheus_metrics_exporter();
+
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
+                    let api = depth_charge_api.clone();
+
+                    let start_time = Instant::now();
+
+                    let response = api
+                        .handle_depth_charge(system_namespace_uuid.0, &system_namespace_uuid.1)
+                        .await;
+
+                    match response {
+                        Ok(ApiResponse::DepthChargeSubmitted { tx_id }) => {
+                            let mut tx_notifications = api.notify_commit.subscribe();
+
+                            loop {
+                                let stage = match tx_notifications.recv().await {
+                                    Ok(stage) => stage,
+                                    Err(e) => {
+                                        error!("Error receiving depth charge transaction notifications: {}", e);
+                                        continue;
+                                    }
+                                };
+
+                                match stage {
+                                    SubmissionStage::Submitted(Ok(id)) => {
+                                        if id == tx_id {
+                                            debug!("Depth charge operation submitted: {id}");
+                                            continue;
+                                        }
+                                    }
+                                    SubmissionStage::Submitted(Err(err)) => {
+                                        if err.tx_id() == &tx_id {
+                                            error!("Depth charge transaction rejected by Chronicle: {} {}",
+                                                err,
+                                                err.tx_id()
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    SubmissionStage::Committed(commit, _) => {
+                                        if commit.tx_id == tx_id {
+                                            let end_time = Instant::now();
+                                            let elapsed_time = end_time - start_time;
+
+                                            debug!(
+                                                "Depth charge transaction committed: {}",
+                                                commit.tx_id
+                                            );
+                                            debug!(
+                                                "Depth charge round trip time: {:.2?}",
+                                                elapsed_time
+                                            );
+                                            histogram!(
+                                                "depth_charge_round_trip",
+                                                elapsed_time.as_millis() as f64
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
+                                        if id == tx_id {
+                                            error!("Depth charge transaction rejected by ledger: {id} {contradiction}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(res) => error!("Unexpected ApiResponse from depth charge: {res:?}"),
+                        Err(e) => error!("ApiError submitting depth charge: {e}"),
+                    }
+                }
+            });
+        }
 
         Ok(dispatch)
     }
@@ -815,8 +952,47 @@ where
     }
 
     #[instrument(skip(self))]
+    async fn depth_charge(
+        &self,
+        namespace: NamespaceId,
+        identity: AuthId,
+    ) -> Result<ApiResponse, ApiError> {
+        let mut api = self.clone();
+        let id = ActivityId::from_external_id(Uuid::new_v4().to_string());
+        tokio::task::spawn_blocking(move || {
+            let to_apply = vec![
+                ChronicleOperation::StartActivity(StartActivity {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                    time: Utc::now(),
+                }),
+                ChronicleOperation::EndActivity(EndActivity {
+                    namespace,
+                    id,
+                    time: Utc::now(),
+                }),
+            ];
+            api.submit_depth_charge(identity, to_apply)
+        })
+        .await?
+    }
+
+    fn submit_depth_charge(
+        &mut self,
+        identity: AuthId,
+        to_apply: Vec<ChronicleOperation>,
+    ) -> Result<ApiResponse, ApiError> {
+        let identity = identity.signed_identity(&self.keystore)?;
+        let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+        Ok(ApiResponse::depth_charge_submission(tx_id))
+    }
+
+    #[instrument(skip(self))]
     async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
         match command {
+            (ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) => {
+                self.depth_charge(namespace, identity).await
+            }
             (
                 ApiCommand::Import(ImportCommand {
                     namespace,
@@ -1735,6 +1911,8 @@ mod test {
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
+        let liveness_check_interval = None;
+
         let dispatch = Api::new(
             pool,
             embed_tp.ledger.clone(),
@@ -1742,6 +1920,7 @@ mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".into()),
+            liveness_check_interval,
         )
         .await
         .unwrap();
@@ -2090,7 +2269,7 @@ mod test {
 
         insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             external_id: "testactivity".into(),
-            namespace: "chronicle-system".into(),
+            namespace: common::prov::SYSTEM_ID.into(),
             attributes: Attributes {
                 typ: Some(DomaintypeId::from_external_id("test")),
                 attributes: [(
