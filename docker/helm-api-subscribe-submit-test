@@ -70,7 +70,7 @@ issueGraphQLSubscription "$HOST:$PORT" "$subscriptionQuery" >"$subscriptionOutpu
 mutationQuery="mutation {
   defineAgent(
     externalId: \"$random_externalId\",
-    namespace: \"helm-api-subscribe-submit-test\",
+    namespace: \"chronicle-system\",
     attributes: {}
   ) {
     txId
