@@ -9,6 +9,7 @@ version = "0.7.5"
 [dependencies]
 async-stl-client    = { workspace = true }
 async-trait         = { workspace = true }
+chronicle-signing   = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap                = { version = "4.1.1", features = ["env"] }
 common              = { path = "../common" }

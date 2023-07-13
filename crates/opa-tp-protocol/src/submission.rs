@@ -1,4 +1,12 @@
+use std::{
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
+
 use crate::{messages, PROTOCOL_VERSION};
+use chronicle_signing::{
+    ChronicleSigning, OpaKnownKeyNamesSigner, SecretError, WithSecret, OPA_NAMESPACE,
+};
 use k256::{
     ecdsa::{Signature, SigningKey, VerifyingKey},
     pkcs8::{EncodePublicKey, LineEnding},
@@ -85,73 +93,100 @@ impl SubmissionBuilder {
         }
     }
 
-    pub fn register_key(
+    pub async fn register_key(
         id: impl AsRef<str>,
-        new_key: &VerifyingKey,
-        root_key: &SigningKey,
+        new_key: &str,
+        signer: &ChronicleSigning,
         overwrite_existing: bool,
-    ) -> Self {
+    ) -> Result<Self, SecretError> {
         let operation = messages::signed_operation::Payload {
             operation: Some(messages::signed_operation::payload::Operation::RegisterKey(
-                register_key(id, new_key, overwrite_existing),
+                register_key(
+                    id,
+                    &signer.verifying_key(OPA_NAMESPACE, new_key).await?,
+                    overwrite_existing,
+                ),
             )),
         };
 
-        let signature: Signature = root_key.sign(&operation.encode_to_vec());
-        let key: PublicKey = root_key.verifying_key().into();
+        let signature = signer.opa_sign(&operation.encode_to_vec()).await?;
+        let key: PublicKey = signer.opa_verifying().await?.into();
         let signed_operation = messages::SignedOperation {
             payload: Some(operation),
             signature: signature.to_vec(),
             verifying_key: key.to_public_key_pem(LineEnding::CRLF).unwrap(),
         };
-        Self {
+        Ok(Self {
             message: Some(BuildingMessage::RegisterKey(signed_operation)),
-        }
+        })
     }
 
-    pub fn rotate_key(
-        id: impl AsRef<str>,
-        old_key: &SigningKey,
-        new_key: &SigningKey,
-        root_key: &SigningKey,
-    ) -> Self {
+    pub async fn rotate_key(
+        id: &str,
+        signer: &ChronicleSigning,
+        old_key: &str,
+        new_key: &str,
+    ) -> Result<Self, SecretError> {
+        let extract_key: Arc<Mutex<RefCell<Option<SigningKey>>>> =
+            Arc::new(Mutex::new(None.into()));
+
+        signer
+            .with_signing_key(OPA_NAMESPACE, old_key, |old_key| {
+                extract_key.lock().unwrap().replace(Some(old_key.clone()));
+            })
+            .await?;
+
+        let old_key = extract_key.lock().unwrap().borrow().clone().unwrap();
+
+        signer
+            .with_signing_key(OPA_NAMESPACE, new_key, |new_key| {
+                extract_key.lock().unwrap().replace(Some(new_key.clone()));
+            })
+            .await?;
+
+        let new_key = extract_key.lock().unwrap().borrow().clone().unwrap();
+
         let operation = messages::signed_operation::Payload {
             operation: Some(messages::signed_operation::payload::Operation::RotateKey(
-                rotate_key(id, old_key, new_key),
+                rotate_key(id, &old_key, &new_key),
             )),
         };
 
-        let signature: Signature = root_key.sign(&operation.encode_to_vec());
-        let key: PublicKey = root_key.verifying_key().into();
+        let signature = signer.opa_sign(&operation.encode_to_vec()).await?;
+        let key: PublicKey = signer.opa_verifying().await?.into();
 
         let signed_operation = messages::SignedOperation {
             payload: Some(operation),
-            signature: signature.to_vec(),
+            signature,
             verifying_key: key.to_public_key_pem(LineEnding::CRLF).unwrap(),
         };
-        Self {
+        Ok(Self {
             message: Some(BuildingMessage::RotateKey(signed_operation)),
-        }
+        })
     }
 
-    pub fn set_policy(id: impl AsRef<str>, policy: Vec<u8>, root_key: SigningKey) -> Self {
+    pub async fn set_policy(
+        id: &str,
+        policy: Vec<u8>,
+        signer: &ChronicleSigning,
+    ) -> Result<Self, SecretError> {
         let operation = messages::signed_operation::Payload {
             operation: Some(messages::signed_operation::payload::Operation::SetPolicy(
                 set_policy(id, policy),
             )),
         };
-
-        let signature: Signature = root_key.sign(&operation.encode_to_vec());
-        let key: PublicKey = root_key.verifying_key().into();
+        let signature = signer.opa_sign(&operation.encode_to_vec()).await?;
+        let key: PublicKey = signer.opa_verifying().await?.into();
 
         let signed_operation = messages::SignedOperation {
             payload: Some(operation),
-            signature: signature.to_vec(),
+            signature,
             verifying_key: key.to_public_key_pem(LineEnding::CRLF).unwrap(),
         };
-        Self {
+
+        Ok(Self {
             message: Some(BuildingMessage::SetPolicy(signed_operation)),
-        }
+        })
     }
 
     pub fn build(mut self, span_id: u64) -> messages::Submission {

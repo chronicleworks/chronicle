@@ -275,10 +275,8 @@ The `bootstrap` command initializes the OPA Transaction Processor with a root ke
 
 `bootstrap`'s arguments include:
 
-- `--root-key` (`-r`): A required argument that specifies the path to the PEM-encoded
-  private key to be used as the root key.
 
-- `--transactor-key` (`-t`): An optional argument that specifies the path to the
+- `--batcher-key` (`-t`): An optional argument that specifies the path to the
   PEM-encoded private key to be used for signing a transaction. If not specified,
   an ephemeral key will be generated.
 
@@ -307,20 +305,14 @@ opactl generate --output path/to/new/key.pem
 
 The `rotate-root` command rotates the root key for the OPA Transaction Processor.
 
-- `--current-root-key` (`-c`): A required argument that specifies the path to
-  the PEM-encoded private key currently registered as the root key.
+- `--new-root-key` (`-n`): A required argument that specifies the name of the key to be registered as the new root key.
 
-- `--new-root-key` (`-n`): A required argument that specifies the path to the
-  PEM-encoded private key to be registered as the new root key.
-
-- `--transactor-key` (`-t`): An optional argument that specifies the path to the
-  PEM-encoded private key to be used for signing the transaction. If not
-  specified, an ephemeral key will be generated.
+- `--batcher-key` (`-t`): An optional argument that specifies the name of the key to be used for signing the transaction. 
 
 #### `rotate-root` Example
 
 ```bash
-opactl rotate-root -c path/to/current/root/key.pem -n path/to/new/root/key.pem
+opactl rotate-root -n root_key:v2
 ```
 
 ### `register-key`
@@ -333,15 +325,8 @@ processor.
 - `--new-key` (`-k`): A required argument that specifies the path to the
   PEM-encoded private key to be registered.
 
-- `--root-key` (`-r`): A required argument that specifies the path to the
-  PEM-encoded private key currently registered as the root key.
-
 - `--id` (`-i`): A required argument that specifies the name to associate with
   the new key.
-
-- `--transactor-key` (`-t`): An optional argument that specifies the path to
-  the PEM-encoded private key to be used for signing the transaction. If not
-  specified, an ephemeral key will be generated.
 
 - `--overwrite` (`-o`): An optional flag allowing re-registration of a
   non-root key.
@@ -371,7 +356,7 @@ Transaction Processor.
 - `--id` (`-i`): A required argument that specifies the ID of the key to be
   rotated.
 
-- `--transactor-key` (`-t`): An optional argument that specifies the path to
+- `--batcher-key` (`-t`): An optional argument that specifies the path to
   the PEM-encoded private key to be used for signing the transaction. If not
   specified, an ephemeral key will be generated.
 
@@ -395,8 +380,8 @@ arguments:
 - `--root-key` (`-k`): A required argument that specifies the path of a
   PEM-encoded private key that has access to the root.
 
-- `--transactor-key` (`-t`): An optional argument that specifies the path of
-  a PEM-encoded private key for the transactor.
+- `--batcher-key` (`-t`): An optional argument that specifies the path of
+  a PEM-encoded private key for the batcher.
 
 #### `set-policy` Example
 

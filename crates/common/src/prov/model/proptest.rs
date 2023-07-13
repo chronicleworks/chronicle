@@ -372,7 +372,7 @@ proptest! {
             // Check that serialization of operation is symmetric
             let op_json = op.to_json().0;
             prop_assert_eq!(op,
-                &rt.block_on(ChronicleOperation::from_json(op.to_json())).unwrap(),
+                &rt.block_on(ChronicleOperation::from_json(&op.to_json().0)).unwrap(),
                 "Serialized operation {}", serde_json::to_string_pretty(&op_json).unwrap());
 
             let res = prov.apply(op);

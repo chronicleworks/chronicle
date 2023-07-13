@@ -9,6 +9,7 @@ lazy_static! {
         "xsd": "http://www.w3.org/2001/XMLSchema#",
         "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "chronicle":"http://btp.works/chronicle/ns#",
+        "chronicle_op":"http://btp.works/chronicleoperations/ns#",
         "entity": {
             "@id": "prov:entity",
             "@type": "@id"

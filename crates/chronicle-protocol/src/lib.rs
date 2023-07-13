@@ -3,7 +3,6 @@ use async_stl_client::{
     zmq_client::{RetryingRequestResponseChannel, ZmqRequestResponseSawtoothChannel},
 };
 use messages::ChronicleSubmitTransaction;
-use protocol::ChronicleOperationEvent;
 
 pub mod address;
 pub mod messages;
@@ -11,6 +10,7 @@ pub mod protocol;
 pub mod settings;
 
 pub use async_stl_client;
+use protocol::ChronicleOperationEvent;
 
 static PROTOCOL_VERSION: &str = "2";
 const SUBMISSION_BODY_VERSION: u16 = 1;

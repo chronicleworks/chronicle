@@ -14,6 +14,7 @@ path = "src/lib.rs"
 async-stl-client = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
+chronicle-signing = { path = "../chronicle-signing" }
 common = { path = "../common" }
 custom_error = { workspace = true }
 derivative = { workspace = true }
@@ -54,7 +55,3 @@ prost-build = { workspace = true }
 [dev-dependencies]
 chrono   = { workspace = true }
 tempfile = { workspace = true }
-
-[features]
-default          = ["vendored-openssl"]
-vendored-openssl = ['openssl/vendored']

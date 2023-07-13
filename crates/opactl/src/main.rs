@@ -1,12 +1,13 @@
-use async_stl_client::zmq_client::{
-    HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
+use async_stl_client::{
+    sawtooth::MessageBuilder,
+    zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
 };
+use chronicle_signing::{OpaKnownKeyNamesSigner, SecretError, OPA_PK};
 use clap::ArgMatches;
-use cli::{load_key_from_match, Wait};
+use cli::{configure_signing, Wait};
 use common::import::{load_bytes_from_url, FromUrlError};
-use futures::{channel::oneshot, join, Future, FutureExt, StreamExt};
+use futures::{channel::oneshot, Future, FutureExt, StreamExt};
 use k256::{
-    ecdsa::SigningKey,
     pkcs8::{EncodePrivateKey, LineEnding},
     SecretKey,
 };
@@ -30,7 +31,7 @@ use url::Url;
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use tokio::runtime::Handle;
-use tracing::{debug, error, info, instrument, span, trace, Instrument, Level};
+use tracing::{debug, error, info, instrument, span, Instrument, Level};
 use user_error::UFE;
 mod cli;
 
@@ -62,6 +63,12 @@ pub enum OpaCtlError {
 
     #[error("Utf8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
+
+    #[error("Signing: {0}")]
+    Signing(#[from] SecretError),
+
+    #[error("Missing Argument")]
+    MissingArgument(String),
 }
 
 impl UFE for OpaCtlError {}
@@ -72,6 +79,52 @@ pub enum Waited {
     WaitedAndFound(OpaOperationEvent),
     WaitedAndOperationFailed(OpaOperationEvent),
     WaitedAndDidNotFind,
+}
+
+pub struct RetryLedgerWriter<W: LedgerWriter + Send + Sync> {
+    inner: W,
+}
+
+impl<
+        W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+            + Send
+            + Sync,
+    > RetryLedgerWriter<W>
+{
+    pub fn new(inner: W) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait::async_trait]
+impl<
+        W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+            + Send
+            + Sync,
+    > LedgerWriter for RetryLedgerWriter<W>
+{
+    type Error = W::Error;
+    type Transaction = W::Transaction;
+
+    async fn submit(
+        &self,
+        tx: &Self::Transaction,
+    ) -> Result<TransactionId, (Option<TransactionId>, Self::Error)> {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        loop {
+            match self.inner.submit(tx).await {
+                Err((_id, SawtoothCommunicationError::NoConnectedValidators)) => {
+                    debug!("Awaiting validator connection, retrying");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    fn message_builder(&self) -> &MessageBuilder {
+        self.inner.message_builder()
+    }
 }
 
 /// Collect incoming transaction ids before running submission, as there is the
@@ -151,9 +204,7 @@ async fn ambient_transactions<
     }.instrument(span));
 
     // Wait for the task to start receiving events
-    trace!("awaiting incoming event");
     let _ = receiving_events_rx.await;
-    trace!("event successfully received from the chain");
 
     notify_rx
 }
@@ -165,45 +216,43 @@ async fn handle_wait<
         + Send
         + Sync
         + 'static,
-    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>,
+    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+        + Send
+        + Sync,
 >(
     matches: &ArgMatches,
     reader: R,
     writer: W,
     submission: OpaSubmitTransaction,
-    transactor_key: &SigningKey,
 ) -> Result<(Waited, R), OpaCtlError> {
     let wait = Wait::from_matches(matches);
-    let (tx_id, tx) = writer.pre_submit(&submission).await?;
+    let writer = RetryLedgerWriter::new(writer);
     match wait {
         Wait::NoWait => {
-            debug!(submitting_tx=%tx_id);
-            writer.submit(tx, transactor_key).await?;
+            writer.submit(&submission).await.map_err(|(_id, e)| e)?;
 
             Ok((Waited::NoWait, reader))
         }
         Wait::NumberOfBlocks(blocks) => {
-            debug!(submitting_tx=%tx_id, waiting_blocks=%blocks);
+            let tx_id = writer.submit(&submission).await.map_err(|(_id, e)| e)?;
             let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
-            let writer = writer.submit(tx, transactor_key);
-
-            match join!(writer, waiter) {
-                (Err(e), _) => Err(e.into()),
-                (_, Ok(Waited::WaitedAndDidNotFind)) => {
-                    Err(OpaCtlError::TransactionNotFound(tx_id))
-                }
-                (_, Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e)))) => {
+            debug!(awaiting_tx=%tx_id, waiting_blocks=%blocks);
+            match waiter.await {
+                Ok(Waited::WaitedAndDidNotFind) => Err(OpaCtlError::TransactionNotFound(tx_id)),
+                Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e))) => {
                     Err(OpaCtlError::TransactionFailed(e))
                 }
-                (_, Ok(x)) => Ok((x, reader)),
-                (_, Err(e)) => Err(OpaCtlError::Cancelled(e)),
+                Ok(x) => Ok((x, reader)),
+                Err(e) => Err(OpaCtlError::Cancelled(e)),
             }
         }
     }
 }
 
 async fn dispatch_args<
-    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>,
+    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+        + Send
+        + Sync,
     R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
         + Send
         + Sync
@@ -218,17 +267,15 @@ async fn dispatch_args<
     let _entered = span.enter();
     let span_id = span.id().map(|x| x.into_u64()).unwrap_or(u64::MAX);
     match matches.subcommand() {
-        Some(("bootstrap", matches)) => {
-            let root_key: SigningKey = load_key_from_match("root-key", matches).into();
-            let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
+        Some(("bootstrap", command_matches)) => {
+            let signing = configure_signing(vec![], &matches, command_matches).await?;
             let bootstrap =
-                SubmissionBuilder::bootstrap_root(root_key.verifying_key()).build(span_id);
+                SubmissionBuilder::bootstrap_root(signing.opa_verifying().await?).build(span_id);
             Ok(handle_wait(
-                matches,
+                command_matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::bootstrap_root(bootstrap, &transactor_key),
-                &transactor_key,
+                OpaSubmitTransaction::bootstrap_root(bootstrap, &signing),
             )
             .await?)
         }
@@ -247,88 +294,85 @@ async fn dispatch_args<
 
             Ok((Waited::NoWait, reader))
         }
-        Some(("rotate-root", matches)) => {
-            let current_root_key: SigningKey =
-                load_key_from_match("current-root-key", matches).into();
-            let new_root_key: SigningKey = load_key_from_match("new-root-key", matches).into();
-            let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
+        Some(("rotate-root", command_matches)) => {
+            let signing =
+                configure_signing(vec!["new-root-key"], &matches, command_matches).await?;
             let rotate_key = SubmissionBuilder::rotate_key(
                 "root",
-                &current_root_key,
-                &new_root_key,
-                &current_root_key,
+                &signing,
+                OPA_PK,
+                command_matches
+                    .get_one::<String>("new-root-key")
+                    .ok_or_else(|| OpaCtlError::MissingArgument("new-root-key".to_owned()))?,
             )
+            .await?
             .build(span_id);
             Ok(handle_wait(
-                matches,
+                command_matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::rotate_root(rotate_key, &transactor_key),
-                &transactor_key,
+                OpaSubmitTransaction::rotate_root(rotate_key, &signing),
             )
             .await?)
         }
-        Some(("register-key", matches)) => {
-            let current_root_key: SigningKey = load_key_from_match("root-key", matches).into();
-            let new_key: SigningKey = load_key_from_match("new-key", matches).into();
-            let id = matches.get_one::<String>("id").unwrap();
-            let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let overwrite_existing = matches.get_flag("overwrite");
-            let register_key = SubmissionBuilder::register_key(
-                id,
-                &new_key.verifying_key(),
-                &current_root_key,
-                overwrite_existing,
-            )
-            .build(span_id);
-            Ok(handle_wait(
-                matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::register_key(
-                    id,
-                    register_key,
-                    &transactor_key,
-                    overwrite_existing,
-                ),
-                &transactor_key,
-            )
-            .await?)
-        }
-        Some(("rotate-key", matches)) => {
-            let current_root_key: SigningKey = load_key_from_match("root-key", matches).into();
-            let current_key: SigningKey = load_key_from_match("current-key", matches).into();
-            let id = matches.get_one::<String>("id").unwrap();
-            let new_key: SigningKey = load_key_from_match("new-key", matches).into();
-            let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let rotate_key =
-                SubmissionBuilder::rotate_key("root", &current_key, &new_key, &current_root_key)
+        Some(("register-key", command_matches)) => {
+            let signing = configure_signing(vec!["new-key"], &matches, command_matches).await?;
+            let new_key = &command_matches
+                .get_one::<String>("new-key")
+                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+            let id = command_matches.get_one::<String>("id").unwrap();
+            let overwrite_existing = command_matches.get_flag("overwrite");
+            let register_key =
+                SubmissionBuilder::register_key(id, new_key, &signing, overwrite_existing)
+                    .await?
                     .build(span_id);
             Ok(handle_wait(
-                matches,
+                command_matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::rotate_key(id, rotate_key, &transactor_key),
-                &transactor_key,
+                OpaSubmitTransaction::register_key(id, register_key, &signing, overwrite_existing),
             )
             .await?)
         }
-        Some(("set-policy", matches)) => {
-            let root_key: SigningKey = load_key_from_match("root-key", matches).into();
-            let transactor_key: SigningKey = load_key_from_match("transactor-key", matches).into();
-            let policy: &String = matches.get_one("policy").unwrap();
+        Some(("rotate-key", command_matches)) => {
+            let signing =
+                configure_signing(vec!["current-key", "new-key"], &matches, command_matches)
+                    .await?;
+
+            let current_key = &command_matches
+                .get_one::<String>("current-key")
+                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+            let new_key = &command_matches
+                .get_one::<String>("new-key")
+                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+            let id = command_matches.get_one::<String>("id").unwrap();
+            let rotate_key = SubmissionBuilder::rotate_key(id, &signing, new_key, current_key)
+                .await?
+                .build(span_id);
+            Ok(handle_wait(
+                command_matches,
+                reader,
+                writer,
+                OpaSubmitTransaction::rotate_key(id, rotate_key, &signing),
+            )
+            .await?)
+        }
+        Some(("set-policy", command_matches)) => {
+            let signing = configure_signing(vec![], &matches, command_matches).await?;
+            let policy: &String = command_matches.get_one("policy").unwrap();
 
             let policy = load_bytes_from_url(policy).await?;
 
-            let id = matches.get_one::<String>("id").unwrap();
+            let id = command_matches.get_one::<String>("id").unwrap();
 
-            let bootstrap = SubmissionBuilder::set_policy(id, policy, root_key).build(span_id);
+            let bootstrap = SubmissionBuilder::set_policy(id, policy, &signing)
+                .await?
+                .build(span_id);
             Ok(handle_wait(
-                matches,
+                command_matches,
                 reader,
                 writer,
-                OpaSubmitTransaction::set_policy(id, bootstrap, &transactor_key),
-                &transactor_key,
+                OpaSubmitTransaction::set_policy(id, bootstrap, &signing),
             )
             .await?)
         }
@@ -464,8 +508,9 @@ pub mod test {
         net::{Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
         thread,
+        time::Duration,
     };
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
     use tokio_stream::wrappers::UnboundedReceiverStream;
     use tracing::{debug, error, info, instrument};
 
@@ -473,8 +518,9 @@ pub mod test {
 
     type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
 
+    #[async_trait::async_trait]
     pub trait SimulatedSawtoothBehavior {
-        fn handle_request(
+        async fn handle_request(
             &self,
             message_type: MessageType,
             request: Vec<u8>,
@@ -582,6 +628,7 @@ pub mod test {
                     .collect(),
                 data: data.to_vec(),
             };
+
             let list = async_stl_client::messages::EventList {
                 events: vec![stl_event],
             };
@@ -708,7 +755,10 @@ pub mod test {
 
     impl WellBehavedBehavior {
         /// Submits a batch of transactions to the validator and performs determinism checks.
-        fn submit_batch(&self, request: &[u8]) -> Result<Vec<u8>, SawtoothCommunicationError> {
+        async fn submit_batch(
+            &self,
+            request: &[u8],
+        ) -> Result<Vec<u8>, SawtoothCommunicationError> {
             // Parse the request into a `ClientBatchSubmitRequest` object and extract the first batch.
             let req: ClientBatchSubmitRequest =
                 protobuf::Message::parse_from_bytes(request).unwrap();
@@ -724,26 +774,33 @@ pub mod test {
                 (context.readable_state(), context.readable_events())
             };
 
-            // Perform determinism checking and get the expected contexts
-            let number_of_determinism_checking_cycles = 5;
-            let context = { TestTransactionContext::clone(&self.context.lock().unwrap()) };
-            let expected_contexts = test_determinism(
-                transactions.as_slice(),
-                &context,
-                number_of_determinism_checking_cycles,
-            );
+            // Run the TP process in a seperate task, so it does not complete before subscriptions
+            // The simulation is only tacitly ordered - events sent before subscription will not be recieved
+            let self_clone = self.clone();
+            tokio::task::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
 
-            // Update the context and perform an output determinism check.
-            let mut context = self.context.lock().unwrap();
-            apply_transactions(&self.handler, &mut context, transactions.as_slice());
-            let updated_readable_state_and_events =
-                (context.readable_state(), context.readable_events());
-            assert_ne!(
-                preprocessing_state_and_events, updated_readable_state_and_events,
-                "Context must be updated after running apply"
-            );
-            assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
+                // Perform determinism checking and get the expected contexts
+                let number_of_determinism_checking_cycles = 5;
+                let context =
+                    { TestTransactionContext::clone(&self_clone.context.lock().unwrap()) };
+                let expected_contexts = test_determinism(
+                    transactions.as_slice(),
+                    &context,
+                    number_of_determinism_checking_cycles,
+                );
 
+                // Update the context and perform an output determinism check.
+                let mut context = self_clone.context.lock().unwrap();
+                apply_transactions(&self_clone.handler, &mut context, transactions.as_slice());
+                let updated_readable_state_and_events =
+                    (context.readable_state(), context.readable_events());
+                assert_ne!(
+                    preprocessing_state_and_events, updated_readable_state_and_events,
+                    "Context must be updated after running apply"
+                );
+                assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
+            });
             // Create a response with an "OK" status and write it to a byte vector.
             let mut response = ClientBatchSubmitResponse::default();
             response
@@ -752,9 +809,10 @@ pub mod test {
         }
     }
 
+    #[async_trait::async_trait]
     impl SimulatedSawtoothBehavior for WellBehavedBehavior {
         #[instrument(skip(self, request))]
-        fn handle_request(
+        async fn handle_request(
             &self,
             message_type: MessageType,
             request: Vec<u8>,
@@ -763,7 +821,7 @@ pub mod test {
                 // Batch submit request, decode and apply the transactions
                 // in the batch
                 MessageType::ClientBatchSubmitRequest => {
-                    let buf = self.submit_batch(&request)?;
+                    let buf = self.submit_batch(&request).await?;
                     Ok((MessageType::ClientBatchSubmitResponse, buf))
                 }
                 // Always respond with a block height of one
@@ -907,11 +965,13 @@ pub mod test {
                               let request: async_stl_client::messages::Message =
                                   async_stl_client::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
 
+
                               let response = behavior_clone
                                   .handle_request(
                                       MessageType::from_i32(request.message_type).unwrap(),
                                       request.content,
                                   )
+                                  .await
                                   .unwrap();
 
 
@@ -932,7 +992,6 @@ pub mod test {
                               if unsolicited_message.is_none() {
                                 break;
                               }
-                              tracing::trace!(unsolicited_message=?unsolicited_message);
 
                               let unsolicited_message = unsolicited_message.unwrap().unwrap();
                               debug!(unsolicited_message = ?unsolicited_message);
@@ -999,15 +1058,18 @@ pub mod test {
         secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
     }
 
-    async fn bootstrap_root_state() -> (String, EmbeddedOpaTp) {
+    // Cli should automatically create ephemeral batcher keys, but we need to supply named keyfiles in a temp directory
+    async fn bootstrap_root_state() -> (String, EmbeddedOpaTp, TempDir) {
         let root_key = key_from_seed(0);
 
-        let mut keyfile = NamedTempFile::new().unwrap();
-        keyfile.write_all(root_key.as_bytes()).unwrap();
+        let keystore = tempfile::tempdir().unwrap();
+        let keyfile_path = keystore.path().join("./opa-pk");
+        std::fs::write(&keyfile_path, root_key.as_bytes()).unwrap();
 
-        let matches = get_opactl_cmd(
-            format!("opactl bootstrap --root-key {}", keyfile.path().display()).as_str(),
-        );
+        let matches = get_opactl_cmd(&format!(
+            "opactl --batcher-key-generated --keystore-path {} bootstrap",
+            keystore.path().display()
+        ));
 
         let opa_tp = embed_opa_tp();
 
@@ -1016,12 +1078,12 @@ pub mod test {
             .await
             .unwrap();
 
-        (root_key, reuse_opa_tp_state(opa_tp))
+        (root_key, reuse_opa_tp_state(opa_tp), keystore)
     }
 
     #[tokio::test]
     async fn bootstrap_root_and_get_key() {
-        let (_root_key, opa_tp) = bootstrap_root_state().await;
+        let (_root_key, opa_tp, _keystore) = bootstrap_root_state().await;
         //Generate a key pem and set env vars
         insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
             ".**.date" => "[date]",
@@ -1057,21 +1119,17 @@ pub mod test {
 
     #[tokio::test]
     async fn rotate_root() {
-        let (root_key, opa_tp) = bootstrap_root_state().await;
-
-        let mut old_keyfile = NamedTempFile::new().unwrap();
-        old_keyfile.write_all(root_key.as_bytes()).unwrap();
+        let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
         let new_root_key = key_from_seed(1);
 
-        let mut new_keyfile = NamedTempFile::new().unwrap();
-        new_keyfile.write_all(new_root_key.as_bytes()).unwrap();
+        let keyfile_path = keystore.path().join("./new-root-1");
+        std::fs::write(&keyfile_path, new_root_key.as_bytes()).unwrap();
 
         let matches = get_opactl_cmd(
             format!(
-                "opactl rotate-root --current-root-key {} --new-root-key {}",
-                old_keyfile.path().display(),
-                new_keyfile.path().display()
+                "opactl --batcher-key-generated --opa-key-from-path --keystore-path {} rotate-root  --new-root-key new-root-1",
+                keystore.path().display(),
             )
             .as_str(),
         );
@@ -1113,20 +1171,17 @@ pub mod test {
 
     #[tokio::test]
     async fn register_and_rotate_key() {
-        let (root_key, opa_tp) = bootstrap_root_state().await;
+        let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
-        let mut root_keyfile = NamedTempFile::new().unwrap();
-        root_keyfile.write_all(root_key.as_bytes()).unwrap();
+        let new_key = key_from_seed(1);
 
-        let new_user_key = key_from_seed(0);
-        let mut new_keyfile = NamedTempFile::new().unwrap();
-        new_keyfile.write_all(new_user_key.as_bytes()).unwrap();
+        let keyfile_path = keystore.path().join("./new-key-1");
+        std::fs::write(&keyfile_path, new_key.as_bytes()).unwrap();
 
         let matches = get_opactl_cmd(
             format!(
-                "opactl register-key --root-key {} --new-key {} --id test",
-                root_keyfile.path().display(),
-                new_keyfile.path().display()
+                "opactl --batcher-key-generated --keystore-path {} register-key  --new-key new-key-1 --id test",
+                keystore.path().display(),
             )
             .as_str(),
         );
@@ -1167,18 +1222,15 @@ pub mod test {
             id: test
         "###);
 
-        let rotate_user_key = key_from_seed(0);
-        let mut rotate_keyfile = NamedTempFile::new().unwrap();
-        rotate_keyfile
-            .write_all(rotate_user_key.as_bytes())
-            .unwrap();
+        let new_key_2 = key_from_seed(1);
+
+        let keyfile_path = keystore.path().join("./new-key-2");
+        std::fs::write(&keyfile_path, new_key_2.as_bytes()).unwrap();
 
         let matches = get_opactl_cmd(
             format!(
-                "opactl rotate-key --root-key {} --current-key {} --new-key {} --id test",
-                root_keyfile.path().display(),
-                new_keyfile.path().display(),
-                rotate_keyfile.path().display(),
+                "opactl --batcher-key-generated --keystore-path {} rotate-key  --current-key new-key-1 --new-key new-key-2 --id test",
+                keystore.path().display(),
             )
             .as_str(),
         );
@@ -1195,7 +1247,7 @@ pub mod test {
         ---
         WaitedAndFound:
           KeyUpdate:
-            id: root
+            id: test
             current:
               key: "[pem]"
               version: 1
@@ -1212,23 +1264,23 @@ pub mod test {
         - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
           - current:
               key: "[pem]"
-              version: 1
-            expired:
-              key: "[pem]"
               version: 0
+            expired: ~
             id: root
         - - 7ed19336d8b5677c39a7b872910f948944dd84ba014846c81fcd53fe1fd5289b9dfd1c
           - current:
               key: "[pem]"
+              version: 1
+            expired:
+              key: "[pem]"
               version: 0
-            expired: ~
             id: test
         "###);
     }
 
     #[tokio::test]
     async fn set_and_update_policy() {
-        let (root_key, opa_tp) = bootstrap_root_state().await;
+        let (root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
         let mut root_keyfile = NamedTempFile::new().unwrap();
         root_keyfile.write_all(root_key.as_bytes()).unwrap();
@@ -1238,8 +1290,8 @@ pub mod test {
 
         let matches = get_opactl_cmd(
             format!(
-                "opactl set-policy --root-key {} --id test  --policy {}",
-                root_keyfile.path().display(),
+                "opactl --batcher-key-generated --keystore-path {} set-policy  --id test  --policy {}",
+                keystore.path().display(),
                 policy.path().display()
             )
             .as_str(),
@@ -1285,8 +1337,8 @@ pub mod test {
 
         let matches = get_opactl_cmd(
             format!(
-                "opactl set-policy --root-key {} --id test  --policy {}",
-                root_keyfile.path().display(),
+                "opactl --batcher-key-generated --keystore-path {} set-policy  --id test  --policy {}",
+                keystore.path().display(),
                 policy.path().display()
             )
             .as_str(),

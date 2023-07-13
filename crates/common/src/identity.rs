@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, fmt};
 
-use crate::{
-    prov::AgentId,
-    signing::{DirectoryStoredKeys, SignerError, KMS},
-};
+use crate::prov::AgentId;
 
-use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
-use openssl::sha::Sha512;
+use chronicle_signing::{ChronicleKnownKeyNamesSigner, SecretError};
+use k256::{
+    ecdsa::VerifyingKey,
+    sha2::{Digest, Sha512},
+};
 use serde_json::{Map, Value};
 use thiserror::Error;
 use tracing::warn;
@@ -16,8 +16,8 @@ pub enum IdentityError {
     #[error("Failed to get agent id from JWT claims")]
     JwtClaims,
 
-    #[error("Invalid key store directory: {0}")]
-    KeyStore(#[from] SignerError),
+    #[error("Signer : {0}")]
+    KeyStore(#[from] SecretError),
 
     #[error("Malformed JSON: {0}")]
     SerdeJson(#[from] serde_json::Error),
@@ -105,12 +105,13 @@ impl AuthId {
         const ZERO: [u8; 1] = [0];
 
         let mut hasher = Sha512::new();
+
         for id_key in id_keys {
             if let Some(Value::String(claim_value)) = claims.get(id_key) {
                 hasher.update(id_key.as_bytes());
-                hasher.update(&ZERO);
+                hasher.update(ZERO);
                 hasher.update(claim_value.as_bytes());
-                hasher.update(&ZERO);
+                hasher.update(ZERO);
             } else {
                 let keys_available: Vec<&String> = claims.keys().collect();
                 warn!(
@@ -121,7 +122,7 @@ impl AuthId {
         }
 
         Ok(Self::JWT(JwtId::new(
-            &hex::encode(hasher.finish()),
+            &hex::encode(hasher.finalize()),
             Value::Object(claims.to_owned()),
         )))
     }
@@ -142,40 +143,20 @@ impl AuthId {
         serde_json::to_value(self).map_err(|e| IdentityError::SerdeJsonSerialize(e.to_string()))
     }
 
-    fn signature<F, T>(&self, store: &DirectoryStoredKeys, f: F) -> Result<Signature, IdentityError>
-    where
-        F: Fn(SigningKey) -> Result<T, SignerError>,
-        T: Signer<Signature>,
-    {
-        let signing_key = self.signing_key(store, f)?;
-        let buf = serde_json::to_string(self)?.as_bytes().to_vec();
-        Ok(signing_key.try_sign(&buf)?)
-    }
-
     /// Get the user identity's [`SignedIdentity`]
-    pub fn signed_identity(&self, store: KMS) -> Result<SignedIdentity, IdentityError> {
-        let (store, f) = match store {
-            KMS::Directory(store) => {
-                let retrieve_signer = crate::signing::directory_signing_key;
-                (store, retrieve_signer)
-            }
-        };
-        let verifying_key = self.verifying_key(store)?;
-        let signature = self.signature(store, f)?;
-        SignedIdentity::new(self, signature, verifying_key)
-    }
+    pub fn signed_identity<S: ChronicleKnownKeyNamesSigner>(
+        &self,
+        store: &S,
+    ) -> Result<SignedIdentity, IdentityError> {
+        let buf = serde_json::to_string(self)?.as_bytes().to_vec();
 
-    /// Use the Chronicle key to sign all identity variants
-    fn signing_key<F, T>(&self, store: &DirectoryStoredKeys, f: F) -> Result<T, IdentityError>
-    where
-        F: Fn(SigningKey) -> Result<T, SignerError>,
-    {
-        Ok(store.chronicle_signing(f)?)
-    }
-
-    /// Use the Chronicle key to verify all identity variants
-    fn verifying_key(&self, store: &DirectoryStoredKeys) -> Result<VerifyingKey, IdentityError> {
-        Ok(store.chronicle_verifying()?)
+        futures::executor::block_on(async move {
+            SignedIdentity::new(
+                self,
+                store.chronicle_sign(&buf).await?,
+                store.chronicle_verifying().await?,
+            )
+        })
     }
 }
 
@@ -234,14 +215,14 @@ impl OpaData {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SignedIdentity {
     pub identity: String,
-    pub signature: Option<Signature>,
+    pub signature: Option<Vec<u8>>,
     pub verifying_key: Option<VerifyingKey>,
 }
 
 impl SignedIdentity {
     fn new(
         id: &AuthId,
-        signature: Signature,
+        signature: Vec<u8>,
         verifying_key: VerifyingKey,
     ) -> Result<Self, IdentityError> {
         Ok(Self {
@@ -279,9 +260,9 @@ mod tests {
         let mut hasher = Sha512::new();
         claim_strings.for_each(|s| {
             hasher.update(s.as_bytes());
-            hasher.update(&ZERO);
+            hasher.update(ZERO);
         });
-        hex::encode(hasher.finish()).into()
+        hex::encode(hasher.finalize()).into()
     }
 
     #[test]

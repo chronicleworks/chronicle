@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 
 use api::ApiError;
 use chronicle_protocol::async_stl_client::error::SawtoothCommunicationError;
+use chronicle_signing::SecretError;
 use clap::{
     builder::{PossibleValuesParser, StringValueParser},
     *,
@@ -15,7 +16,6 @@ use common::{
         operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
         ExternalId, ExternalIdPart, ParseIriError,
     },
-    signing::SignerError,
 };
 use iref::Iri;
 use thiserror::Error;
@@ -66,8 +66,8 @@ pub enum CliError {
     #[error("API failure: {0}")]
     ApiError(#[from] ApiError),
 
-    #[error("Key storage: {0}")]
-    Keys(#[from] SignerError),
+    #[error("Secrets : {0}")]
+    Secrets(#[from] SecretError),
 
     #[error("IO error: {0}")]
     InputOutput(#[from] std::io::Error),
@@ -101,6 +101,12 @@ pub enum CliError {
 
     #[error("UTF-8 error: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
+}
+
+impl CliError {
+    pub fn missing_argument(arg: impl Into<String>) -> Self {
+        Self::MissingArgument { arg: arg.into() }
+    }
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -813,17 +819,6 @@ impl SubCommand for CliModel {
             .author("Blockchain Technology Partners")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
-                Arg::new("config")
-                    .short('c')
-                    .long("config")
-                    .value_name("config")
-                    .value_hint(ValueHint::FilePath)
-                    .default_value("~/.chronicle/config.toml")
-                    .help("Sets a custom config file")
-                    .takes_value(true)
-                    .env("CHRONICLE_CONFIG"),
-            )
-            .arg(
                 Arg::new("instrument")
                     .short('i')
                     .long("instrument")
@@ -1025,6 +1020,88 @@ impl SubCommand for CliModel {
 
         #[cfg(not(feature = "inmem"))]
         {
+            app = app.arg(
+                Arg::new("batcher-key-from-path")
+                    .long("batcher-key-from-path")
+                    .takes_value(true)
+                    .value_hint(ValueHint::DirPath)
+                    .help("Path to a directory containing the key for signing batches")
+                    .conflicts_with("batcher-key-from-vault")
+                    .conflicts_with("batcher-key-generated"),
+            );
+
+            app = app.arg(
+                Arg::new("batcher-key-from-vault")
+                    .long("batcher-key-from-vault")
+                    .takes_value(false)
+                    .help("Use Hashicorp Vault to store the batcher key")
+                    .conflicts_with("batcher-key-from-path")
+                    .conflicts_with("batcher-key-generated"),
+            );
+
+            app = app.arg(
+                Arg::new("batcher-key-generated")
+                    .long("batcher-key-generated")
+                    .takes_value(false)
+                    .help("Generate the batcher key in memory")
+                    .conflicts_with("batcher-key-from-path")
+                    .conflicts_with("batcher-key-from-vault"),
+            );
+
+            app = app.arg(
+                Arg::new("chronicle-key-from-path")
+                    .long("chronicle-key-from-path")
+                    .takes_value(true)
+                    .value_hint(ValueHint::DirPath)
+                    .help("Path to a directory containing the key for signing identities and query results")
+                    .conflicts_with("chronicle-key-from-vault")
+                    .conflicts_with("chronicle-key-generated"),
+            );
+
+            app = app.arg(
+                Arg::new("chronicle-key-from-vault")
+                    .long("chronicle-key-from-vault")
+                    .takes_value(false)
+                    .help("Use Hashicorp Vault to store the Chronicle key")
+                    .conflicts_with("chronicle-key-from-path")
+                    .conflicts_with("chronicle-key-generated"),
+            );
+
+            app = app.arg(
+                Arg::new("chronicle-key-generated")
+                    .long("chronicle-key-generated")
+                    .takes_value(false)
+                    .help("Generate the Chronicle key in memory")
+                    .conflicts_with("chronicle-key-from-path")
+                    .conflicts_with("chronicle-key-from-vault"),
+            );
+
+            app = app.arg(
+                Arg::new("vault-address")
+                    .long("vault-address")
+                    .takes_value(true)
+                    .value_hint(ValueHint::Url)
+                    .help("URL for connecting to Hashicorp Vault")
+                    .env("VAULT_ADDRESS"),
+            );
+
+            app = app.arg(
+                Arg::new("vault-token")
+                    .long("vault-token")
+                    .takes_value(true)
+                    .help("Token for connecting to Hashicorp Vault")
+                    .env("VAULT_TOKEN"),
+            );
+
+            app = app.arg(
+                Arg::new("vault-mount-path")
+                    .long("vault-mount-path")
+                    .takes_value(true)
+                    .value_hint(ValueHint::DirPath)
+                    .help("Mount path for vault secrets")
+                    .env("VAULT_MOUNT_PATH"),
+            );
+
             app.arg(
                 // default is provided by cargo.toml
                 Arg::new("sawtooth")

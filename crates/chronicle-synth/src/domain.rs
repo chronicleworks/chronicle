@@ -52,7 +52,7 @@ impl TypesAttributesRoles {
         impl From<ChronicleDomain> for TypesAttributesRoles {
             fn from(value: ChronicleDomain) -> Self {
                 let mut attribute_types = BTreeMap::new();
-                attribute_types.extend(value.attributes.into_iter());
+                attribute_types.extend(value.attributes);
 
                 let entities = value
                     .entities

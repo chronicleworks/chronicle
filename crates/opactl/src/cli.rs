@@ -1,25 +1,23 @@
-use std::process::exit;
+use std::path::PathBuf;
 
+use chronicle_signing::{
+    opa_secret_names, ChronicleSecretsOptions, ChronicleSigning, SecretError, BATCHER_NAMESPACE,
+    OPA_NAMESPACE,
+};
 use clap::{
-    builder::{NonEmptyStringValueParser, PathBufValueParser, StringValueParser},
-    parser::ValueSource,
+    builder::{NonEmptyStringValueParser, StringValueParser},
     Arg, ArgAction, ArgMatches, Command, ValueHint,
 };
-use k256::{pkcs8::DecodePrivateKey, SecretKey};
-use rand::rngs::StdRng;
-use rand_core::SeedableRng;
-use tracing::{debug, error, info};
+
+use tracing::info;
 use url::Url;
 
 // Generate an ephemeral key if no key is provided
-fn transactor_key() -> Arg {
-    Arg::new( "transactor-key")
-     .short('t')
-     .long("transactor-key")
-     .env("TRANSACTOR_KEY")
-     .num_args(0..=1)
-     .value_hint(ValueHint::FilePath)
-     .help("The path of a PEM-encoded private key, used to sign the sawtooth transaction. If not specified an ephemeral key will be generated")
+fn batcher_key() -> Arg {
+    Arg::new( "batcher-key-from-store")
+      .long("batcher-key-from-store")
+      .num_args(0)
+      .help("If specified the key 'batcher-pk' will be used to sign sawtooth transactions, otherwise an ephemeral key will be generated")
 }
 
 fn wait_args(command: Command) -> Command {
@@ -37,18 +35,8 @@ fn wait_args(command: Command) -> Command {
 fn bootstrap() -> Command {
     wait_args(
         Command::new("bootstrap")
-            .about("Initialize the OPA transaction processor with a root key")
-            .arg(
-                Arg::new("root-key")
-                    .short('r')
-                    .long("root-key")
-                    .env("ROOT_KEY")
-                    .required(true)
-                    .num_args(1)
-                    .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM-encoded private key"),
-            )
-            .arg(transactor_key()),
+            .about("Initialize the OPA transaction processor with a root key from the keystore")
+            .arg(batcher_key()),
     )
 }
 
@@ -59,27 +47,15 @@ fn generate() -> Command {
                 .short('o')
                 .long("output")
                 .num_args(0..=1)
-                .value_hint(ValueHint::FilePath)
-                .value_parser(PathBufValueParser::new())
-                .help("The path to write the key to, if not specified then the key is written to stdout"),
+                .help("The name to write the key to, if not specified then the key is written to stdout"),
         )
-        .about("Generate a new private key and write it to stdout")
+        .about("Generate a new private key and write it to the keystore")
 }
 
 fn rotate_root() -> Command {
     wait_args(
         Command::new("rotate-root")
             .about("Rotate the root key for the OPA transaction processor")
-            .arg(
-                Arg::new("current-root-key")
-                    .short('c')
-                    .long("current-root-key")
-                    .env("CURRENT_ROOT_KEY")
-                    .required(true)
-                    .num_args(1)
-                    .value_hint(ValueHint::FilePath)
-                    .help("The path of the current registered root private key"),
-            )
             .arg(
                 Arg::new("new-root-key")
                     .short('n')
@@ -88,9 +64,9 @@ fn rotate_root() -> Command {
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The path of the new key to register as the root key"),
+                    .help("The name of the new key in the keystore to register as the root key"),
             )
-            .arg(transactor_key()),
+            .arg(batcher_key()),
     )
 }
 
@@ -100,23 +76,11 @@ fn register_key() -> Command {
             .about("Register a new non root key with the OPA transaction processor")
             .arg(
                 Arg::new("new-key")
-                    .short('k')
                     .long("new-key")
-                    .env("NEW_KEY")
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM-encoded key to register"),
-            )
-            .arg(
-                Arg::new("root-key")
-                    .short('r')
-                    .long("root-key")
-                    .env("ROOT_KEY")
-                    .required(true)
-                    .num_args(1)
-                    .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM-encoded private key"),
+                    .help("The keystore name of a PEM-encoded key to register"),
             )
             .arg(
                 Arg::new("id")
@@ -135,7 +99,7 @@ fn register_key() -> Command {
                     .action(ArgAction::SetTrue)
                     .help("Replace any existing non-root key"),
             )
-            .arg(transactor_key()),
+            .arg(batcher_key()),
     )
 }
 
@@ -145,33 +109,21 @@ fn rotate_key() -> Command {
             .about("Rotate the key with the specified id for the OPA transaction processor")
             .arg(
                 Arg::new("current-key")
-                    .short('c')
                     .long("current-key")
                     .env("CURRENT_KEY")
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The path of the current registered root key"),
-            )
-            .arg(
-                Arg::new("root-key")
-                    .short('r')
-                    .long("root-key")
-                    .env("ROOT_KEY")
-                    .required(true)
-                    .num_args(1)
-                    .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM-encoded private key"),
+                    .help("The keystore name of the current registered key"),
             )
             .arg(
                 Arg::new("new-key")
-                    .short('n')
                     .long("new-key")
                     .env("NEW_KEY")
                     .required(true)
                     .num_args(1)
                     .value_hint(ValueHint::FilePath)
-                    .help("The path of the new key to register for the given name"),
+                    .help("The keystore name of the new key to register"),
             )
             .arg(
                 Arg::new("id")
@@ -183,7 +135,7 @@ fn rotate_key() -> Command {
                     .value_parser(NonEmptyStringValueParser::new())
                     .help("The id of the key"),
             )
-            .arg(transactor_key()),
+            .arg(batcher_key()),
     )
 }
 
@@ -211,17 +163,7 @@ fn set_policy() -> Command {
                     .value_parser(StringValueParser::new())
                     .help("A path or url to a policy bundle"),
             )
-            .arg(
-                Arg::new("root-key")
-                    .short('k')
-                    .long("root-key")
-                    .env("ROOT_KEY")
-                    .required(true)
-                    .num_args(1)
-                    .value_hint(ValueHint::FilePath)
-                    .help("The path of a PEM-encoded private key"),
-            )
-            .arg(transactor_key()),
+            .arg(batcher_key()),
     )
 }
 
@@ -281,11 +223,83 @@ pub const LONG_VERSION: &str = const_format::formatcp!(
 );
 
 pub fn cli() -> Command {
-    info!(chronicle_version = LONG_VERSION);
+    info!(opa_version = LONG_VERSION);
     Command::new("opactl")
         .version(LONG_VERSION)
         .author("Blockchain Technology Partners")
         .about("A command line tool for interacting with the OPA transaction processor")
+        .arg(
+            Arg::new("keystore-path")
+                .long("keystore-path")
+                .help("The path to a directory containing keys")
+                .value_parser(clap::value_parser!(PathBuf))
+                .value_hint(ValueHint::DirPath)
+                .env("KEYSTORE_PATH")
+                .default_value("."),
+        )
+        .arg(
+            Arg::new("batcher-key-from-path")
+                .long("batcher-key-from-path")
+                .action(ArgAction::SetTrue)
+                .help("Load batcher key from keystore path")
+                .conflicts_with("batcher-key-from-vault")
+                .conflicts_with("batcher-key-generated"),
+        )
+        .arg(
+            Arg::new("batcher-key-from-vault")
+                .long("batcher-key-from-vault")
+                .action(ArgAction::SetTrue)
+                .help("Use Hashicorp Vault to store the batcher key")
+                .conflicts_with("batcher-key-from-path")
+                .conflicts_with("batcher-key-generated"),
+        )
+        .arg(
+            Arg::new("batcher-key-generated")
+                .long("batcher-key-generated")
+                .action(ArgAction::SetTrue)
+                .help("Generate the batcher key in memory")
+                .conflicts_with("batcher-key-from-path")
+                .conflicts_with("batcher-key-from-vault"),
+        )
+        .arg(
+            Arg::new("opa-key-from-path")
+                .long("opa-key-from-path")
+                .action(ArgAction::SetTrue)
+                .help("Use keystore path for the opa key located in 'opa-pk'")
+                .conflicts_with("opa-key-from-vault"),
+        )
+        .arg(
+            Arg::new("opa-key-from-vault")
+                .long("opa-key-from-vault")
+                .action(ArgAction::SetTrue)
+                .help("Use Hashicorp Vault to store the Opa key")
+                .conflicts_with("opa-key-from-path"),
+        )
+        .arg(
+            Arg::new("vault-address")
+                .long("vault-address")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(Url))
+                .value_hint(ValueHint::Url)
+                .help("URL for connecting to Hashicorp Vault")
+                .env("VAULT_ADDRESS"),
+        )
+        .arg(
+            Arg::new("vault-token")
+                .long("vault-token")
+                .num_args(0..=1)
+                .help("Token for connecting to Hashicorp Vault")
+                .env("VAULT_TOKEN"),
+        )
+        .arg(
+            Arg::new("vault-mount-path")
+                .long("vault-mount-path")
+                .num_args(0..=1)
+                .value_hint(ValueHint::DirPath)
+                .help("Mount path for vault secrets")
+                .default_value("/")
+                .env("VAULT_MOUNT_PATH"),
+        )
         .arg(
             Arg::new("sawtooth-address")
                 .short('a')
@@ -306,32 +320,65 @@ pub fn cli() -> Command {
         .subcommand(get_policy())
 }
 
-// Keys are either file paths to a PEM encoded key or a PEM encoded key supplied
-// as an environment variable, so we need to load them based on the input type
-pub(crate) fn load_key_from_match(name: &str, matches: &ArgMatches) -> SecretKey {
-    if let Some(source) = matches.value_source(name) {
-        debug!(loading_key=%name, from=?source);
-        match source {
-            ValueSource::CommandLine | ValueSource::DefaultValue => {
-                let path: &String = matches.get_one(name).unwrap();
-                let key = std::fs::read_to_string(path).unwrap_or_else(|_| {
-                    error!("Unable to read file {path}");
-                    exit(1)
-                });
-                SecretKey::from_pkcs8_pem(key.trim()).unwrap()
-            }
-            ValueSource::EnvVariable => {
-                let key: &String = matches.get_one(name).unwrap();
-                SecretKey::from_pkcs8_pem(key.trim()).unwrap()
-            }
-            _ => unreachable!(),
-        }
-    } else if name == "transactor-key" {
-        debug!("creating new transactor key");
-        SecretKey::random(StdRng::from_entropy())
+// Chronicle secret store needs to know what secret names are used in advance,
+// so extract from potential cli args
+fn additional_secret_names(expected: Vec<&str>, matches: &ArgMatches) -> Vec<String> {
+    expected
+        .iter()
+        .filter_map(|x| matches.get_one::<String>(x).cloned())
+        .collect()
+}
+
+// Batcher keys may be ephemeral if batcher-key-from-path is not set, also we need to know secret names in advance, so must inspect the supplied CLI arguments
+pub(crate) async fn configure_signing(
+    expected: Vec<&str>,
+    root_matches: &ArgMatches,
+    matches: &ArgMatches,
+) -> Result<ChronicleSigning, SecretError> {
+    let mut secret_names = opa_secret_names();
+    secret_names.append(
+        &mut additional_secret_names(expected, matches)
+            .into_iter()
+            .map(|name| (OPA_NAMESPACE.to_string(), name.to_string()))
+            .collect(),
+    );
+    let keystore_path = root_matches.get_one::<PathBuf>("keystore-path").unwrap();
+
+    let opa_key_from_vault = root_matches
+        .get_one("opa-key-from-vault")
+        .is_some_and(|x| *x);
+    let opa_secret_options = if opa_key_from_vault {
+        ChronicleSecretsOptions::stored_in_vault(
+            matches.get_one("vault-url").unwrap(),
+            matches.get_one("vault-token").cloned().unwrap(),
+            matches.get_one("vault-mount-path").cloned().unwrap(),
+        )
     } else {
-        panic!("no source for key \"{name}\"")
-    }
+        ChronicleSecretsOptions::stored_at_path(keystore_path)
+    };
+    let opa_secret = (OPA_NAMESPACE.to_string(), opa_secret_options);
+
+    let batcher_key_from_path = root_matches
+        .get_one("batcher-key-from-path")
+        .is_some_and(|x| *x);
+    let batcher_key_from_vault = root_matches
+        .get_one("batcher-key-from-vault")
+        .is_some_and(|x| *x);
+    let batcher_secret_options = if batcher_key_from_path {
+        ChronicleSecretsOptions::stored_at_path(keystore_path)
+    } else if batcher_key_from_vault {
+        ChronicleSecretsOptions::stored_in_vault(
+            matches.get_one("vault-url").unwrap(),
+            matches.get_one("vault-token").cloned().unwrap(),
+            matches.get_one("vault-mount-path").cloned().unwrap(),
+        )
+    } else {
+        ChronicleSecretsOptions::generate_in_memory()
+    };
+    let batcher_secret = (BATCHER_NAMESPACE.to_string(), batcher_secret_options);
+
+    let secrets = vec![opa_secret, batcher_secret];
+    ChronicleSigning::new(secret_names, secrets).await
 }
 
 #[derive(Debug, Clone, Copy)]

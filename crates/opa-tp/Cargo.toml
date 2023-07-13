@@ -21,6 +21,7 @@ doc = false
 async-stl-client = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
+chronicle-signing = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap = { workspace = true, features = ["derive", "env"] }
 const_format = { workspace = true }

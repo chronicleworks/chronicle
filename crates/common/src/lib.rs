@@ -13,6 +13,5 @@ pub mod import;
 pub mod ledger;
 pub mod opa;
 pub mod prov;
-pub mod signing;
 
 pub use k256;

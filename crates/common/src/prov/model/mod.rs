@@ -65,8 +65,8 @@ pub enum ProcessorError {
         iri: String,
         object: serde_json::Value,
     },
-    #[error("Json LD object is not a node")]
-    NotANode,
+    #[error("Json LD object is not a node {0}")]
+    NotANode(serde_json::Value),
     #[error("Chronicle value is not a JSON object")]
     NotAnObject,
     #[error("OpaExecutorError: {0}")]
@@ -452,7 +452,7 @@ impl ProvModel {
     ) {
         self.derivation
             .entry((namespace_id, id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Derivation {
                 typ,
                 generated_id: id,
@@ -485,11 +485,11 @@ impl ProvModel {
         };
         self.delegation
             .entry((namespace_id.clone(), responsible_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(delegation.clone());
         self.acted_on_behalf_of
             .entry((namespace_id.clone(), delegate_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(delegation);
     }
 
@@ -502,7 +502,7 @@ impl ProvModel {
     ) {
         self.association
             .entry((namespace_id.clone(), activity_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Association {
                 namespace_id: namespace_id.clone(),
                 id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
@@ -520,7 +520,7 @@ impl ProvModel {
     ) {
         self.generation
             .entry((namespace, generated_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Generation {
                 activity_id: activity_id.clone(),
                 generated_id: generated_id.clone(),
@@ -535,7 +535,7 @@ impl ProvModel {
     ) {
         self.generated
             .entry((namespace, generated_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(GeneratedEntity {
                 entity_id: entity_id.clone(),
                 generated_id: generated_id.clone(),
@@ -545,7 +545,7 @@ impl ProvModel {
     pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
         self.usage
             .entry((namespace, activity_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Usage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
@@ -560,7 +560,7 @@ impl ProvModel {
     ) {
         self.was_informed_by
             .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert((namespace, informing_activity.clone()));
     }
 
@@ -573,7 +573,7 @@ impl ProvModel {
     ) {
         self.attribution
             .entry((namespace_id.clone(), entity_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Attribution {
                 namespace_id: namespace_id.clone(),
                 id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
@@ -586,7 +586,7 @@ impl ProvModel {
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
         self.had_identity
             .entry((namespace.clone(), agent.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert((namespace, identity.clone()));
     }
 
@@ -1172,6 +1172,7 @@ impl ExpandedJson {
         use json_ld::{
             syntax::context, Compact, ExpandedDocument, Process, ProcessingMode, TryFromJson,
         };
+
         let vocabulary = no_vocabulary_mut();
         let mut loader: NoLoader<IriBuf, (), json_ld::syntax::Value> = NoLoader::new();
 
