@@ -4,9 +4,7 @@ use async_graphql::Context;
 use chrono::{DateTime, Utc};
 use common::{
     attributes::Attributes,
-    commands::{
-        ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
-    },
+    commands::{ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand},
     identity::AuthId,
     prov::{operations::DerivationType, ActivityId, AgentId, EntityId, Role},
 };
@@ -226,31 +224,6 @@ pub async fn was_quoted_from<'a>(
         DerivationType::Quotation,
     )
     .await
-}
-
-pub async fn generate_key<'a>(
-    ctx: &Context<'a>,
-    id: AgentId,
-    namespace: Option<String>,
-) -> async_graphql::Result<Submission> {
-    let api = ctx.data_unchecked::<ApiDispatch>();
-
-    let identity = ctx.data_unchecked::<AuthId>().to_owned();
-
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
-
-    let res = api
-        .dispatch(
-            ApiCommand::Agent(AgentCommand::RegisterKey {
-                id,
-                namespace,
-                registration: KeyRegistration::Generate,
-            }),
-            identity,
-        )
-        .await?;
-
-    transaction_context(res, ctx).await
 }
 
 pub async fn start_activity<'a>(

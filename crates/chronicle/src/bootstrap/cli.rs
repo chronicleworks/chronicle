@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, convert::Infallible, path::PathBuf};
+use std::{collections::BTreeMap, convert::Infallible};
 
 use api::ApiError;
 use chronicle_protocol::async_sawtooth_sdk::error::SawtoothCommunicationError;
@@ -8,9 +8,7 @@ use clap::{
 };
 use common::{
     attributes::{Attribute, Attributes},
-    commands::{
-        ActivityCommand, AgentCommand, ApiCommand, EntityCommand, KeyImport, KeyRegistration,
-    },
+    commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
     import::FromUrlError,
     opa::{OpaExecutorError, PolicyLoaderError},
     prov::{
@@ -350,62 +348,24 @@ impl SubCommand for AgentCliModel {
             define = define.arg(attr.as_arg());
         }
 
-        cmd.subcommand(define)
-        .subcommand(Command::new("register-key")
-            .about("Register a key pair, or a public key with an agent")
-            .arg(Arg::new("id")
-                .help("A valid chronicle agent IRI")
-                .required(true)
-                .takes_value(true))
-            .arg(
-                Arg::new("namespace")
-                    .short('n')
-                    .long("namespace")
-                    .default_value("default")
-                    .required(false)
-                    .takes_value(true),
-            )
-            .arg(Arg::new("generate")
-                .help("Automatically generate a signing key for this agent and store it in the configured key store")
-                .required_unless_present_any(vec!["publickey", "privatekey"])
-                .short('g')
-                .long("generate")
-                .takes_value(false),
-            )
-            .arg(
-                Arg::new("publickey")
-                    .help("Import the public key at this location to the configured key store")
-                    .short('p')
-                    .long("publickey")
-                    .value_hint(ValueHint::FilePath)
-                    .required_unless_present_any(vec!["generate","privatekey"])
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("privatekey")
-                    .help("Import the private key at the specified path to the configured key store, ensure you have configured the key store to be in an appropriate location")
-                    .short('k')
-                    .long("privatekey")
-                    .required_unless_present_any(vec!["generate","publickey"])
-                    .value_hint(ValueHint::FilePath)
-                    .required(false)
-                    .takes_value(true),
-            ))
-        .subcommand(Command::new("use")
-            .about("Make the specified agent the context for activities and entities")
-            .arg(Arg::new("id")
-                .help("A valid chronicle agent IRI")
-                .required(true)
-                .takes_value(true))
-            .arg(
-                Arg::new("namespace")
-                    .short('n')
-                    .long("namespace")
-                    .default_value("default")
-                    .required(false)
-                    .takes_value(true),
-            ),
-    )
+        cmd.subcommand(define).subcommand(
+            Command::new("use")
+                .about("Make the specified agent the context for activities and entities")
+                .arg(
+                    Arg::new("id")
+                        .help("A valid chronicle agent IRI")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .default_value("default")
+                        .required(false)
+                        .takes_value(true),
+                ),
+        )
     }
 
     fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
@@ -414,26 +374,6 @@ impl SubCommand for AgentCliModel {
                 external_id: name_from::<AgentId>(matches, "external_id", "id")?,
                 namespace: namespace_from(matches)?,
                 attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
-            })));
-        }
-        if let Some(matches) = matches.subcommand_matches("register-key") {
-            let registration = {
-                if matches.contains_id("generate") {
-                    KeyRegistration::Generate
-                } else if matches.contains_id("privatekey") {
-                    KeyRegistration::ImportSigning(KeyImport::FromPath {
-                        path: matches.get_one::<PathBuf>("privatekey").unwrap().to_owned(),
-                    })
-                } else {
-                    KeyRegistration::ImportVerifying(KeyImport::FromPath {
-                        path: matches.get_one::<PathBuf>("publickey").unwrap().to_owned(),
-                    })
-                }
-            };
-            return Ok(Some(ApiCommand::Agent(AgentCommand::RegisterKey {
-                id: id_from(matches, "id")?,
-                namespace: namespace_from(matches)?,
-                registration,
             })));
         }
 

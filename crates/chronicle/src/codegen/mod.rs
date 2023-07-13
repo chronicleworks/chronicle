@@ -1234,7 +1234,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     let acted_on_behalf_of_doc = include_str!("../../../../domain_docs/acted_on_behalf_of.md");
     let define_doc = include_str!("../../../../domain_docs/define.md");
     let end_doc = include_str!("../../../../domain_docs/end_activity.md");
-    let generate_key_doc = include_str!("../../../../domain_docs/generate_key.md");
     let had_primary_source_doc = include_str!("../../../../domain_docs/had_primary_source.md");
     let instant_activity_doc = include_str!("../../../../domain_docs/instant_activity.md");
     let prov_activity_doc = include_str!("../../../../domain_docs/prov_activity.md");
@@ -1465,16 +1464,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_quoted_from(ctx, namespace, generated_entity.into(), used_entity.into())
                 .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
-        }
-
-        #[doc = #_(#generate_key_doc)]
-        pub async fn generate_key<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            id: #agent_id,
-            namespace: Option<String>,
-        ) -> async_graphql::#graphql_result<#submission> {
-            #impls::generate_key(ctx, id.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #[doc = #_(#instant_activity_doc)]
