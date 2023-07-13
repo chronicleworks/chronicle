@@ -307,7 +307,8 @@ where
         let store = Store::new(pool.clone())?;
 
         let keystore = DirectoryStoredKeys::new(secret_path)?;
-        let signing = keystore.chronicle_signing()?;
+        let retrieve_signer = common::signing::directory_signing_key;
+        let signing = keystore.chronicle_signing(retrieve_signer)?;
 
         pool.get()?
             .build_transaction()
@@ -551,7 +552,8 @@ where
         identity: AuthId,
         to_apply: Vec<ChronicleOperation>,
     ) -> Result<ApiResponse, ApiError> {
-        let identity = identity.signed_identity(&self.keystore)?;
+        let kms = common::signing::KMS::Directory(&self.keystore);
+        let identity = identity.signed_identity(kms)?;
         let model = ProvModel::from_tx(&to_apply)?;
         let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
 
@@ -976,7 +978,7 @@ where
         identity: AuthId,
         to_apply: Vec<ChronicleOperation>,
     ) -> Result<ApiResponse, ApiError> {
-        let identity = identity.signed_identity(&self.keystore)?;
+        let identity = identity.signed_identity(common::signing::KMS::Directory(&self.keystore))?;
         let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
         Ok(ApiResponse::depth_charge_submission(tx_id))
     }
@@ -1343,7 +1345,7 @@ where
         operations: Vec<ChronicleOperation>,
     ) -> Result<ApiResponse, ApiError> {
         let mut api = self.clone();
-        let identity = identity.signed_identity(&self.keystore)?;
+        let identity = identity.signed_identity(common::signing::KMS::Directory(&self.keystore))?;
         let model = ProvModel::from_tx(&operations)?;
         tokio::task::spawn_blocking(move || {
             // Check here to ensure that import operations result in data changes

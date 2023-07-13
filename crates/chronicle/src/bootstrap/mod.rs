@@ -693,7 +693,8 @@ pub async fn bootstrap<Query, Mutation>(
             .expect("failed to create key store at {config.secrets.path}");
         info!(keystore=?store);
 
-        if store.chronicle_signing().is_err() {
+        let retrieve_signer = common::signing::directory_signing_key;
+        if store.chronicle_signing(retrieve_signer).is_err() {
             info!("Generating new chronicle key");
             store
                 .generate_chronicle()

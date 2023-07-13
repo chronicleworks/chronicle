@@ -42,6 +42,19 @@ pub enum SignerError {
     NoPrivateKeyFound,
 }
 
+// TODO:
+// This is a temporary solution to allow for matching on different KMS types
+// in order to retrieve different methods for retrieving keys/signatures.
+pub enum KMS<'a> {
+    Directory(&'a DirectoryStoredKeys),
+}
+
+// TODO:
+// Placeholder for a more generic solution to signing
+pub fn directory_signing_key(key: SigningKey) -> Result<SigningKey, SignerError> {
+    Ok(key)
+}
+
 #[derive(Debug, Clone)]
 pub struct DirectoryStoredKeys {
     base: PathBuf,
@@ -58,8 +71,12 @@ impl DirectoryStoredKeys {
         })
     }
 
-    pub fn chronicle_signing(&self) -> Result<SigningKey, SignerError> {
-        Self::signing_key_at(&self.base)
+    pub fn chronicle_signing<F, T>(&self, f: F) -> Result<T, SignerError>
+    where
+        F: Fn(SigningKey) -> Result<T, SignerError>,
+    {
+        let signing_key = Self::signing_key_at(&self.base)?;
+        f(signing_key)
     }
 
     /// Return the verifying key associated with the Chronicle user

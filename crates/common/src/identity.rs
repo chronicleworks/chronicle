@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, fmt};
 
 use crate::{
     prov::AgentId,
-    signing::{DirectoryStoredKeys, SignerError},
+    signing::{DirectoryStoredKeys, SignerError, KMS},
 };
 
 use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
@@ -142,25 +142,35 @@ impl AuthId {
         serde_json::to_value(self).map_err(|e| IdentityError::SerdeJsonSerialize(e.to_string()))
     }
 
-    fn signature(&self, store: &DirectoryStoredKeys) -> Result<Signature, IdentityError> {
-        let signing_key = self.signing_key(store)?;
+    fn signature<F, T>(&self, store: &DirectoryStoredKeys, f: F) -> Result<Signature, IdentityError>
+    where
+        F: Fn(SigningKey) -> Result<T, SignerError>,
+        T: Signer<Signature>,
+    {
+        let signing_key = self.signing_key(store, f)?;
         let buf = serde_json::to_string(self)?.as_bytes().to_vec();
         Ok(signing_key.try_sign(&buf)?)
     }
 
     /// Get the user identity's [`SignedIdentity`]
-    pub fn signed_identity(
-        &self,
-        store: &DirectoryStoredKeys,
-    ) -> Result<SignedIdentity, IdentityError> {
+    pub fn signed_identity(&self, store: KMS) -> Result<SignedIdentity, IdentityError> {
+        let (store, f) = match store {
+            KMS::Directory(store) => {
+                let retrieve_signer = crate::signing::directory_signing_key;
+                (store, retrieve_signer)
+            }
+        };
         let verifying_key = self.verifying_key(store)?;
-        let signature = self.signature(store)?;
+        let signature = self.signature(store, f)?;
         SignedIdentity::new(self, signature, verifying_key)
     }
 
     /// Use the Chronicle key to sign all identity variants
-    fn signing_key(&self, store: &DirectoryStoredKeys) -> Result<SigningKey, IdentityError> {
-        Ok(store.chronicle_signing()?)
+    fn signing_key<F, T>(&self, store: &DirectoryStoredKeys, f: F) -> Result<T, IdentityError>
+    where
+        F: Fn(SigningKey) -> Result<T, SignerError>,
+    {
+        Ok(store.chronicle_signing(f)?)
     }
 
     /// Use the Chronicle key to verify all identity variants
