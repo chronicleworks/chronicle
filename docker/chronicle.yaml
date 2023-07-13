@@ -125,7 +125,6 @@ services:
         /usr/local/bin/chronicle \
           -c /etc/chronicle/config/config.toml \
           --console-logging pretty \
-          --sawtooth tcp://validator:4004 \
           serve-api \
           --interface 0.0.0.0:9982
     volumes:
