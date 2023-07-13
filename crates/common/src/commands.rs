@@ -20,41 +20,12 @@ pub enum NamespaceCommand {
     Create { external_id: ExternalId },
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum KeyImport {
-    FromPath { path: PathBuf },
-    FromPEMBuffer { buffer: Vec<u8> },
-}
-
-impl std::fmt::Debug for KeyImport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::FromPath { path } => write!(f, "KeyImport::FromPath {{ path: {:?} }}", path),
-            Self::FromPEMBuffer { .. } => {
-                write!(f, "KeyImport::FromPEMBuffer {{ buffer: ***SECRET*** }}")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum KeyRegistration {
-    Generate,
-    ImportVerifying(KeyImport),
-    ImportSigning(KeyImport),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentCommand {
     Create {
         external_id: ExternalId,
         namespace: ExternalId,
         attributes: Attributes,
-    },
-    RegisterKey {
-        id: AgentId,
-        namespace: ExternalId,
-        registration: KeyRegistration,
     },
     UseInContext {
         id: AgentId,
@@ -375,48 +346,5 @@ impl ApiResponse {
             prov: Box::new(prov),
             tx_id,
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use k256::{
-        pkcs8::{EncodePrivateKey, LineEnding},
-        SecretKey,
-    };
-    use rand_core::SeedableRng;
-
-    use crate::commands::{KeyImport, KeyRegistration};
-
-    fn key_from_seed(seed: u8) -> String {
-        let secret: SecretKey = SecretKey::random(rand::rngs::StdRng::from_seed([seed; 32]));
-
-        secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
-    }
-
-    #[test]
-    fn test_key_import_custom_debug() {
-        let pk = key_from_seed(0);
-
-        let from_pem_buffer = KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
-            buffer: pk.as_bytes().into(),
-        });
-
-        insta::assert_debug_snapshot!(from_pem_buffer, @r###"
-        ImportSigning(
-            KeyImport::FromPEMBuffer { buffer: ***SECRET*** },
-        )
-        "###);
-
-        // `FromPath` `path` should be visible in `Debug`
-        let from_path = KeyRegistration::ImportSigning(KeyImport::FromPath {
-            path: "some_path".into(),
-        });
-
-        insta::assert_debug_snapshot!(from_path, @r###"
-        ImportSigning(
-            KeyImport::FromPath { path: "some_path" },
-        )
-        "###);
     }
 }

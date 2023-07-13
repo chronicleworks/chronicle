@@ -27,7 +27,7 @@ use common::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
             WasInformedBy,
         },
@@ -1011,17 +1011,6 @@ where
                 self.create_agent(external_id, namespace, attributes, identity)
                     .await
             }
-            (
-                ApiCommand::Agent(AgentCommand::RegisterKey {
-                    id,
-                    namespace,
-                    registration,
-                }),
-                identity,
-            ) => {
-                self.register_key(id, namespace, registration, identity)
-                    .await
-            }
             (ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) => {
                 self.use_agent_in_cli_context(id, namespace).await
             }
@@ -1407,60 +1396,6 @@ where
         .await?
     }
 
-    /// Creates and submits a (ChronicleTransaction::RegisterKey) implicitly verifying the input keys and saving to the local key store as required
-    #[instrument(skip(self))]
-    async fn register_key(
-        &self,
-        id: AgentId,
-        namespace: ExternalId,
-        registration: KeyRegistration,
-        identity: AuthId,
-    ) -> Result<ApiResponse, ApiError> {
-        let mut api = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut connection = api.store.connection()?;
-            connection.build_transaction().run(|connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
-
-                let applying_new_namespace = !to_apply.is_empty();
-
-                match registration {
-                    KeyRegistration::Generate => {
-                        api.keystore.generate_agent(&id)?;
-                    }
-                    KeyRegistration::ImportSigning(KeyImport::FromPath { path }) => {
-                        api.keystore.import_agent(&id, Some(&path), None)?
-                    }
-                    KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer { buffer }) => {
-                        api.keystore.store_agent(&id, Some(&buffer), None)?
-                    }
-                    KeyRegistration::ImportVerifying(KeyImport::FromPath { path }) => {
-                        api.keystore.import_agent(&id, None, Some(&path))?
-                    }
-                    KeyRegistration::ImportVerifying(KeyImport::FromPEMBuffer { buffer }) => {
-                        api.keystore.store_agent(&id, None, Some(&buffer))?
-                    }
-                }
-
-                to_apply.push(ChronicleOperation::RegisterKey(RegisterKey {
-                    id: id.clone(),
-                    namespace: namespace.clone(),
-                    publickey: hex::encode(api.keystore.agent_verifying(&id)?.to_bytes()),
-                }));
-
-                api.apply_effects_and_submit(
-                    connection,
-                    id,
-                    identity,
-                    to_apply,
-                    namespace,
-                    applying_new_namespace,
-                )
-            })
-        })
-        .await?
-    }
-
     /// Creates and submits a (ChronicleTransaction::StartActivity) determining the appropriate agent by external_id, or via [use_agent] context
     #[instrument(skip(self))]
     async fn instant(
@@ -1660,15 +1595,11 @@ mod test {
         attributes::{Attribute, Attributes},
         commands::{
             ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, ImportCommand,
-            KeyImport, KeyRegistration, NamespaceCommand,
+            NamespaceCommand,
         },
         database::TemporaryDatabase,
         identity::AuthId,
-        k256::{
-            pkcs8::{EncodePrivateKey, LineEnding},
-            sha2::{Digest, Sha256},
-            SecretKey,
-        },
+        k256::sha2::{Digest, Sha256},
         prov::{
             operations::{ChronicleOperation, DerivationType},
             to_json_ld::ToJson,
@@ -1679,7 +1610,6 @@ mod test {
     };
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
     use protobuf::Message;
-    use rand_core::SeedableRng;
     use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
 
     use std::collections::HashMap;
@@ -2056,101 +1986,6 @@ mod test {
             }
           ]
         }
-        "###);
-    }
-
-    fn key_from_seed(seed: u8) -> String {
-        let secret: SecretKey = SecretKey::random(rand::rngs::StdRng::from_seed([seed; 32]));
-
-        secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
-    }
-
-    #[tokio::test]
-    async fn agent_public_key() {
-        let mut api = test_api().await;
-
-        let identity = AuthId::chronicle();
-
-        let pk = key_from_seed(0);
-        api.dispatch(
-            ApiCommand::NameSpace(NamespaceCommand::Create {
-                external_id: "testns".into(),
-            }),
-            identity.clone(),
-        )
-        .await
-        .unwrap();
-
-        let delta = api
-            .dispatch(
-                ApiCommand::Agent(AgentCommand::RegisterKey {
-                    id: AgentId::from_external_id("testagent"),
-                    namespace: "testns".into(),
-                    registration: KeyRegistration::ImportSigning(KeyImport::FromPEMBuffer {
-                        buffer: pk.as_bytes().into(),
-                    }),
-                }),
-                identity,
-            )
-            .await
-            .unwrap()
-            .unwrap();
-
-        insta::assert_yaml_snapshot!(delta.0, {
-            ".*.public_key" => "[public]"
-        }, @r###"
-        ---
-        namespaces:
-          ? external_id: testns
-            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-          : id:
-              external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            external_id: testns
-        agents:
-          ? - external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - testagent
-          : id: testagent
-            namespaceid:
-              external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            external_id: testagent
-            domaintypeid: ~
-            attributes: {}
-        activities: {}
-        entities: {}
-        identities:
-          ? - external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - external_id: testagent
-              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
-          : id:
-              external_id: testagent
-              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
-            namespaceid:
-              external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
-        has_identity:
-          ? - external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - testagent
-          : - external_id: testns
-              uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
-            - external_id: testagent
-              public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
-        had_identity: {}
-        association: {}
-        derivation: {}
-        delegation: {}
-        acted_on_behalf_of: {}
-        generation: {}
-        usage: {}
-        was_informed_by: {}
-        generated: {}
-        attribution: {}
         "###);
     }
 

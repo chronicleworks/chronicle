@@ -1154,11 +1154,6 @@ mod test {
             ) {{
               context
             }}
-            generateKey(
-              id: {{ externalId: "{external_id_input}" }}
-            ) {{
-              context
-            }}
             defineItemCertifiedActivity(
               externalId: "{external_id_input}"
               attributes: {{ certIdAttribute: "cert" }}
@@ -1234,9 +1229,6 @@ mod test {
             },
             "wasQuotedFrom": {
               "context": "chronicle:entity:withexternalid"
-            },
-            "generateKey": {
-              "context": "chronicle:agent:withexternalid"
             },
             "defineItemCertifiedActivity": {
               "context": "chronicle:activity:withexternalid"
@@ -5209,17 +5201,6 @@ mod test {
                 wasQuotedFrom(
                   generatedEntity: { externalId: "test entity 1" },
                   usedEntity: { externalId: "test entity 2" }
-                ) { context }
-              }"#,
-            )
-            .await;
-
-        schemas
-            .check_responses_qm(
-                r#"
-              mutation {
-                generateKey(
-                  id: { externalId: "test agent" }
                 ) { context }
               }"#,
             )
