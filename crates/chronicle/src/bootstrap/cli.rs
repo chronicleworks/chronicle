@@ -1086,11 +1086,11 @@ impl SubCommand for CliModel {
         #[cfg(not(feature = "inmem"))]
         {
             app.arg(
+                // default is provided by cargo.toml
                 Arg::new("sawtooth")
                     .long("sawtooth")
                     .value_name("sawtooth")
                     .value_hint(ValueHint::Url)
-                    .default_value("tcp://localhost:4004")
                     .help("Sets sawtooth validator address")
                     .takes_value(true),
             )
