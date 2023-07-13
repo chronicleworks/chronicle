@@ -3,12 +3,12 @@ pub mod chronicle_graphql;
 pub mod inmem;
 mod persistence;
 
-use async_sawtooth_sdk::{
+use async_stl_client::{
     error::SawtoothCommunicationError,
     ledger::{BlockId, BlockingLedgerWriter, FromBlock},
 };
 use chronicle_protocol::{
-    async_sawtooth_sdk::ledger::{LedgerReader, LedgerWriter},
+    async_stl_client::ledger::{LedgerReader, LedgerWriter},
     messages::ChronicleSubmitTransaction,
     protocol::ChronicleOperationEvent,
 };

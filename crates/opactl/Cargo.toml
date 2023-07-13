@@ -7,7 +7,7 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-sawtooth-sdk  = { path = "../async-sawtooth-sdk" }
+async-stl-client    = { workspace = true }
 async-trait         = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 clap                = { version = "4.1.1", features = ["env"] }

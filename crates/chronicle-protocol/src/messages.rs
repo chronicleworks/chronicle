@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::sawtooth::*;
-use async_sawtooth_sdk::{
+use async_stl_client::{
     ledger::{LedgerTransaction, TransactionId},
     sawtooth::{MessageBuilder, TransactionPayload},
 };
@@ -82,7 +82,7 @@ impl LedgerTransaction for ChronicleSubmitTransaction {
     async fn as_sawtooth_tx(
         &self,
         message_builder: &MessageBuilder,
-    ) -> (async_sawtooth_sdk::messages::Transaction, TransactionId) {
+    ) -> (async_stl_client::messages::Transaction, TransactionId) {
         //Ensure we append any opa policy binary address and meta address to the
         //list of addresses, along with the settings address
         let mut addresses: Vec<_> = self

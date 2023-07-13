@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr, time::Duration};
 
-use async_sawtooth_sdk::ledger::{BlockId, BlockIdError};
+use async_stl_client::ledger::{BlockId, BlockIdError};
 use chrono::DateTime;
 
 use chrono::Utc;

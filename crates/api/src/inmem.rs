@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::{
+use async_stl_client::{
     error::SawtoothCommunicationError,
     ledger::SawtoothLedger,
     zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
@@ -362,8 +362,8 @@ impl EmbeddedChronicleTp {
 
                               debug!(request = ?multipart);
                               last_address =  multipart[0].to_vec();
-                              let request: async_sawtooth_sdk::messages::Message =
-                                  async_sawtooth_sdk::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
+                              let request: async_stl_client::messages::Message =
+                                  async_stl_client::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
 
                               debug!(request = ?request);
 
@@ -375,7 +375,7 @@ impl EmbeddedChronicleTp {
                                   .unwrap();
 
 
-                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                              let message_wrapper = async_stl_client::messages::Message {
                                 message_type: response.0 as i32,
                                 tx_id: request.tx_id,
                                 content: response.1
@@ -396,7 +396,7 @@ impl EmbeddedChronicleTp {
 
                               let unsolicited_message = unsolicited_message.unwrap().unwrap();
                               debug!(unsolicited_message = ?unsolicited_message);
-                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                              let message_wrapper = async_stl_client::messages::Message {
                                 message_type: unsolicited_message.0 as i32,
                                 tx_id: "".to_string(),
                                 content: unsolicited_message.1

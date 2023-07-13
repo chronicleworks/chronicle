@@ -349,7 +349,7 @@ pub mod test {
     use std::{cell::RefCell, collections::BTreeMap};
 
     use chronicle_protocol::{
-        async_sawtooth_sdk::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
+        async_stl_client::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
         messages::ChronicleSubmitTransaction,
     };
     use common::{

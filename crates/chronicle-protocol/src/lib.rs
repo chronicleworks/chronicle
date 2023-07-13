@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::{
+use async_stl_client::{
     ledger::SawtoothLedger,
     zmq_client::{RetryingRequestResponseChannel, ZmqRequestResponseSawtoothChannel},
 };
@@ -10,7 +10,7 @@ pub mod messages;
 pub mod protocol;
 pub mod settings;
 
-pub use async_sawtooth_sdk;
+pub use async_stl_client;
 
 static PROTOCOL_VERSION: &str = "1";
 

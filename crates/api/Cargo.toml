@@ -14,7 +14,7 @@ async-graphql = { workspace = true, features = [
   "uuid",
 ] }
 async-graphql-poem = { workspace = true }
-async-sawtooth-sdk = { workspace = true }
+async-stl-client = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }

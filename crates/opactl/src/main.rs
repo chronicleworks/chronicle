@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::zmq_client::{
+use async_stl_client::zmq_client::{
     HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
 };
 use clap::ArgMatches;
@@ -12,7 +12,7 @@ use k256::{
 };
 use opa_tp_protocol::{
     address::{FAMILY, VERSION},
-    async_sawtooth_sdk::{
+    async_stl_client::{
         error::SawtoothCommunicationError,
         ledger::{LedgerReader, LedgerWriter, TransactionId},
     },
@@ -105,7 +105,7 @@ async fn ambient_transactions<
             let stream = reader
                 .state_updates(
                     "opa/operation",
-                    async_sawtooth_sdk::ledger::FromBlock::Head,
+                    async_stl_client::ledger::FromBlock::Head,
                     Some(max_steps),
                 )
                 .await;
@@ -420,7 +420,7 @@ async fn main() {
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`
 #[cfg(test)]
 pub mod test {
-    use async_sawtooth_sdk::{
+    use async_stl_client::{
         error::SawtoothCommunicationError,
         ledger::SawtoothLedger,
         messages::{
@@ -571,18 +571,18 @@ pub mod test {
             attributes: Vec<(String, String)>,
             data: &[u8],
         ) -> Result<(), ContextError> {
-            let stl_event = async_sawtooth_sdk::messages::Event {
+            let stl_event = async_stl_client::messages::Event {
                 event_type: event_type.clone(),
                 attributes: attributes
                     .iter()
-                    .map(|(k, v)| async_sawtooth_sdk::messages::event::Attribute {
+                    .map(|(k, v)| async_stl_client::messages::event::Attribute {
                         key: k.clone(),
                         value: v.clone(),
                     })
                     .collect(),
                 data: data.to_vec(),
             };
-            let list = async_sawtooth_sdk::messages::EventList {
+            let list = async_stl_client::messages::EventList {
                 events: vec![stl_event],
             };
             let stl_event: Vec<u8> = list.encode_to_vec();
@@ -747,7 +747,7 @@ pub mod test {
             // Create a response with an "OK" status and write it to a byte vector.
             let mut response = ClientBatchSubmitResponse::default();
             response
-                .set_status(async_sawtooth_sdk::messages::client_batch_submit_response::Status::Ok);
+                .set_status(async_stl_client::messages::client_batch_submit_response::Status::Ok);
             Ok(response.encode_to_vec())
         }
     }
@@ -774,12 +774,12 @@ pub mod test {
                         ..Default::default()
                     };
                     let block_header_bytes = block_header.encode_to_vec();
-                    response.blocks = vec![async_sawtooth_sdk::messages::Block {
+                    response.blocks = vec![async_stl_client::messages::Block {
                         header: block_header_bytes,
                         ..Default::default()
                     }];
                     response.set_status(
-                        async_sawtooth_sdk::messages::client_block_list_response::Status::Ok,
+                        async_stl_client::messages::client_block_list_response::Status::Ok,
                     );
                     Ok((
                         MessageType::ClientBlockListResponse,
@@ -790,7 +790,7 @@ pub mod test {
                 MessageType::ClientEventsSubscribeRequest => {
                     let mut response = ClientEventsSubscribeResponse::default();
                     response.set_status(
-                        async_sawtooth_sdk::messages::client_events_subscribe_response::Status::Ok,
+                        async_stl_client::messages::client_events_subscribe_response::Status::Ok,
                     );
                     Ok((
                         MessageType::ClientEventsSubscribeResponse,
@@ -809,13 +809,13 @@ pub mod test {
                         .unwrap();
 
                     let mut response = ClientStateGetResponse {
-                        status: async_sawtooth_sdk::messages::client_state_get_response::Status::Ok
+                        status: async_stl_client::messages::client_state_get_response::Status::Ok
                             as i32,
                         ..Default::default()
                     };
 
                     if state.is_empty() {
-                        response.set_status(async_sawtooth_sdk::messages::client_state_get_response::Status::NoResource);
+                        response.set_status(async_stl_client::messages::client_state_get_response::Status::NoResource);
                     } else {
                         response.value = state[0].1.clone();
                     }
@@ -832,13 +832,13 @@ pub mod test {
                         ..Default::default()
                     };
                     let block_header_bytes = block_header.encode_to_vec();
-                    response.block = Some(async_sawtooth_sdk::messages::Block {
+                    response.block = Some(async_stl_client::messages::Block {
                         header: block_header_bytes,
                         ..Default::default()
                     });
 
                     response.set_status(
-                        async_sawtooth_sdk::messages::client_block_get_response::Status::Ok,
+                        async_stl_client::messages::client_block_get_response::Status::Ok,
                     );
                     let buf = response.encode_to_vec();
                     Ok((MessageType::ClientBlockListResponse, buf))
@@ -904,8 +904,8 @@ pub mod test {
 
                               debug!(request = ?multipart);
                               last_address =  multipart[0].to_vec();
-                              let request: async_sawtooth_sdk::messages::Message =
-                                  async_sawtooth_sdk::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
+                              let request: async_stl_client::messages::Message =
+                                  async_stl_client::prost::Message::decode(&*multipart[1].to_vec()).map_err(|e| error!(%e)).unwrap();
 
                               let response = behavior_clone
                                   .handle_request(
@@ -915,7 +915,7 @@ pub mod test {
                                   .unwrap();
 
 
-                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                              let message_wrapper = async_stl_client::messages::Message {
                                 message_type: response.0 as i32,
                                 tx_id: request.tx_id,
                                 content: response.1
@@ -936,7 +936,7 @@ pub mod test {
 
                               let unsolicited_message = unsolicited_message.unwrap().unwrap();
                               debug!(unsolicited_message = ?unsolicited_message);
-                              let message_wrapper = async_sawtooth_sdk::messages::Message {
+                              let message_wrapper = async_stl_client::messages::Message {
                                 message_type: unsolicited_message.0 as i32,
                                 tx_id: "".to_string(),
                                 content: unsolicited_message.1

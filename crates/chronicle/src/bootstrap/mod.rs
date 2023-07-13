@@ -68,7 +68,7 @@ fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Vec<SocketA
 #[allow(dead_code)]
 #[cfg(not(feature = "inmem"))]
 fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, CliError> {
-    use async_sawtooth_sdk::zmq_client::{
+    use async_stl_client::zmq_client::{
         HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
     };
 
@@ -721,7 +721,7 @@ pub async fn bootstrap<Query, Mutation>(
 #[cfg(test)]
 pub mod test {
     use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
-    use async_sawtooth_sdk::prost::Message;
+    use async_stl_client::prost::Message;
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::TemporaryDatabase,
@@ -796,8 +796,8 @@ pub mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let buf = async_sawtooth_sdk::messages::Setting {
-            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
+        let buf = async_stl_client::messages::Setting {
+            entries: vec![async_stl_client::messages::setting::Entry {
                 key: "chronicle.opa.policy_name".to_string(),
                 value: "allow_transactions".to_string(),
             }],
@@ -807,8 +807,8 @@ pub mod test {
             chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
             buf,
         );
-        let buf = async_sawtooth_sdk::messages::Setting {
-            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
+        let buf = async_stl_client::messages::Setting {
+            entries: vec![async_stl_client::messages::setting::Entry {
                 key: "chronicle.opa.entrypoint".to_string(),
                 value: "allow_transactions.allowed_users".to_string(),
             }],

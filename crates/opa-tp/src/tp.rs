@@ -418,7 +418,7 @@ impl TransactionHandler for OpaTransactionHandler {
 
 #[cfg(test)]
 mod test {
-    use async_sawtooth_sdk::sawtooth::MessageBuilder;
+    use async_stl_client::sawtooth::MessageBuilder;
     use k256::{ecdsa::SigningKey, SecretKey};
     use opa_tp_protocol::{
         address,

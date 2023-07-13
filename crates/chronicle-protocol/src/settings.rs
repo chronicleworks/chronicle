@@ -1,6 +1,6 @@
 use std::iter::repeat;
 
-use async_sawtooth_sdk::{
+use async_stl_client::{
     error::SawtoothCommunicationError, ledger::LedgerReader, messages::Setting,
 };
 use k256::sha2::{Digest, Sha256};

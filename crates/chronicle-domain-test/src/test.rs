@@ -63,7 +63,7 @@ pub async fn main() {
 #[cfg(test)]
 mod test {
     use super::{Mutation, Query};
-    use async_sawtooth_sdk::prost::Message;
+    use async_stl_client::prost::Message;
     use chronicle::{
         api::{
             chronicle_graphql::{OpaCheck, Store, Subscription},
@@ -130,8 +130,8 @@ mod test {
         let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
         keystore.generate_chronicle().unwrap();
 
-        let buf = async_sawtooth_sdk::messages::Setting {
-            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
+        let buf = async_stl_client::messages::Setting {
+            entries: vec![async_stl_client::messages::setting::Entry {
                 key: "chronicle.opa.policy_name".to_string(),
                 value: "allow_transactions".to_string(),
             }],
@@ -142,8 +142,8 @@ mod test {
             chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
             buf,
         );
-        let buf = async_sawtooth_sdk::messages::Setting {
-            entries: vec![async_sawtooth_sdk::messages::setting::Entry {
+        let buf = async_stl_client::messages::Setting {
+            entries: vec![async_stl_client::messages::setting::Entry {
                 key: "chronicle.opa.entrypoint".to_string(),
                 value: "allow_transactions.allowed_users".to_string(),
             }],

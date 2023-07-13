@@ -27,7 +27,7 @@ strict  = []
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-async-sawtooth-sdk = { workspace = true }
+async-stl-client   = { workspace = true }
 chronicle-protocol = { path = "../chronicle-protocol" }
 futures            = { workspace = true }
 hex                = { workspace = true }

@@ -3,7 +3,6 @@
 members = [
   "crates/common",
   "crates/api",
-  "crates/async-sawtooth-sdk",
   "crates/chronicle",
   "crates/chronicle-domain",
   "crates/chronicle-domain-lint",
@@ -25,7 +24,7 @@ anyhow = "1.0.6"
 assert_fs = "1.0"
 async-graphql = "5.0.9"
 async-graphql-poem = "5.0.9"
-async-sawtooth-sdk = { path = "crates/async-sawtooth-sdk" }
+async-stl-client = { git = "https://github.com/btpworks/async-stl-sdk" }
 async-stream = "0.3.3"
 async-trait = "0.1.61"
 base64 = "0.21"
