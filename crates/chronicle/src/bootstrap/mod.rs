@@ -1051,7 +1051,6 @@ pub mod test {
               external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             public_key: "[public]"
-        attachments: {}
         has_identity:
           ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
@@ -1061,8 +1060,6 @@ pub mod test {
             - external_id: test_agent
               public_key: "[public]"
         had_identity: {}
-        has_evidence: {}
-        had_attachment: {}
         association: {}
         derivation: {}
         delegation: {}

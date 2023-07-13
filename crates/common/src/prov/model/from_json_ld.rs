@@ -16,19 +16,17 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-            WasAttributedTo, WasGeneratedBy, WasInformedBy,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+            SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
+            WasInformedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ActivityId, AgentId, DomaintypeId, EntityId, EvidenceId, ExternalIdPart, IdentityId,
-        NamespaceId, Role, UuidPart,
+        ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart, IdentityId, NamespaceId, Role,
+        UuidPart,
     },
 };
 
-use super::{
-    Activity, Agent, Attachment, Entity, ExpandedJson, Identity, ProcessorError, ProvModel,
-};
+use super::{Activity, Agent, Entity, ExpandedJson, Identity, ProcessorError, ProvModel};
 
 pub struct ContextLoader;
 
@@ -180,8 +178,6 @@ impl ProvModel {
                     self.apply_node_as_entity(o)?;
                 } else if o.has_type(&id_from_iri(&Chronicle::Identity)) {
                     self.apply_node_as_identity(o)?;
-                } else if o.has_type(&id_from_iri(&Chronicle::HasEvidence)) {
-                    self.apply_node_as_attachment(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Delegation)) {
                     self.apply_node_as_delegation(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Association)) {
@@ -499,62 +495,6 @@ impl ProvModel {
         Ok(())
     }
 
-    fn apply_node_as_attachment(
-        &mut self,
-        attachment: &Node<IriBuf, BlankIdBuf, ()>,
-    ) -> Result<(), ProcessorError> {
-        let namespaceid = extract_namespace(attachment)?;
-
-        let id = EvidenceId::try_from(Iri::from_str(
-            attachment
-                .id()
-                .ok_or_else(|| ProcessorError::MissingId {
-                    object: as_json(attachment),
-                })?
-                .as_str(),
-        )?)?;
-
-        let signer = extract_reference_ids(&Chronicle::SignedBy, attachment)?
-            .into_iter()
-            .next()
-            .ok_or_else(|| ProcessorError::MissingId {
-                object: as_json(attachment),
-            })
-            .map(|id| IdentityId::try_from(id.as_iri()))??;
-
-        let signature = extract_scalar_prop(&Chronicle::Signature, attachment)
-            .ok()
-            .and_then(|x| x.as_str())
-            .ok_or_else(|| ProcessorError::MissingProperty {
-                iri: Chronicle::Signature.as_iri().to_string(),
-                object: as_json(attachment),
-            })?
-            .to_owned();
-
-        let signature_time = extract_scalar_prop(&Chronicle::SignedAtTime, attachment)
-            .ok()
-            .and_then(|x| x.as_str().map(DateTime::parse_from_rfc3339))
-            .ok_or_else(|| ProcessorError::MissingProperty {
-                iri: Chronicle::SignedAtTime.as_iri().to_string(),
-                object: as_json(attachment),
-            })??;
-
-        let locator = extract_scalar_prop(&Chronicle::Locator, attachment)
-            .ok()
-            .and_then(|x| x.as_str());
-
-        self.add_attachment(Attachment {
-            namespaceid,
-            id,
-            signature,
-            signer,
-            locator: locator.map(|x| x.to_owned()),
-            signature_time: signature_time.into(),
-        });
-
-        Ok(())
-    }
-
     fn apply_node_as_entity(
         &mut self,
         entity: &Node<IriBuf, BlankIdBuf, ()>,
@@ -575,20 +515,6 @@ impl ProvModel {
             .into_iter()
             .map(|id| ActivityId::try_from(id.as_iri()))
             .collect::<Result<Vec<_>, _>>()?;
-
-        for attachment in extract_reference_ids(&Chronicle::HasEvidence, entity)?
-            .into_iter()
-            .map(|id| EvidenceId::try_from(id.as_iri()))
-        {
-            self.has_attachment(namespaceid.clone(), id.clone(), &attachment?);
-        }
-
-        for attachment in extract_reference_ids(&Chronicle::HadEvidence, entity)?
-            .into_iter()
-            .map(|id| EvidenceId::try_from(id.as_iri()))
-        {
-            self.had_attachment(namespaceid.clone(), id.clone(), &attachment?);
-        }
 
         for derived in extract_reference_ids(&Prov::WasDerivedFrom, entity)?
             .into_iter()
@@ -665,8 +591,6 @@ trait Operation {
     fn key(&self) -> String;
     fn start_time(&self) -> String;
     fn locator(&self) -> Option<String>;
-    fn signature(&self) -> Option<String>;
-    fn signature_time(&self) -> Option<String>;
     fn end_time(&self) -> String;
     fn entity(&self) -> EntityId;
     fn used_entity(&self) -> EntityId;
@@ -837,26 +761,6 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
         Some(locator.as_str().unwrap().to_owned())
     }
 
-    fn signature(&self) -> Option<String> {
-        let mut objects = self.get(&id_from_iri(&ChronicleOperations::Signature));
-        let signature = match objects.next() {
-            Some(object) => object,
-            None => return None,
-        };
-
-        Some(signature.as_str().unwrap().to_owned())
-    }
-
-    fn signature_time(&self) -> Option<String> {
-        let mut objects = self.get(&id_from_iri(&ChronicleOperations::SignatureTime));
-        let time = match objects.next() {
-            Some(object) => object,
-            None => return None,
-        };
-
-        Some(time.as_str().unwrap().to_owned())
-    }
-
     fn informing_activity(&self) -> ActivityId {
         let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::InformingActivityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
@@ -971,20 +875,6 @@ impl ChronicleOperation {
                     namespace,
                     id,
                     activity,
-                }))
-            } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityHasEvidence)) {
-                let namespace = o.namespace();
-                let id = o.entity();
-                let agent = o.agent();
-                let signature_time = o.signature_time().map(|t| t.parse().unwrap());
-                Ok(ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                    namespace,
-                    identityid: o.identity(),
-                    id,
-                    locator: o.locator(),
-                    agent,
-                    signature: o.signature(),
-                    signature_time,
                 }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::EntityDerive)) {
                 let namespace = o.namespace();

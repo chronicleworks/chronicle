@@ -194,7 +194,6 @@ impl<T: Display> FromCompact for T {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
 pub enum ChronicleIri {
-    Attachment(EvidenceId),
     Identity(IdentityId),
     Namespace(NamespaceId),
     Domaintype(DomaintypeId),
@@ -209,7 +208,6 @@ pub enum ChronicleIri {
 impl Display for ChronicleIri {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ChronicleIri::Attachment(id) => write!(f, "{id}"),
             ChronicleIri::Identity(id) => write!(f, "{id}"),
             ChronicleIri::Namespace(id) => write!(f, "{id}"),
             ChronicleIri::Domaintype(id) => write!(f, "{id}"),
@@ -220,12 +218,6 @@ impl Display for ChronicleIri {
             ChronicleIri::Attribution(id) => write!(f, "{id}"),
             ChronicleIri::Delegation(id) => write!(f, "{id}"),
         }
-    }
-}
-
-impl From<EvidenceId> for ChronicleIri {
-    fn from(val: EvidenceId) -> Self {
-        ChronicleIri::Attachment(val)
     }
 }
 
@@ -310,7 +302,6 @@ impl FromStr for ChronicleIri {
             ["activity", ..] => Ok(ActivityId::try_from(iri.as_iri()?)?.into()),
             ["entity", ..] => Ok(EntityId::try_from(iri.as_iri()?)?.into()),
             ["domaintype", ..] => Ok(DomaintypeId::try_from(iri.as_iri()?)?.into()),
-            ["evidence", ..] => Ok(EvidenceId::try_from(iri.as_iri()?)?.into()),
             ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
             ["association", ..] => Ok(AssociationId::try_from(iri.as_iri()?)?.into()),
             ["attribution", ..] => Ok(AttributionId::try_from(iri.as_iri()?)?.into()),
@@ -332,45 +323,6 @@ impl ChronicleIri {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ChronicleJSON(pub serde_json::Value);
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct EvidenceId {
-    external_id: ExternalId,
-    signature: String,
-}
-
-impl Display for EvidenceId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(Into::<IriRefBuf>::into(self).as_str())
-    }
-}
-
-impl From<&EvidenceId> for IriRefBuf {
-    fn from(val: &EvidenceId) -> Self {
-        Chronicle::attachment(val.external_id_part(), &val.signature).into()
-    }
-}
-
-impl EvidenceId {
-    pub fn from_external_id(external_id: impl AsRef<str>, signature: impl AsRef<str>) -> Self {
-        Self {
-            external_id: external_id.as_ref().into(),
-            signature: signature.as_ref().to_string(),
-        }
-    }
-}
-
-impl ExternalIdPart for EvidenceId {
-    fn external_id_part(&self) -> &ExternalId {
-        &self.external_id
-    }
-}
-
-impl SignaturePart for EvidenceId {
-    fn signature_part(&self) -> &str {
-        &self.signature
-    }
-}
 
 fn fragment_components(iri: Iri) -> Vec<String> {
     match iri.fragment() {
@@ -398,24 +350,6 @@ fn optional_component(external_id: &str, component: &str) -> Result<Option<Strin
     match component.replace(&*kv, "") {
         s if s.is_empty() => Ok(None),
         s => Ok(Some(s)),
-    }
-}
-
-impl<'a> TryFrom<Iri<'a>> for EvidenceId {
-    type Error = ParseIriError;
-
-    fn try_from(value: Iri) -> Result<Self, Self::Error> {
-        let de_compacted = value.de_compact();
-
-        let value = Iri::from_str(&de_compacted)?;
-
-        match fragment_components(value).as_slice() {
-            [_, external_id, signature] => Ok(Self {
-                external_id: ExternalId::from(external_id),
-                signature: signature.to_string(),
-            }),
-            _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
-        }
     }
 }
 

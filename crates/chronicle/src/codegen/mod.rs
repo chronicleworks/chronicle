@@ -465,7 +465,6 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let abstract_entity = &rust::import("chronicle::api::chronicle_graphql", "Entity").qualified();
     let entity_impl = &rust::import("chronicle::api::chronicle_graphql", "entity").qualified();
     let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
-    let evidence = &rust::import("chronicle::api::chronicle_graphql", "Evidence");
     let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
 
     let object = rust::import("chronicle::async_graphql", "Object").qualified();
@@ -476,7 +475,6 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
-    let evidence_doc = include_str!("../../../../domain_docs/evidence.md");
     let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
     let had_primary_source_doc = include_str!("../../../../domain_docs/had_primary_source.md");
     let id_doc = include_str!("../../../../domain_docs/id.md");
@@ -518,11 +516,6 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
         #[graphql(name = "type")]
         async fn typ(&self) -> Option<#domain_type_id> {
             self.0.domaintype.as_deref().map(#domain_type_id::from_external_id)
-        }
-
-        #[doc = #_(#evidence_doc)]
-        async fn evidence<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#evidence>> {
-            #entity_impl::evidence(self.0.attachment_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
 
         #[doc = #_(#was_attributed_to_doc)]
@@ -1223,7 +1216,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     let graphql_object = &rust::import("chronicle::async_graphql", "Object");
 
     let graphql_result = &rust::import("chronicle::async_graphql", "Result");
-    let graphql_upload = &rust::import("chronicle::async_graphql", "Upload");
     let graphql_context = &rust::import("chronicle::async_graphql", "Context");
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
@@ -1244,7 +1236,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
     let end_doc = include_str!("../../../../domain_docs/end_activity.md");
     let generate_key_doc = include_str!("../../../../domain_docs/generate_key.md");
     let had_primary_source_doc = include_str!("../../../../domain_docs/had_primary_source.md");
-    let has_attachment_doc = include_str!("../../../../domain_docs/has_attachment.md");
     let instant_activity_doc = include_str!("../../../../domain_docs/instant_activity.md");
     let prov_activity_doc = include_str!("../../../../domain_docs/prov_activity.md");
     let prov_agent_doc = include_str!("../../../../domain_docs/prov_agent.md");
@@ -1580,20 +1571,6 @@ fn gen_mutation(domain: &ChronicleDomainDef) -> rust::Tokens {
             namespace: Option<String>,
         ) -> async_graphql::#graphql_result<#submission> {
             #impls::was_generated_by(ctx, activity.into(), id.into(), namespace).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
-        }
-
-        #[doc = #_(#has_attachment_doc)]
-        pub async fn has_attachment<'a>(
-            &self,
-            ctx: &#graphql_context<'a>,
-            id: #entity_id,
-            namespace: Option<String>,
-            attachment: #graphql_upload,
-            agent: #agent_id,
-            locator: String,
-        ) -> async_graphql::#graphql_result<#submission> {
-            #impls::has_attachment(ctx, id.into(), namespace, attachment, agent.into(), locator)
-                .await.map_err(|e| #async_graphql_error_extensions::extend(&e))
         }
     }
     }

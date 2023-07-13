@@ -91,16 +91,6 @@ pub struct Activity {
     pub ended: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Queryable)]
-pub struct Attachment {
-    pub id: i32,
-    pub namespace_id: i32,
-    pub signature_time: NaiveDateTime,
-    pub signature: String,
-    pub signer_id: i32,
-    pub locator: Option<String>,
-}
-
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = entity)]
 pub struct Entity {
@@ -108,7 +98,6 @@ pub struct Entity {
     pub external_id: String,
     pub namespace_id: i32,
     pub domaintype: Option<String>,
-    pub attachment_id: Option<i32>,
 }
 
 #[derive(Insertable, Queryable, Selectable)]

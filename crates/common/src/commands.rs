@@ -238,13 +238,6 @@ pub enum EntityCommand {
         namespace: ExternalId,
         attributes: Attributes,
     },
-    Attach {
-        id: EntityId,
-        namespace: ExternalId,
-        file: PathOrFile,
-        locator: Option<String>,
-        agent: Option<AgentId>,
-    },
     Attribute {
         id: EntityId,
         namespace: ExternalId,
@@ -270,22 +263,6 @@ impl EntityCommand {
             external_id: external_id.as_ref().into(),
             namespace: namespace.as_ref().into(),
             attributes,
-        }
-    }
-
-    pub fn attach(
-        id: EntityId,
-        namespace: impl AsRef<str>,
-        file: PathOrFile,
-        locator: Option<String>,
-        agent: Option<AgentId>,
-    ) -> Self {
-        Self::Attach {
-            id,
-            namespace: namespace.as_ref().into(),
-            file,
-            locator,
-            agent,
         }
     }
 

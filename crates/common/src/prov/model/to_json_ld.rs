@@ -44,40 +44,6 @@ impl ToJson for ProvModel {
             }))
         }
 
-        for ((ns, id), attachment) in self.attachments.iter() {
-            if let Value::Object(mut attachmentdoc) = json!({
-                "@id": (*id.de_compact()),
-                "@type": [Iri::from(Chronicle::HasEvidence).as_str()],
-                "http://btp.works/chronicle/ns#entitySignature": [{
-                    "@value": attachment.signature.to_string()
-                }],
-                "http://btp.works/chronicle/ns#signedAtTime": [{
-                    "@value": attachment.signature_time.to_rfc3339()
-                }],
-                "http://btp.works/chronicle/ns#signedBy": [{
-                    "@id": attachment.signer.de_compact()
-                }],
-                "http://btp.works/chronicle/ns#hasNamespace": [{
-                    "@id": ns.de_compact()
-                }],
-            }) {
-                if let Some(locator) = attachment.locator.as_ref() {
-                    let mut values = Vec::new();
-
-                    values.push(json!({
-                        "@value": Value::String(locator.to_owned()),
-                    }));
-
-                    attachmentdoc.insert(
-                        Iri::from(Chronicle::Locator).to_string(),
-                        Value::Array(values),
-                    );
-                }
-
-                doc.push(Value::Object(attachmentdoc));
-            }
-        }
-
         for ((_, id), agent) in self.agents.iter() {
             let mut typ = vec![Iri::from(Prov::Agent).to_string()];
             if let Some(x) = agent.domaintypeid.as_ref() {
@@ -473,25 +439,6 @@ impl ToJson for ProvModel {
 
                 let entity_key = (entity.namespaceid.clone(), entity.id.clone());
 
-                if let Some((_, identity)) = self.has_evidence.get(&entity_key) {
-                    entitydoc.insert(
-                        Iri::from(Chronicle::HasEvidence).to_string(),
-                        json!([{"@id": identity.de_compact()}]),
-                    );
-                }
-
-                if let Some(identities) = self.had_attachment.get(&entity_key) {
-                    let mut values = Vec::new();
-
-                    for (_, id) in identities {
-                        values.push(json!({ "@id": id.de_compact()}));
-                    }
-                    entitydoc.insert(
-                        Iri::from(Chronicle::HadEvidence).to_string(),
-                        Value::Array(values),
-                    );
-                }
-
                 if let Some(attributions) = self.attribution.get(&entity_key) {
                     let mut ids = Vec::new();
 
@@ -857,67 +804,6 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                namespace,
-                identityid,
-                id,
-                locator,
-                agent,
-                signature,
-                signature_time,
-            }) => {
-                let mut o = Value::new_operation(ChronicleOperations::EntityHasEvidence);
-
-                o.has_value(
-                    OperationValue::string(namespace.external_id_part()),
-                    ChronicleOperations::NamespaceName,
-                );
-
-                o.has_value(
-                    OperationValue::string(namespace.uuid_part()),
-                    ChronicleOperations::NamespaceUuid,
-                );
-
-                o.has_value(
-                    OperationValue::string(id.external_id_part()),
-                    ChronicleOperations::EntityName,
-                );
-
-                o.has_value(
-                    OperationValue::string(agent.external_id_part()),
-                    ChronicleOperations::AgentName,
-                );
-
-                if let Some(locator) = locator {
-                    o.has_value(
-                        OperationValue::string(locator),
-                        ChronicleOperations::Locator,
-                    );
-                }
-
-                if let Some(signature) = signature {
-                    o.has_value(
-                        OperationValue::string(signature),
-                        ChronicleOperations::Signature,
-                    );
-                }
-
-                if let Some(signature_time) = signature_time {
-                    o.has_value(
-                        OperationValue::string(signature_time.to_rfc3339()),
-                        ChronicleOperations::SignatureTime,
-                    );
-                }
-
-                if let Some(identity_id) = identityid {
-                    o.has_id(
-                        OperationValue::identity(identity_id.clone().into()),
-                        ChronicleOperations::Identity,
-                    );
-                }
-
-                o
-            }
             ChronicleOperation::EntityDerive(EntityDerive {
                 namespace,
                 id,
@@ -1136,6 +1022,7 @@ impl OperationValue {
         OperationValue(value.to_string())
     }
 
+    #[allow(dead_code)]
     fn identity(id: ChronicleIri) -> Self {
         OperationValue(id.to_string())
     }

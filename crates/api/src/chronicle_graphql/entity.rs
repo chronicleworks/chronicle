@@ -1,4 +1,4 @@
-use super::{Activity, Agent, Entity, Evidence, Namespace, Store};
+use super::{Activity, Agent, Entity, Namespace, Store};
 use async_graphql::Context;
 use common::prov::{operations::DerivationType, Role};
 use diesel::prelude::*;
@@ -39,26 +39,6 @@ pub async fn namespace<'a>(
     Ok(namespace::table
         .filter(dsl::id.eq(namespace_id))
         .first::<Namespace>(&mut connection)?)
-}
-
-pub async fn evidence<'a>(
-    attachment_id: Option<i32>,
-    ctx: &Context<'a>,
-) -> async_graphql::Result<Option<Evidence>> {
-    use crate::persistence::schema::attachment::{self, dsl};
-
-    let store = ctx.data_unchecked::<Store>();
-
-    let mut connection = store.pool.get()?;
-
-    if let Some(attachment_id) = attachment_id {
-        Ok(attachment::table
-            .filter(dsl::id.eq(attachment_id))
-            .first::<Evidence>(&mut connection)
-            .optional()?)
-    } else {
-        Ok(None)
-    }
 }
 
 /// Return the agents to which an entity was attributed along with the roles in which it was attributed

@@ -16,25 +16,25 @@ use chrono::{DateTime, Utc};
 
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
-use futures::{select, AsyncReadExt, FutureExt, StreamExt};
+use futures::{select, FutureExt, StreamExt};
 
 use common::{
     attributes::Attributes,
     commands::*,
     identity::{AuthId, IdentityError},
-    k256::ecdsa::{signature::Signer, Signature, SigningKey},
+    k256::ecdsa::SigningKey,
     ledger::{Commit, SubmissionError, SubmissionStage, SubscriptionError},
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-            EntityHasEvidence, RegisterKey, SetAttributes, StartActivity, WasAssociatedWith,
-            WasAttributedTo, WasGeneratedBy, WasInformedBy,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+            SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
+            WasInformedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
-        Contradiction, EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId,
-        ProcessorError, ProvModel, Role, SYSTEM_ID, SYSTEM_UUID,
+        Contradiction, EntityId, ExternalId, ExternalIdPart, NamespaceId, ProcessorError,
+        ProvModel, Role, SYSTEM_ID, SYSTEM_UUID,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -88,9 +88,6 @@ pub enum ApiError {
     #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
     NoCurrentAgent,
 
-    #[error("Cannot locate attachment file")]
-    CannotFindAttachment,
-
     #[error("Api shut down before reply")]
     ApiShutdownRx,
 
@@ -117,9 +114,6 @@ pub enum ApiError {
 
     #[error("No appropriate activity to end")]
     NotCurrentActivity,
-
-    #[error("Could not sign message: {0}")]
-    EvidenceSigning(#[from] common::k256::ecdsa::Error),
 
     #[error("Contradiction: {0}")]
     Contradiction(#[from] Contradiction),
@@ -1154,19 +1148,6 @@ where
                     .await
             }
             (
-                ApiCommand::Entity(EntityCommand::Attach {
-                    id,
-                    namespace,
-                    file,
-                    locator,
-                    agent,
-                }),
-                identity,
-            ) => {
-                self.entity_attach(id, namespace, file.clone(), locator, agent, identity)
-                    .await
-            }
-            (
                 ApiCommand::Entity(EntityCommand::Derive {
                     id,
                     namespace,
@@ -1340,91 +1321,6 @@ where
 
                 api.apply_effects_and_submit(
                     connection,
-                    id,
-                    identity,
-                    to_apply,
-                    namespace,
-                    applying_new_namespace,
-                )
-            })
-        })
-        .await?
-    }
-
-    /// Creates and submits a (ChronicleTransaction::EntityAttach), reading input files and using the agent's private keys as required
-    ///
-    /// # Notes
-    /// Slightly messy combination of sync / async, very large input files will cause issues without the use of the async_signer crate
-    #[instrument(skip(self))]
-    async fn entity_attach(
-        &self,
-        id: EntityId,
-        namespace: ExternalId,
-        file: PathOrFile,
-        locator: Option<String>,
-        agent: Option<AgentId>,
-        identity: AuthId,
-    ) -> Result<ApiResponse, ApiError> {
-        // Do our file io in async context at least
-        let buf = match file {
-            PathOrFile::Path(ref path) => {
-                std::fs::read(path).map_err(|_| ApiError::CannotFindAttachment {})
-            }
-            PathOrFile::File(mut file) => {
-                let mut buf = vec![];
-                Arc::get_mut(&mut file)
-                    .unwrap()
-                    .read_to_end(&mut buf)
-                    .await
-                    .map_err(ApiError::InputOutput)?;
-
-                Ok(buf)
-            }
-        }?;
-
-        let mut api = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut connection = api.store.connection()?;
-
-            connection.build_transaction().run(|pg_connection| {
-                let (namespace, mut to_apply) = api.ensure_namespace(pg_connection, &namespace)?;
-
-                let applying_new_namespace = !to_apply.is_empty();
-
-                let mut connection = api.store.connection()?;
-                let agent = agent
-                    .map(|agent| {
-                        api.store.agent_by_agent_external_id_and_namespace(
-                            &mut connection,
-                            agent.external_id_part(),
-                            &namespace,
-                        )
-                    })
-                    .unwrap_or_else(|| api.store.get_current_agent(&mut connection))?;
-
-                let agent_id = AgentId::from_external_id(agent.external_id);
-
-                let signer = api.keystore.agent_signing(&agent_id)?;
-
-                let signature: Signature = signer.try_sign(&buf)?;
-
-                let tx = ChronicleOperation::EntityHasEvidence(EntityHasEvidence {
-                    namespace: namespace.clone(),
-                    id: id.clone(),
-                    agent: agent_id.clone(),
-                    identityid: Some(IdentityId::from_external_id(
-                        agent_id.external_id_part(),
-                        &*hex::encode(signer.to_bytes()),
-                    )),
-                    signature: Some(hex::encode(signature)),
-                    locator,
-                    signature_time: Some(Utc::now()),
-                });
-
-                to_apply.push(tx);
-
-                api.apply_effects_and_submit(
-                    pg_connection,
                     id,
                     identity,
                     to_apply,
@@ -2237,7 +2133,6 @@ mod test {
               external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
             public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
-        attachments: {}
         has_identity:
           ? - external_id: testns
               uuid: 5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea
@@ -2247,8 +2142,6 @@ mod test {
             - external_id: testagent
               public_key: 029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964
         had_identity: {}
-        has_evidence: {}
-        had_attachment: {}
         association: {}
         derivation: {}
         delegation: {}

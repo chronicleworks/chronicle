@@ -1,14 +1,11 @@
 //! Primitive mutation operations that are not in terms of particular domain types
 
-use std::sync::Arc;
-
-use async_graphql::{Context, Upload};
+use async_graphql::Context;
 use chrono::{DateTime, Utc};
 use common::{
     attributes::Attributes,
     commands::{
         ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, KeyRegistration,
-        PathOrFile,
     },
     identity::AuthId,
     prov::{operations::DerivationType, ActivityId, AgentId, EntityId, Role},
@@ -466,38 +463,6 @@ pub async fn was_generated_by<'a>(
                 id: entity,
                 namespace,
                 activity,
-            }),
-            identity,
-        )
-        .await?;
-
-    transaction_context(res, ctx).await
-}
-
-pub async fn has_attachment<'a>(
-    ctx: &Context<'a>,
-    entity: EntityId,
-    namespace: Option<String>,
-    attachment: Upload,
-    agent: AgentId,
-    locator: String,
-) -> async_graphql::Result<Submission> {
-    let api = ctx.data_unchecked::<ApiDispatch>();
-
-    let identity = ctx.data_unchecked::<AuthId>().to_owned();
-
-    let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
-
-    let res = api
-        .dispatch(
-            ApiCommand::Entity(EntityCommand::Attach {
-                id: entity,
-                namespace,
-                agent: Some(agent),
-                file: PathOrFile::File(Arc::new(Box::pin(
-                    attachment.value(ctx)?.into_async_read(),
-                ))),
-                locator: Some(locator),
             }),
             identity,
         )
