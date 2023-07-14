@@ -543,7 +543,8 @@ pub mod test {
 
         let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
         keystore.generate_chronicle().unwrap();
-        let signed_identity = AuthId::chronicle().signed_identity(&keystore).unwrap();
+        let kms = common::signing::KMS::Directory(&keystore);
+        let signed_identity = AuthId::chronicle().signed_identity(kms).unwrap();
 
         // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
@@ -556,7 +557,8 @@ pub mod test {
             signed_identity,
         );
 
-        let secret: SigningKey = keystore.chronicle_signing().unwrap();
+        let retrieve_signer = common::signing::directory_signing_key;
+        let secret: SigningKey = keystore.chronicle_signing(retrieve_signer).unwrap();
 
         let submit_tx = ChronicleSubmitTransaction {
             tx,
