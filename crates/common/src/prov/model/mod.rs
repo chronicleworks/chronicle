@@ -1,5 +1,7 @@
 mod contradiction;
 pub use contradiction::Contradiction;
+pub mod transaction;
+pub use transaction::ChronicleTransaction;
 
 use chrono::{DateTime, Utc};
 use iref::IriBuf;
@@ -20,7 +22,7 @@ use uuid::Uuid;
 
 use crate::{
     attributes::{Attribute, Attributes},
-    identity::{IdentityError, SignedIdentity},
+    identity::IdentityError,
     opa::OpaExecutorError,
     prov::operations::WasAttributedTo,
 };
@@ -72,11 +74,25 @@ pub enum ProcessorError {
     #[error("Malformed JSON {0}")]
     SerdeJson(#[from] serde_json::Error),
     #[error("Unparsable date/time {0}")]
+    SubmissionFormat(#[from] PayloadError),
+    #[error("Submission body format: {0}")]
     Time(#[from] chrono::ParseError),
     #[error("Tokio Error {0}")]
     Tokio(#[from] JoinError),
     #[error("State is not valid utf8 {0}")]
     Utf8(#[from] std::str::Utf8Error),
+}
+
+#[derive(Error, Debug)]
+pub enum PayloadError {
+    #[error("No list of Chronicle operations")]
+    OpsNotAList,
+    #[error("Not a JSON object")]
+    NotAnObject,
+    #[error("No version number")]
+    VersionMissing,
+    #[error("Unknown version number")]
+    VersionUnknown,
 }
 
 impl From<Infallible> for ProcessorError {
@@ -114,18 +130,6 @@ impl From<&str> for ChronicleTransactionId {
 impl ChronicleTransactionId {
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct ChronicleTransaction {
-    pub tx: Vec<ChronicleOperation>,
-    pub identity: SignedIdentity,
-}
-
-impl ChronicleTransaction {
-    pub fn new(tx: Vec<ChronicleOperation>, identity: SignedIdentity) -> Self {
-        Self { tx, identity }
     }
 }
 

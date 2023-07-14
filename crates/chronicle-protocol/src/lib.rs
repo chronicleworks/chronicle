@@ -12,7 +12,7 @@ pub mod settings;
 
 pub use async_stl_client;
 
-static PROTOCOL_VERSION: &str = "1";
+static PROTOCOL_VERSION: &str = "2";
 
 pub type ChronicleLedger = SawtoothLedger<
     RetryingRequestResponseChannel<ZmqRequestResponseSawtoothChannel>,

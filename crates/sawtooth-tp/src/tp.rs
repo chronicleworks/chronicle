@@ -1,6 +1,7 @@
 use chronicle_protocol::protocol::{
     chronicle_committed, chronicle_contradicted, chronicle_identity_from_submission,
-    chronicle_operations_from_submission, deserialize_submission, messages::Submission,
+    chronicle_operations_from_submission_v1, chronicle_operations_from_submission_v2,
+    deserialize_submission, messages::Submission,
 };
 use common::{
     identity::{AuthId, OpaData, SignedIdentity},
@@ -101,13 +102,33 @@ impl TP for ChronicleTransactionHandler {
     }
 
     async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
+        use common::prov::transaction;
+        use common::prov::transaction::ToChronicleTransaction;
         let identity = chronicle_identity_from_submission(submission.identity)
             .await
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
-        let body = chronicle_operations_from_submission(submission.body)
-            .await
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
-        Ok(ChronicleTransaction::new(body, identity))
+        match &*submission.version {
+            "1" => {
+                use transaction::v1::ChronicleTransaction;
+                #[allow(deprecated)]
+                let ops = chronicle_operations_from_submission_v1(submission.body_old)
+                    .await
+                    .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+                let tx = ChronicleTransaction::new(ops, identity);
+                Ok(tx.to_current())
+            }
+            "2" => {
+                use transaction::v2::ChronicleTransaction;
+                let ops = chronicle_operations_from_submission_v2(submission.body)
+                    .await
+                    .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+                let tx = ChronicleTransaction::new(ops, identity);
+                Ok(tx.to_current())
+            }
+            v => Err(ApplyError::InternalError(format!(
+                "unknown protocol version: {v}"
+            ))),
+        }
     }
 
     async fn tp(
@@ -346,23 +367,36 @@ impl TransactionHandler for ChronicleTransactionHandler {
 
 #[cfg(test)]
 pub mod test {
-    use std::{cell::RefCell, collections::BTreeMap};
+    use std::{
+        cell::RefCell,
+        collections::hash_map::DefaultHasher,
+        collections::BTreeMap,
+        hash::{Hash, Hasher},
+    };
 
+    use async_stl_client::sawtooth::TransactionPayload;
     use chronicle_protocol::{
         async_stl_client::{ledger::LedgerTransaction, sawtooth::MessageBuilder},
         messages::ChronicleSubmitTransaction,
+        protocol::messages::Submission,
     };
+    use chrono::{NaiveDateTime, TimeZone, Utc};
     use common::{
-        identity::AuthId,
+        identity::{AuthId, SignedIdentity},
         k256::ecdsa::SigningKey,
         prov::{
-            operations::{ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace},
+            operations::{
+                ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace, EndActivity,
+                StartActivity,
+            },
             ActivityId, AgentId, ChronicleTransaction, DelegationId, ExternalId, ExternalIdPart,
             NamespaceId, Role,
         },
         signing::DirectoryStoredKeys,
     };
     use prost::Message;
+    use rand::rngs::StdRng;
+    use rand_core::SeedableRng;
     use sawtooth_sdk::{
         messages::{processor::TpProcessRequest, transaction::TransactionHeader},
         processor::handler::{ContextError, TransactionContext, TransactionHandler},
@@ -372,7 +406,7 @@ pub mod test {
 
     use uuid::Uuid;
 
-    use crate::tp::ChronicleTransactionHandler;
+    use crate::{abstract_tp::TP, tp::ChronicleTransactionHandler};
 
     type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
 
@@ -667,5 +701,56 @@ pub mod test {
         })
         .await
         .unwrap();
+    }
+
+    pub fn construct_operations() -> Vec<ChronicleOperation> {
+        let mut hasher = DefaultHasher::new();
+        "foo".hash(&mut hasher);
+        let n1 = hasher.finish();
+        "bar".hash(&mut hasher);
+        let n2 = hasher.finish();
+        let uuid = Uuid::from_u64_pair(n1, n2);
+
+        let base_ms = 1234567654321;
+        let activity_start =
+            Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_millis(base_ms).unwrap());
+        let activity_end =
+            Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_millis(base_ms + 12345).unwrap());
+
+        let start = ChronicleOperation::StartActivity(StartActivity {
+            namespace: NamespaceId::from_external_id("test-namespace", uuid),
+            id: ActivityId::from_external_id("test-activity"),
+            time: activity_start,
+        });
+        let end = ChronicleOperation::EndActivity(EndActivity {
+            namespace: NamespaceId::from_external_id("test-namespace", uuid),
+            id: ActivityId::from_external_id("test-activity"),
+            time: activity_end,
+        });
+
+        vec![start, end]
+    }
+
+    async fn construct_submission(operations: Vec<ChronicleOperation>) -> Submission {
+        let tx_sub = ChronicleSubmitTransaction::new(
+            ChronicleTransaction {
+                tx: operations,
+                identity: SignedIdentity::new_no_identity(),
+            },
+            SigningKey::random(StdRng::seed_from_u64(0)),
+            None,
+        );
+        Submission::decode(tx_sub.to_bytes().await.unwrap().as_slice()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn get_operations_from_submission() {
+        let expected_operations = construct_operations();
+        let submission = construct_submission(expected_operations.clone()).await;
+        let actual_operations = ChronicleTransactionHandler::tp_operations(submission)
+            .await
+            .unwrap()
+            .tx;
+        assert_eq!(expected_operations, actual_operations);
     }
 }

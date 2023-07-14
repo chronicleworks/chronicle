@@ -52,6 +52,7 @@ glob        = { workspace = true }
 prost-build = { workspace = true }
 
 [dev-dependencies]
+chrono   = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

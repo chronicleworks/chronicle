@@ -50,6 +50,7 @@ zmq                  = { workspace = true }
 glob        = { workspace = true }
 
 [dev-dependencies]
+chrono   = { workspace = true }
 insta    = { workspace = true, features = ["yaml"] }
 protobuf = { workspace = true }
 tempfile = { workspace = true }

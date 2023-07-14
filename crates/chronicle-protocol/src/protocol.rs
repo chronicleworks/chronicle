@@ -8,7 +8,7 @@ use common::{
     identity::SignedIdentity,
     prov::{
         operations::ChronicleOperation, to_json_ld::ToJson, CompactionError, Contradiction,
-        ExpandedJson, ProcessorError, ProvModel,
+        ExpandedJson, PayloadError, ProcessorError, ProvModel,
     },
 };
 use prost::Message;
@@ -103,7 +103,7 @@ pub enum ProtocolError {
     },
 }
 
-static PROTOCOL_VERSION: &str = "1";
+static PROTOCOL_VERSION: &str = "2";
 
 // Include the `submission` module, which is
 // generated from ./protos/submission.proto.
@@ -174,8 +174,9 @@ pub fn deserialize_submission(buf: &[u8]) -> Result<messages::Submission, prost:
 }
 
 /// Convert a `Submission` payload from a vector of
-/// strings to a vector of `ChronicleOperation`s
-pub async fn chronicle_operations_from_submission(
+/// strings to a vector of `ChronicleOperation`s.
+/// Operates for version 1 of the protocol.
+pub async fn chronicle_operations_from_submission_v1(
     submission_body: Vec<String>,
 ) -> Result<Vec<ChronicleOperation>, ProcessorError> {
     let mut ops = Vec::with_capacity(submission_body.len());
@@ -189,10 +190,123 @@ pub async fn chronicle_operations_from_submission(
     Ok(ops)
 }
 
+/// Convert a `Submission` payload from a vector of
+/// strings to a vector of `ChronicleOperation`s.
+/// Operates for version 2 of the protocol.
+pub async fn chronicle_operations_from_submission_v2(
+    submission_body: String,
+) -> Result<Vec<ChronicleOperation>, ProcessorError> {
+    use serde_json::{json, Value};
+    let json = serde_json::from_str(&submission_body)?;
+    if let Value::Object(map) = json {
+        if let Some(version) = map.get("version") {
+            if version == &json!(1) {
+                if let Some(Value::Array(ops_json)) = map.get("ops") {
+                    let mut ops = Vec::with_capacity(ops_json.len());
+                    for op in ops_json {
+                        ops.push(ChronicleOperation::from_json(ExpandedJson(op.clone())).await?);
+                    }
+                    Ok(ops)
+                } else {
+                    Err(PayloadError::OpsNotAList.into())
+                }
+            } else {
+                Err(PayloadError::VersionUnknown.into())
+            }
+        } else {
+            Err(PayloadError::VersionMissing.into())
+        }
+    } else {
+        Err(PayloadError::NotAnObject.into())
+    }
+}
+
 /// Convert a `Submission` identity from a String
 /// to a `SignedIdentity`
 pub async fn chronicle_identity_from_submission(
     submission_identity: String,
 ) -> Result<SignedIdentity, ProcessorError> {
     Ok(serde_json::from_str(&submission_identity)?)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::protocol::{
+        chronicle_operations_from_submission_v1, chronicle_operations_from_submission_v2,
+        ChronicleOperation,
+    };
+    use chrono::{NaiveDateTime, TimeZone, Utc};
+    use common::prov::{
+        operations::{EndActivity, StartActivity},
+        to_json_ld::ToJson,
+        ActivityId, NamespaceId,
+    };
+    use serde_json::{json, Value};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+    use uuid::Uuid;
+
+    fn construct_operations() -> Vec<ChronicleOperation> {
+        let mut hasher = DefaultHasher::new();
+        "foo".hash(&mut hasher);
+        let n1 = hasher.finish();
+        "bar".hash(&mut hasher);
+        let n2 = hasher.finish();
+        let uuid = Uuid::from_u64_pair(n1, n2);
+
+        let base_ms = 1234567654321;
+        let activity_start =
+            Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_millis(base_ms).unwrap());
+        let activity_end =
+            Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_millis(base_ms + 12345).unwrap());
+
+        let start = ChronicleOperation::StartActivity(StartActivity {
+            namespace: NamespaceId::from_external_id("test-namespace", uuid),
+            id: ActivityId::from_external_id("test-activity"),
+            time: activity_start,
+        });
+        let end = ChronicleOperation::EndActivity(EndActivity {
+            namespace: NamespaceId::from_external_id("test-namespace", uuid),
+            id: ActivityId::from_external_id("test-activity"),
+            time: activity_end,
+        });
+
+        vec![start, end]
+    }
+
+    #[tokio::test]
+    async fn deserialize_submission_v1() {
+        let operations_expected = construct_operations();
+
+        let submission_body = operations_expected
+            .iter()
+            .map(|operation| serde_json::to_string(&operation.to_json().0).unwrap())
+            .collect();
+
+        let operations_actual = chronicle_operations_from_submission_v1(submission_body)
+            .await
+            .unwrap();
+
+        assert_eq!(operations_expected, operations_actual);
+    }
+
+    #[tokio::test]
+    async fn deserialize_submission_v2() {
+        let operations_expected = construct_operations();
+
+        let submission_body =
+            serde_json::to_string(&json!({"version": 1, "ops": operations_expected
+            .iter()
+            .map(|operation| operation.to_json().0)
+            .collect::<Vec<Value>>()}))
+            .unwrap();
+
+        let operations_actual = chronicle_operations_from_submission_v2(submission_body)
+            .await
+            .unwrap();
+
+        assert_eq!(operations_expected, operations_actual);
+    }
 }
