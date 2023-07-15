@@ -7,10 +7,8 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow             = { workspace = true }
 async-sawtooth-sdk = { workspace = true }
 async-trait        = { workspace = true }
-chrono             = { workspace = true, features = ["serde"] }
 derivative         = { workspace = true }
 futures            = { workspace = true }
 hex                = { workspace = true }
@@ -26,7 +24,6 @@ serde_json         = { workspace = true }
 thiserror          = { workspace = true }
 tokio              = { workspace = true }
 tracing            = { workspace = true }
-url                = { workspace = true }
 uuid               = { workspace = true }
 zmq                = { workspace = true }
 

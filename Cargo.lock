@@ -385,7 +385,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chronicle-telemetry",
- "chrono",
  "derivative",
  "futures",
  "glob",
@@ -525,20 +524,6 @@ dependencies = [
  "rustversion",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "backoff"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b62ddb9cb1ec0a098ad4bbf9344d0713fa193ae1a80af55febcff2627b6a00c1"
-dependencies = [
- "futures-core",
- "getrandom 0.2.10",
- "instant",
- "pin-project-lite",
- "rand 0.8.5",
- "tokio",
 ]
 
 [[package]]
@@ -774,7 +759,6 @@ dependencies = [
  "opa",
  "opa-tp-protocol",
  "opentelemetry",
- "opentelemetry-jaeger",
  "percent-encoding",
  "question",
  "rand 0.8.5",
@@ -802,7 +786,6 @@ name = "chronicle-domain"
 version = "0.7.5"
 dependencies = [
  "chronicle",
- "insta",
  "tempfile",
 ]
 
@@ -838,7 +821,6 @@ version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
- "backoff",
  "bytes",
  "common",
  "custom_error",
@@ -853,14 +835,11 @@ dependencies = [
  "prost 0.10.4",
  "prost-build",
  "prost-types 0.11.9",
- "protobuf",
  "rand 0.8.5",
  "rand_core 0.6.4",
- "sawtooth-sdk",
  "serde",
  "serde_derive",
  "serde_json",
- "temp-dir",
  "tempfile",
  "thiserror",
  "tokio",
@@ -892,12 +871,9 @@ version = "0.7.5"
 dependencies = [
  "cfg-if",
  "console-subscriber",
- "opentelemetry",
- "opentelemetry-jaeger",
  "tracing",
  "tracing-elastic-apm",
  "tracing-log",
- "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
 ]
@@ -1020,16 +996,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap_generate"
-version = "3.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e1b28c4a802ac3628604fd267cac62aaea74dc61af3410db6b1c44c03b42599"
-dependencies = [
- "clap 3.2.25",
- "clap_complete",
-]
-
-[[package]]
 name = "clap_lex"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1087,11 +1053,9 @@ name = "common"
 version = "0.7.5"
 dependencies = [
  "anyhow",
- "api",
  "async-graphql",
  "async-trait",
  "chrono",
- "const_format",
  "criterion",
  "custom_error",
  "derivative",
@@ -1115,23 +1079,18 @@ dependencies = [
  "openssl",
  "percent-encoding",
  "pkcs8 0.10.2",
- "portpicker",
  "proptest",
  "prost 0.10.4",
- "prost-build",
- "protobuf",
  "r2d2",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "rdf-types",
  "reqwest",
  "rust-embed",
- "sawtooth-sdk",
  "serde",
  "serde_derive",
  "serde_json",
  "static-iref",
- "temp-dir",
  "tempfile",
  "testcontainers",
  "thiserror",
@@ -1421,20 +1380,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2801af0d36612ae591caa9568261fddce32ce6e08a7275ea334a06a4ad021a2c"
-dependencies = [
- "cfg-if",
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1466,16 +1411,6 @@ dependencies = [
  "crossbeam-utils",
  "memoffset 0.9.0",
  "scopeguard",
-]
-
-[[package]]
-name = "crossbeam-queue"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1cfb3ea8a53f37c40dea2c7bedcbd88bdfae54f5e2175d6ecaff1c988353add"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -2560,12 +2495,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "integer-encoding"
-version = "3.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3532,7 +3461,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "chronicle-telemetry",
- "chrono",
  "clap 3.2.25",
  "const_format",
  "hex",
@@ -3545,7 +3473,6 @@ dependencies = [
  "rand_core 0.6.4",
  "sawtooth-sdk",
  "serde_json",
- "tempfile",
  "thiserror",
  "tokio",
  "tracing",
@@ -3556,10 +3483,8 @@ dependencies = [
 name = "opa-tp-protocol"
 version = "0.7.5"
 dependencies = [
- "anyhow",
  "async-sawtooth-sdk",
  "async-trait",
- "chrono",
  "derivative",
  "futures",
  "glob",
@@ -3577,7 +3502,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "url",
  "uuid 1.4.0",
  "zmq",
 ]
@@ -3693,28 +3617,6 @@ dependencies = [
  "bytes",
  "http",
  "opentelemetry_api",
- "reqwest",
-]
-
-[[package]]
-name = "opentelemetry-jaeger"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08e028dc9f4f304e9320ce38c80e7cf74067415b1ad5a8750a38bae54a4d450d"
-dependencies = [
- "async-trait",
- "futures",
- "futures-executor",
- "headers",
- "http",
- "once_cell",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-semantic-conventions",
- "reqwest",
- "thiserror",
- "thrift",
- "tokio",
 ]
 
 [[package]]
@@ -3769,15 +3671,6 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
-
-[[package]]
-name = "ordered-float"
-version = "2.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7940cf2ca942593318d07fcf2596cdca60a85c9e7fab408a5e21a4f9dcd40d87"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "os_str_bytes"
@@ -4907,15 +4800,12 @@ version = "0.7.5"
 dependencies = [
  "async-sawtooth-sdk",
  "async-trait",
- "backoff",
  "bytes",
  "chronicle-protocol",
  "chronicle-telemetry",
  "clap 3.2.25",
- "clap_generate",
  "common",
  "const_format",
- "crossbeam",
  "custom_error",
  "derivative",
  "futures",
@@ -4926,9 +4816,7 @@ dependencies = [
  "opa-tp-protocol",
  "openssl",
  "opentelemetry",
- "opentelemetry-jaeger",
  "prost 0.10.4",
- "prost-build",
  "protobuf",
  "rand 0.8.5",
  "rand_core 0.6.4",
@@ -5381,12 +5269,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df8e77cb757a61f51b947ec4a7e3646efd825b73561db1c232a8ccb639e611a0"
 
 [[package]]
-name = "temp-dir"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af547b166dd1ea4b472165569fc456cfb6818116f854690b0ff205e636523dab"
-
-[[package]]
 name = "tempfile"
 version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5466,28 +5348,6 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
-]
-
-[[package]]
-name = "threadpool"
-version = "1.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
-dependencies = [
- "num_cpus",
-]
-
-[[package]]
-name = "thrift"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float",
- "threadpool",
 ]
 
 [[package]]
@@ -5836,20 +5696,6 @@ dependencies = [
  "lazy_static",
  "log",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00a39dcf9bfc1742fa4d6215253b33a6e474be78275884c216fc2a06267b3600"
-dependencies = [
- "once_cell",
- "opentelemetry",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]

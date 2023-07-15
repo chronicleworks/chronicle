@@ -17,15 +17,12 @@ version = "0.7.5"
 [dependencies]
 async-sawtooth-sdk   = { path = "../async-sawtooth-sdk" }
 async-trait          = { workspace = true }
-backoff              = { workspace = true }
 bytes                = { workspace = true }
 chronicle-protocol   = { path = "../chronicle-protocol" }
 chronicle-telemetry  = { path = "../chronicle-telemetry" }
 clap                 = { workspace = true }
-clap_generate        = { workspace = true }
 common               = { path = "../common" }
 const_format         = { workspace = true }
-crossbeam            = { workspace = true }
 custom_error         = { workspace = true }
 derivative           = { workspace = true }
 futures              = { workspace = true }
@@ -35,7 +32,6 @@ lazy_static          = { workspace = true }
 opa-tp-protocol      = { path = "../opa-tp-protocol" }
 openssl              = { workspace = true }
 opentelemetry        = { workspace = true }
-opentelemetry-jaeger = { workspace = true }
 prost                = { workspace = true }
 protobuf             = { workspace = true }
 rand                 = { workspace = true }
@@ -52,7 +48,6 @@ zmq                  = { workspace = true }
 
 [build-dependencies]
 glob        = { workspace = true }
-prost-build = { workspace = true }
 
 [dev-dependencies]
 insta    = { workspace = true, features = ["yaml"] }
