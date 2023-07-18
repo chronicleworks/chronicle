@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 
-use async_sawtooth_sdk::zmq_client::{
+use async_stl_client::zmq_client::{
     HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
 };
 use chronicle_protocol::{
     address::{FAMILY, VERSION},
-    async_sawtooth_sdk::ledger::SawtoothLedger,
+    async_stl_client::ledger::SawtoothLedger,
     settings::{read_opa_settings, OpaSettings, SettingsReader},
 };
 use clap::ArgMatches;

@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::{
+use async_stl_client::{
     ledger::{LedgerTransaction, TransactionId},
     sawtooth::MessageBuilder,
 };
@@ -106,7 +106,7 @@ impl LedgerTransaction for OpaSubmitTransaction {
     async fn as_sawtooth_tx(
         &self,
         message_builder: &MessageBuilder,
-    ) -> (async_sawtooth_sdk::messages::Transaction, TransactionId) {
+    ) -> (async_stl_client::messages::Transaction, TransactionId) {
         message_builder
             .make_sawtooth_transaction(
                 self.addresses(),

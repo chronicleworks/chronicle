@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, convert::Infallible};
 
 use api::ApiError;
-use chronicle_protocol::async_sawtooth_sdk::error::SawtoothCommunicationError;
+use chronicle_protocol::async_stl_client::error::SawtoothCommunicationError;
 use clap::{
     builder::{PossibleValuesParser, StringValueParser},
     *,

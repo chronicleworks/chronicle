@@ -61,9 +61,9 @@ with GraphQL data containing `context` and a `null` `tx_id`.
 Chronicle now provides users with the ability to generate a Chronicle domain with
 documentation by using a domain.yaml file and adding documentation comments to it.
 
-## `async-sawtooth-sdk`
+## `async-stl-client`
 
-Chronicle now uses `async-sawtooth-sdk` in this update, which contains generic client
+Chronicle now uses `async-stl-client` in this update, which contains generic client
 types used by `opa-tp-protocol`. The transition to this new SDK has led to several
 improvements.
 

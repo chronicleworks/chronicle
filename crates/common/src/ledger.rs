@@ -1,6 +1,6 @@
 use derivative::Derivative;
 
-use opa_tp_protocol::async_sawtooth_sdk::{error::SawtoothCommunicationError, ledger::BlockId};
+use opa_tp_protocol::async_stl_client::{error::SawtoothCommunicationError, ledger::BlockId};
 use tracing::{instrument, trace};
 
 use crate::{

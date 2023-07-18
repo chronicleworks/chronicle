@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-use async_sawtooth_sdk::{
+use async_stl_client::{
     ledger::SawtoothLedger,
     zmq_client::{RetryingRequestResponseChannel, ZmqRequestResponseSawtoothChannel},
 };
@@ -12,7 +12,7 @@ pub mod state;
 pub mod submission;
 pub mod transaction;
 
-pub use async_sawtooth_sdk;
+pub use async_stl_client;
 
 static PROTOCOL_VERSION: &str = "1";
 

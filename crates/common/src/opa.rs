@@ -6,7 +6,7 @@ use k256::sha2::{Digest, Sha256};
 use opa::{bundle::Bundle, wasm::Opa};
 use opa_tp_protocol::{
     address::{FAMILY, VERSION},
-    async_sawtooth_sdk::{
+    async_stl_client::{
         error::SawtoothCommunicationError,
         ledger::LedgerReader,
         zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},

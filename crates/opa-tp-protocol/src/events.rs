@@ -1,4 +1,4 @@
-use async_sawtooth_sdk::{
+use async_stl_client::{
     error::SawtoothCommunicationError,
     ledger::{LedgerEvent, Span},
 };
