@@ -12,7 +12,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow           = { workspace = true }
 async-trait      = { workspace = true }
-chrono           = { workspace = true, features = ["serde"] }
 derivative       = { workspace = true }
 futures          = { workspace = true }
 hex              = { workspace = true }

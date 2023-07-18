@@ -17,7 +17,6 @@ async-graphql = { workspace = true, features = [
 ] }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-const_format = { workspace = true }
 custom_error = { workspace = true }
 derivative = { workspace = true }
 diesel = { workspace = true }
@@ -38,21 +37,17 @@ opa-tp-protocol = { path = "../opa-tp-protocol" }
 openssl = { workspace = true }
 percent-encoding = { workspace = true }
 pkcs8 = { workspace = true }
-portpicker = { workspace = true }
 prost = "0.10.0"
-protobuf = { workspace = true }
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
 reqwest = { workspace = true }
 rdf-types = { workspace = true }
 rust-embed = { workspace = true }
-sawtooth-sdk = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 static-iref = { workspace = true }
-temp-dir = { workspace = true }
 testcontainers = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -64,16 +59,13 @@ zmq = { workspace = true }
 [build-dependencies]
 glob        = { workspace = true }
 lazy_static = { workspace = true }
-prost-build = { workspace = true }
 serde_json  = { workspace = true }
 
 [dev-dependencies]
-api          = { path = "../api" }
 criterion    = { workspace = true }
 insta        = { workspace = true, features = ["json"] }
 mockito      = { workspace = true }
 proptest     = { workspace = true }
-sawtooth-sdk = { workspace = true }
 tempfile     = { workspace = true }
 
 [[bench]]

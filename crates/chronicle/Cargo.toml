@@ -30,7 +30,6 @@ is-terminal          = { workspace = true }
 jsonschema           = { workspace = true }
 opa                  = { workspace = true }
 opentelemetry        = { workspace = true }
-opentelemetry-jaeger = { workspace = true }
 percent-encoding     = { workspace = true }
 question             = { workspace = true }
 rand                 = { workspace = true }

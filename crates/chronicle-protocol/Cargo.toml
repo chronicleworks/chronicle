@@ -13,7 +13,6 @@ path = "src/lib.rs"
 [dependencies]
 async-sawtooth-sdk = { workspace = true }
 async-trait = { workspace = true }
-backoff = { workspace = true, features = ["futures", "tokio"] }
 bytes = { workspace = true }
 common = { path = "../common" }
 custom_error = { workspace = true }
@@ -37,7 +36,6 @@ prost = { workspace = true }
 prost-types = { workspace = true }
 rand = { workspace = true, features = ["getrandom"] }
 rand_core = { workspace = true }
-sawtooth-sdk = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
@@ -54,8 +52,6 @@ glob        = { workspace = true }
 prost-build = { workspace = true }
 
 [dev-dependencies]
-protobuf = { workspace = true }
-temp-dir = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

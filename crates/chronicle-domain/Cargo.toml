@@ -25,5 +25,4 @@ strict = []
 inmem = ["chronicle/inmem"]
 
 [dev-dependencies]
-insta    = { workspace = true }
 tempfile = { workspace = true }
