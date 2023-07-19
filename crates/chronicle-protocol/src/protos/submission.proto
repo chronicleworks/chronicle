@@ -18,6 +18,7 @@ message OpaPolicy {
 message Submission {
   string version = 1;
   uint64 span_id = 2;
-  repeated string body = 3;
+  repeated string body_old = 3 [deprecated = true];
   string identity = 4;
+  string body = 5;
 }
