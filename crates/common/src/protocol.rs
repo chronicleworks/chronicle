@@ -44,7 +44,7 @@ pub enum ProtocolError {
     },
 }
 
-static PROTOCOL_VERSION: &str = "1";
+static PROTOCOL_VERSION: &str = "2";
 
 // Include the `submission` module, which is
 // generated from ./protos/submission.proto.
@@ -136,17 +136,12 @@ pub async fn create_operation_submission_request(
 
     let mut ops = Vec::with_capacity(payload.tx.len());
     for op in &payload.tx {
-        let op_json = op.to_json();
-        let compact_json_string = op_json.compact().await?.0.to_string();
-        // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
-        // which calls here from `sawtooth-protocol::messages` being non-fallible
-        ops.push(compact_json_string);
+        let op_json = op.to_json().compact().await?;
+        ops.push(op_json);
     }
-    submission.body = ops;
 
-    let identity = serde_json::to_string(&payload.identity)?;
-    submission.identity = identity;
-
+    submission.body = serde_json::to_string(&json!({"version": 1, "ops": ops}))?;
+    submission.identity = serde_json::to_string(payload.identity)?;
     Ok(submission)
 }
 
