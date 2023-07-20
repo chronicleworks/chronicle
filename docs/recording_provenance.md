@@ -660,10 +660,11 @@ time](#ended-at-time). Eliding the time parameter will use the current system
 time. Time stamps should be in
 [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html) format.
 
-Started at time operations also take an optional `AgentIdOrExternal`, to
-associate the activity with the agent - there is no current way to record a role
-with this however, so prefer [wasAssociatedWith](#association) if you need
-role-based modeling.
+Started at Time operations also take an optional `AgentIdOrExternal`,
+to associate the activity with the agent. This `agent` parameter causes
+confusion, by always recording that the agent's role is unspecified,
+so it is **deprecated** and should *not* be used. Instead, use
+[wasAssociatedWith](#association) to associate activities with agents.
 
 ```graphql
 mutation {
@@ -688,10 +689,11 @@ model a time range. Eliding the time parameter will use the current system time.
 Time stamps should be in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339.html)
 format.
 
-Ended at time operations also take an optional `AgentIdOrExternal`, to associate
-the activity with the agent - there is no current way to record a role with this
-however, so prefer [wasAssociatedWith](#association) if you need role-based
-modeling.
+Ended at Time operations also take an optional `AgentIdOrExternal`,
+to associate the activity with the agent. This `agent` parameter causes
+confusion, by always recording that the agent's role is unspecified,
+so it is **deprecated** and should *not* be used. Instead, use
+[wasAssociatedWith](#association) to associate activities with agents.
 
 ```graphql
 mutation {
