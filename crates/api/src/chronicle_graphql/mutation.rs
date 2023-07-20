@@ -230,7 +230,7 @@ pub async fn start_activity<'a>(
     ctx: &Context<'a>,
     id: ActivityId,
     namespace: Option<String>,
-    agent: Option<AgentId>,
+    agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -258,7 +258,7 @@ pub async fn end_activity<'a>(
     ctx: &Context<'a>,
     id: ActivityId,
     namespace: Option<String>,
-    agent: Option<AgentId>,
+    agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
@@ -286,7 +286,7 @@ pub async fn instant_activity<'a>(
     ctx: &Context<'a>,
     id: ActivityId,
     namespace: Option<String>,
-    agent: Option<AgentId>,
+    agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
     time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
     let api = ctx.data_unchecked::<ApiDispatch>();
