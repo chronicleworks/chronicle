@@ -52,4 +52,5 @@ nav:
       - Establishing identity: auth.md
       - Access control policy: opa.md
       - Authorization checking: oidc-opa-flow.md
+      - Importing data: importing.md
   - Upgrading: upgrading.md
