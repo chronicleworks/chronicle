@@ -102,9 +102,14 @@ impl TP for ChronicleTransactionHandler {
     }
 
     async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
+        use chronicle_protocol::protocol::messages::submission::IdentityVariant;
         use common::prov::transaction;
         use common::prov::transaction::ToChronicleTransaction;
-        let identity = chronicle_identity_from_submission(submission.identity)
+        let identity =
+            chronicle_identity_from_submission(match submission.identity_variant.unwrap() {
+                IdentityVariant::IdentityOld(id) => id,
+                IdentityVariant::Identity(id) => id.payload,
+            })
             .await
             .map_err(|e| ApplyError::InternalError(e.to_string()))?;
         match &*submission.version {
@@ -119,9 +124,15 @@ impl TP for ChronicleTransactionHandler {
             }
             "2" => {
                 use transaction::v2::ChronicleTransaction;
-                let ops = chronicle_operations_from_submission_v2(submission.body)
-                    .await
-                    .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+                let ops = chronicle_operations_from_submission_v2(
+                    match submission.body_variant.unwrap() {
+                        chronicle_protocol::protocol::messages::submission::BodyVariant::Body(
+                            body,
+                        ) => body.payload,
+                    },
+                )
+                .await
+                .map_err(|e| ApplyError::InternalError(e.to_string()))?;
                 let tx = ChronicleTransaction::new(ops, identity);
                 Ok(tx.to_current())
             }
@@ -144,9 +155,9 @@ impl TP for ChronicleTransactionHandler {
         let span = submission.span_id;
         let id = request.get_signature().to_owned();
 
-        info!(transaction_id = %id, span = %span, operation_count = %operations.tx.len(), identity = %submission.identity);
+        info!(transaction_id = %id, span = %span, operation_count = %operations.tx.len(), identity = ?submission.identity_variant);
 
-        //pre compute dependencies
+        //precompute dependencies
         let deps = operations
             .tx
             .iter()

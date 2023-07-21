@@ -6,8 +6,11 @@ use opa_tp_protocol::state::{policy_address, policy_meta_address};
 use serde_json::json;
 
 use crate::{
-    address::SawtoothAddress, protocol::ProtocolError, settings::sawtooth_settings_address,
-    PROTOCOL_VERSION,
+    address::SawtoothAddress,
+    protocol::ProtocolError,
+    sawtooth::submission::{BodyVariant, IdentityVariant},
+    settings::sawtooth_settings_address,
+    PROTOCOL_VERSION, SUBMISSION_BODY_VERSION,
 };
 
 use super::sawtooth::*;
@@ -23,6 +26,7 @@ pub struct ChronicleSubmitTransaction {
     pub signer: SigningKey,
     pub policy_name: Option<String>,
 }
+
 #[async_trait::async_trait]
 impl TransactionPayload for ChronicleSubmitTransaction {
     type Error = ProtocolError;
@@ -42,8 +46,14 @@ impl TransactionPayload for ChronicleSubmitTransaction {
             ops.push(op_json);
         }
 
-        submission.body = serde_json::to_string(&json!({"version": 1, "ops": ops}))?;
-        submission.identity = serde_json::to_string(&self.tx.identity)?;
+        let ops_json =
+            serde_json::to_string(&json!({"version": SUBMISSION_BODY_VERSION, "ops": ops}))?;
+        let identity_json = serde_json::to_string(&self.tx.identity)?;
+
+        submission.body_variant = Some(BodyVariant::Body(BodyMessageV1 { payload: ops_json }));
+        submission.identity_variant = Some(IdentityVariant::Identity(IdentityMessageV1 {
+            payload: identity_json,
+        }));
         Ok(submission.encode_to_vec())
     }
 }
