@@ -10,7 +10,7 @@ use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     convert::Infallible,
     fmt::{Debug, Display},
 };
@@ -317,7 +317,7 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Derivation {
     pub generated_id: EntityId,
     pub used_id: EntityId,
@@ -325,7 +325,7 @@ pub struct Derivation {
     pub typ: DerivationType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Delegation {
     pub namespace_id: NamespaceId,
     pub id: DelegationId,
@@ -359,7 +359,7 @@ impl Delegation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Association {
     pub namespace_id: NamespaceId,
     pub id: AssociationId,
@@ -385,25 +385,25 @@ impl Association {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Usage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Generation {
     pub activity_id: ActivityId,
     pub generated_id: EntityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct GeneratedEntity {
     pub entity_id: EntityId,
     pub generated_id: ActivityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Attribution {
     pub namespace_id: NamespaceId,
     pub id: AttributionId,
@@ -438,25 +438,25 @@ type NamespacedAttachment = NamespacedId<EvidenceId>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvModel {
-    pub namespaces: HashMap<NamespaceId, Namespace>,
-    pub agents: HashMap<NamespacedAgent, Agent>,
-    pub activities: HashMap<NamespacedActivity, Activity>,
-    pub entities: HashMap<NamespacedEntity, Entity>,
-    pub identities: HashMap<NamespacedIdentity, Identity>,
-    pub attachments: HashMap<NamespacedAttachment, Attachment>,
-    pub has_identity: HashMap<NamespacedAgent, NamespacedIdentity>,
-    pub had_identity: HashMap<NamespacedAgent, HashSet<NamespacedIdentity>>,
-    pub has_evidence: HashMap<NamespacedEntity, NamespacedAttachment>,
-    pub had_attachment: HashMap<NamespacedEntity, HashSet<NamespacedAttachment>>,
-    pub association: HashMap<NamespacedActivity, HashSet<Association>>,
-    pub derivation: HashMap<NamespacedEntity, HashSet<Derivation>>,
-    pub delegation: HashMap<NamespacedAgent, HashSet<Delegation>>,
-    pub acted_on_behalf_of: HashMap<NamespacedAgent, HashSet<Delegation>>,
-    pub generation: HashMap<NamespacedEntity, HashSet<Generation>>,
-    pub usage: HashMap<NamespacedActivity, HashSet<Usage>>,
-    pub was_informed_by: HashMap<NamespacedActivity, HashSet<NamespacedActivity>>,
-    pub generated: HashMap<NamespacedActivity, HashSet<GeneratedEntity>>,
-    pub attribution: HashMap<NamespacedEntity, HashSet<Attribution>>,
+    pub namespaces: BTreeMap<NamespaceId, Namespace>,
+    pub agents: BTreeMap<NamespacedAgent, Agent>,
+    pub activities: BTreeMap<NamespacedActivity, Activity>,
+    pub entities: BTreeMap<NamespacedEntity, Entity>,
+    pub identities: BTreeMap<NamespacedIdentity, Identity>,
+    pub attachments: BTreeMap<NamespacedAttachment, Attachment>,
+    pub has_identity: BTreeMap<NamespacedAgent, NamespacedIdentity>,
+    pub had_identity: BTreeMap<NamespacedAgent, BTreeSet<NamespacedIdentity>>,
+    pub has_evidence: BTreeMap<NamespacedEntity, NamespacedAttachment>,
+    pub had_attachment: BTreeMap<NamespacedEntity, BTreeSet<NamespacedAttachment>>,
+    pub association: BTreeMap<NamespacedActivity, BTreeSet<Association>>,
+    pub derivation: BTreeMap<NamespacedEntity, BTreeSet<Derivation>>,
+    pub delegation: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
+    pub acted_on_behalf_of: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
+    pub generation: BTreeMap<NamespacedEntity, BTreeSet<Generation>>,
+    pub usage: BTreeMap<NamespacedActivity, BTreeSet<Usage>>,
+    pub was_informed_by: BTreeMap<NamespacedActivity, BTreeSet<NamespacedActivity>>,
+    pub generated: BTreeMap<NamespacedActivity, BTreeSet<GeneratedEntity>>,
+    pub attribution: BTreeMap<NamespacedEntity, BTreeSet<Attribution>>,
 }
 
 impl ProvModel {
@@ -484,7 +484,7 @@ impl ProvModel {
     ) {
         self.derivation
             .entry((namespace_id, id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(Derivation {
                 typ,
                 generated_id: id,
@@ -517,11 +517,11 @@ impl ProvModel {
         };
         self.delegation
             .entry((namespace_id.clone(), responsible_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(delegation.clone());
         self.acted_on_behalf_of
             .entry((namespace_id.clone(), delegate_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(delegation);
     }
 
@@ -534,7 +534,7 @@ impl ProvModel {
     ) {
         self.association
             .entry((namespace_id.clone(), activity_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(Association {
                 namespace_id: namespace_id.clone(),
                 id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
@@ -552,7 +552,7 @@ impl ProvModel {
     ) {
         self.generation
             .entry((namespace, generated_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(Generation {
                 activity_id: activity_id.clone(),
                 generated_id: generated_id.clone(),
@@ -567,7 +567,7 @@ impl ProvModel {
     ) {
         self.generated
             .entry((namespace, generated_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(GeneratedEntity {
                 entity_id: entity_id.clone(),
                 generated_id: generated_id.clone(),
@@ -577,7 +577,7 @@ impl ProvModel {
     pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
         self.usage
             .entry((namespace, activity_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(Usage {
                 activity_id: activity_id.clone(),
                 entity_id: entity_id.clone(),
@@ -592,7 +592,7 @@ impl ProvModel {
     ) {
         self.was_informed_by
             .entry((namespace.clone(), activity.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert((namespace, informing_activity.clone()));
     }
 
@@ -605,7 +605,7 @@ impl ProvModel {
     ) {
         self.attribution
             .entry((namespace_id.clone(), entity_id.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(Attribution {
                 namespace_id: namespace_id.clone(),
                 id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
@@ -618,7 +618,7 @@ impl ProvModel {
     pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
         self.had_identity
             .entry((namespace.clone(), agent.clone()))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert((namespace, identity.clone()));
     }
 
@@ -637,7 +637,7 @@ impl ProvModel {
     ) {
         self.had_attachment
             .entry((namespace.clone(), entity))
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert((namespace, attachment.clone()));
     }
 
@@ -924,7 +924,7 @@ impl ProvModel {
                     _ => {}
                 };
 
-                self.modify_activity(&namespace, &id, move |mut activity| {
+                self.modify_activity(&namespace, &id, move |activity| {
                     activity.ended = Some(time);
                 });
 
@@ -1298,7 +1298,7 @@ lazy_static! {
 }
 
 impl ExpandedJson {
-    pub async fn compact(self) -> Result<CompactedJson, CompactionError> {
+    async fn compact_unordered(self) -> Result<CompactedJson, CompactionError> {
         use json_ld::{
             syntax::context, Compact, ExpandedDocument, Process, ProcessingMode, TryFromJson,
         };
@@ -1347,9 +1347,12 @@ impl ExpandedJson {
                 inner: e.to_string(),
             })?;
 
+        // Sort @graph
+
         // reference context
 
-        let json = output.into_value().into();
+        let json: Value = output.into_value().into();
+
         if let Value::Object(mut map) = json {
             map.insert(
                 "@context".to_string(),
@@ -1361,20 +1364,20 @@ impl ExpandedJson {
         }
     }
 
-    pub async fn compact_stable_order(self) -> Result<Value, CompactionError> {
-        let mut v: serde_json::Value = serde_json::from_str(&self.compact().await?.0.to_string())?;
+    // Sort @graph by json value, as they are unstable and we need deterministic output
+    pub async fn compact(self) -> Result<Value, CompactionError> {
+        let mut v: serde_json::Value =
+            serde_json::from_str(&self.compact_unordered().await?.0.to_string())?;
 
-        // Sort @graph by //@id, as objects are unordered
         if let Some(v) = v.pointer_mut("/@graph").and_then(|p| p.as_array_mut()) {
-            v.sort_by(|l, r| {
-                let lid = l.get("@id").and_then(|o| o.as_str());
-
-                let rid = r.get("@id").and_then(|o| o.as_str());
-                lid.cmp(&rid)
-            });
+            v.sort_by_cached_key(|v| v.to_string());
         }
 
         Ok(v)
+    }
+
+    pub async fn compact_stable_order(self) -> Result<Value, CompactionError> {
+        self.compact().await
     }
 }
 pub mod from_json_ld;

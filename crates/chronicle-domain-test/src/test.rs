@@ -750,6 +750,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
@@ -921,6 +923,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -1678,6 +1682,8 @@ mod test {
           }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -1724,6 +1730,8 @@ mod test {
             }
           }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
 
         // use the same delegated contractor for two different roles
 
@@ -1837,7 +1845,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1887,7 +1895,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -1946,7 +1954,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2004,7 +2012,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2081,7 +2089,7 @@ mod test {
         context = 'chronicle:agent:testagent1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2121,7 +2129,7 @@ mod test {
         context = 'chronicle:activity:testactivity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2161,7 +2169,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let agent = schema
             .execute(Request::new(
@@ -2204,6 +2212,8 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // create another activity
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2220,6 +2230,8 @@ mod test {
         [data.defineItemManufacturedActivity]
         context = 'chronicle:activity:testactivityid2'
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // establish WasInformedBy relationship
         insta::assert_toml_snapshot!(schema
@@ -2239,7 +2251,7 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query WasInformedBy relationship
         insta::assert_toml_snapshot!(schema
@@ -2273,7 +2285,7 @@ mod test {
         externalId = 'testactivityid2'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // create a third activity
         insta::assert_toml_snapshot!(schema
@@ -2291,7 +2303,7 @@ mod test {
         context = 'chronicle:activity:testactivityid3'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // establish another WasInformedBy relationship
         insta::assert_toml_snapshot!(schema
@@ -2311,7 +2323,7 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query WasInformedBy relationship
         insta::assert_toml_snapshot!(schema
@@ -2448,7 +2460,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // attribute the entity to the agent
         insta::assert_json_snapshot!(schema
@@ -2472,7 +2484,7 @@ mod test {
               }
               "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query WasAttributedTo relationship
         insta::assert_toml_snapshot!(schema
@@ -2516,7 +2528,7 @@ mod test {
         locationAttribute = 'SomeLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
                   .execute(Request::new(
@@ -2560,7 +2572,7 @@ mod test {
         locationAttribute = 'SomeLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
@@ -2603,7 +2615,7 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
@@ -2647,7 +2659,7 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // create another agent and attribute the entity to that other agent as well
         insta::assert_json_snapshot!(schema
@@ -2677,7 +2689,7 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query WasAttributedTo relationship
         insta::assert_toml_snapshot!(schema
@@ -2730,7 +2742,7 @@ mod test {
         locationAttribute = 'AnotherLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
             .execute(Request::new(
@@ -2783,7 +2795,7 @@ mod test {
         locationAttribute = 'AnotherLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
@@ -2825,7 +2837,7 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
@@ -2903,6 +2915,8 @@ mod test {
         context = 'chronicle:activity:testactivity1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // create an entity
         insta::assert_toml_snapshot!(schema
           .execute(Request::new(
@@ -2918,6 +2932,8 @@ mod test {
         [data.defineNCBRecordEntity]
         context = 'chronicle:entity:testentity1'
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // establish Generated relationship
         insta::assert_toml_snapshot!(schema
@@ -2937,7 +2953,7 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query Generated relationship
         insta::assert_toml_snapshot!(schema
@@ -2971,6 +2987,8 @@ mod test {
         externalId = 'testentity1'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // The following demonstrates that a second wasGeneratedBy
         // relationship cannot be made once the first has been established.
 
@@ -2991,6 +3009,8 @@ mod test {
         context = 'chronicle:entity:testitem'
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // establish another Generated relationship
         insta::assert_toml_snapshot!(schema
             .execute(Request::new(
@@ -3009,7 +3029,7 @@ mod test {
         context = 'chronicle:entity:testitem'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // query Generated relationship
         insta::assert_toml_snapshot!(schema
@@ -3066,7 +3086,7 @@ mod test {
 
         assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let res = schema
             .execute(Request::new(
@@ -3088,7 +3108,7 @@ mod test {
 
         assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let res = schema
                 .execute(Request::new(
@@ -3104,7 +3124,7 @@ mod test {
 
         assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let res = schema
             .execute(Request::new(
@@ -3120,7 +3140,7 @@ mod test {
 
         assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let from = DateTime::<Utc>::from_utc(
             NaiveDate::from_ymd_opt(1968, 9, 1)
@@ -3169,7 +3189,7 @@ mod test {
                 assert_eq!(res.errors, vec![]);
             }
 
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
             let res = schema
                 .execute(Request::new(format!(
                     r#"
@@ -3183,7 +3203,7 @@ mod test {
                 .await;
             assert_eq!(res.errors, vec![]);
 
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
 
             let res = schema
                 .execute(Request::new(format!(
@@ -3203,6 +3223,8 @@ mod test {
 
             assert_eq!(res.errors, vec![]);
 
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+
             let res = schema
                 .execute(Request::new(format!(
                     r#"
@@ -3221,7 +3243,7 @@ mod test {
 
             assert_eq!(res.errors, vec![]);
 
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
 
             let agent = if i % 2 == 0 {
                 "testagent1"
@@ -3241,7 +3263,7 @@ mod test {
                 )))
                 .await;
 
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
 
             assert_eq!(res.errors, vec![]);
         }
@@ -3619,6 +3641,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // Entire timeline reverse order
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -3990,6 +4014,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // By activity type
 
         // Note the case of `ItemCertified` and `ItemCodified` in the `activityTypes`
@@ -4092,6 +4118,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // As previous but omitting forEntity and forAgent
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -4188,6 +4216,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // By agent
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
@@ -4261,6 +4291,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // As previous but omitting forEntity and activityTypes
         insta::assert_json_snapshot!(schema
@@ -4355,7 +4387,7 @@ mod test {
             assert_eq!(res.errors, vec![]);
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Default cursor
 
@@ -4494,6 +4526,8 @@ mod test {
           }
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Middle cursor
 
@@ -4723,6 +4757,8 @@ mod test {
         }
         "###);
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         // Out of bound cursor
 
         // Note the case of `Contractor` in the `agentsByType(agentType:` field of
@@ -4870,6 +4906,8 @@ mod test {
             .to_string(),
         ));
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -4894,6 +4932,8 @@ mod test {
           "#);
 
         let res = stream.next().await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         insta::assert_json_snapshot!(res, @r###"
         {

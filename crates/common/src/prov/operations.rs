@@ -17,7 +17,19 @@ use super::{
 };
 
 #[derive(
-    QueryId, SqlType, AsExpression, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,
+    QueryId,
+    SqlType,
+    AsExpression,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
 )]
 #[diesel(sql_type = Integer)]
 #[repr(i32)]

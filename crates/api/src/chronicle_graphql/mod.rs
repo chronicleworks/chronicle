@@ -15,8 +15,8 @@ use common::{
     ledger::{SubmissionError, SubmissionStage},
     opa::{ExecutorContext, OpaExecutorError},
     prov::{
-        to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, CompactedJson, ExternalId,
-        ExternalIdPart, ProvModel,
+        to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, ExternalId, ExternalIdPart,
+        ProvModel,
     },
 };
 use derivative::*;
@@ -839,7 +839,7 @@ impl IriEndpoint {
             Ok(()) => match self.store.connection() {
                 Ok(connection) => match retrieve(connection, id, ns) {
                     Ok(data) => match data.to_json().compact().await {
-                        Ok(CompactedJson(mut json)) => {
+                        Ok(mut json) => {
                             use serde_json::Value;
                             if let Value::Object(mut map) = json {
                                 map.insert(

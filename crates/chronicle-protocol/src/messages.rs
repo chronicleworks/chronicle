@@ -39,7 +39,7 @@ impl TransactionPayload for ChronicleSubmitTransaction {
         let mut ops = Vec::with_capacity(self.tx.tx.len());
         for op in &self.tx.tx {
             let op_json = op.to_json();
-            let compact_json_string = op_json.compact().await?.0.to_string();
+            let compact_json_string = op_json.compact().await?.to_string();
             // using `unwrap` to work around `MessageBuilder::make_sawtooth_transaction`,
             // which calls here from `sawtooth-protocol::messages` being non-fallible
             ops.push(compact_json_string);
