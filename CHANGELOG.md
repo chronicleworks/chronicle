@@ -1,8 +1,12 @@
 # CHANGELOG
 
+## v0.7.5
+
+* build: bump openssl version [view commit](https://github.com/btpworks/chronicle/commit/06c2e90895c78c995398a8a17b114fc0853e238d)
+* test: backport sleep coverage and determinism support [view commit](https://github.com/btpworks/chronicle/commit/a2e78fc24c8db1c58088353263282549029fc38c)
+
 ## v0.7.4
 
-fromto 1=v0.7.3 2=HEAD 3=https://github.com/btpworks/chronicle/commit
 * fix(chronicle-synth): fix generate script to work from chronicle root dir [view commit](https://github.com/btpworks/chronicle/commit/0961ba52b1e1f754a4a5b051db898ba65dd0aac7)
 * feat(bootstrap): add load from url support for data import [view commit](https://github.com/btpworks/chronicle/commit/3ae8b7fc4acd466d372063abd95f2e0c34170991)
 * docs(cli, recording_provenance): update data import sections [view commit](https://github.com/btpworks/chronicle/commit/23c015aed76086b4399d6cf4b3e0adb4de04bfec)
@@ -49,7 +53,6 @@ fromto 1=v0.7.3 2=HEAD 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.7.3
 
-fromto 1=v0.7.2 2=v0.7.3 3=https://github.com/btpworks/chronicle/commit
 * docs(helm-jwks-opa.md): if no oidc then do not need to disable endpoints [view commit](https://github.com/btpworks/chronicle/commit/5f062163d4a40b0a50af7f060bb94531391e0aeb)
 * docs(opa): fix sections on default opa disallowing jwt users [view commit](https://github.com/btpworks/chronicle/commit/bec44a73fa91cf7cc84e8abdc224f6ca3ccf52e2)
 * fix(policies): allow jwt users [view commit](https://github.com/btpworks/chronicle/commit/ea23af09f649fd1b79684f09a4dfd8a838fc2f4c)
@@ -58,12 +61,10 @@ fromto 1=v0.7.2 2=v0.7.3 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.7.2
 
-fromto 1=0.7.2 2=v0.7.2 3=https://github.com/btpworks/chronicle/commit
 * build(make): disable gh release artifact upload [view commit](https://github.com/btpworks/chronicle/commit/45eac9c379607fd95354bfabcfbfa1a71a1443fb)
 
 ## 0.7.2
 
-fromto 1=v0.7.1 2=0.7.2 3=https://github.com/btpworks/chronicle/commit
 * fix(docker): always apt-get update to deal with changing repos [view commit](https://github.com/btpworks/chronicle/commit/f3e9c8ce64929b10d1abb845d72e0ea4b768c8e8)
 * fix(docker): remove superfluous --platform declarations [view commit](https://github.com/btpworks/chronicle/commit/26158b0b4585905a1b8f02e947706bd4a1fa9501)
 * fix(docker): id-provider maven build should be BUILDPLATFORM [view commit](https://github.com/btpworks/chronicle/commit/9d94839a26e899a21576f456750f692fc15c843f)
@@ -72,7 +73,6 @@ fromto 1=v0.7.1 2=0.7.2 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.7.1
 
-fromto 1=v0.7.0 2=v0.7.1 3=https://github.com/btpworks/chronicle/commit
 * chore: Add .VERSION to builder image [view commit](https://github.com/btpworks/chronicle/commit/a4a6a6b273f059ef7d6756db585c5dbdcf364cd5)
 * feat(gq-subscribe): resolve hostnames to ip addresses [view commit](https://github.com/btpworks/chronicle/commit/b0bfd3134df154bde7d93386d4af85d2fad9d603)
 * chore: Remove the type alias as it's deprecated [view commit](https://github.com/btpworks/chronicle/commit/378a3723ae28a2b9c4f2c7c7bde5c50103076b1f)
@@ -103,7 +103,6 @@ fromto 1=v0.7.0 2=v0.7.1 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.7.0
 
-fromto 1=v0.6.0 2=v0.7.0 3=https://github.com/btpworks/chronicle/commit
 * test: add helm chart chronicle api test [view commit](https://github.com/btpworks/chronicle/commit/de7e0e7650b02a2d49b6cf182ecfd31c9c94aadc)
 * fix: Backported 0.6 fixes, refactored in cleanly [view commit](https://github.com/btpworks/chronicle/commit/dbfb1e311e4475d14dec551ce87b3480663dded6)
 * feat: System namespace [view commit](https://github.com/btpworks/chronicle/commit/c862832ac4195296095c871331ee2876f2310aa8)
@@ -297,7 +296,6 @@ fromto 1=v0.6.0 2=v0.7.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.6.0
 
-fromto 1=v0.5.0 2=v0.6.0 3=https://github.com/btpworks/chronicle/commit
 * Release 0.6.0 [view commit](https://github.com/btpworks/chronicle/commit/8a64f2da8087ef848577ebaa60b4088738e7b5f8)
 * fix: Remove static test pk [view commit](https://github.com/btpworks/chronicle/commit/1d871ec563a511f1a46b8ca597b005c286fbfdcd)
 * build(deps): Bump bzip2 from 0.4.3 to 0.4.4 [view commit](https://github.com/btpworks/chronicle/commit/20a9606b02611c532debb14bb94b7b5872905343)
@@ -330,7 +328,6 @@ fromto 1=v0.5.0 2=v0.6.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.5.0
 
-fromto 1=v0.4.0 2=v0.5.0 3=https://github.com/btpworks/chronicle/commit
 * docs: update CHANGELOG.md [view commit](https://github.com/btpworks/chronicle/commit/4e6e989daed92d1a90194e5c911bdc97a03ee524)
 * fix(sawtooth-protocol): change externalId back to name [view commit](https://github.com/btpworks/chronicle/commit/baf471cdbb387b0a41bad57c520de31131be0402)
 * fix(activity.rs): in resolving associations, include delegates [view commit](https://github.com/btpworks/chronicle/commit/3729c8a4394bf7c8b0adf17cf96ac59907cafd0d)
@@ -383,7 +380,6 @@ fromto 1=v0.4.0 2=v0.5.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.4.0
 
-fromto 1=v0.3.0 2=v0.4.0 3=https://github.com/btpworks/chronicle/commit
 * docs(docs): fix md formatting in upgrading [view commit](https://github.com/btpworks/chronicle/commit/4927e9512b4b35c4cebd6b673017d68b3764992b)
 * refactor(api): refactor for consistency and readability [view commit](https://github.com/btpworks/chronicle/commit/10654f7a1ea48dc9d2450e40faf424cd23010002)
 * docs(docs): update upgrading documentation for v0.4.0 [view commit](https://github.com/btpworks/chronicle/commit/1067725bc09137d3b986f81cdefa45ada59e8d5e)
@@ -434,7 +430,6 @@ fromto 1=v0.3.0 2=v0.4.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.3.0
 
-fromto 1=v0.2.1 2=v0.3.0 3=https://github.com/btpworks/chronicle/commit
 * docs(docs): fix documentation [view commit](https://github.com/btpworks/chronicle/commit/765ada19ba1f285788eb405ef323d2f505abcdf6)
 * docs(docs): update formatting domain terms docs section [view commit](https://github.com/btpworks/chronicle/commit/7cad62c0535eb6756109c0d6a4f33526a8ada395)
 * feat: prefix definition operations with define [view commit](https://github.com/btpworks/chronicle/commit/53b71b3c62b129963a7b2016c137905419587254)
@@ -453,7 +448,6 @@ fromto 1=v0.2.1 2=v0.3.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.2.1
 
-fromto 1=v0.2.0 2=v0.2.1 3=https://github.com/btpworks/chronicle/commit
 * fix: Create a root key if none exists [view commit](https://github.com/btpworks/chronicle/commit/15057420819e360eb1bdff6ebfc1bb4104e49d20)
 * feat: Keystore init subcommand for operational purposes [view commit](https://github.com/btpworks/chronicle/commit/3309df7b27e97706581b6babaec46aed5ddbe467)
 * docs: correct links and headings [view commit](https://github.com/btpworks/chronicle/commit/17da1d17b290b79fe05971818fd35669f07f4e2a)
@@ -485,7 +479,6 @@ fromto 1=v0.2.0 2=v0.2.1 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.2.0
 
-fromto 1=v0.1.7 2=v0.2.0 3=https://github.com/btpworks/chronicle/commit
 * docs: update CHANGELOG [view commit](https://github.com/btpworks/chronicle/commit/a6b504a5b5c3569ef1dc688d7b43928d5eb53759)
 * feat(common): use compact json form in `create_operation_submission_request` [view commit](https://github.com/btpworks/chronicle/commit/6214f2110ef176334d94ac67c389ca6f53978438)
 * feat(sawtooth-protocol): make `async` `MessageBuilder::make_sawtooth_transaction` and `SawtoothSubmitter::submit` [view commit](https://github.com/btpworks/chronicle/commit/085aecddeae4841acd0a69f7687a943470883004)
@@ -509,7 +502,6 @@ fromto 1=v0.1.7 2=v0.2.0 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.7
 
-fromto 1=v0.1.5 2=v0.1.7 3=https://github.com/btpworks/chronicle/commit
 * fix: Update artifact paths in release [view commit](https://github.com/btpworks/chronicle/commit/81f3a62f8c945698dcb35568fda11413075de86a)
 * fix: Correct id type [view commit](https://github.com/btpworks/chronicle/commit/d8f46f35382400c8bfadc29f00cb4a0ba385dc46)
 * fix: Rebase to error handling [view commit](https://github.com/btpworks/chronicle/commit/65114c0cdac353b51a3ce80fff230283cca0f827)
@@ -704,7 +696,6 @@ fromto 1=v0.1.5 2=v0.1.7 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.5
 
-fromto 1=v0.1.4 2=v0.1.5 3=https://github.com/btpworks/chronicle/commit
 * Fix: use sdl rather than federated sdl, as it doesn't include subscriptions [view commit](https://github.com/btpworks/chronicle/commit/67e2c37666dd9e9af78f4236e8b0ae73a93b82a3)
 * fix(docker): correct docker-compose run plan [view commit](https://github.com/btpworks/chronicle/commit/5abfb7e327045f5b5c7bbdb409aed917fa7583b6)
 * build(docker): add libsqlite3-dev [view commit](https://github.com/btpworks/chronicle/commit/0d70588b9c7444557bf0bab01146a8211d5251ac)
@@ -712,7 +703,6 @@ fromto 1=v0.1.4 2=v0.1.5 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.4
 
-fromto 1=v0.1.3 2=v0.1.4 3=https://github.com/btpworks/chronicle/commit
 * fix: Doctest for ambiguous bootstrap export [view commit](https://github.com/btpworks/chronicle/commit/9938adc796ab9b70189a92f4618a1cc5a92f621e)
 * fix: Add snapshots for CI [view commit](https://github.com/btpworks/chronicle/commit/29e22529a92c07b98635f8fe5fa8b21dbf6c8afb)
 * fix: pass inmem feature to bootstrap [view commit](https://github.com/btpworks/chronicle/commit/ebff34b2049bb97fc6abf17b7d1bb2f7ff04fbb3)
@@ -733,15 +723,12 @@ fromto 1=v0.1.3 2=v0.1.4 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.3
 
-fromto 1=v0.1.2 2=v0.1.3 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.2
 
-fromto 1=v0.1.1 2=v0.1.2 3=https://github.com/btpworks/chronicle/commit
 
 ## v0.1.1
 
-fromto 1=v0.1.0 2=v0.1.1 3=https://github.com/btpworks/chronicle/commit
 * fix(docker): correct image versions for libc compat [view commit](https://github.com/btpworks/chronicle/commit/b0b1b46c42031d4e0b37ec5521c1a86b96ff77cd)
 * fix: Actually adjust the port back to 9982, will conflict [view commit](https://github.com/btpworks/chronicle/commit/983fdc9c4c8587267fa7d2ed4900d0f4703ebf49)
 * feat: Use apollo studio sandbox in the same way as autochrome [view commit](https://github.com/btpworks/chronicle/commit/d0c82bee94d8fc9ff389bc4ed04a2560b7350330)
