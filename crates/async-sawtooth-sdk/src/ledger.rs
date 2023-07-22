@@ -364,8 +364,8 @@ impl<
             builder,
             channel,
             last_seen_block: Default::default(),
-            _e: std::marker::PhantomData::default(),
-            _t: std::marker::PhantomData::default(),
+            _e: std::marker::PhantomData,
+            _t: std::marker::PhantomData,
         }
     }
 

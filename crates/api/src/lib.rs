@@ -295,7 +295,7 @@ where
                 signer: signing.clone(),
                 ledger_writer: Arc::new(BlockingLedgerWriter::new(ledger)),
                 store: store.clone(),
-                uuid_source: PhantomData::default(),
+                uuid_source: PhantomData,
                 policy_name,
             };
 
@@ -338,7 +338,7 @@ where
                                   Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,block_id,_position,_span )) => {
 
                                         debug!(committed = ?tx);
-                                        debug!(delta = %commit.to_json().compact().await.unwrap().pretty());
+                                        debug!(delta = %serde_json::to_string_pretty(&commit.to_json().compact().await.unwrap()).unwrap());
 
                                         api.sync( commit.clone().into(), &block_id,ChronicleTransactionId::from(tx.as_str()))
                                             .instrument(info_span!("Incoming confirmation", offset = ?block_id, tx_id = %tx))
@@ -1610,7 +1610,7 @@ mod test {
     use rand_core::SeedableRng;
     use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
 
-    use std::collections::HashMap;
+    use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
     use uuid::Uuid;
 
@@ -1891,6 +1891,8 @@ mod test {
           ]
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Check that the operations that do not result in data changes are not submitted
         insta::assert_json_snapshot!(api
@@ -2256,6 +2258,8 @@ mod test {
         .await
         .unwrap();
 
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
         insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
@@ -2361,6 +2365,8 @@ mod test {
           ]
         }
         "###);
+
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         let res = api
             .dispatch(
