@@ -26,7 +26,6 @@ futures              = { workspace = true }
 genco                = { workspace = true }
 hex                  = { workspace = true }
 iref                 = { workspace = true }
-is-terminal          = { workspace = true }
 jsonschema           = { workspace = true }
 opa                  = { workspace = true }
 opentelemetry        = { workspace = true }
