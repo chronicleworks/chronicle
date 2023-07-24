@@ -27,7 +27,7 @@ use common::{
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
     signing::DirectoryStoredKeys,
 };
-use is_terminal::IsTerminal;
+use std::io::IsTerminal;
 use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 

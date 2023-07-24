@@ -57,7 +57,6 @@ http = "0.2.9"
 insta = { version = "1.26.0", features = ["redactions", "toml"] }
 iref = "2.2"
 iref-enum = "2.1"
-is-terminal = "0.4.7"
 json-ld = { version = "0.14" }
 json-syntax = { version = "0.9", features = ["serde", "serde_json"] }
 jsonschema = "0.17.0"
