@@ -26,6 +26,7 @@ use diesel::{
     PgConnection, Queryable,
 };
 use futures::Stream;
+use metrics_exporter_prometheus::PrometheusHandle;
 use poem::{
     get, handler,
     http::{HeaderValue, StatusCode},
@@ -53,7 +54,7 @@ use tracing::{debug, error, instrument, warn};
 use url::Url;
 
 use self::authorization::TokenChecker;
-use crate::{ApiDispatch, ApiError, StoreError};
+use crate::{chronicle_graphql::health::Metrics, ApiDispatch, ApiError, StoreError};
 
 #[macro_use]
 pub mod activity;
@@ -61,6 +62,7 @@ pub mod agent;
 mod authorization;
 mod cursor_query;
 pub mod entity;
+pub mod health;
 pub mod mutation;
 pub mod query;
 
@@ -522,6 +524,22 @@ impl SecurityConf {
     }
 }
 
+pub struct Endpoints {
+    serve_graphql: bool,
+    serve_data: bool,
+    serve_metrics: bool,
+}
+
+impl Endpoints {
+    pub fn new(serve_graphql: bool, serve_data: bool, serve_metrics: bool) -> Self {
+        Self {
+            serve_graphql,
+            serve_data,
+            serve_metrics,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait ChronicleApiServer {
     async fn serve_api(
@@ -530,8 +548,8 @@ pub trait ChronicleApiServer {
         api: ApiDispatch,
         addresses: Vec<SocketAddr>,
         security_conf: SecurityConf,
-        serve_graphql: bool,
-        serve_data: bool,
+        endpoints: Endpoints,
+        metrics_handle: Option<PrometheusHandle>,
     ) -> Result<(), ApiError>;
 }
 
@@ -1075,8 +1093,8 @@ where
         api: ApiDispatch,
         addresses: Vec<SocketAddr>,
         sec: SecurityConf,
-        serve_graphql: bool,
-        serve_data: bool,
+        endpoints: Endpoints,
+        metrics_handle: Option<PrometheusHandle>,
     ) -> Result<(), ApiError> {
         let claim_parser = sec.id_claims.map(|id_claims| AuthFromJwt {
             id_claims,
@@ -1110,18 +1128,23 @@ where
 
         match (&sec.jwks_uri, &sec.userinfo_uri) {
             (None, None) => {
-                tracing::warn!("API endpoint uses no authentication");
+                warn!("API endpoint uses no authentication");
 
-                if serve_graphql {
+                if endpoints.serve_graphql {
                     app = app
                         .at("/", get(gql_playground).post(GraphQL::new(schema.clone())))
                         .at("/ws", get(GraphQLSubscription::new(schema)))
                 };
-                if serve_data {
+                if endpoints.serve_data {
                     app = app
                         .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(None)))
                         .at("/data/:ns/:iri", get(iri_endpoint(None)))
+                };
+                if endpoints.serve_metrics {
+                    let handle = metrics_handle.unwrap();
+                    let metrics_endpoint = Metrics::new(handle);
+                    app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
             (jwks_uri, userinfo_uri) => {
@@ -1145,7 +1168,7 @@ where
                     )
                 };
 
-                if serve_graphql {
+                if endpoints.serve_graphql {
                     app = app
                         .at(
                             "/",
@@ -1162,11 +1185,16 @@ where
                             }),
                         )
                 };
-                if serve_data {
+                if endpoints.serve_data {
                     app = app
                         .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
                         .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
+                };
+                if endpoints.serve_metrics {
+                    let handle = metrics_handle.unwrap();
+                    let metrics_endpoint = Metrics::new(handle);
+                    app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
         }

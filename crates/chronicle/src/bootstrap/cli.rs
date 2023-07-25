@@ -32,8 +32,23 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum CliError {
-    #[error("Missing argument: {arg}")]
-    MissingArgument { arg: String },
+    #[error("API failure: {0}")]
+    ApiError(#[from] ApiError),
+
+    #[error("Bad argument: {0}")]
+    ArgumentParsing(#[from] clap::Error),
+
+    #[error("Failure in commit notification stream: {0}")]
+    CommitNotificationStream(#[from] RecvError),
+
+    #[error("Invalid configuration file: {0}")]
+    ConfigInvalid(#[from] toml::de::Error),
+
+    #[error("Metrics endpoint is enabled but the metrics on which it depends are not. Please enable health metrics or disable the metrics endpoint.")]
+    MetricsEndpointConfigError,
+
+    #[error("IO error: {0}")]
+    InputOutput(#[from] std::io::Error),
 
     #[error("Invalid argument {arg} expected {expected} got {got}")]
     InvalidArgument {
@@ -42,53 +57,47 @@ pub enum CliError {
         got: String,
     },
 
-    #[error("Bad argument: {0}")]
-    ArgumentParsing(#[from] clap::Error),
-
-    #[error("Invalid IRI: {0}")]
-    InvalidIri(#[from] iref::Error),
-
     #[error("Invalid Chronicle IRI: {0}")]
     InvalidChronicleIri(#[from] ParseIriError),
-
-    #[error("Invalid JSON: {0}")]
-    InvalidJson(#[from] serde_json::Error),
-
-    #[error("Invalid URI: {0}")]
-    InvalidUri(#[from] url::ParseError),
-
-    #[error("Invalid timestamp: {0}")]
-    InvalidTimestamp(#[from] chrono::ParseError),
 
     #[error("Invalid coercion: {arg}")]
     InvalidCoercion { arg: String },
 
-    #[error("API failure: {0}")]
-    ApiError(#[from] ApiError),
+    #[error("Invalid IRI: {0}")]
+    InvalidIri(#[from] iref::Error),
 
-    #[error("Key storage: {0}")]
-    Keys(#[from] SignerError),
-
-    #[error("IO error: {0}")]
-    InputOutput(#[from] std::io::Error),
-
-    #[error("Invalid configuration file: {0}")]
-    ConfigInvalid(#[from] toml::de::Error),
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(#[from] serde_json::Error),
 
     #[error("Invalid path: {path}")]
     InvalidPath { path: String },
 
+    #[error("Invalid timestamp: {0}")]
+    InvalidTimestamp(#[from] chrono::ParseError),
+
+    #[error("Invalid URI: {0}")]
+    InvalidUri(#[from] url::ParseError),
+
+    #[error("Key storage: {0}")]
+    Keys(#[from] SignerError),
+
     #[error("Invalid JSON-LD: {0}")]
     Ld(#[from] CompactionError),
 
-    #[error("Failure in commit notification stream: {0}")]
-    CommitNoticiationStream(#[from] RecvError),
+    #[error("Metrics exporter Prometheus installation error: {0}")]
+    MetricsExporterPrometheus(#[from] metrics_exporter_prometheus::BuildError),
+
+    #[error("Missing argument: {arg}")]
+    MissingArgument { arg: String },
+
+    #[error("OPA executor error: {0}")]
+    OpaExecutor(#[from] OpaExecutorError),
 
     #[error("Policy loader error: {0}")]
     OpaPolicyLoader(#[from] PolicyLoaderError),
 
-    #[error("OPA executor error: {0}")]
-    OpaExecutor(#[from] OpaExecutorError),
+    #[error("Health metrics config error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
 
     #[error("Sawtooth communication error: {source}")]
     SawtoothCommunicationError {
@@ -936,13 +945,6 @@ impl SubCommand for CliModel {
                             .env("REQUIRE_AUTH")
                             .help("if JWT must be provided, preventing anonymous requests"),
                     ).arg(
-                        Arg::new("liveness-check")
-                            .long("liveness-check")
-                            .help("Turn on liveness depth charge checks and specify the interval in seconds")
-                            .takes_value(true)
-                            .value_name("interval")
-                            .default_missing_value("1800"),
-                    ).arg(
                         Arg::new("jwks-address")
                             .long("jwks-address")
                             .takes_value(true)
@@ -982,9 +984,21 @@ impl SubCommand for CliModel {
                         .long("offer-endpoints")
                         .takes_value(true)
                         .min_values(1)
-                        .value_parser(["data", "graphql"])
-                        .default_values(&["data", "graphql"])
+                        .value_parser(["data", "graphql", "metrics"])
+                        .default_values(&["data", "graphql", "metrics"])
                         .help("which API endpoints to offer")
+                    ).arg(
+                        Arg::new("enable-health-metrics")
+                            .long("enable-health-metrics")
+                            .help("Turn on health metrics based on recurring depth charge transactions")
+                            .env("ENABLE_HEALTH_METRICS"),
+                    ).arg(
+                        Arg::with_name("health-metrics-interval")
+                            .long("health-metrics-interval")
+                            .help("Configure health metrics depth charge transaction interval in seconds")
+                            .value_name("interval")
+                            .default_value("1800")
+                            .env("HEALTH_METRICS_INTERVAL"),
                     ),
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"))
@@ -1026,7 +1040,7 @@ impl SubCommand for CliModel {
         #[cfg(not(feature = "inmem"))]
         {
             app.arg(
-                // default is provided by cargo.toml
+                // default is provided by Cargo.toml
                 Arg::new("sawtooth")
                     .long("sawtooth")
                     .value_name("sawtooth")

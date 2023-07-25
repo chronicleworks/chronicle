@@ -183,7 +183,6 @@ mod test {
 
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
-        let liveness_check_interval = None;
 
         let dispatch = Api::new(
             pool.clone(),
@@ -192,7 +191,7 @@ mod test {
             SameUuid,
             HashMap::default(),
             None,
-            liveness_check_interval,
+            None,
         )
         .await
         .unwrap();

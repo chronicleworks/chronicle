@@ -22,6 +22,7 @@ Options are:
 
 - `data` for IRIs encoded in URIs (at `/context` and `/data`)
 - `graphql` for GraphQL requests (at `/` and `/ws`)
+- `metrics` for API health check metrics (at `/metrics`)
 
 ##### Authentication
 
@@ -64,22 +65,25 @@ typically suffixed `/userinfo`. If this option is supplied then the endpoint
 must supply any additional claims in response to the same `Authorization:`
 header that was provided by a user in making their API request.
 
-##### Liveness Health Check
+##### Health Metrics
 
-###### `--liveness-check <interval>`
+For more details, see our documentation on
+[Health Metrics](./health-checks-and-testing#health-metrics) in
+our section on [Health Checks and Testing](./health-checks-and-testing).
 
-Enables liveness depth charge checks and specifies the interval in seconds.
-
-For more details, see our documentation on the
-[Liveness Health Check](./health-checks-and-testing.md#liveness-health-check).
-
-The `interval` argument specifies the time duration in seconds between
-consecutive checks and is set to 1800 seconds (or 30 minutes) by default.
-
-By default, liveness checks are disabled.
+Health metrics are enabled by default.
 
 For configuration via Helm Chart, see our documentation on
-[Helm Options and the Liveness Health Check](./helm-options.md#liveness-health-check).
+[Helm Options and the Liveness Health Check](./helm-options.md#health-metrics).
+
+###### `--enable-health-metrics`
+
+Enables health metrics based on recurring depth charge transactions.
+
+###### `--health-metrics-interval <interval>`
+
+Specifies the time duration in seconds between health metrics depth charge
+transactions, set to 1800 seconds (or 30 minutes) by default.
 
 ##### Deprecated Options
 

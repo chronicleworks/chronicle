@@ -736,6 +736,7 @@ dependencies = [
  "insta",
  "iref",
  "jsonschema",
+ "metrics-exporter-prometheus",
  "opa",
  "opa-tp-protocol",
  "opentelemetry",
