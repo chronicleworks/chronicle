@@ -39,7 +39,7 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
-use metrics::histogram;
+use metrics::{gauge, histogram};
 pub use persistence::StoreError;
 use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
@@ -101,6 +101,12 @@ pub enum ApiError {
 
     #[error("Ledger shut down before send: {0}")]
     LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
+
+    #[error("Metrics quantile not found: {quantile}")]
+    MetricsQuantileNotFound { quantile: String },
+
+    #[error("Metrics latest round trip not found")]
+    MetricsLatestRoundTripNotFound,
 
     #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
     NoCurrentAgent,
@@ -459,6 +465,10 @@ where
                                             );
                                             histogram!(
                                                 "depth_charge_round_trip",
+                                                elapsed_time.as_millis() as f64
+                                            );
+                                            gauge!(
+                                                "latest_depth_charge_round_trip",
                                                 elapsed_time.as_millis() as f64
                                             );
                                             break;

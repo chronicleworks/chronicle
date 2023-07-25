@@ -44,6 +44,9 @@ pub enum CliError {
     #[error("Invalid configuration file: {0}")]
     ConfigInvalid(#[from] toml::de::Error),
 
+    #[error("Health endpoint is enabled but the metrics on which it depends are not. Please enable health metrics or disable the health endpoint.")]
+    HealthEndpointConfigError,
+
     #[error("Metrics endpoint is enabled but the metrics on which it depends are not. Please enable health metrics or disable the metrics endpoint.")]
     MetricsEndpointConfigError,
 
@@ -984,8 +987,8 @@ impl SubCommand for CliModel {
                         .long("offer-endpoints")
                         .takes_value(true)
                         .min_values(1)
-                        .value_parser(["data", "graphql", "metrics"])
-                        .default_values(&["data", "graphql", "metrics"])
+                        .value_parser(["data", "graphql", "health", "metrics"])
+                        .default_values(&["data", "graphql", "health", "metrics"])
                         .help("which API endpoints to offer")
                     ).arg(
                         Arg::new("enable-health-metrics")

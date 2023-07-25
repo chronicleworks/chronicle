@@ -22,6 +22,7 @@ Options are:
 
 - `data` for IRIs encoded in URIs (at `/context` and `/data`)
 - `graphql` for GraphQL requests (at `/` and `/ws`)
+- `health` for API health check (at `/health`)
 - `metrics` for API health check metrics (at `/metrics`)
 
 ##### Authentication

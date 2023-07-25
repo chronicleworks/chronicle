@@ -444,6 +444,9 @@ where
             .map(String::clone)
             .collect();
 
+        if endpoints.contains(&"health".to_string()) && health_metrics_handle.is_none() {
+            return Err(CliError::HealthEndpointConfigError);
+        }
         if endpoints.contains(&"metrics".to_string()) && health_metrics_handle.is_none() {
             return Err(CliError::MetricsEndpointConfigError);
         }
@@ -464,6 +467,7 @@ where
             Endpoints::new(
                 endpoints.contains(&"graphql".to_string()),
                 endpoints.contains(&"data".to_string()),
+                endpoints.contains(&"health".to_string()),
                 endpoints.contains(&"metrics".to_string()),
             ),
             health_metrics_handle,

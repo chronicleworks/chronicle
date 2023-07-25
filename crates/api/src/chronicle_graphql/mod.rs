@@ -54,7 +54,7 @@ use tracing::{debug, error, instrument, warn};
 use url::Url;
 
 use self::authorization::TokenChecker;
-use crate::{chronicle_graphql::health::Metrics, ApiDispatch, ApiError, StoreError};
+use crate::{chronicle_graphql::health::Health, ApiDispatch, ApiError, StoreError};
 
 #[macro_use]
 pub mod activity;
@@ -527,14 +527,21 @@ impl SecurityConf {
 pub struct Endpoints {
     serve_graphql: bool,
     serve_data: bool,
+    serve_health: bool,
     serve_metrics: bool,
 }
 
 impl Endpoints {
-    pub fn new(serve_graphql: bool, serve_data: bool, serve_metrics: bool) -> Self {
+    pub fn new(
+        serve_graphql: bool,
+        serve_data: bool,
+        serve_health: bool,
+        serve_metrics: bool,
+    ) -> Self {
         Self {
             serve_graphql,
             serve_data,
+            serve_health,
             serve_metrics,
         }
     }
@@ -1112,7 +1119,7 @@ where
         }
         let schema = schema
             .data(Store::new(pool.clone()))
-            .data(api)
+            .data(api.clone())
             .data(sec.opa.clone())
             .data(AuthId::anonymous())
             .finish();
@@ -1141,9 +1148,15 @@ where
                         .at("/data/:iri", get(iri_endpoint(None)))
                         .at("/data/:ns/:iri", get(iri_endpoint(None)))
                 };
+                if endpoints.serve_health {
+                    // Unwrapping here is infallible if `endpoints.serve_health` is true
+                    let handle = metrics_handle.clone().unwrap();
+                    let health_endpoint = Health::HealthEndpoint(handle);
+                    app = app.at("/health", get(health_endpoint))
+                };
                 if endpoints.serve_metrics {
                     let handle = metrics_handle.unwrap();
-                    let metrics_endpoint = Metrics::new(handle);
+                    let metrics_endpoint = Health::MetricsEndpoint(handle);
                     app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
@@ -1191,9 +1204,14 @@ where
                         .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
                         .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
                 };
+                if endpoints.serve_health {
+                    let handle = metrics_handle.clone().unwrap();
+                    let health_endpoint = Health::HealthEndpoint(handle);
+                    app = app.at("/health", get(health_endpoint))
+                };
                 if endpoints.serve_metrics {
                     let handle = metrics_handle.unwrap();
-                    let metrics_endpoint = Metrics::new(handle);
+                    let metrics_endpoint = Health::MetricsEndpoint(handle);
                     app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
