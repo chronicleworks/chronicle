@@ -144,14 +144,14 @@ impl TokenChecker {
                             ),
                         })
                     }
-                } else if error.is_some() {
-                    tracing::trace!("first error before UserInfo was {error:?}");
+                } else {
+                    if error.is_some() {
+                        tracing::trace!("first error before UserInfo was {error:?}");
+                    }
                     error = Some(Error::UserInfoResponse {
                         server: userinfo_uri.clone(),
                         status: response.status(),
                     });
-                } else {
-                    cache.cache_set(token.to_string(), Map::new());
                 }
             }
         }
