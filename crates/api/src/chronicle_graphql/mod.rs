@@ -26,6 +26,7 @@ use diesel::{
     PgConnection, Queryable,
 };
 use futures::Stream;
+use lazy_static::lazy_static;
 use poem::{
     get, handler,
     http::{HeaderValue, StatusCode},
@@ -48,7 +49,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast::error::RecvError, Semaphore};
 use tracing::{debug, error, instrument, warn};
 use url::Url;
 
@@ -63,6 +64,8 @@ mod cursor_query;
 pub mod entity;
 pub mod mutation;
 pub mod query;
+
+pub type AuthorizationError = authorization::Error;
 
 #[derive(Default, Queryable, Selectable, SimpleObject)]
 #[diesel(table_name = crate::persistence::schema::agent)]
@@ -460,6 +463,7 @@ impl std::fmt::Debug for JwksUri {
     }
 }
 
+#[derive(Clone)]
 pub struct UserInfoUri {
     uri: Url,
 }
@@ -664,6 +668,10 @@ impl EndpointSecurityConfiguration {
             must_claim,
             allow_anonymous,
         }
+    }
+
+    async fn check_status(&self) -> Result<(), AuthorizationError> {
+        self.checker.check_status().await
     }
 }
 
@@ -1063,6 +1071,18 @@ impl async_graphql::extensions::ExtensionFactory for OpaCheck {
     }
 }
 
+lazy_static! {
+    static ref SHUTDOWN_SIGNAL: Arc<Semaphore> = Arc::new(Semaphore::new(0));
+}
+
+fn trigger_shutdown() {
+    SHUTDOWN_SIGNAL.add_permits(1);
+}
+
+async fn await_shutdown() {
+    let _permit = SHUTDOWN_SIGNAL.acquire().await.unwrap();
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleApiServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -1145,6 +1165,8 @@ where
                     )
                 };
 
+                secconf().check_status().await?;
+
                 if serve_graphql {
                     app = app
                         .at(
@@ -1177,7 +1199,10 @@ where
             .reduce(|listener_1, listener_2| listener_1.combine(listener_2).boxed())
             .unwrap();
 
-        Server::new(listener).run(app).await?;
+        Server::new(listener)
+            .run_with_graceful_shutdown(app, await_shutdown(), None)
+            .await?;
+
         Ok(())
     }
 }

@@ -126,6 +126,9 @@ pub enum ApiError {
 
     #[error("Sawtooth communication error: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
+
+    #[error("Authentication endpoint error: {0}")]
+    AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>

@@ -35,13 +35,14 @@ pub enum Error {
     #[error("formatting error: {0}", message)]
     Format { message: String },
     #[error("unexpected response: {0} responded with status {1}", server, status)]
-    UserInfoResponse { server: String, status: StatusCode },
+    UnexpectedResponse { server: String, status: StatusCode },
 }
 
 pub struct TokenChecker {
     client: reqwest::Client,
     verifier: Option<RemoteJwksVerifier>,
-    userinfo_uri: Option<String>,
+    jwks_uri: Option<JwksUri>,
+    userinfo_uri: Option<UserInfoUri>,
     userinfo_cache: Arc<Mutex<TimedCache<String, Map<String, Value>>>>,
 }
 
@@ -61,11 +62,38 @@ impl TokenChecker {
                     Duration::from_secs(cache_expiry_seconds.into()),
                 )
             }),
-            userinfo_uri: userinfo_uri.map(UserInfoUri::full_uri),
+            jwks_uri: jwks_uri.cloned(),
+            userinfo_uri: userinfo_uri.cloned(),
             userinfo_cache: Arc::new(Mutex::new(TimedCache::with_lifespan(
                 cache_expiry_seconds.into(),
             ))),
         }
+    }
+
+    pub async fn check_status(&self) -> Result<(), Error> {
+        if let Some(uri) = &self.jwks_uri {
+            let status = self.client.get(uri.full_uri()).send().await?.status();
+            // should respond with JSON web key set
+            if !status.is_success() {
+                tracing::warn!("{uri:?} returns {status}");
+                return Err(Error::UnexpectedResponse {
+                    server: format!("{uri:?}"),
+                    status,
+                });
+            }
+        }
+        if let Some(uri) = &self.userinfo_uri {
+            let status = self.client.get(uri.full_uri()).send().await?.status();
+            // should require an authorization token
+            if !status.is_client_error() || status == StatusCode::NOT_FOUND {
+                tracing::warn!("{uri:?} without authorization token returns {status}");
+                return Err(Error::UnexpectedResponse {
+                    server: format!("{uri:?}"),
+                    status,
+                });
+            }
+        }
+        Ok(())
     }
 
     #[instrument(level = "trace", skip_all, err)]
@@ -107,7 +135,16 @@ impl TokenChecker {
         let mut error = None;
         match self.attempt_jwt(token).await {
             Ok(claims_as_provided) => claims.extend(claims_as_provided),
-            error @ Err(Error::Jwks { .. }) => return error, // abort on JWKS verifier failure
+            Err(Error::Jwks { source }) => {
+                match source {
+                    jwtk::Error::IoError(_) | jwtk::Error::Reqwest(_) => {
+                        tracing::error!(fatal_error = ?source);
+                        super::trigger_shutdown();
+                    }
+                    _ => (),
+                }
+                return Err(Error::Jwks { source }); // abort on JWKS verifier failure
+            }
             Err(err) => error = Some(err), // could tolerate error from what may be opaque token
         };
         if let Some(userinfo_uri) = &self.userinfo_uri {
@@ -121,7 +158,7 @@ impl TokenChecker {
                 drop(cache);
                 let request = self
                     .client
-                    .get(userinfo_uri)
+                    .get(userinfo_uri.full_uri())
                     .header("Authorization", format!("Bearer {token}"));
                 let response = request.send().await?;
                 cache = self.userinfo_cache.lock().await;
@@ -142,16 +179,22 @@ impl TokenChecker {
                             message: format!(
                                 "UserInfo response has unexpected format: {response_text}"
                             ),
-                        })
+                        });
+                        tracing::error!(fatal_error = ?error.as_ref().unwrap());
+                        super::trigger_shutdown();
                     }
                 } else {
                     if error.is_some() {
                         tracing::trace!("first error before UserInfo was {error:?}");
                     }
-                    error = Some(Error::UserInfoResponse {
-                        server: userinfo_uri.clone(),
+                    error = Some(Error::UnexpectedResponse {
+                        server: format!("{userinfo_uri:?}"),
                         status: response.status(),
                     });
+                    if response.status() != StatusCode::UNAUTHORIZED {
+                        tracing::error!(fatal_error = ?error.as_ref().unwrap());
+                        super::trigger_shutdown();
+                    }
                 }
             }
         }

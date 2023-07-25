@@ -35,6 +35,7 @@ iref = { workspace = true }
 iref-enum = { workspace = true }
 json-ld = { workspace = true }
 jwtk = { workspace = true }
+lazy_static = { workspace = true }
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
 opa = { workspace = true }
