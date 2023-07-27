@@ -27,7 +27,7 @@ use common::{
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
     signing::DirectoryStoredKeys,
 };
-use std::io::IsTerminal;
+use std::{io::IsTerminal, time::Instant};
 use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 
@@ -480,6 +480,7 @@ where
         }
 
         info!("Loading import data complete");
+        info!("Importing {} operations", operations.len());
 
         let identity = AuthId::chronicle();
         info!("Importing data as root to Chronicle namespace: {namespace}");
@@ -516,6 +517,7 @@ where
     use colored_json::prelude::*;
     let config = handle_config_and_init(&model)?;
 
+    let start_time = Instant::now();
     let response = execute_subcommand(gql, config, model).await?;
 
     match response {
@@ -608,6 +610,8 @@ where
                     }
                     SubmissionStage::Committed(commit, _) => {
                         if commit.tx_id == tx_id {
+                            let end_time = Instant::now();
+                            let elapsed_time = end_time - start_time;
                             debug!("Import transaction committed: {}", commit.tx_id);
                             println!("Import complete");
                             println!(
@@ -619,6 +623,8 @@ where
                                     .to_colored_json_auto()
                                     .unwrap()
                             );
+                            println!();
+                            println!("Import took {} seconds", elapsed_time.as_secs());
                             // An import command generates a single transaction, so we can break here and exit
                             break;
                         }
