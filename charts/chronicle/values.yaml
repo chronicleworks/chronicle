@@ -124,6 +124,10 @@ opa:
     ## @md | `opa.tp.extraVolumeMounts` | extra volume mounts for opa-tp deployment | list | nil
     extraVolumeMounts:
 
+perftest:
+  enabled: false
+  ops: 1000
+
 ## @md | `port` | the port on which the chronicle service listens | 9982 |
 port: 9982
 

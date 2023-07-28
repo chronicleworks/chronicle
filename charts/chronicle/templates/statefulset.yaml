@@ -121,6 +121,9 @@ spec:
                 {{- if not .Values.opa.enabled }}
                 --embedded-opa-policy \
                 {{- end }}
+                {{- if .Values.perftest.enabled }}
+                perftest {{ .Values.perftest.ops }}
+                {{- else }}
                 serve-api \
                   --interface 0.0.0.0:{{ .Values.port }} \
                   {{- if .Values.healthCheck.enabled }}
@@ -133,6 +136,7 @@ spec:
                   {{ include "chronicle.userinfo-url.cli" . }}
                   {{ include "chronicle.id-claims" . }}
                   ;
+                {{- end }}
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
