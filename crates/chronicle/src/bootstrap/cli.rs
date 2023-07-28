@@ -45,6 +45,9 @@ pub enum CliError {
     #[error("Bad argument: {0}")]
     ArgumentParsing(#[from] clap::Error),
 
+    #[error("Blocking thread pool: {0}")]
+    Join(#[from] tokio::task::JoinError),
+
     #[error("Invalid IRI: {0}")]
     InvalidIri(#[from] iref::Error),
 
@@ -1010,6 +1013,15 @@ impl SubCommand for CliModel {
                             .value_hint(ValueHint::Url)
                             .value_parser(StringValueParser::new())
                             .help("A path or url to data import file"),
+                    )
+            )
+            .subcommand(
+                Command::new("perftest")
+                    .arg(
+                        Arg::new("ops")
+                            .value_name("OPS")
+                            .help("Number of operations")
+                            .required(true)
                     )
             );
 

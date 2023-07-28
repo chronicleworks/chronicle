@@ -19,7 +19,7 @@ use diesel_migrations::MigrationHarness;
 use futures::{select, FutureExt, StreamExt};
 
 use common::{
-    attributes::Attributes,
+    attributes::{Attribute, Attributes},
     commands::*,
     identity::{AuthId, IdentityError},
     k256::ecdsa::SigningKey,
@@ -33,8 +33,8 @@ use common::{
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
-        Contradiction, EntityId, ExternalId, ExternalIdPart, NamespaceId, ProcessorError,
-        ProvModel, Role, SYSTEM_ID, SYSTEM_UUID,
+        Contradiction, DomaintypeId, EntityId, ExternalId, ExternalIdPart, NamespaceId,
+        ProcessorError, ProvModel, Role, SYSTEM_ID, SYSTEM_UUID,
     },
     signing::{DirectoryStoredKeys, SignerError},
 };
@@ -55,7 +55,10 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::mpsc::{self, error::SendError, Sender},
+    sync::{
+        broadcast::error::RecvError,
+        mpsc::{self, error::SendError, Sender},
+    },
     task::JoinError,
 };
 
@@ -67,6 +70,9 @@ use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
+    #[error("Failure in commit notification stream: {0}")]
+    CommitNoticiationStream(#[from] RecvError),
+
     #[error("Storage: {0:?}")]
     Store(#[from] persistence::StoreError),
 
@@ -129,6 +135,9 @@ pub enum ApiError {
 
     #[error("Authentication endpoint error: {0}")]
     AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
+
+    #[error("Perftest unable to complete")]
+    PerftestError,
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -252,6 +261,43 @@ impl ApiDispatch {
         self.dispatch(
             ApiCommand::DepthCharge(DepthChargeCommand { namespace }),
             identity.clone(),
+        )
+        .await
+    }
+
+    #[instrument]
+    pub async fn handle_perftest(
+        &self,
+        id: AuthId,
+        namespace: NamespaceId,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch_perftest(id, namespace).await
+    }
+
+    #[instrument]
+    async fn dispatch_perftest(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch(
+            ApiCommand::Activity(ActivityCommand::Create {
+                external_id: Uuid::new_v4().to_string().into(),
+                namespace: common::prov::SYSTEM_ID.into(),
+                attributes: Attributes {
+                    typ: Some(DomaintypeId::from_external_id("perftest")),
+                    attributes: [(
+                        "perftest".to_owned(),
+                        Attribute {
+                            typ: "perftest".to_owned(),
+                            value: serde_json::Value::String("perftest".to_owned()),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            }),
+            identity,
         )
         .await
     }

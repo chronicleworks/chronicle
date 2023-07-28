@@ -24,12 +24,19 @@ use common::{
     import::{load_bytes_from_stdin, load_bytes_from_url},
     ledger::SubmissionStage,
     opa::ExecutorContext,
-    prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
+    prov::{
+        operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId, SYSTEM_ID,
+        SYSTEM_UUID,
+    },
     signing::DirectoryStoredKeys,
 };
-use std::io::IsTerminal;
+use std::{
+    io::IsTerminal,
+    time::{Duration, Instant},
+};
 use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
+use uuid::Uuid;
 
 use config::*;
 use diesel::{
@@ -489,6 +496,66 @@ where
             .await?;
 
         Ok((response, ret_api))
+    } else if let Some(matches) = matches.subcommand_matches("perftest") {
+        let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
+
+        info!("Performing {} operations", ops);
+
+        let perftest_ops_api = api.clone();
+
+        let mut ops_copy = ops;
+        let start_time = Instant::now();
+        tokio::task::spawn(async move {
+            while ops > 0 {
+                let identity = AuthId::chronicle();
+                let namespace = system_namespace();
+                let _res = perftest_ops_api.handle_perftest(identity, namespace).await;
+                ops -= 1;
+            }
+            info!("Perftest operations sent");
+        });
+
+        let perftest_notify_api = api.clone();
+
+        let (elapsed_time, failed_submissions) = tokio::task::spawn(async move {
+            let mut failed_submissions = 0;
+            let mut tx_notifications = perftest_notify_api.notify_commit.subscribe();
+            while ops_copy > 0 {
+                let stage = tx_notifications.recv().await?;
+
+                match stage {
+                    SubmissionStage::Submitted(Ok(id)) => {
+                        info!("Perftest Transaction submitted: {}", id);
+                    }
+                    SubmissionStage::Submitted(Err(err)) => {
+                        info!(
+                            "Perftest transaction rejected by Chronicle: {} {}",
+                            err,
+                            err.tx_id()
+                        );
+                        ops_copy -= 1;
+                        failed_submissions += 1;
+                    }
+                    SubmissionStage::Committed(commit, _) => {
+                        info!("Perftest transaction committed: {}", commit.tx_id);
+                        ops_copy -= 1;
+                        info!("{} operations remaining", ops_copy);
+                    }
+                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
+                        info!("Perftest transaction rejected: {id} {contradiction}");
+                        return Err(ApiError::PerftestError);
+                    }
+                }
+            }
+            let end_time = Instant::now();
+            let elapsed_time = end_time - start_time;
+            Ok::<(Duration, u64), ApiError>((elapsed_time, failed_submissions))
+        })
+        .await??;
+        info!("Perftest complete");
+        info!("Perftest took {} seconds", elapsed_time.as_secs());
+        info!("{} operations failed", failed_submissions);
+        Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
         Ok((api.dispatch(cmd, identity).await?, ret_api))
@@ -503,6 +570,10 @@ fn get_namespace(matches: &ArgMatches) -> NamespaceId {
     let uuid = uuid::Uuid::try_parse(namespace_uuid)
         .unwrap_or_else(|_| panic!("cannot parse namespace UUID: {}", namespace_uuid));
     NamespaceId::from_external_id(namespace_id, uuid)
+}
+
+fn system_namespace() -> NamespaceId {
+    NamespaceId::from_external_id(SYSTEM_ID, Uuid::try_from(SYSTEM_UUID).unwrap())
 }
 
 async fn config_and_exec<Query, Mutation>(
