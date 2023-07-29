@@ -555,6 +555,8 @@ where
         info!("Perftest complete");
         info!("Perftest took {} seconds", elapsed_time.as_secs());
         info!("{} operations failed", failed_submissions);
+        info!("Sleeping for 5 minutes before shutting down this round of performance testing");
+        tokio::time::sleep(Duration::from_secs(300)).await;
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
