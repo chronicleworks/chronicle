@@ -107,7 +107,7 @@ pub enum ChronicleTransactionIdError {
     InvalidTransactionId { id: String },
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ChronicleTransactionId(String);
 
 impl Display for ChronicleTransactionId {

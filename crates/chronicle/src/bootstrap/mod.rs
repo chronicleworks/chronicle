@@ -25,15 +25,12 @@ use common::{
     ledger::SubmissionStage,
     opa::ExecutorContext,
     prov::{
-        operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId, SYSTEM_ID,
-        SYSTEM_UUID,
+        operations::ChronicleOperation, to_json_ld::ToJson, ChronicleTransactionId, ExpandedJson,
+        NamespaceId, SYSTEM_ID, SYSTEM_UUID,
     },
     signing::DirectoryStoredKeys,
 };
-use std::{
-    io::IsTerminal,
-    time::{Duration, Instant},
-};
+use std::{io::IsTerminal, time::Instant};
 use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 use uuid::Uuid;
@@ -501,57 +498,48 @@ where
         info!("Performing {} operations", ops);
 
         let perftest_ops_api = api.clone();
+        let submitted_tx_ids =
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::<
+                ChronicleTransactionId,
+            >::new()));
 
         let start_time = Instant::now();
-        let (end_time, failed_ops) = tokio::task::spawn(async move {
-            let mut failed_ops = 0;
-            let mut tx_notifications = perftest_ops_api.notify_commit.subscribe();
+
+        // Spawn a separate task to handle transactions submission
+        tokio::spawn(submit_transactions(
+            perftest_ops_api.clone(),
+            submitted_tx_ids.clone(),
+            ops,
+        ));
+
+        let tx_notifications = perftest_ops_api.notify_commit.subscribe();
+
+        let (end_time, commits) = tokio::task::spawn(async move {
+            let mut commits = 0;
+            let mut tx_notifications = tx_notifications;
+
             loop {
-                let identity = AuthId::chronicle();
-                let namespace = system_namespace();
-                if let Ok(ApiResponse::Submission { tx_id, .. }) =
-                    perftest_ops_api.handle_perftest(identity, namespace).await
-                {
-                    loop {
-                        match tx_notifications.recv().await {
-                            Ok(SubmissionStage::Committed(id, _)) => {
-                                if id.tx_id == tx_id {
-                                    info!("Perftest transaction committed: {}", id.tx_id);
-                                    ops -= 1;
-                                    if ops == 0 {
-                                        return Ok::<(Instant, u64), ApiError>((
-                                            Instant::now(),
-                                            failed_ops,
-                                        ));
-                                    }
-                                    info!("{} operations remaining", ops);
-                                    break;
-                                }
+                while let Ok(notification) = tx_notifications.try_recv() {
+                    // Check if the received notification is for a submitted tx_id
+                    if let SubmissionStage::Committed(id, _) = notification {
+                        let mut submitted_tx_ids = submitted_tx_ids.lock().await;
+                        if submitted_tx_ids.contains(&id.tx_id) {
+                            info!("Perftest transaction committed: {}", id.tx_id);
+                            ops -= 1;
+                            commits += 1;
+                            if ops == 0 {
+                                return Ok::<(Instant, u64), ApiError>((
+                                    Instant::now(),
+                                    commits,
+                                ));
                             }
-                            Ok(SubmissionStage::Submitted(Err(err))) => {
-                                if err.tx_id() == &tx_id {
-                                    error!("Perftest transaction failed: {}", err);
-                                    ops -= 1;
-                                    failed_ops += 1;
-                                    if ops == 0 {
-                                        return Ok::<(Instant, u64), ApiError>((
-                                            Instant::now(),
-                                            failed_ops,
-                                        ));
-                                    }
-                                    info!("{} operations remaining", ops);
-                                    break;
-                                }
-                            }
-                            Ok(_) => continue,
-                            Err(tokio::sync::broadcast::error::RecvError::Lagged(lag)) => {
-                                error!("RecvError::Lagged({lag})");
-                                continue;
-                            }
-                            Err(e) => {
-                                error!("Unexpected RecvError: {e}");
-                                continue;
-                            }
+                            info!("{} operations remaining", ops);
+                            submitted_tx_ids.remove(&id.tx_id);
+                        } else {
+                            info!(
+                                "SEEING THIS TRANSACTION HERE MEANS OTHER COMMIT MESSAGES WOULD BE POSSIBLE: {}",
+                                id.tx_id
+                            );
                         }
                     }
                 }
@@ -563,9 +551,7 @@ where
 
         info!("Perftest complete");
         info!("Perftest took {} seconds", elapsed_time.as_secs());
-        info!("Perftest failed {} operations", failed_ops);
-        info!("Sleeping for 5 minutes before shutting down this round of performance testing");
-        tokio::time::sleep(Duration::from_secs(300)).await;
+        info!("Committed {} operations", commits);
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
@@ -573,6 +559,29 @@ where
     } else {
         Ok((ApiResponse::Unit, ret_api))
     }
+}
+
+// Separate task to handle the submission of transactions
+async fn submit_transactions(
+    perftest_ops_api: ApiDispatch,
+    submitted_tx_ids: std::sync::Arc<
+        tokio::sync::Mutex<std::collections::HashSet<ChronicleTransactionId>>,
+    >,
+    mut ops: u64,
+) {
+    while ops > 0 {
+        let identity = AuthId::chronicle();
+        let namespace = system_namespace();
+        if let Ok(ApiResponse::Submission { tx_id, .. }) =
+            perftest_ops_api.handle_perftest(identity, namespace).await
+        {
+            ops -= 1;
+            // Add the tx_id to the submitted set
+            let mut submitted_tx_ids = submitted_tx_ids.lock().await;
+            submitted_tx_ids.insert(tx_id.clone());
+        }
+    }
+    info!("Perftest operations sent.");
 }
 
 fn get_namespace(matches: &ArgMatches) -> NamespaceId {
