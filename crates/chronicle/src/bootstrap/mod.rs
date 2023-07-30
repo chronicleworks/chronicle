@@ -498,15 +498,15 @@ where
         Ok((response, ret_api))
     } else if let Some(matches) = matches.subcommand_matches("perftest") {
         let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
-
         info!("Performing {} operations", ops);
 
         let perftest_ops_api = api.clone();
 
         let start_time = Instant::now();
-        tokio::task::spawn(async move {
+        let (end_time, failed_ops) = tokio::task::spawn(async move {
+            let mut failed_ops = 0;
             let mut tx_notifications = perftest_ops_api.notify_commit.subscribe();
-            while ops > 0 {
+            loop {
                 let identity = AuthId::chronicle();
                 let namespace = system_namespace();
                 if let Ok(ApiResponse::Submission { tx_id, .. }) =
@@ -518,6 +518,27 @@ where
                                 if id.tx_id == tx_id {
                                     info!("Perftest transaction committed: {}", id.tx_id);
                                     ops -= 1;
+                                    if ops == 0 {
+                                        return Ok::<(Instant, u64), ApiError>((
+                                            Instant::now(),
+                                            failed_ops,
+                                        ));
+                                    }
+                                    info!("{} operations remaining", ops);
+                                    break;
+                                }
+                            }
+                            Ok(SubmissionStage::Submitted(Err(err))) => {
+                                if err.tx_id() == &tx_id {
+                                    error!("Perftest transaction failed: {}", err);
+                                    ops -= 1;
+                                    failed_ops += 1;
+                                    if ops == 0 {
+                                        return Ok::<(Instant, u64), ApiError>((
+                                            Instant::now(),
+                                            failed_ops,
+                                        ));
+                                    }
                                     info!("{} operations remaining", ops);
                                     break;
                                 }
@@ -535,17 +556,14 @@ where
                     }
                 }
             }
-            info!("Perftest operations sent");
-            Ok::<(), ApiError>(())
         })
         .await??;
 
-        let end_time = Instant::now();
         let elapsed_time = end_time - start_time;
 
         info!("Perftest complete");
         info!("Perftest took {} seconds", elapsed_time.as_secs());
-
+        info!("Perftest failed {} operations", failed_ops);
         info!("Sleeping for 5 minutes before shutting down this round of performance testing");
         tokio::time::sleep(Duration::from_secs(300)).await;
         Ok((ApiResponse::Unit, ret_api))
