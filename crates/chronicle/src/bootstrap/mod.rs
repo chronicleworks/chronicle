@@ -512,13 +512,24 @@ where
                 if let Ok(ApiResponse::Submission { tx_id, .. }) =
                     perftest_ops_api.handle_perftest(identity, namespace).await
                 {
-                    ops -= 1;
                     loop {
-                        if let Ok(SubmissionStage::Committed(id, _)) = tx_notifications.recv().await
-                        {
-                            if id.tx_id == tx_id {
-                                info!("Perftest transaction committed: {}", id.tx_id);
-                                break;
+                        match tx_notifications.recv().await {
+                            Ok(SubmissionStage::Committed(id, _)) => {
+                                if id.tx_id == tx_id {
+                                    info!("Perftest transaction committed: {}", id.tx_id);
+                                    ops -= 1;
+                                    info!("{} operations remaining", ops);
+                                    break;
+                                }
+                            }
+                            Ok(_) => continue,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(lag)) => {
+                                error!("RecvError::Lagged({lag})");
+                                continue;
+                            }
+                            Err(e) => {
+                                error!("Unexpected RecvError: {e}");
+                                continue;
                             }
                         }
                     }
