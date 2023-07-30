@@ -503,58 +503,38 @@ where
 
         let perftest_ops_api = api.clone();
 
-        let mut ops_copy = ops;
         let start_time = Instant::now();
         tokio::task::spawn(async move {
+            let mut tx_notifications = perftest_ops_api.notify_commit.subscribe();
             while ops > 0 {
                 let identity = AuthId::chronicle();
                 let namespace = system_namespace();
-                let _res = perftest_ops_api.handle_perftest(identity, namespace).await;
-                ops -= 1;
-            }
-            info!("Perftest operations sent");
-        });
-
-        let perftest_notify_api = api.clone();
-
-        let (elapsed_time, failed_submissions) = tokio::task::spawn(async move {
-            let mut failed_submissions = 0;
-            let mut tx_notifications = perftest_notify_api.notify_commit.subscribe();
-            while ops_copy > 0 {
-                let stage = tx_notifications.recv().await?;
-
-                match stage {
-                    SubmissionStage::Submitted(Ok(id)) => {
-                        info!("Perftest Transaction submitted: {}", id);
-                    }
-                    SubmissionStage::Submitted(Err(err)) => {
-                        info!(
-                            "Perftest transaction rejected by Chronicle: {} {}",
-                            err,
-                            err.tx_id()
-                        );
-                        ops_copy -= 1;
-                        failed_submissions += 1;
-                    }
-                    SubmissionStage::Committed(commit, _) => {
-                        info!("Perftest transaction committed: {}", commit.tx_id);
-                        ops_copy -= 1;
-                        info!("{} operations remaining", ops_copy);
-                    }
-                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
-                        info!("Perftest transaction rejected: {id} {contradiction}");
-                        return Err(ApiError::PerftestError);
+                if let Ok(ApiResponse::Submission { tx_id, .. }) =
+                    perftest_ops_api.handle_perftest(identity, namespace).await
+                {
+                    ops -= 1;
+                    loop {
+                        if let Ok(SubmissionStage::Committed(id, _)) = tx_notifications.recv().await
+                        {
+                            if id.tx_id == tx_id {
+                                info!("Perftest transaction committed: {}", id.tx_id);
+                                break;
+                            }
+                        }
                     }
                 }
             }
-            let end_time = Instant::now();
-            let elapsed_time = end_time - start_time;
-            Ok::<(Duration, u64), ApiError>((elapsed_time, failed_submissions))
+            info!("Perftest operations sent");
+            Ok::<(), ApiError>(())
         })
         .await??;
+
+        let end_time = Instant::now();
+        let elapsed_time = end_time - start_time;
+
         info!("Perftest complete");
         info!("Perftest took {} seconds", elapsed_time.as_secs());
-        info!("{} operations failed", failed_submissions);
+
         info!("Sleeping for 5 minutes before shutting down this round of performance testing");
         tokio::time::sleep(Duration::from_secs(300)).await;
         Ok((ApiResponse::Unit, ret_api))
