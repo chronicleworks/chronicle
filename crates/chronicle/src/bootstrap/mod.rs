@@ -498,7 +498,9 @@ where
         tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 
         let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
-        info!("Performing {} operations", ops);
+        // let cap = matches.value_of("cap").unwrap().parse::<u64>().unwrap();
+        // let delay_duration = std::time::Duration::from_secs(1 / cap);
+
         let perftest_ops_api = api.clone();
 
         while let Err(e) = perftest_ops_api
@@ -509,6 +511,7 @@ where
         }
 
         info!("Chronicle warmed up, starting perftest ...");
+        info!("Performing {} operations", ops);
 
         let start_time = Instant::now();
 
@@ -518,8 +521,14 @@ where
             while ops > 0 {
                 let identity = AuthId::chronicle();
                 let namespace = system_namespace();
-                let _res = perftest_ops_api.handle_perftest(identity, namespace).await;
-                ops -= 1;
+                // If submission fails treat it as a lag error and retry
+                if perftest_ops_api
+                    .handle_perftest(identity, namespace)
+                    .await
+                    .is_ok()
+                {
+                    ops -= 1;
+                }
             }
         });
 
