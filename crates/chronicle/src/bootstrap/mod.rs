@@ -518,7 +518,12 @@ where
         let mut tx_notifications = api.notify_commit.subscribe();
 
         tokio::task::spawn(async move {
+            let mut cap = 50;
             while ops > 0 {
+                if cap == 0 {
+                    cap = 50;
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
                 let identity = AuthId::chronicle();
                 let namespace = system_namespace();
                 // If submission fails treat it as a lag error and retry
@@ -529,6 +534,7 @@ where
                 {
                     ops -= 1;
                 }
+                cap -= 1;
             }
         });
 
