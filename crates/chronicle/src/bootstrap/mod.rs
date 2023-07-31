@@ -494,9 +494,22 @@ where
 
         Ok((response, ret_api))
     } else if let Some(matches) = matches.subcommand_matches("perftest") {
+        info!("Waiting 20 seconds to begin perftest ...");
+        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+
         let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
         info!("Performing {} operations", ops);
         let perftest_ops_api = api.clone();
+
+        while let Err(e) = perftest_ops_api
+            .handle_perftest(AuthId::chronicle(), system_namespace())
+            .await
+        {
+            warn!("Draining potential lag errors: {}", e);
+        }
+
+        info!("Chronicle warmed up, starting perftest ...");
+
         let start_time = Instant::now();
 
         let mut tx_notifications = api.notify_commit.subscribe();
