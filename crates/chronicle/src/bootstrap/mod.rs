@@ -498,8 +498,7 @@ where
         tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 
         let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
-        // let cap = matches.value_of("cap").unwrap().parse::<u64>().unwrap();
-        // let delay_duration = std::time::Duration::from_secs(1 / cap);
+        let cap = matches.value_of("cap").unwrap().parse::<u64>().unwrap();
 
         let perftest_ops_api = api.clone();
 
@@ -518,10 +517,11 @@ where
         let mut tx_notifications = api.notify_commit.subscribe();
 
         tokio::task::spawn(async move {
-            let mut cap = 50;
+            let cap_set = cap;
+            let mut cap = cap;
             while ops > 0 {
                 if cap == 0 {
-                    cap = 50;
+                    cap = cap_set;
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
                 let identity = AuthId::chronicle();

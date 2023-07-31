@@ -1023,6 +1023,12 @@ impl SubCommand for CliModel {
                             .help("Number of operations")
                             .required(true)
                     )
+                    .arg(
+                        Arg::new("cap")
+                            .value_name("CAP")
+                            .help("Pause after this many operations")
+                            .required(true)
+                    )
             );
 
         for agent in self.agents.iter() {
