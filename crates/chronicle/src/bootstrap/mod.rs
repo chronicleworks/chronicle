@@ -499,6 +499,8 @@ where
         let perftest_ops_api = api.clone();
         let start_time = Instant::now();
 
+        let mut tx_notifications = api.notify_commit.subscribe();
+
         tokio::task::spawn(async move {
             while ops > 0 {
                 let identity = AuthId::chronicle();
@@ -508,7 +510,6 @@ where
             }
         });
 
-        let mut tx_notifications = api.notify_commit.subscribe();
         while ops > 0 {
             if let Ok(SubmissionStage::Committed(_, _)) = tx_notifications.recv().await {
                 ops -= 1;
