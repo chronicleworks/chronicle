@@ -130,13 +130,21 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/userinfo
 {{- end -}}
 
 {{- define "chronicle.offer-endpoints" -}}
-{{- if or (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) -}}
-  {{- if and (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) -}}
+{{- if or (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) (.Values.endpoints.healthMetrics.enabled) -}}
+  {{- if and (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) (.Values.endpoints.healthMetrics.enabled) -}}
+    --offer-endpoints data graphql metrics \
+  {{- else if and (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) -}}
     --offer-endpoints data graphql \
+  {{- else if and (.Values.endpoints.data.enabled) (.Values.endpoints.healthMetrics.enabled) -}}
+    --offer-endpoints data metrics \
+  {{- else if and (.Values.endpoints.graphql.enabled) (.Values.endpoints.healthMetrics.enabled) -}}
+    --offer-endpoints graphql metrics \
   {{- else if .Values.endpoints.data.enabled -}}
     --offer-endpoints data \
   {{- else if .Values.endpoints.graphql.enabled -}}
     --offer-endpoints graphql \
+  {{- else if .Values.endpoints.healthMetrics.enabled -}}
+    --offer-endpoints metrics \
   {{- end -}}
 {{- end -}}
 {{- end -}}
