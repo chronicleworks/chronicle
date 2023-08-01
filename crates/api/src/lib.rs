@@ -40,7 +40,6 @@ use common::{
 };
 
 use metrics::histogram;
-use metrics_exporter_prometheus::PrometheusBuilder;
 pub use persistence::StoreError;
 use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
@@ -67,26 +66,8 @@ use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
-    #[error("Storage: {0:?}")]
-    Store(#[from] persistence::StoreError),
-
-    #[error("Transaction failed: {0}")]
-    Transaction(#[from] diesel::result::Error),
-
-    #[error("Invalid IRI: {0}")]
-    Iri(#[from] iref::Error),
-
-    #[error("JSON-LD processing: {0}")]
-    JsonLD(String),
-
-    #[error("Ledger error: {0}")]
-    Ledger(#[from] SubmissionError),
-
-    #[error("Signing: {0}")]
-    Signing(#[from] SignerError),
-
-    #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
-    NoCurrentAgent,
+    #[error("Invalid socket address: {0}")]
+    AddressParse(#[from] AddrParseError),
 
     #[error("Api shut down before reply")]
     ApiShutdownRx,
@@ -94,41 +75,59 @@ pub enum ApiError {
     #[error("Api shut down before send: {0}")]
     ApiShutdownTx(#[from] SendError<ApiSendWithReply>),
 
-    #[error("Ledger shut down before send: {0}")]
-    LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
-
-    #[error("Invalid socket address: {0}")]
-    AddressParse(#[from] AddrParseError),
+    #[error("Authentication endpoint error: {0}")]
+    AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
 
     #[error("Connection pool: {0}")]
     ConnectionPool(#[from] r2d2::Error),
 
-    #[error("IO error: {0}")]
-    InputOutput(#[from] std::io::Error),
-
-    #[error("Blocking thread pool: {0}")]
-    Join(#[from] JoinError),
-
-    #[error("State update subscription: {0}")]
-    Subscription(#[from] SubscriptionError),
-
-    #[error("No appropriate activity to end")]
-    NotCurrentActivity,
-
     #[error("Contradiction: {0}")]
     Contradiction(#[from] Contradiction),
-
-    #[error("Processor: {0}")]
-    ProcessorError(#[from] ProcessorError),
 
     #[error("Identity: {0}")]
     IdentityError(#[from] IdentityError),
 
+    #[error("IO error: {0}")]
+    InputOutput(#[from] std::io::Error),
+
+    #[error("Invalid IRI: {0}")]
+    Iri(#[from] iref::Error),
+
+    #[error("JSON-LD processing: {0}")]
+    JsonLD(String),
+
+    #[error("Blocking thread pool: {0}")]
+    Join(#[from] JoinError),
+
+    #[error("Ledger error: {0}")]
+    Ledger(#[from] SubmissionError),
+
+    #[error("Ledger shut down before send: {0}")]
+    LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
+
+    #[error("No agent is currently in use, please call agent use or supply an agent in your call")]
+    NoCurrentAgent,
+
+    #[error("No appropriate activity to end")]
+    NotCurrentActivity,
+
+    #[error("Processor: {0}")]
+    ProcessorError(#[from] ProcessorError),
+
     #[error("Sawtooth communication error: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
 
-    #[error("Authentication endpoint error: {0}")]
-    AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
+    #[error("Signing: {0}")]
+    Signing(#[from] SignerError),
+
+    #[error("Storage: {0:?}")]
+    Store(#[from] persistence::StoreError),
+
+    #[error("State update subscription: {0}")]
+    Subscription(#[from] SubscriptionError),
+
+    #[error("Transaction failed: {0}")]
+    Transaction(#[from] diesel::result::Error),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -257,26 +256,6 @@ impl ApiDispatch {
     }
 }
 
-fn install_prometheus_metrics_exporter() {
-    let metrics_endpoint = "127.0.0.1:9000";
-    let metrics_listen_socket = match metrics_endpoint.parse::<std::net::SocketAddrV4>() {
-        Ok(addr) => addr,
-        Err(e) => {
-            error!("Unable to parse metrics listen socket address: {e:?}");
-            return;
-        }
-    };
-
-    if let Err(e) = PrometheusBuilder::new()
-        .with_http_listener(metrics_listen_socket)
-        .install()
-    {
-        error!("Prometheus exporter installation for liveness check metrics failed: {e:?}");
-    } else {
-        debug!("Liveness check metrics Prometheus exporter installed with endpoint on {metrics_endpoint}/metrics");
-    }
-}
-
 impl<U, LEDGER> Api<U, LEDGER>
 where
     U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
@@ -295,7 +274,7 @@ where
         uuidgen: U,
         namespace_bindings: HashMap<String, Uuid>,
         policy_name: Option<String>,
-        liveness_check_interval: Option<u64>,
+        depth_charge_interval: Option<u64>,
     ) -> Result<ApiDispatch, ApiError> {
         let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -423,15 +402,12 @@ where
             }
         });
 
-        if let Some(interval) = liveness_check_interval {
-            debug!("Starting liveness depth charge task");
+        if let Some(interval) = depth_charge_interval {
+            debug!("Starting health metrics depth charge task");
 
             let depth_charge_api = dispatch.clone();
 
             tokio::task::spawn(async move {
-                // Configure and install Prometheus exporter
-                install_prometheus_metrics_exporter();
-
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
                     let api = depth_charge_api.clone();
@@ -1742,8 +1718,6 @@ mod test {
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
-        let liveness_check_interval = None;
-
         let dispatch = Api::new(
             pool,
             embed_tp.ledger.clone(),
@@ -1751,7 +1725,7 @@ mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".into()),
-            liveness_check_interval,
+            None,
         )
         .await
         .unwrap();

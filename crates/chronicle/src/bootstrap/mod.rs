@@ -27,8 +27,9 @@ use common::{
     prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
     signing::DirectoryStoredKeys,
 };
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use std::io::IsTerminal;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 use user_error::UFE;
 
 use config::*;
@@ -137,6 +138,7 @@ async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> 
     Ok(pool)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn api_server<Query, Mutation>(
     api: &ApiDispatch,
     pool: &ConnectionPool,
@@ -145,6 +147,7 @@ pub async fn api_server<Query, Mutation>(
     security_conf: SecurityConf,
     serve_graphql: bool,
     serve_data: bool,
+    metrics_handle: Option<PrometheusHandle>,
 ) -> Result<(), ApiError>
 where
     Query: ObjectType + Copy,
@@ -158,6 +161,7 @@ where
             security_conf,
             serve_graphql,
             serve_data,
+            metrics_handle,
         )
         .await?
     }
@@ -171,7 +175,7 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
     policy_name: Option<String>,
-    liveness_check_interval: Option<u64>,
+    depth_charge_interval: Option<u64>,
 ) -> Result<ApiDispatch, CliError> {
     let ledger = ledger(config, options)?;
 
@@ -182,7 +186,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         policy_name,
-        liveness_check_interval,
+        depth_charge_interval,
     )
     .await?)
 }
@@ -193,7 +197,7 @@ pub async fn api(
     _options: &ArgMatches,
     config: &Config,
     remote_opa: Option<String>,
-    liveness_check_interval: Option<u64>,
+    depth_charge_interval: Option<u64>,
 ) -> Result<api::ApiDispatch, ApiError> {
     let embedded_tp = in_mem_ledger(config, _options)?;
 
@@ -204,7 +208,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         remote_opa,
-        liveness_check_interval,
+        depth_charge_interval,
     )
     .await
 }
@@ -319,26 +323,44 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
     }
 }
 
-/// If `--liveness-check` is set, we use either the interval in seconds provided or the default of 1800.
-/// Otherwise, we use `None` to disable the depth charge.
-fn configure_depth_charge(matches: &ArgMatches) -> Option<u64> {
+/// If health metrics are enabled, we use either the interval in seconds provided or the default of 1800.
+/// Otherwise, we return `None` for the handle **and** for the interval value in order to disable the health
+/// metrics depth charge transactions as well as the `/metrics` endpoint.
+fn configure_health_metrics(
+    matches: &ArgMatches,
+) -> Result<(Option<PrometheusHandle>, Option<u64>), CliError> {
     if let Some(serve_api_matches) = matches.subcommand_matches("serve-api") {
-        if let Some(interval) = serve_api_matches.value_of("liveness-check") {
-            let parsed_interval = interval.parse::<u64>().unwrap_or_else(|e| {
-                warn!("Failed to parse '--liveness-check' value: {e}");
-                1800
-            });
+        if serve_api_matches.is_present("enable-health-metrics") {
+            debug!("Health metrics enabled");
 
-            if parsed_interval == 1800 {
-                debug!("Using default liveness health check interval value: 1800");
-            } else {
-                debug!("Using custom liveness health check interval value: {parsed_interval}");
+            let interval = serve_api_matches
+                .value_of("health-metrics-interval")
+                .unwrap_or("1800")
+                .parse::<u64>()?;
+
+            debug!(
+                "Using {} health metrics interval value: {}",
+                if interval == 1800 {
+                    "default"
+                } else {
+                    "custom"
+                },
+                interval
+            );
+            let handle = PrometheusBuilder::new().install_recorder()?;
+
+            debug!("Health metrics Prometheus exporter installed successfully");
+            return Ok((Some(handle), Some(interval)));
+        } else {
+            debug!("Health metrics disabled");
+            if serve_api_matches.is_present("health-metrics-interval") {
+                debug!(
+                    "Health metrics interval value provided but health metrics disabled, ignoring"
+                );
             }
-            return Some(parsed_interval);
         }
     }
-    debug!("Liveness health check disabled");
-    None
+    Ok((None, None))
 }
 
 #[instrument(skip(gql, cli))]
@@ -359,14 +381,14 @@ where
 
     let opa = configure_opa(&config, &matches).await?;
 
-    let liveness_check_interval = configure_depth_charge(&matches);
+    let (health_metrics_handle, depth_charge_interval) = configure_health_metrics(&matches)?;
 
     let api = api(
         &pool,
         &matches,
         &config,
         opa.remote_settings(),
-        liveness_check_interval,
+        depth_charge_interval,
     )
     .await?;
     let ret_api = api.clone();
@@ -423,6 +445,10 @@ where
             .map(String::clone)
             .collect();
 
+        if endpoints.contains(&"metrics".to_string()) && health_metrics_handle.is_none() {
+            return Err(CliError::MetricsEndpointConfigError);
+        }
+
         api_server(
             &api,
             &pool,
@@ -438,6 +464,7 @@ where
             ),
             endpoints.contains(&"graphql".to_string()),
             endpoints.contains(&"data".to_string()),
+            health_metrics_handle,
         )
         .await?;
 
@@ -847,8 +874,6 @@ pub mod test {
         let database = TemporaryDatabase::default();
         let pool = database.connection_pool().unwrap();
 
-        let liveness_check_interval = None;
-
         let dispatch = Api::new(
             pool,
             embedded_tp.ledger.clone(),
@@ -856,7 +881,7 @@ pub mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".to_owned()),
-            liveness_check_interval,
+            None,
         )
         .await
         .unwrap();

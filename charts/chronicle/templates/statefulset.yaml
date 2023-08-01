@@ -123,8 +123,9 @@ spec:
                 {{- end }}
                 serve-api \
                   --interface 0.0.0.0:{{ .Values.port }} \
-                  {{- if .Values.healthCheck.enabled }}
-                  --liveness-check {{ .Values.healthCheck.interval }} \
+                  {{- if .Values.healthMetrics.enabled }}
+                  --enable-health-metrics \
+                  --health-metrics-interval {{ .Values.healthMetrics.interval }} \
                   {{- end }}
                   {{ include "chronicle.offer-endpoints" . }}
                   {{- if .Values.auth.required }}

@@ -27,6 +27,7 @@ use diesel::{
 };
 use futures::Stream;
 use lazy_static::lazy_static;
+use metrics_exporter_prometheus::PrometheusHandle;
 use poem::{
     get, handler,
     http::{HeaderValue, StatusCode},
@@ -54,7 +55,7 @@ use tracing::{debug, error, instrument, warn};
 use url::Url;
 
 use self::authorization::TokenChecker;
-use crate::{ApiDispatch, ApiError, StoreError};
+use crate::{chronicle_graphql::health::Metrics, ApiDispatch, ApiError, StoreError};
 
 #[macro_use]
 pub mod activity;
@@ -62,6 +63,7 @@ pub mod agent;
 mod authorization;
 mod cursor_query;
 pub mod entity;
+pub mod health;
 pub mod mutation;
 pub mod query;
 
@@ -526,6 +528,7 @@ impl SecurityConf {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[async_trait::async_trait]
 pub trait ChronicleApiServer {
     async fn serve_api(
@@ -536,6 +539,7 @@ pub trait ChronicleApiServer {
         security_conf: SecurityConf,
         serve_graphql: bool,
         serve_data: bool,
+        metrics_handle: Option<PrometheusHandle>,
     ) -> Result<(), ApiError>;
 }
 
@@ -1097,6 +1101,7 @@ where
         sec: SecurityConf,
         serve_graphql: bool,
         serve_data: bool,
+        metrics_handle: Option<PrometheusHandle>,
     ) -> Result<(), ApiError> {
         let claim_parser = sec.id_claims.map(|id_claims| AuthFromJwt {
             id_claims,
@@ -1130,7 +1135,7 @@ where
 
         match (&sec.jwks_uri, &sec.userinfo_uri) {
             (None, None) => {
-                tracing::warn!("API endpoint uses no authentication");
+                warn!("API endpoint uses no authentication");
 
                 if serve_graphql {
                     app = app
@@ -1142,6 +1147,10 @@ where
                         .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(None)))
                         .at("/data/:ns/:iri", get(iri_endpoint(None)))
+                };
+                if let Some(handle) = metrics_handle {
+                    let metrics_endpoint = Metrics::new(handle);
+                    app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
             (jwks_uri, userinfo_uri) => {
@@ -1189,6 +1198,10 @@ where
                         .at("/context", get(LdContextEndpoint))
                         .at("/data/:iri", get(iri_endpoint(Some(secconf()))))
                         .at("/data/:ns/:iri", get(iri_endpoint(Some(secconf()))))
+                };
+                if let Some(handle) = metrics_handle {
+                    let metrics_endpoint = Metrics::new(handle);
+                    app = app.at("/metrics", get(metrics_endpoint))
                 };
             }
         }

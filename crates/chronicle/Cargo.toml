@@ -27,6 +27,7 @@ genco                = { workspace = true }
 hex                  = { workspace = true }
 iref                 = { workspace = true }
 jsonschema           = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 opa                  = { workspace = true }
 opentelemetry        = { workspace = true }
 percent-encoding     = { workspace = true }
