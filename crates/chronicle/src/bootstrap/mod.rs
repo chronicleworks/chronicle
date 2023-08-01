@@ -494,60 +494,59 @@ where
 
         Ok((response, ret_api))
     } else if let Some(matches) = matches.subcommand_matches("perftest") {
-        info!("Waiting 20 seconds to begin perftest ...");
+        println!("Waiting 20 seconds to begin perftest ...");
         tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 
-        let mut ops = matches.value_of("ops").unwrap().parse::<u64>().unwrap();
-        let cap = matches.value_of("cap").unwrap().parse::<u64>().unwrap();
+        // e.g. 2000 ops
+        let mut ops = matches.value_of("ops").unwrap().parse::<i32>().unwrap();
+        // e.g. 10 ops per second
+        let cap = matches.value_of("cap").unwrap().parse::<i32>().unwrap();
+
+        println!("Performing {} operations ...", ops);
 
         let perftest_ops_api = api.clone();
 
-        while let Err(e) = perftest_ops_api
-            .handle_perftest(AuthId::chronicle(), system_namespace())
-            .await
-        {
-            warn!("Draining potential lag errors: {}", e);
-        }
-
-        info!("Chronicle warmed up, starting perftest ...");
-        info!("Performing {} operations", ops);
+        let mut tx_notifications = api.notify_commit.subscribe();
 
         let start_time = Instant::now();
 
-        let mut tx_notifications = api.notify_commit.subscribe();
-
         tokio::task::spawn(async move {
-            let cap_set = cap;
-            let mut cap = cap;
             while ops > 0 {
-                if cap == 0 {
-                    cap = cap_set;
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let timer = Instant::now();
+                let mut ops_in_current_batch = std::cmp::min(ops, cap);
+
+                while ops_in_current_batch > 0 {
+                    let identity = AuthId::chronicle();
+                    let namespace = system_namespace();
+                    // If submission fails treat it as a lag error and retry
+                    if perftest_ops_api
+                        .handle_perftest(identity, namespace)
+                        .await
+                        .is_ok()
+                    {
+                        ops_in_current_batch -= 1;
+                    }
                 }
-                let identity = AuthId::chronicle();
-                let namespace = system_namespace();
-                // If submission fails treat it as a lag error and retry
-                if perftest_ops_api
-                    .handle_perftest(identity, namespace)
-                    .await
-                    .is_ok()
-                {
-                    ops -= 1;
+
+                ops -= ops_in_current_batch;
+
+                let time_elapsed = timer.elapsed().as_secs_f64();
+                let time_to_wait = 1.0 - time_elapsed;
+                if time_to_wait > 0.0 {
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(time_to_wait)).await;
                 }
-                cap -= 1;
             }
         });
 
         while ops > 0 {
             if let Ok(SubmissionStage::Committed(_, _)) = tx_notifications.recv().await {
                 ops -= 1;
-                info!("{} operations remaining", ops);
             }
         }
         let elapsed_time = Instant::now() - start_time;
 
-        info!("Perftest complete");
-        info!("Perftest took {} seconds", elapsed_time.as_secs());
+        println!("Perftest complete");
+        println!("Perftest took {} seconds", elapsed_time.as_secs());
         Ok((ApiResponse::Unit, ret_api))
     } else if let Some(cmd) = cli.matches(&matches)? {
         let identity = AuthId::chronicle();
