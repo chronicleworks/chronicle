@@ -126,6 +126,7 @@ spec:
                   {{- if .Values.healthCheck.enabled }}
                   --liveness-check {{ .Values.healthCheck.interval }} \
                   {{- end }}
+                  {{ include "chronicle.offer-endpoints" . }}
                   {{- if .Values.auth.required }}
                   --require-auth \
                   {{- end }}

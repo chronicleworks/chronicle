@@ -1,5 +1,23 @@
 # Other Chronicle Helm Options
 
+## Endpoints
+
+Chronicle can offer endpoints for `data` (at `/context` and `/data`) and
+`graphql` (at `/` and `/ws`).
+
+These are served by default and can be configured in the Chronicle Helm Chart
+`values.yaml` with the following options:
+
+```yaml
+endpoints:
+  data:
+    enabled: true
+  graphql:
+    enabled: true
+```
+
+See [command line options](cli#offer-endpoints-name-name) for more information.
+
 ## Liveness Health Check
 
 Chronicle can enable liveness depth charge checks to ensure system availability.
