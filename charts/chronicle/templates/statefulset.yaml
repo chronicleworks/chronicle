@@ -102,41 +102,42 @@ spec:
           command: [ "bash", "-c"]
           args:
             - |
-              {{ if .Values.auth.required }}
-              {{ if and (not .Values.auth.jwks.url) (not .Values.auth.userinfo.url) (not .Values.devIdProvider.enabled) }}
-              {{ required "If 'auth.required' you need to provide at least 'auth.jwks.url' or 'auth.userinfo.url', or 'devIdProvider.enabled' must be 'true'!" .Values.auth.jwks.url }}
-              {{ end }}
-              {{ end }}
+              tail -f /dev/null
+              # {{ if .Values.auth.required }}
+              # {{ if and (not .Values.auth.jwks.url) (not .Values.auth.userinfo.url) (not .Values.devIdProvider.enabled) }}
+              # {{ required "If 'auth.required' you need to provide at least 'auth.jwks.url' or 'auth.userinfo.url', or 'devIdProvider.enabled' must be 'true'!" .Values.auth.jwks.url }}
+              # {{ end }}
+              # {{ end }}
 
-              echo "Waiting 20 seconds for postgres to start";
-              sleep 20;
-              chronicle \
-                -c /etc/chronicle/config/config.toml \
-                --console-logging json \
-                --sawtooth tcp://{{ include "chronicle.sawtooth.service" . }}:{{ include "chronicle.sawtooth.sawcomp" . }} \
-                --remote-database \
-                --database-name {{ .Values.postgres.database }} \
-                --database-username {{ .Values.postgres.user }} \
-                --database-host {{ .Values.postgres.host }} \
-                {{- if not .Values.opa.enabled }}
-                --embedded-opa-policy \
-                {{- end }}
-                {{- if .Values.perftest.enabled }}
-                perftest {{ .Values.perftest.ops }}
-                {{- else }}
-                serve-api \
-                  --interface 0.0.0.0:{{ .Values.port }} \
-                  {{- if .Values.healthCheck.enabled }}
-                  --liveness-check {{ .Values.healthCheck.interval }} \
-                  {{- end }}
-                  {{- if .Values.auth.required }}
-                  --require-auth \
-                  {{- end }}
-                  {{ include "chronicle.jwks-url.cli" . }}
-                  {{ include "chronicle.userinfo-url.cli" . }}
-                  {{ include "chronicle.id-claims" . }}
-                  ;
-                {{- end }}
+              # echo "Waiting 20 seconds for postgres to start";
+              # sleep 20;
+              # chronicle \
+              #   -c /etc/chronicle/config/config.toml \
+              #   --console-logging json \
+              #   --sawtooth tcp://{{ include "chronicle.sawtooth.service" . }}:{{ include "chronicle.sawtooth.sawcomp" . }} \
+              #   --remote-database \
+              #   --database-name {{ .Values.postgres.database }} \
+              #   --database-username {{ .Values.postgres.user }} \
+              #   --database-host {{ .Values.postgres.host }} \
+              #   {{- if not .Values.opa.enabled }}
+              #   --embedded-opa-policy \
+              #   {{- end }}
+              #   {{- if .Values.perftest.enabled }}
+              #   perftest {{ .Values.perftest.ops }}
+              #   {{- else }}
+              #   serve-api \
+              #     --interface 0.0.0.0:{{ .Values.port }} \
+              #     {{- if .Values.healthCheck.enabled }}
+              #     --liveness-check {{ .Values.healthCheck.interval }} \
+              #     {{- end }}
+              #     {{- if .Values.auth.required }}
+              #     --require-auth \
+              #     {{- end }}
+              #     {{ include "chronicle.jwks-url.cli" . }}
+              #     {{ include "chronicle.userinfo-url.cli" . }}
+              #     {{ include "chronicle.id-claims" . }}
+              #     ;
+              #   {{- end }}
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
