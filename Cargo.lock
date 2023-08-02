@@ -185,6 +185,7 @@ dependencies = [
  "iref-enum",
  "json-ld",
  "jwtk",
+ "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
  "opa",
