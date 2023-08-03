@@ -733,6 +733,7 @@ pub async fn bootstrap<Query, Mutation>(
         matches
             .get_one::<String>("instrument")
             .map(|s| Url::parse(s).expect("cannot parse instrument as URI: {s}")),
+        matches.get_one::<String>("flamegraph").map(|x| x.as_str()),
         if matches.contains_id("console-logging") {
             match matches.get_one::<String>("console-logging") {
                 Some(level) => match level.as_str() {
@@ -851,7 +852,7 @@ pub mod test {
     }
 
     async fn test_api<'a>() -> TestDispatch<'a> {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
 

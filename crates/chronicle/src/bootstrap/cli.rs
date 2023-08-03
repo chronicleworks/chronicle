@@ -835,9 +835,17 @@ impl SubCommand for CliModel {
                     .value_hint(ValueHint::Url)
                     .help("Instrument using RUST_LOG environment"),
             )
+            .arg(
+                Arg::new("flamegraph")
+                    .long("flamegraph")
+                    .value_name("instrument")
+                    .takes_value(true)
+                    .value_hint(ValueHint::FilePath)
+                    .help("Write spans to a flamegraph file"),
+            )
             .arg(Arg::new("console-logging").long("console-logging")
                 .takes_value(true)
-                .possible_values(["pretty","json"])
+                .possible_values(["pretty","json","off"])
                 .default_value("pretty")
                 .help(
                     "Instrument using RUST_LOG environment, writing in either human readable format or structured json to stdio",

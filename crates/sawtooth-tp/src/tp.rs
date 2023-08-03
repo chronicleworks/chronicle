@@ -103,8 +103,7 @@ impl TP for ChronicleTransactionHandler {
 
     async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
         use chronicle_protocol::protocol::messages::submission::IdentityVariant;
-        use common::prov::transaction;
-        use common::prov::transaction::ToChronicleTransaction;
+        use common::prov::{transaction, transaction::ToChronicleTransaction};
         let identity =
             chronicle_identity_from_submission(match submission.identity_variant.unwrap() {
                 IdentityVariant::IdentityOld(id) => id,
@@ -380,8 +379,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
 pub mod test {
     use std::{
         cell::RefCell,
-        collections::hash_map::DefaultHasher,
-        collections::BTreeMap,
+        collections::{hash_map::DefaultHasher, BTreeMap},
         hash::{Hash, Hasher},
     };
 
@@ -584,7 +582,7 @@ pub mod test {
 
     #[tokio::test]
     async fn simple_non_contradicting_operation() {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
         keystore.generate_chronicle().unwrap();
