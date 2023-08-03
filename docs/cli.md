@@ -79,7 +79,23 @@ consecutive checks and is set to 1800 seconds (or 30 minutes) by default.
 By default, liveness checks are disabled.
 
 For configuration via Helm Chart, see our documentation on
-[Helm Options and the Liveness Health Check](./helm-options.md#liveness-health-check).
+[Helm Options and the Liveness Health
+Check](./helm-options.md#liveness-health-check).
+
+##### Instrumentation
+
+Instrumentation level is controlled by Rust's RUST_LOG environment variable -
+see <https://docs.rs/env_logger/latest/env_logger/>.
+
+###### `--console-logging`
+
+One of pretty, json or off. Pretty is suited to local development, json for
+production.
+
+###### `--flamegraph`
+
+Takes a path to a file and will write tracing information to it for use with
+analytic tools like <https://crates.io/crates/inferno>.
 
 ##### Deprecated Options
 

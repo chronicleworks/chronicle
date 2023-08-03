@@ -1,5 +1,6 @@
 use tracing::subscriber::set_global_default;
 use tracing_elastic_apm::config::Config;
+use tracing_flame::FlameLayer;
 use tracing_log::{log::LevelFilter, LogTracer};
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 use url::Url;
@@ -40,63 +41,122 @@ macro_rules! apm_layer {
     };
 }
 
-pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLogging) {
+pub struct OptionalDrop<T> {
+    inner: Option<T>,
+}
+
+impl<T> OptionalDrop<T> {
+    pub fn new(inner: T) -> Self {
+        Self { inner: Some(inner) }
+    }
+}
+
+impl<T> Drop for OptionalDrop<T> {
+    fn drop(&mut self) {
+        self.inner.take();
+    }
+}
+
+pub fn telemetry(
+    collector_endpoint: Option<Url>,
+    flame_file: Option<&str>,
+    console_logging: ConsoleLogging,
+) -> impl Drop {
+    let (flame_layer, guard) = flame_file
+        .map(|path| {
+            let (flame_layer, guard) = FlameLayer::with_file(path).unwrap();
+            (Some(flame_layer), Some(guard))
+        })
+        .unwrap_or((None, None));
+
     LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
-    match (collector_endpoint, console_logging) {
-        (Some(otel), ConsoleLogging::Json) => {
-            set_global_default(
-                Registry::default()
-                    .with(env_filter)
-                    .with(apm_layer!(otel))
-                    .with(stdio_layer!().json()),
-            )
-            .ok();
-        }
-        (Some(otel), ConsoleLogging::Pretty) => {
-            set_global_default(
-                Registry::default()
-                    .with(env_filter)
-                    .with(apm_layer!(otel.as_str()))
-                    .with(stdio_layer!().pretty()),
-            )
-            .ok();
-        }
-        (Some(otel), ConsoleLogging::Off) => {
-            set_global_default(
-                Registry::default()
-                    .with(env_filter)
-                    .with(apm_layer!(otel.as_str())),
-            )
-            .ok();
-        }
-        (None, ConsoleLogging::Json) => {
-            set_global_default(
-                Registry::default()
-                    .with(env_filter)
-                    .with(stdio_layer!().json()),
-            )
-            .ok();
-        }
-        (None, ConsoleLogging::Pretty) => {
+    match (collector_endpoint, flame_layer, console_logging) {
+        (Some(otel), Some(flame_layer), ConsoleLogging::Json) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(flame_layer)
+                .with(apm_layer!(otel))
+                .with(stdio_layer!().json()),
+        ),
+        (Some(otel), Some(flame_layer), ConsoleLogging::Pretty) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(flame_layer)
+                .with(stdio_layer!().pretty())
+                .with(apm_layer!(otel.as_str())),
+        ),
+        (Some(otel), Some(flame_layer), ConsoleLogging::Off) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(flame_layer)
+                .with(apm_layer!(otel.as_str())),
+        ),
+        (None, Some(flame_layer), ConsoleLogging::Json) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(flame_layer)
+                .with(stdio_layer!().json()),
+        ),
+        (None, Some(flame_layer), ConsoleLogging::Pretty) => {
             cfg_if::cfg_if! {
               if #[cfg(feature = "tokio-tracing")] {
-                let layers = Registry::default()
+                set_global_default(Registry::default()
                   .with(env_filter)
+                  .with(flame_layer)
                   .with(stdio_layer!().pretty())
-                  .with(console_layer!());
-
-                set_global_default(layers).ok();
-
+                  .with(console_layer!()))
               } else {
-                let layers = Registry::default()
+                set_global_default(Registry::default()
                   .with(env_filter)
-                  .with(stdio_layer!().pretty());
-                set_global_default(layers).ok();
+                  .with(flame_layer)
+                  .with(stdio_layer!().pretty())
+                )
               }
             }
         }
-        _ => (),
+        (Some(otel), None, ConsoleLogging::Json) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(apm_layer!(otel))
+                .with(stdio_layer!().json()),
+        ),
+        (Some(otel), None, ConsoleLogging::Pretty) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(stdio_layer!().pretty())
+                .with(apm_layer!(otel.as_str())),
+        ),
+        (Some(otel), None, ConsoleLogging::Off) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(apm_layer!(otel.as_str())),
+        ),
+        (None, None, ConsoleLogging::Json) => set_global_default(
+            Registry::default()
+                .with(env_filter)
+                .with(stdio_layer!().json()),
+        ),
+        (None, None, ConsoleLogging::Pretty) => {
+            cfg_if::cfg_if! {
+              if #[cfg(feature = "tokio-tracing")] {
+                set_global_default(Registry::default()
+                  .with(env_filter)
+                  .with(stdio_layer!().pretty())
+                  .with(console_layer!()))
+              } else {
+                set_global_default(Registry::default()
+                  .with(env_filter)
+                  .with(stdio_layer!().pretty())
+                )
+              }
+            }
+        }
+        _ => set_global_default(Registry::default().with(env_filter)),
     }
+    .map_err(|e| eprintln!("Failed to set global default subscriber: {:?}", e))
+    .ok();
+
+    OptionalDrop::new(guard)
 }

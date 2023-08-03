@@ -59,6 +59,7 @@ async fn main() {
         matches
             .get_one::<String>("instrument")
             .and_then(|s| Url::parse(s).ok()),
+        None,
         match matches.get_one::<String>("console-logging") {
             Some(level) => match level.as_str() {
                 "pretty" => ConsoleLogging::Pretty,

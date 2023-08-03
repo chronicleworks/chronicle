@@ -377,7 +377,7 @@ async fn dispatch_args<
 
 #[tokio::main]
 async fn main() {
-    chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+    chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
     let args = cli::cli().get_matches();
     let address: &Url = args.get_one("sawtooth-address").unwrap();
     let client = ZmqRequestResponseSawtoothChannel::new(
@@ -980,12 +980,12 @@ pub mod test {
     }
 
     fn embed_opa_tp() -> EmbeddedOpaTp {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
         EmbeddedOpaTp::new()
     }
 
     fn reuse_opa_tp_state(tp: EmbeddedOpaTp) -> EmbeddedOpaTp {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
         EmbeddedOpaTp::new_with_state(tp.context.lock().unwrap().state.borrow().clone()).unwrap()
     }
 
