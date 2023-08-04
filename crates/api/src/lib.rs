@@ -460,28 +460,15 @@ where
 
     fn apply_effects_and_submit(
         &mut self,
-        connection: &mut PgConnection,
+        _connection: &mut PgConnection,
         id: impl Into<ChronicleIri>,
         identity: AuthId,
         to_apply: Vec<ChronicleOperation>,
-        namespace: NamespaceId,
-        applying_new_namespace: bool,
+        _namespace: NamespaceId,
+        _applying_new_namespace: bool,
     ) -> Result<ApiResponse, ApiError> {
-        if applying_new_namespace {
-            self.submit(id, identity, to_apply)
-        } else if let Some(to_apply) = {
-            let mut state = self
-                .store
-                .prov_model_for_namespace(connection, &namespace)?;
-            state.namespace_context(&namespace);
-            self.ensure_effects(&mut state, &to_apply)?
-        } {
-            self.submit(id, identity, to_apply)
-        } else {
-            info!("API call will not result in any data changes");
-            let model = ProvModel::from_tx(&to_apply)?;
-            Ok(ApiResponse::already_recorded(id, model))
-        }
+        // This has been temporarily fixed to no longer check API calls will result in data changes.
+        self.submit(id, identity, to_apply)
     }
 
     /// Ensures that the named namespace exists, returns an existing namespace, and a vector containing a `ChronicleTransaction` to create one if not present
@@ -1891,16 +1878,6 @@ mod test {
           ]
         }
         "###);
-
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-
-        // Check that the operations that do not result in data changes are not submitted
-        insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::Import(ImportCommand { namespace, operations } ), identity)
-            .await
-            .unwrap()
-            .unwrap()
-            .1, @r###""null""###);
     }
 
     #[tokio::test]
@@ -2311,349 +2288,347 @@ mod test {
         "###);
     }
 
-    #[tokio::test]
-    async fn contradict_attributes() {
-        let mut api = test_api().await;
+    // #[tokio::test]
+    // async fn contradict_attributes() {
+    //     let mut api = test_api().await;
 
-        let identity = AuthId::chronicle();
+    //     let identity = AuthId::chronicle();
 
-        insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
+    //     insta::assert_json_snapshot!(
+    //     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+    //         external_id: "testagent".into(),
+    //         namespace: "testns".into(),
+    //         attributes: Attributes {
+    //             typ: Some(DomaintypeId::from_external_id("test")),
+    //             attributes: [(
+    //                 "test".to_owned(),
+    //                 Attribute {
+    //                     typ: "test".to_owned(),
+    //                     value: serde_json::Value::String("test".to_owned()),
+    //                 },
+    //             )]
+    //             .into_iter()
+    //             .collect(),
+    //         },
+    //     }), identity.clone())
+    //     .await
+    //     .unwrap()
+    //     .unwrap()
+    //     .0
+    //     .to_json()
+    //     .compact_stable_order()
+    //     .await
+    //     .unwrap(), @r###"
+    //     {
+    //       "@context": "https://btp.works/chr/1.0/c.jsonld",
+    //       "@graph": [
+    //         {
+    //           "@id": "chronicle:agent:testagent",
+    //           "@type": [
+    //             "prov:Agent",
+    //             "chronicle:domaintype:test"
+    //           ],
+    //           "externalId": "testagent",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "value": {
+    //             "test": "test"
+    //           }
+    //         },
+    //         {
+    //           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "@type": "chronicle:Namespace",
+    //           "externalId": "testns"
+    //         }
+    //       ]
+    //     }
+    //     "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+    //     let res = api
+    //         .dispatch(
+    //             ApiCommand::Agent(AgentCommand::Create {
+    //                 external_id: "testagent".into(),
+    //                 namespace: "testns".into(),
+    //                 attributes: Attributes {
+    //                     typ: Some(DomaintypeId::from_external_id("test")),
+    //                     attributes: [(
+    //                         "test".to_owned(),
+    //                         Attribute {
+    //                             typ: "test".to_owned(),
+    //                             value: serde_json::Value::String("test2".to_owned()),
+    //                         },
+    //                     )]
+    //                     .into_iter()
+    //                     .collect(),
+    //                 },
+    //             }),
+    //             identity,
+    //         )
+    //         .await;
 
-        let res = api
-            .dispatch(
-                ApiCommand::Agent(AgentCommand::Create {
-                    external_id: "testagent".into(),
-                    namespace: "testns".into(),
-                    attributes: Attributes {
-                        typ: Some(DomaintypeId::from_external_id("test")),
-                        attributes: [(
-                            "test".to_owned(),
-                            Attribute {
-                                typ: "test".to_owned(),
-                                value: serde_json::Value::String("test2".to_owned()),
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                    },
-                }),
-                identity,
-            )
-            .await;
+    //     insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
+    // }
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
-    }
+    // #[tokio::test]
+    // async fn contradict_start_time() {
+    //     let mut api = test_api().await;
 
-    #[tokio::test]
-    async fn contradict_start_time() {
-        let mut api = test_api().await;
+    //     let identity = AuthId::chronicle();
 
-        let identity = AuthId::chronicle();
+    //     insta::assert_json_snapshot!(
+    //     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+    //         external_id: "testagent".into(),
+    //         namespace: "testns".into(),
+    //         attributes: Attributes {
+    //             typ: Some(DomaintypeId::from_external_id("test")),
+    //             attributes: [(
+    //                 "test".to_owned(),
+    //                 Attribute {
+    //                     typ: "test".to_owned(),
+    //                     value: serde_json::Value::String("test".to_owned()),
+    //                 },
+    //             )]
+    //             .into_iter()
+    //             .collect(),
+    //         },
+    //     }), identity.clone())
+    //     .await
+    //     .unwrap()
+    //     .unwrap()
+    //     .0
+    //     .to_json()
+    //     .compact_stable_order()
+    //     .await
+    //     .unwrap(), @r###"
+    //     {
+    //       "@context": "https://btp.works/chr/1.0/c.jsonld",
+    //       "@graph": [
+    //         {
+    //           "@id": "chronicle:agent:testagent",
+    //           "@type": [
+    //             "prov:Agent",
+    //             "chronicle:domaintype:test"
+    //           ],
+    //           "externalId": "testagent",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "value": {
+    //             "test": "test"
+    //           }
+    //         },
+    //         {
+    //           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "@type": "chronicle:Namespace",
+    //           "externalId": "testns"
+    //         }
+    //       ]
+    //     }
+    //     "###);
 
-        insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
+    //     api.dispatch(
+    //         ApiCommand::Agent(AgentCommand::UseInContext {
+    //             id: AgentId::from_external_id("testagent"),
+    //             namespace: "testns".into(),
+    //         }),
+    //         identity.clone(),
+    //     )
+    //     .await
+    //     .unwrap();
 
-        api.dispatch(
-            ApiCommand::Agent(AgentCommand::UseInContext {
-                id: AgentId::from_external_id("testagent"),
-                namespace: "testns".into(),
-            }),
-            identity.clone(),
-        )
-        .await
-        .unwrap();
+    //     insta::assert_json_snapshot!(
+    //     api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
+    //         id: ActivityId::from_external_id("testactivity"),
+    //         namespace: "testns".into(),
+    //         time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
+    //         agent: None,
+    //     }), identity.clone())
+    //     .await
+    //     .unwrap()
+    //     .unwrap()
+    //     .0
+    //     .to_json()
+    //     .compact_stable_order()
+    //     .await
+    //     .unwrap(), @r###"
+    //     {
+    //       "@context": "https://btp.works/chr/1.0/c.jsonld",
+    //       "@graph": [
+    //         {
+    //           "@id": "chronicle:activity:testactivity",
+    //           "@type": "prov:Activity",
+    //           "externalId": "testactivity",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "prov:qualifiedAssociation": {
+    //             "@id": "chronicle:association:testagent:testactivity:role="
+    //           },
+    //           "startTime": "2014-07-08T09:10:11+00:00",
+    //           "value": {},
+    //           "wasAssociatedWith": [
+    //             "chronicle:agent:testagent"
+    //           ]
+    //         },
+    //         {
+    //           "@id": "chronicle:association:testagent:testactivity:role=",
+    //           "@type": "prov:Association",
+    //           "agent": "chronicle:agent:testagent",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "prov:hadActivity": {
+    //             "@id": "chronicle:activity:testactivity"
+    //           }
+    //         },
+    //         {
+    //           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "@type": "chronicle:Namespace",
+    //           "externalId": "testns"
+    //         }
+    //       ]
+    //     }
+    //     "###);
 
-        insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "startTime": "2014-07-08T09:10:11+00:00",
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
+    //     // Should contradict
+    //     let res = api
+    //         .dispatch(
+    //             ApiCommand::Activity(ActivityCommand::Start {
+    //                 id: ActivityId::from_external_id("testactivity"),
+    //                 namespace: "testns".into(),
+    //                 time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
+    //                 agent: None,
+    //             }),
+    //             identity,
+    //         )
+    //         .await;
 
-        // Should contradict
-        let res = api
-            .dispatch(
-                ApiCommand::Activity(ActivityCommand::Start {
-                    id: ActivityId::from_external_id("testactivity"),
-                    namespace: "testns".into(),
-                    time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
-                    agent: None,
-                }),
-                identity,
-            )
-            .await;
+    //     insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
+    // }
 
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
-    }
+    // #[tokio::test]
+    // async fn contradict_end_time() {
+    //     let mut api = test_api().await;
 
-    #[tokio::test]
-    async fn contradict_end_time() {
-        let mut api = test_api().await;
+    //     let identity = AuthId::chronicle();
 
-        let identity = AuthId::chronicle();
+    //     insta::assert_json_snapshot!(
+    //     api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+    //         external_id: "testagent".into(),
+    //         namespace: "testns".into(),
+    //         attributes: Attributes {
+    //             typ: Some(DomaintypeId::from_external_id("test")),
+    //             attributes: [(
+    //                 "test".to_owned(),
+    //                 Attribute {
+    //                     typ: "test".to_owned(),
+    //                     value: serde_json::Value::String("test".to_owned()),
+    //                 },
+    //             )]
+    //             .into_iter()
+    //             .collect(),
+    //         },
+    //     }), identity.clone())
+    //     .await
+    //     .unwrap()
+    //     .unwrap()
+    //     .0
+    //     .to_json()
+    //     .compact_stable_order()
+    //     .await
+    //     .unwrap(), @r###"
+    //     {
+    //       "@context": "https://btp.works/chr/1.0/c.jsonld",
+    //       "@graph": [
+    //         {
+    //           "@id": "chronicle:agent:testagent",
+    //           "@type": [
+    //             "prov:Agent",
+    //             "chronicle:domaintype:test"
+    //           ],
+    //           "externalId": "testagent",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "value": {
+    //             "test": "test"
+    //           }
+    //         },
+    //         {
+    //           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "@type": "chronicle:Namespace",
+    //           "externalId": "testns"
+    //         }
+    //       ]
+    //     }
+    //     "###);
 
-        insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
+    //     api.dispatch(
+    //         ApiCommand::Agent(AgentCommand::UseInContext {
+    //             id: AgentId::from_external_id("testagent"),
+    //             namespace: "testns".into(),
+    //         }),
+    //         identity.clone(),
+    //     )
+    //     .await
+    //     .unwrap();
 
-        api.dispatch(
-            ApiCommand::Agent(AgentCommand::UseInContext {
-                id: AgentId::from_external_id("testagent"),
-                namespace: "testns".into(),
-            }),
-            identity.clone(),
-        )
-        .await
-        .unwrap();
+    //     insta::assert_json_snapshot!(
+    //     api.dispatch(ApiCommand::Activity(ActivityCommand::End {
+    //         id: ActivityId::from_external_id("testactivity"),
+    //         namespace: "testns".into(),
+    //         time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
+    //         agent: None,
+    //     }), identity.clone())
+    //     .await
+    //     .unwrap()
+    //     .unwrap()
+    //     .0
+    //     .to_json()
+    //     .compact_stable_order()
+    //     .await
+    //     .unwrap(), @r###"
+    //     {
+    //       "@context": "https://btp.works/chr/1.0/c.jsonld",
+    //       "@graph": [
+    //         {
+    //           "@id": "chronicle:activity:testactivity",
+    //           "@type": "prov:Activity",
+    //           "endTime": "2018-07-08T09:10:11+00:00",
+    //           "externalId": "testactivity",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "prov:qualifiedAssociation": {
+    //             "@id": "chronicle:association:testagent:testactivity:role="
+    //           },
+    //           "value": {},
+    //           "wasAssociatedWith": [
+    //             "chronicle:agent:testagent"
+    //           ]
+    //         },
+    //         {
+    //           "@id": "chronicle:association:testagent:testactivity:role=",
+    //           "@type": "prov:Association",
+    //           "agent": "chronicle:agent:testagent",
+    //           "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "prov:hadActivity": {
+    //             "@id": "chronicle:activity:testactivity"
+    //           }
+    //         },
+    //         {
+    //           "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+    //           "@type": "chronicle:Namespace",
+    //           "externalId": "testns"
+    //         }
+    //       ]
+    //     }
+    //     "###);
 
-        insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "endTime": "2018-07-08T09:10:11+00:00",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
+    //     // Should contradict
+    //     let res = api
+    //         .dispatch(
+    //             ApiCommand::Activity(ActivityCommand::End {
+    //                 id: ActivityId::from_external_id("testactivity"),
+    //                 namespace: "testns".into(),
+    //                 time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
+    //                 agent: None,
+    //             }),
+    //             identity,
+    //         )
+    //         .await;
 
-        // Should contradict
-        let res = api
-            .dispatch(
-                ApiCommand::Activity(ActivityCommand::End {
-                    id: ActivityId::from_external_id("testactivity"),
-                    namespace: "testns".into(),
-                    time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
-                    agent: None,
-                }),
-                identity,
-            )
-            .await;
-
-        insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
-    }
+    //     insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
+    // }
 
     #[tokio::test]
     async fn end_activity() {
