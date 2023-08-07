@@ -36,6 +36,13 @@ devIdProvider:
     ## @md | `devIdProvider.image.tag` | the image tag | latest |
     tag: BTP2.1.0-0.7.4
 
+## @md | `endpoints` | which API endpoints to offer | data, graphql |
+endpoints:
+  data:
+    enabled: true
+  graphql:
+    enabled: true
+
 ## @md | `extraVolumes` | a list of additional volumes to add to chronicle | [] |
 extraVolumes: []
 ## @md | `extraVolumeMounts` | a list of additional volume mounts to add to chronicle | [] |

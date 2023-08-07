@@ -128,3 +128,15 @@ http://{{ include "chronicle.id-provider.service" . }}:8090/userinfo
 {{- define "chronicle.root-key.secret" -}}
 {{ include "common.names.fullname" . }}-root-key
 {{- end -}}
+
+{{- define "chronicle.offer-endpoints" -}}
+{{- if or (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) -}}
+  {{- if and (.Values.endpoints.data.enabled) (.Values.endpoints.graphql.enabled) -}}
+    --offer-endpoints data graphql \
+  {{- else if .Values.endpoints.data.enabled -}}
+    --offer-endpoints data \
+  {{- else if .Values.endpoints.graphql.enabled -}}
+    --offer-endpoints graphql \
+  {{- end -}}
+{{- end -}}
+{{- end -}}
