@@ -1392,8 +1392,29 @@ impl Store {
         let namespace = self.namespace_by_external_id(connection, ns)?.0;
 
         let mut model = ProvModel::default();
-        self.prov_model_for_agent(agent, &namespace, &mut model, connection)
-            .unwrap();
+        self.prov_model_for_agent(agent, &namespace, &mut model, connection)?;
+        Ok(model)
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn apply_prov_model_for_agent_id(
+        &self,
+        connection: &mut PgConnection,
+        mut model: ProvModel,
+        id: &AgentId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        if let Some(agent) = schema::agent::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::agent::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Agent::as_select())
+            .first(connection)
+            .optional()?
+        {
+            let namespace = self.namespace_by_external_id(connection, ns)?.0;
+            self.prov_model_for_agent(agent, &namespace, &mut model, connection)?;
+        }
         Ok(model)
     }
 
@@ -1414,8 +1435,29 @@ impl Store {
         let namespace = self.namespace_by_external_id(connection, ns)?.0;
 
         let mut model = ProvModel::default();
-        self.prov_model_for_activity(activity, &namespace, &mut model, connection)
-            .unwrap();
+        self.prov_model_for_activity(activity, &namespace, &mut model, connection)?;
+        Ok(model)
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn apply_prov_model_for_activity_id(
+        &self,
+        connection: &mut PgConnection,
+        mut model: ProvModel,
+        id: &ActivityId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        if let Some(activity) = schema::activity::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::activity::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Activity::as_select())
+            .first(connection)
+            .optional()?
+        {
+            let namespace = self.namespace_by_external_id(connection, ns)?.0;
+            self.prov_model_for_activity(activity, &namespace, &mut model, connection)?;
+        }
         Ok(model)
     }
 
@@ -1436,8 +1478,75 @@ impl Store {
         let namespace = self.namespace_by_external_id(connection, ns)?.0;
 
         let mut model = ProvModel::default();
-        self.prov_model_for_entity(entity, &namespace, &mut model, connection)
-            .unwrap();
+        self.prov_model_for_entity(entity, &namespace, &mut model, connection)?;
+        Ok(model)
+    }
+
+    #[instrument(level = "debug", skip(connection))]
+    pub fn apply_prov_model_for_entity_id(
+        &self,
+        connection: &mut PgConnection,
+        mut model: ProvModel,
+        id: &EntityId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        if let Some(entity) = schema::entity::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::entity::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Entity::as_select())
+            .first(connection)
+            .optional()?
+        {
+            let namespace = self.namespace_by_external_id(connection, ns)?.0;
+            self.prov_model_for_entity(entity, &namespace, &mut model, connection)?;
+        }
+        Ok(model)
+    }
+
+    pub(crate) fn prov_model_for_usage(
+        &self,
+        connection: &mut PgConnection,
+        mut model: ProvModel,
+        id: &EntityId,
+        activity_id: &ActivityId,
+        ns: &ExternalId,
+    ) -> Result<ProvModel, StoreError> {
+        if let Some(entity) = schema::entity::table
+            .inner_join(schema::namespace::dsl::namespace)
+            .filter(schema::entity::external_id.eq(id.external_id_part()))
+            .filter(schema::namespace::external_id.eq(ns))
+            .select(query::Entity::as_select())
+            .first(connection)
+            .optional()?
+        {
+            if let Some(activity) = schema::activity::table
+                .inner_join(schema::namespace::dsl::namespace)
+                .filter(schema::activity::external_id.eq(id.external_id_part()))
+                .filter(schema::namespace::external_id.eq(ns))
+                .select(query::Activity::as_select())
+                .first(connection)
+                .optional()?
+            {
+                let namespace = self.namespace_by_external_id(connection, ns)?.0;
+                for used in schema::usage::table
+                    .filter(schema::usage::activity_id.eq(activity.id))
+                    .order(schema::usage::activity_id.asc())
+                    .inner_join(schema::entity::table)
+                    .select(schema::entity::external_id)
+                    .load::<String>(connection)?
+                {
+                    let used = used;
+                    model.used(
+                        namespace.clone(),
+                        activity_id,
+                        &EntityId::from_external_id(used),
+                    );
+                }
+                self.prov_model_for_entity(entity, &namespace, &mut model, connection)?;
+                self.prov_model_for_activity(activity, &namespace, &mut model, connection)?;
+            }
+        }
         Ok(model)
     }
 }
