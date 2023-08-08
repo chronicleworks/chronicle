@@ -1895,7 +1895,7 @@ mod test {
     }
 
     fn embed_chronicle_tp() -> EmbeddedChronicleTp {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
         let mut buf = vec![];
         Setting {
             entries: vec![Setting_Entry {
@@ -1956,7 +1956,7 @@ mod test {
     }
 
     async fn test_api<'a>() -> TestDispatch<'a> {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+        chronicle_telemetry::telemetry(None, None, chronicle_telemetry::ConsoleLogging::Pretty);
 
         let secretpath = TempDir::new().unwrap().into_path();
 
