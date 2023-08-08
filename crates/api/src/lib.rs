@@ -27,7 +27,7 @@ use common::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
             SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
             WasInformedBy,
         },
@@ -563,28 +563,286 @@ where
         Ok(ApiResponse::submission(id, model, tx_id))
     }
 
-    /// Ensure that Chronicle API calls that will not result in any changes in state should not be dispatched
+    /// Checks if ChronicleOperations resulting from Chronicle API calls will result in any changes in state
     ///
     /// # Arguments
-    /// * `state` - `ProvModel` for the operations' namespace
+    /// * `connection` - Connection to the Chronicle database
     /// * `to_apply` - Chronicle operations resulting from an API call
-    #[instrument(skip(self))]
-    fn ensure_effects(
+    #[instrument(skip(self, connection))]
+    fn check_for_effects(
         &mut self,
-        state: &mut ProvModel,
+        connection: &mut PgConnection,
         to_apply: &Vec<ChronicleOperation>,
     ) -> Result<Option<Vec<ChronicleOperation>>, ApiError> {
-        let mut transactions = Vec::new();
+        let mut model = ProvModel::default();
+        let mut transactions = Vec::<ChronicleOperation>::with_capacity(to_apply.len());
+        for op in to_apply {
+            let mut applied_model = match op {
+                ChronicleOperation::CreateNamespace(CreateNamespace { external_id, .. }) => {
+                    let (namespace, _) = self.ensure_namespace(connection, external_id)?;
+                    model.namespace_context(&namespace);
+                    model
+                }
+                ChronicleOperation::AgentExists(AgentExists {
+                    ref namespace,
+                    ref external_id,
+                }) => {
+                    model.namespace_context(namespace);
+                    self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        &AgentId::from_external_id(external_id),
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::ActivityExists(ActivityExists {
+                    ref namespace,
+                    ref external_id,
+                }) => {
+                    model.namespace_context(namespace);
 
-        for tx in to_apply {
-            let mut state_with_effects = state.clone();
-            state_with_effects.apply(tx)?;
-            if state_with_effects != *state {
-                transactions.push(tx.clone());
-                state.apply(tx)?;
-            } else {
-                info!(?tx, "Transaction has no effect, data already recorded");
+                    self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        &ActivityId::from_external_id(external_id),
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::EntityExists(EntityExists {
+                    ref namespace,
+                    ref external_id,
+                }) => {
+                    model.namespace_context(namespace);
+                    self.store.apply_prov_model_for_entity_id(
+                        connection,
+                        model,
+                        &EntityId::from_external_id(external_id),
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::ActivityUses(ActivityUses {
+                    ref namespace,
+                    ref id,
+                    ref activity,
+                }) => {
+                    model.namespace_context(namespace);
+                    self.store.prov_model_for_usage(
+                        connection,
+                        model,
+                        id,
+                        activity,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::SetAttributes(ref o) => match o {
+                    SetAttributes::Activity { namespace, id, .. } => {
+                        model.namespace_context(namespace);
+                        self.store.apply_prov_model_for_activity_id(
+                            connection,
+                            model,
+                            id,
+                            namespace.external_id_part(),
+                        )?
+                    }
+                    SetAttributes::Agent { namespace, id, .. } => {
+                        model.namespace_context(namespace);
+                        self.store.apply_prov_model_for_agent_id(
+                            connection,
+                            model,
+                            id,
+                            namespace.external_id_part(),
+                        )?
+                    }
+                    SetAttributes::Entity { namespace, id, .. } => {
+                        model.namespace_context(namespace);
+                        self.store.apply_prov_model_for_entity_id(
+                            connection,
+                            model,
+                            id,
+                            namespace.external_id_part(),
+                        )?
+                    }
+                },
+                ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
+                    model.namespace_context(namespace);
+                    self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        id,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
+                    model.namespace_context(namespace);
+                    self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        id,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::WasInformedBy(WasInformedBy {
+                    namespace,
+                    activity,
+                    informing_activity,
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        activity,
+                        namespace.external_id_part(),
+                    )?;
+                    self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        informing_activity,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
+                    activity_id,
+                    responsible_id,
+                    delegate_id,
+                    namespace,
+                    ..
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        responsible_id,
+                        namespace.external_id_part(),
+                    )?;
+                    let model = self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        delegate_id,
+                        namespace.external_id_part(),
+                    )?;
+                    if let Some(id) = activity_id {
+                        self.store.apply_prov_model_for_activity_id(
+                            connection,
+                            model,
+                            id,
+                            namespace.external_id_part(),
+                        )?
+                    } else {
+                        model
+                    }
+                }
+                ChronicleOperation::RegisterKey(RegisterKey { namespace, id, .. }) => {
+                    model.namespace_context(namespace);
+                    self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        id,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
+                    namespace,
+                    activity_id,
+                    agent_id,
+                    ..
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        activity_id,
+                        namespace.external_id_part(),
+                    )?;
+
+                    self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        agent_id,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
+                    namespace,
+                    id,
+                    activity,
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_activity_id(
+                        connection,
+                        model,
+                        activity,
+                        namespace.external_id_part(),
+                    )?;
+
+                    self.store.apply_prov_model_for_entity_id(
+                        connection,
+                        model,
+                        id,
+                        namespace.external_id_part(),
+                    )?
+                }
+                ChronicleOperation::EntityDerive(EntityDerive {
+                    namespace,
+                    id,
+                    used_id,
+                    activity_id,
+                    ..
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_entity_id(
+                        connection,
+                        model,
+                        id,
+                        namespace.external_id_part(),
+                    )?;
+
+                    let model = self.store.apply_prov_model_for_entity_id(
+                        connection,
+                        model,
+                        used_id,
+                        namespace.external_id_part(),
+                    )?;
+
+                    if let Some(id) = activity_id {
+                        self.store.apply_prov_model_for_activity_id(
+                            connection,
+                            model,
+                            id,
+                            namespace.external_id_part(),
+                        )?
+                    } else {
+                        model
+                    }
+                }
+                ChronicleOperation::WasAttributedTo(WasAttributedTo {
+                    namespace,
+                    entity_id,
+                    agent_id,
+                    ..
+                }) => {
+                    model.namespace_context(namespace);
+                    let model = self.store.apply_prov_model_for_entity_id(
+                        connection,
+                        model,
+                        entity_id,
+                        namespace.external_id_part(),
+                    )?;
+
+                    self.store.apply_prov_model_for_agent_id(
+                        connection,
+                        model,
+                        agent_id,
+                        namespace.external_id_part(),
+                    )?
+                }
+            };
+            let state = applied_model.clone();
+            applied_model.apply(op)?;
+            if state != applied_model {
+                transactions.push(op.clone());
             }
+
+            model = applied_model;
         }
 
         if transactions.is_empty() {
@@ -600,18 +858,11 @@ where
         id: impl Into<ChronicleIri>,
         identity: AuthId,
         to_apply: Vec<ChronicleOperation>,
-        namespace: NamespaceId,
         applying_new_namespace: bool,
     ) -> Result<ApiResponse, ApiError> {
         if applying_new_namespace {
             self.submit(id, identity, to_apply)
-        } else if let Some(to_apply) = {
-            let mut state = self
-                .store
-                .prov_model_for_namespace(connection, &namespace)?;
-            state.namespace_context(&namespace);
-            self.ensure_effects(&mut state, &to_apply)?
-        } {
+        } else if let Some(to_apply) = self.check_for_effects(connection, &to_apply)? {
             self.submit(id, identity, to_apply)
         } else {
             info!("API call will not result in any data changes");
@@ -674,7 +925,7 @@ where
                 let applying_new_namespace = !to_apply.is_empty();
 
                 let create = ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
-                    namespace: namespace.clone(),
+                    namespace,
                     id: id.clone(),
                     activity: activity_id,
                 });
@@ -686,7 +937,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -715,7 +965,7 @@ where
 
                 let (id, to_apply) = {
                     let create = ChronicleOperation::ActivityUses(ActivityUses {
-                        namespace: namespace.clone(),
+                        namespace,
                         id: id.clone(),
                         activity: activity_id,
                     });
@@ -730,7 +980,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -760,7 +1009,7 @@ where
 
                 let (id, to_apply) = {
                     let create = ChronicleOperation::WasInformedBy(WasInformedBy {
-                        namespace: namespace.clone(),
+                        namespace,
                         activity: id.clone(),
                         informing_activity: informing_activity_id,
                     });
@@ -775,7 +1024,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -814,7 +1062,7 @@ where
 
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
                     id: EntityId::from_external_id(&external_id),
-                    namespace: namespace.clone(),
+                    namespace,
                     attributes,
                 });
 
@@ -825,7 +1073,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -863,7 +1110,7 @@ where
                 let id = ActivityId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
                     id: id.clone(),
-                    namespace: namespace.clone(),
+                    namespace,
                     attributes,
                 });
 
@@ -874,7 +1121,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -912,7 +1158,7 @@ where
                 let id = AgentId::from_external_id(&external_id);
                 let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
                     id: id.clone(),
-                    namespace: namespace.clone(),
+                    namespace,
                     attributes,
                 });
 
@@ -923,7 +1169,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1193,7 +1438,6 @@ where
                     responsible_id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1234,7 +1478,6 @@ where
                     responsible_id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1275,7 +1518,6 @@ where
                     responsible_id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1304,7 +1546,7 @@ where
                 let applying_new_namespace = !to_apply.is_empty();
 
                 let tx = ChronicleOperation::EntityDerive(EntityDerive {
-                    namespace: namespace.clone(),
+                    namespace,
                     id: id.clone(),
                     used_id: used_id.clone(),
                     activity_id: activity_id.clone(),
@@ -1318,7 +1560,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1354,24 +1595,12 @@ where
             // Check here to ensure that import operations result in data changes
             let mut connection = api.store.connection()?;
             connection.build_transaction().run(|connection| {
-                // If the namespace exists, get the model for the namespace and check each operation will have effects
-                let mut state = match api.store.prov_model_for_namespace(connection, &namespace) {
-                    Ok(mut state) => {
-                        info!("Importing data to existing namespace: {namespace}");
-                        // `prov_model_for_namespace` returns a model with the namespace context not applied
-                        state.namespace_context(&namespace);
-                        state
-                    }
-                    _ => {
-                        // If namespace does not exist, create a new model
-                        info!("Importing data to new namespace: {namespace}");
-                        ProvModel::default()
-                    }
-                };
-                if let Some(operations) = api.ensure_effects(&mut state, &operations)? {
+                if let Some(operations_to_apply) = api.check_for_effects(connection, &operations)? {
                     info!("Submitting import operations to ledger");
-                    let tx_id =
-                        api.submit_blocking(&ChronicleTransaction::new(operations, identity))?;
+                    let tx_id = api.submit_blocking(&ChronicleTransaction::new(
+                        operations_to_apply,
+                        identity,
+                    ))?;
                     Ok(ApiResponse::import_submitted(model, tx_id))
                 } else {
                     info!("Import will not result in any data changes");
@@ -1453,7 +1682,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1507,7 +1735,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
@@ -1561,7 +1788,6 @@ where
                     id,
                     identity,
                     to_apply,
-                    namespace,
                     applying_new_namespace,
                 )
             })
