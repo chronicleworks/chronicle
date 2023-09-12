@@ -103,7 +103,7 @@ r2d2 = "0.8.9"
 rand = { version = "0.8.5", features = ["getrandom"] }
 rand_core = "0.6.3"
 rdf-types = "0.14"
-reqwest = "0.11.14"
+reqwest = "0.11.20"
 rust-embed = { version = "6.6.0", features = [
   "debug-embed",
   "include-exclude",
