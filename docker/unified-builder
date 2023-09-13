@@ -323,6 +323,7 @@ EXPOSE 8090
 # Build the chronicle-helm-api-test image
 FROM debian-upgraded AS chronicle-helm-api-test
 ARG TARGETARCH
+ARG NODE_MAJOR=20
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -330,14 +331,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   && apt-get install --no-install-recommends -y \
   ca-certificates \
   curl \
+  gnupg \
   jq \
   wait-for-it
 
-RUN curl -fsLOS https://deb.nodesource.com/setup_lts.x \
-  && bash ./setup_lts.x \
+RUN mkdir -p /etc/apt/keyrings \
+  && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" >/etc/apt/sources.list.d/nodesource.list \
+  && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
   && apt-get install -y nodejs \
-  && npm install -g -f graphqurl --yes \
-  && rm -f ./setup_lts.x
+  && npm install -g -f graphqurl --yes
 
 COPY --from=artifacts /artifacts/${TARGETARCH}/gq-ws /usr/local/bin/
 COPY docker/helm-api-subscribe-submit-test /usr/local/bin/subscribe-submit-test
