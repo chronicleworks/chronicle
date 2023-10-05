@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM node:18 AS chronicle-test
+FROM node:20 AS chronicle-test
 
 RUN npm install -g -f graphqurl
 
