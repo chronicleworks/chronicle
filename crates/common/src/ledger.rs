@@ -608,7 +608,7 @@ impl ChronicleOperation {
                                 resource
                                     .get("@id")
                                     .and_then(|id| id.as_str())
-                                    .ok_or(ProcessorError::NotANode {})?,
+                                    .ok_or(ProcessorError::NotANode(resource.clone()))?,
                             )?,
                             data: serde_json::to_string(resource).unwrap(),
                         })
@@ -623,7 +623,7 @@ impl ChronicleOperation {
                         json_ld
                             .get("@id")
                             .and_then(|id| id.as_str())
-                            .ok_or(ProcessorError::NotANode {})?,
+                            .ok_or(ProcessorError::NotANode(json_ld.clone()))?,
                     )?,
                     data: serde_json::to_string(&json_ld).unwrap(),
                 }]
@@ -668,7 +668,7 @@ fn transform_context_graph_object(
             .and_then(|o| o.remove("@id"))
             .as_ref()
             .and_then(|v| v.as_str())
-            .ok_or(ProcessorError::NotANode)?: value
+            .ok_or(ProcessorError::NotANode(value.clone()))?: value
     }))
 }
 

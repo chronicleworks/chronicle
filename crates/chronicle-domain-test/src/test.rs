@@ -77,15 +77,17 @@ mod test {
             identity::AuthId,
             k256::sha2::{Digest, Sha256},
             opa::{CliPolicyLoader, ExecutorContext},
-            signing::DirectoryStoredKeys,
         },
         serde_json, tokio,
         uuid::Uuid,
     };
+    use chronicle_signing::{
+        chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+        CHRONICLE_NAMESPACE,
+    };
     use core::future::Future;
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-    use std::{collections::HashMap, time::Duration};
-    use tempfile::TempDir;
+    use std::time::Duration;
 
     #[derive(Debug, Clone)]
     struct SameUuid;
@@ -124,11 +126,21 @@ mod test {
     ) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-        let secretpath = TempDir::new().unwrap().into_path();
-
-        let keystore_path = secretpath.clone();
-        let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
-        keystore.generate_chronicle().unwrap();
+        let signing = ChronicleSigning::new(
+            chronicle_secret_names(),
+            vec![
+                (
+                    CHRONICLE_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+                (
+                    BATCHER_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+            ],
+        )
+        .await
+        .unwrap();
 
         let buf = async_stl_client::messages::Setting {
             entries: vec![async_stl_client::messages::setting::Entry {
@@ -188,9 +200,9 @@ mod test {
         let dispatch = Api::new(
             pool.clone(),
             ledger,
-            &secretpath,
             SameUuid,
-            HashMap::default(),
+            signing,
+            vec![],
             None,
             liveness_check_interval,
         )

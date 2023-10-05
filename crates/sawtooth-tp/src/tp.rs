@@ -103,15 +103,19 @@ impl TP for ChronicleTransactionHandler {
 
     async fn tp_operations(submission: Submission) -> Result<ChronicleTransaction, ApplyError> {
         use chronicle_protocol::protocol::messages::submission::IdentityVariant;
-        use common::prov::transaction;
-        use common::prov::transaction::ToChronicleTransaction;
-        let identity =
-            chronicle_identity_from_submission(match submission.identity_variant.unwrap() {
+        use common::prov::{transaction, transaction::ToChronicleTransaction};
+
+        let identity = chronicle_identity_from_submission(
+            match submission
+                .identity_variant
+                .ok_or_else(|| ApplyError::InternalError("missing identity".to_string()))?
+            {
                 IdentityVariant::IdentityOld(id) => id,
                 IdentityVariant::Identity(id) => id.payload,
-            })
-            .await
-            .map_err(|e| ApplyError::InternalError(e.to_string()))?;
+            },
+        )
+        .await
+        .map_err(|e| ApplyError::InternalError(e.to_string()))?;
         match &*submission.version {
             "1" => {
                 use transaction::v1::ChronicleTransaction;
@@ -380,8 +384,7 @@ impl TransactionHandler for ChronicleTransactionHandler {
 pub mod test {
     use std::{
         cell::RefCell,
-        collections::hash_map::DefaultHasher,
-        collections::BTreeMap,
+        collections::{hash_map::DefaultHasher, BTreeMap},
         hash::{Hash, Hasher},
     };
 
@@ -391,10 +394,13 @@ pub mod test {
         messages::ChronicleSubmitTransaction,
         protocol::messages::Submission,
     };
+    use chronicle_signing::{
+        chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+        CHRONICLE_NAMESPACE,
+    };
     use chrono::{NaiveDateTime, TimeZone, Utc};
     use common::{
         identity::{AuthId, SignedIdentity},
-        k256::ecdsa::SigningKey,
         prov::{
             operations::{
                 ActsOnBehalfOf, AgentExists, ChronicleOperation, CreateNamespace, EndActivity,
@@ -403,17 +409,14 @@ pub mod test {
             ActivityId, AgentId, ChronicleTransaction, DelegationId, ExternalId, ExternalIdPart,
             NamespaceId, Role,
         },
-        signing::DirectoryStoredKeys,
     };
     use prost::Message;
-    use rand::rngs::StdRng;
-    use rand_core::SeedableRng;
+
     use sawtooth_sdk::{
         messages::{processor::TpProcessRequest, transaction::TransactionHeader},
         processor::handler::{ContextError, TransactionContext, TransactionHandler},
     };
     use serde_json::Value;
-    use tempfile::TempDir;
 
     use uuid::Uuid;
 
@@ -586,10 +589,22 @@ pub mod test {
     async fn simple_non_contradicting_operation() {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-        let keystore = DirectoryStoredKeys::new(TempDir::new().unwrap().into_path()).unwrap();
-        keystore.generate_chronicle().unwrap();
-        let kms = common::signing::KMS::Directory(&keystore);
-        let signed_identity = AuthId::chronicle().signed_identity(kms).unwrap();
+        let secrets = ChronicleSigning::new(
+            chronicle_secret_names(),
+            vec![
+                (
+                    CHRONICLE_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+                (
+                    BATCHER_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+            ],
+        )
+        .await
+        .unwrap();
+        let signed_identity = AuthId::chronicle().signed_identity(&secrets).unwrap();
 
         // Example transaction payload of `CreateNamespace`,
         // `AgentExists`, and `AgentActsOnBehalfOf` `ChronicleOperation`s
@@ -602,18 +617,15 @@ pub mod test {
             signed_identity,
         );
 
-        let retrieve_signer = common::signing::directory_signing_key;
-        let secret: SigningKey = keystore.chronicle_signing(retrieve_signer).unwrap();
-
         let submit_tx = ChronicleSubmitTransaction {
             tx,
-            signer: secret.clone(),
+            signer: secrets.clone(),
             policy_name: None,
         };
 
         let message_builder = MessageBuilder::new_deterministic("TEST", "1.0");
         // Get a signed tx from sawtooth protocol
-        let (tx, _id) = submit_tx.as_sawtooth_tx(&message_builder).await;
+        let (tx, _id) = submit_tx.as_sawtooth_tx(&message_builder).await.unwrap();
 
         let header =
             <TransactionHeader as protobuf::Message>::parse_from_bytes(&tx.header).unwrap();
@@ -743,12 +755,28 @@ pub mod test {
     }
 
     async fn construct_submission(operations: Vec<ChronicleOperation>) -> Submission {
+        let secrets = ChronicleSigning::new(
+            chronicle_secret_names(),
+            vec![
+                (
+                    CHRONICLE_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+                (
+                    BATCHER_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::test_keys(),
+                ),
+            ],
+        )
+        .await
+        .unwrap();
+
         let tx_sub = ChronicleSubmitTransaction::new(
             ChronicleTransaction {
                 tx: operations,
                 identity: SignedIdentity::new_no_identity(),
             },
-            SigningKey::random(StdRng::seed_from_u64(0)),
+            secrets,
             None,
         );
         Submission::decode(tx_sub.to_bytes().await.unwrap().as_slice()).unwrap()
@@ -756,6 +784,7 @@ pub mod test {
 
     #[tokio::test]
     async fn get_operations_from_submission() {
+        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
         let expected_operations = construct_operations();
         let submission = construct_submission(expected_operations.clone()).await;
         let actual_operations = ChronicleTransactionHandler::tp_operations(submission)

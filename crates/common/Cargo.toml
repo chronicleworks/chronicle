@@ -16,6 +16,7 @@ async-graphql = { workspace = true, features = [
   "uuid",
 ] }
 async-trait = { workspace = true }
+chronicle-signing = { workspace = true }
 chrono = { workspace = true }
 custom_error = { workspace = true }
 derivative = { workspace = true }
@@ -41,8 +42,8 @@ prost = "0.10.0"
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
-reqwest = { workspace = true }
 rdf-types = { workspace = true }
+reqwest = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

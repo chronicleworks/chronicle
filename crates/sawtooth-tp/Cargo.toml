@@ -19,6 +19,7 @@ async-stl-client     = { workspace = true }
 async-trait          = { workspace = true }
 bytes                = { workspace = true }
 chronicle-protocol   = { path = "../chronicle-protocol" }
+chronicle-signing    = { workspace = true }
 chronicle-telemetry  = { path = "../chronicle-telemetry" }
 clap                 = { workspace = true }
 common               = { path = "../common" }
@@ -54,7 +55,3 @@ chrono   = { workspace = true }
 insta    = { workspace = true, features = ["yaml"] }
 protobuf = { workspace = true }
 tempfile = { workspace = true }
-
-[features]
-default          = ["vendored-openssl"]
-vendored-openssl = ['openssl/vendored']

@@ -4,7 +4,6 @@ use crate::{identity::SignedIdentity, prov::operations::ChronicleOperation};
 pub struct ChronicleTransaction {
     pub tx: Vec<ChronicleOperation>,
     pub identity: SignedIdentity,
-    // TODO: pub signature: Option<(Signature, VerifyingKey)>,
 }
 
 impl ChronicleTransaction {

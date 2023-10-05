@@ -12,6 +12,7 @@ path = "src/test.rs"
 
 [dependencies]
 chronicle           = { path = "../chronicle" }
+chronicle-signing   = { path = "../chronicle-signing" }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 tracing             = { workspace = true }
 tracing-log         = { workspace = true }

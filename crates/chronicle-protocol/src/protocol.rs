@@ -8,7 +8,7 @@ use common::{
     identity::SignedIdentity,
     prov::{
         operations::ChronicleOperation, to_json_ld::ToJson, CompactionError, Contradiction,
-        ExpandedJson, PayloadError, ProcessorError, ProvModel,
+        PayloadError, ProcessorError, ProvModel,
     },
 };
 use prost::Message;
@@ -160,7 +160,6 @@ impl messages::Event {
     }
 }
 
-/// `Submission` protocol buffer serializer
 pub fn serialize_submission(submission: &messages::Submission) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.reserve(submission.encoded_len());
@@ -184,7 +183,7 @@ pub async fn chronicle_operations_from_submission_v1(
         let json = serde_json::from_str(op)?;
         // The inner json value should be in compacted form,
         // wrapping in `ExpandedJson`, as required by `ChronicleOperation::from_json`
-        let op = ChronicleOperation::from_json(ExpandedJson(json)).await?;
+        let op = ChronicleOperation::from_json(&json).await?;
         ops.push(op);
     }
     Ok(ops)
@@ -198,13 +197,14 @@ pub async fn chronicle_operations_from_submission_v2(
 ) -> Result<Vec<ChronicleOperation>, ProcessorError> {
     use serde_json::{json, Value};
     let json = serde_json::from_str(&submission_body)?;
+
     if let Value::Object(map) = json {
         if let Some(version) = map.get("version") {
             if version == &json!(1) {
-                if let Some(Value::Array(ops_json)) = map.get("ops") {
+                if let Some(ops_json) = map.get("ops").and_then(|x| x.as_array()) {
                     let mut ops = Vec::with_capacity(ops_json.len());
                     for op in ops_json {
-                        ops.push(ChronicleOperation::from_json(ExpandedJson(op.clone())).await?);
+                        ops.push(ChronicleOperation::from_json(op).await?);
                     }
                     Ok(ops)
                 } else {

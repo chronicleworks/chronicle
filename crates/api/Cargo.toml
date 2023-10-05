@@ -21,6 +21,7 @@ base64 = { workspace = true }
 cached = { workspace = true }
 cfg-if = { workspace = true }
 chronicle-protocol = { path = "../chronicle-protocol" }
+chronicle-signing = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true }
 common = { path = "../common" }

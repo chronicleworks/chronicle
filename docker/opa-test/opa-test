@@ -15,4 +15,4 @@ fi
 sleep 20
 
 RUST_LOG=trace /usr/local/bin/opactl --sawtooth-address tcp://$HOST:$PORT \
-  bootstrap --root-key ./root.pem
+  bootstrap 

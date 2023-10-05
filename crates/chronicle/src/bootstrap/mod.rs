@@ -1,5 +1,4 @@
 mod cli;
-mod config;
 mod opa;
 
 #[cfg(feature = "inmem")]
@@ -14,6 +13,10 @@ use chronicle_protocol::{
     address::{FAMILY, VERSION},
     ChronicleLedger,
 };
+use chronicle_signing::{
+    chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+    CHRONICLE_NAMESPACE,
+};
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
@@ -22,16 +25,20 @@ use common::{
     database::{get_connection_with_retry, DatabaseConnector},
     identity::AuthId,
     import::{load_bytes_from_stdin, load_bytes_from_url},
+    k256::{
+        pkcs8::{EncodePrivateKey, LineEnding},
+        SecretKey,
+    },
     ledger::SubmissionStage,
     opa::ExecutorContext,
-    prov::{operations::ChronicleOperation, to_json_ld::ToJson, ExpandedJson, NamespaceId},
-    signing::DirectoryStoredKeys,
+    prov::{operations::ChronicleOperation, to_json_ld::ToJson, NamespaceId},
 };
+use rand::rngs::StdRng;
+use rand_core::SeedableRng;
 use std::io::IsTerminal;
 use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 
-use config::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection,
@@ -42,8 +49,10 @@ use url::Url;
 
 use std::{
     collections::{BTreeSet, HashMap},
-    io,
+    fs::File,
+    io::{self, Write},
     net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
     str::FromStr,
 };
 
@@ -52,11 +61,10 @@ use crate::codegen::ChronicleDomainDef;
 use self::opa::opa_executor_from_embedded_policy;
 
 #[cfg(not(feature = "inmem"))]
-fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Vec<SocketAddr>, CliError> {
+fn sawtooth_address(options: &ArgMatches) -> Result<Vec<SocketAddr>, CliError> {
     Ok(options
         .value_of("sawtooth")
         .map(str::to_string)
-        .or_else(|| Some(config.validator.address.clone().to_string()))
         .ok_or(CliError::MissingArgument {
             arg: "sawtooth".to_owned(),
         })
@@ -67,7 +75,7 @@ fn sawtooth_address(config: &Config, options: &ArgMatches) -> Result<Vec<SocketA
 
 #[allow(dead_code)]
 #[cfg(not(feature = "inmem"))]
-fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, CliError> {
+fn ledger(options: &ArgMatches) -> Result<ChronicleLedger, CliError> {
     use async_stl_client::zmq_client::{
         HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
     };
@@ -75,7 +83,7 @@ fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, CliE
     Ok(ChronicleLedger::new(
         ZmqRequestResponseSawtoothChannel::new(
             "inmem",
-            &sawtooth_address(config, options)?,
+            &sawtooth_address(options)?,
             HighestBlockValidatorSelector,
         )?
         .retrying(),
@@ -86,7 +94,6 @@ fn ledger(config: &Config, options: &ArgMatches) -> Result<ChronicleLedger, CliE
 
 #[allow(dead_code)]
 fn in_mem_ledger(
-    _config: &Config,
     _options: &ArgMatches,
 ) -> Result<crate::api::inmem::EmbeddedChronicleTp, ApiError> {
     Ok(crate::api::inmem::EmbeddedChronicleTp::new()?)
@@ -165,22 +172,88 @@ where
     Ok(())
 }
 
+fn namespace_bindings(options: &ArgMatches) -> Vec<NamespaceId> {
+    options
+        .values_of("namespace-bindings")
+        .map(|values| {
+            values
+                .map(|value| {
+                    let (id, uuid) = value.split_once(':').unwrap();
+
+                    let uuid = uuid::Uuid::parse_str(uuid).unwrap();
+                    NamespaceId::from_external_id(id, uuid)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn vault_secrets_options(options: &ArgMatches) -> Result<ChronicleSecretsOptions, CliError> {
+    let vault_url = options
+        .value_of("vault-url")
+        .ok_or_else(|| CliError::missing_argument("vault-url"))?;
+    let token = options
+        .value_of("vault-token")
+        .ok_or_else(|| CliError::missing_argument("vault-token"))?;
+    let mount_path = options
+        .value_of("vault-mount-path")
+        .ok_or_else(|| CliError::missing_argument("vault-mount-path"))?;
+    Ok(ChronicleSecretsOptions::stored_in_vault(
+        &Url::parse(vault_url)?,
+        token,
+        mount_path,
+    ))
+}
+
+async fn chronicle_signing(options: &ArgMatches) -> Result<ChronicleSigning, CliError> {
+    // Determine batcher configuration
+    let batcher_options = match (
+        options.get_one::<PathBuf>("batcher-key-from-path"),
+        options.get_flag("batcher-key-from-vault"),
+        options.get_flag("batcher-key-generated"),
+    ) {
+        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
+        (_, true, _) => vault_secrets_options(options)?,
+        (_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
+        _ => unreachable!("CLI should always set batcher key"),
+    };
+
+    let chronicle_options = match (
+        options.get_one::<PathBuf>("chronicle-key-from-path"),
+        options.get_flag("chronicle-key-from-vault"),
+        options.get_flag("chronicle-key-generated"),
+    ) {
+        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
+        (_, true, _) => vault_secrets_options(options)?,
+        (_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
+        _ => unreachable!("CLI should always set chronicle key"),
+    };
+
+    Ok(ChronicleSigning::new(
+        chronicle_secret_names(),
+        vec![
+            (CHRONICLE_NAMESPACE.to_string(), chronicle_options),
+            (BATCHER_NAMESPACE.to_string(), batcher_options),
+        ],
+    )
+    .await?)
+}
+
 #[cfg(not(feature = "inmem"))]
 pub async fn api(
     pool: &ConnectionPool,
     options: &ArgMatches,
-    config: &Config,
     policy_name: Option<String>,
     liveness_check_interval: Option<u64>,
 ) -> Result<ApiDispatch, CliError> {
-    let ledger = ledger(config, options)?;
+    let ledger = ledger(options)?;
 
     Ok(Api::new(
         pool.clone(),
         ledger,
-        &config.secrets.path,
         UniqueUuid,
-        config.namespace_bindings.clone(),
+        chronicle_signing(options).await?,
+        namespace_bindings(options),
         policy_name,
         liveness_check_interval,
     )
@@ -190,23 +263,22 @@ pub async fn api(
 #[cfg(feature = "inmem")]
 pub async fn api(
     pool: &ConnectionPool,
-    _options: &ArgMatches,
-    config: &Config,
+    options: &ArgMatches,
     remote_opa: Option<String>,
     liveness_check_interval: Option<u64>,
-) -> Result<api::ApiDispatch, ApiError> {
-    let embedded_tp = in_mem_ledger(config, _options)?;
+) -> Result<api::ApiDispatch, CliError> {
+    let embedded_tp = in_mem_ledger(options)?;
 
-    Api::new(
+    Ok(Api::new(
         pool.clone(),
         embedded_tp.ledger,
-        &config.secrets.path,
         UniqueUuid,
-        config.namespace_bindings.clone(),
+        chronicle_signing(options).await?,
+        vec![],
         remote_opa,
         liveness_check_interval,
     )
-    .await
+    .await?)
 }
 
 fn construct_db_uri(matches: &ArgMatches) -> String {
@@ -282,7 +354,7 @@ impl ConfiguredOpa {
 /// then always use embedded policy
 #[cfg(feature = "inmem")]
 #[allow(unused_variables)]
-async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
+async fn configure_opa(options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
     let (default_policy_name, entrypoint) =
         ("allow_transactions", "allow_transactions.allowed_users");
     let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
@@ -290,8 +362,8 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
 }
 
 #[cfg(not(feature = "inmem"))]
-#[instrument(skip(config, options))]
-async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
+#[instrument(skip(options))]
+async fn configure_opa(options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
     if options.is_present("embedded-opa-policy") {
         let (default_policy_name, entrypoint) =
             ("allow_transactions", "allow_transactions.allowed_users");
@@ -311,8 +383,7 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
         Ok(ConfiguredOpa::Url(opa))
     } else {
         let (opa, settings) =
-            self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(config, options)?)
-                .await?;
+            self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(options)?).await?;
         tracing::info!(use_on_chain_opa= ?settings, "Chronicle operating in secure mode with on chain OPA policy");
 
         Ok(ConfiguredOpa::Remote(opa, settings))
@@ -344,7 +415,6 @@ fn configure_depth_charge(matches: &ArgMatches) -> Option<u64> {
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
-    config: Config,
     cli: CliModel,
 ) -> Result<(ApiResponse, ApiDispatch), CliError>
 where
@@ -357,14 +427,13 @@ where
 
     let pool = pool_remote(&construct_db_uri(&matches)).await?;
 
-    let opa = configure_opa(&config, &matches).await?;
+    let opa = configure_opa(&matches).await?;
 
     let liveness_check_interval = configure_depth_charge(&matches);
 
     let api = api(
         &pool,
         &matches,
-        &config,
         opa.remote_settings(),
         liveness_check_interval,
     )
@@ -470,7 +539,7 @@ where
 
         let mut operations = Vec::new();
         for value in json_array.into_iter() {
-            let op = ChronicleOperation::from_json(ExpandedJson(value))
+            let op = ChronicleOperation::from_json(&value)
                 .await
                 .expect("Failed to parse imported JSON-LD to ChronicleOperation");
             // Only import operations for the specified namespace
@@ -514,9 +583,8 @@ where
     Mutation: ObjectType + Copy,
 {
     use colored_json::prelude::*;
-    let config = handle_config_and_init(&model)?;
 
-    let response = execute_subcommand(gql, config, model).await?;
+    let response = execute_subcommand(gql, model).await?;
 
     match response {
         (
@@ -686,19 +754,16 @@ pub async fn bootstrap<Query, Mutation>(
         },
     );
 
-    if matches.subcommand_matches("verify-keystore").is_some() {
-        let config = handle_config_and_init(&domain.into())
-            .expect("failed to initialize from domain definition");
-        let store = DirectoryStoredKeys::new(config.secrets.path)
-            .expect("failed to create key store at {config.secrets.path}");
-        info!(keystore=?store);
+    if matches.subcommand_matches("generate-key").is_some() {
+        let key = SecretKey::random(StdRng::from_entropy());
+        let key = key.to_pkcs8_pem(LineEnding::CRLF).unwrap();
 
-        let retrieve_signer = common::signing::directory_signing_key;
-        if store.chronicle_signing(retrieve_signer).is_err() {
-            info!("Generating new chronicle key");
-            store
-                .generate_chronicle()
-                .expect("failed to create key in {store.base}");
+        if let Some(path) = matches.get_one::<PathBuf>("output") {
+            //TODO - clean up these unwraps, they always come up with fs / cli
+            let mut file = File::create(path).unwrap();
+            file.write_all(key.as_bytes()).unwrap();
+        } else {
+            print!("{}", *key);
         }
 
         std::process::exit(0);
@@ -722,6 +787,10 @@ pub async fn bootstrap<Query, Mutation>(
 pub mod test {
     use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
     use async_stl_client::prost::Message;
+    use chronicle_signing::{
+        chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+        CHRONICLE_NAMESPACE,
+    };
     use common::{
         commands::{ApiCommand, ApiResponse},
         database::TemporaryDatabase,
@@ -732,11 +801,8 @@ pub mod test {
             to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
             EntityId, ProvModel,
         },
-        signing::DirectoryStoredKeys,
     };
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-    use std::collections::HashMap;
-    use tempfile::TempDir;
     use uuid::Uuid;
 
     use super::{CliModel, SubCommand};
@@ -790,11 +856,21 @@ pub mod test {
     async fn test_api<'a>() -> TestDispatch<'a> {
         chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-        let secretpath = TempDir::new().unwrap().into_path();
-
-        let keystore_path = secretpath.clone();
-        let keystore = DirectoryStoredKeys::new(keystore_path).unwrap();
-        keystore.generate_chronicle().unwrap();
+        let secrets = ChronicleSigning::new(
+            chronicle_secret_names(),
+            vec![
+                (
+                    CHRONICLE_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::generate_in_memory(),
+                ),
+                (
+                    BATCHER_NAMESPACE.to_string(),
+                    ChronicleSecretsOptions::generate_in_memory(),
+                ),
+            ],
+        )
+        .await
+        .unwrap();
 
         let buf = async_stl_client::messages::Setting {
             entries: vec![async_stl_client::messages::setting::Entry {
@@ -852,9 +928,9 @@ pub mod test {
         let dispatch = Api::new(
             pool,
             embedded_tp.ledger.clone(),
-            &secretpath,
             SameUuid,
-            HashMap::default(),
+            secrets,
+            vec![],
             Some("allow_transactions".to_owned()),
             liveness_check_interval,
         )
