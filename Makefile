@@ -4,6 +4,7 @@ include $(MAKEFILE_DIR)/standard_defs.mk
 export OPENSSL_STATIC=1
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
+export CARGO_HOME=.cargo_cached
 
 
 IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl id-provider chronicle-helm-api-test
@@ -42,7 +43,8 @@ endif
 
 .PHONY: build-end-to-end-test
 build-end-to-end-test:
-	docker build -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
+	docker build --build-arg CARGO_HOME=.cargo_cached \
+	 -t chronicle-test:$(ISOLATION_ID) -f docker/chronicle-test/chronicle-test.dockerfile .
 
 .PHONY: test-chronicle-e2e
 test-chronicle-e2e: build-end-to-end-test
@@ -67,24 +69,23 @@ $(MARKERS)/binfmt:
 
 # Run the compiler for host and target, then extract the binaries
 .PHONY: test-prep-$(ISOLATION_ID)
-test-prep-$(ISOLATION_ID): $(HOST_ARCHITECTURE)-ensure-context
+test-prep-$(ISOLATION_ID): ensure-context
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t tested-artifacts:$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID)-$(HOST_ARCHITECTURE) \
 		--platform linux/$(HOST_ARCHITECTURE) \
+		--build-arg CARGO_HOME=.cargo_cached \
 		--target test \
 		--load
 
 .PHONY: tested-$(ISOLATION_ID)
 test: tested-$(ISOLATION_ID)
 tested-$(ISOLATION_ID): test-prep-$(ISOLATION_ID)
+	docker info
 	container_id=$$(docker run -d \
-		-v $(DOCKER_SOCK):/var/run/docker.sock \
 		tested-artifacts:${ISOLATION_ID} sleep 1d); \
-		docker exec --user root $$container_id groupadd -g $(DOCKER_GID) docker \
-		&& docker exec --user root $$container_id usermod -aG docker tester \
-		&& docker exec $$container_id cargo test --locked --release \
+		&& docker exec --env DOCKER_HOST=${DOCKER_HOST} --env CARGO_HOME=.cargo_cached --env RUST_LOG=debug,cranelift=off,wasmtime=off $$container_id cargo test  --locked --release \
 		&& docker rm -f $$container_id
 
 	rm -rf .artifacts
@@ -97,11 +98,13 @@ tested-$(ISOLATION_ID): test-prep-$(ISOLATION_ID)
 .PHONY: test-e2e
 test: test-e2e
 define arch-contexts =
-.PHONY: $(1)-ensure-context
-$(1)-ensure-context: $(MARKERS)/binfmt
+.PHONY: ensure-context
+ensure-context: $(MARKERS)/binfmt
+	docker context create tls-environment || true 
 	docker buildx create --name ctx-$(ISOLATION_ID)-$(1) \
 		--config buildkit.toml \
 		--driver docker-container \
+		--use tls-environment \
 		--bootstrap || true
 	docker buildx use ctx-$(ISOLATION_ID)-$(1)
 
@@ -117,12 +120,13 @@ $(foreach arch,$(ARCHS),$(eval $(call arch-contexts,$(arch))))
 define multi-arch-docker =
 
 .PHONY: $(1)-$(2)-build
-$(1)-$(2)-build: $(2)-ensure-context  policies/bundle.tar.gz
+$(1)-$(2)-build: ensure-context  policies/bundle.tar.gz
 	docker buildx build $(DOCKER_PROGRESS)  \
 		-f./docker/unified-builder \
 		-t $(1)-$(2):$(ISOLATION_ID) . \
 		--builder ctx-$(ISOLATION_ID)-$(2) \
 		--platform linux/$(2) \
+		--build-arg CARGO_HOME=.cargo_cached \
 		--target $(1) \
 		--load
 

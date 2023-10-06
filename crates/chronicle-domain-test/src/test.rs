@@ -71,7 +71,7 @@ mod test {
             Api, UuidGen,
         },
         async_graphql::{Request, Response, Schema},
-        chrono::{DateTime, NaiveDate, Utc},
+        chrono::{NaiveDate, TimeZone, Utc},
         common::{
             database::TemporaryDatabase,
             identity::AuthId,
@@ -557,16 +557,16 @@ mod test {
     async fn api_calls_resulting_in_no_data_changes_return_null() {
         let (schema, _database) = test_schema().await;
 
-        let from = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(1968, 9, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        )
-        .checked_add_signed(chronicle::chrono::Duration::days(1))
-        .unwrap()
-        .to_rfc3339();
+        let from = Utc
+            .from_utc_datetime(
+                &NaiveDate::from_ymd_opt(1968, 9, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .checked_add_signed(chronicle::chrono::Duration::days(1))
+            .unwrap()
+            .to_rfc3339();
 
         let id_one = chronicle::async_graphql::Name::new("1");
         let id_two = chronicle::async_graphql::Name::new("2");
@@ -2355,31 +2355,31 @@ mod test {
 
         let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
 
-        let from = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2023, 3, 20)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        )
-        .checked_add_signed(chronicle::chrono::Duration::days(1))
-        .unwrap()
-        .to_rfc3339();
+        let from = Utc
+            .from_utc_datetime(
+                &NaiveDate::from_ymd_opt(2023, 3, 20)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .checked_add_signed(chronicle::chrono::Duration::days(1))
+            .unwrap()
+            .to_rfc3339();
 
         let test_entity = chronicle::async_graphql::Name::new("Certificate");
 
         let test_agent = chronicle::async_graphql::Name::new("Certifier");
 
-        let to = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2023, 3, 21)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        )
-        .checked_add_signed(chronicle::chrono::Duration::days(1))
-        .unwrap()
-        .to_rfc3339();
+        let to = Utc
+            .from_utc_datetime(
+                &NaiveDate::from_ymd_opt(2023, 3, 21)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .checked_add_signed(chronicle::chrono::Duration::days(1))
+            .unwrap()
+            .to_rfc3339();
 
         // create an activity that used an entity and was associated with an agent
         insta::assert_json_snapshot!(schema
@@ -3119,12 +3119,11 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let from = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(1968, 9, 1)
+        let from = Utc.from_utc_datetime(
+            &NaiveDate::from_ymd_opt(1968, 9, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
                 .unwrap(),
-            Utc,
         );
 
         for i in 1..10 {

@@ -172,6 +172,7 @@ where
     Ok(())
 }
 
+#[allow(dead_code)]
 fn namespace_bindings(options: &ArgMatches) -> Vec<NamespaceId> {
     options
         .values_of("namespace-bindings")

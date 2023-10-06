@@ -60,7 +60,7 @@ impl TypesAttributesRoles {
                     .map(|(entity_type, attributes)| {
                         (
                             entity_type,
-                            attributes.link_attribute_types(&mut attribute_types),
+                            attributes.link_attribute_types(&attribute_types),
                         )
                     })
                     .collect();
@@ -70,7 +70,7 @@ impl TypesAttributesRoles {
                     .map(|(agent_type, attributes)| {
                         (
                             agent_type,
-                            attributes.link_attribute_types(&mut attribute_types),
+                            attributes.link_attribute_types(&attribute_types),
                         )
                     })
                     .collect();
@@ -80,7 +80,7 @@ impl TypesAttributesRoles {
                     .map(|(activity_type, attributes)| {
                         (
                             activity_type,
-                            attributes.link_attribute_types(&mut attribute_types),
+                            attributes.link_attribute_types(&attribute_types),
                         )
                     })
                     .collect();
@@ -182,7 +182,7 @@ struct Attributes {
 impl Attributes {
     fn link_attribute_types(
         self,
-        attribute_types: &mut BTreeMap<AttributeType, ChroniclePrimitive>,
+        attribute_types: &BTreeMap<AttributeType, ChroniclePrimitive>,
     ) -> BTreeMap<AttributeType, SynthType> {
         let mut attr = BTreeMap::new();
         for attr_type in self.attributes {

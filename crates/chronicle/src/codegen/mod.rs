@@ -315,6 +315,7 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
     let async_graphql_error_extensions =
         &rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
 
+    let timezone = &rust::import("chronicle::chrono", "TimeZone").direct();
     let object = rust::import("chronicle::async_graphql", "Object").qualified();
     let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
     let context = &rust::import("chronicle::async_graphql", "Context").qualified();
@@ -362,12 +363,12 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 
         #[doc = #_(#start_doc)]
         async fn started(&self) -> Option<#date_time<#utc>> {
-            self.0.started.map(|x| #date_time::from_utc(x, #utc))
+            self.0.started.as_ref().map(|x| #timezone::from_utc_datetime(&#utc,x))
         }
 
         #[doc = #_(#end_doc)]
         async fn ended(&self) -> Option<#date_time<#utc>> {
-            self.0.ended.map(|x| #date_time::from_utc(x, #utc))
+            self.0.ended.as_ref().map(|x| #timezone::from_utc_datetime(&#utc,x))
         }
 
         #[doc = #_(#type_doc)]

@@ -694,7 +694,7 @@ pub mod test {
     }
 
     fn get_sorted_transactions(
-        batch: &mut sawtooth_sdk::messages::batch::Batch,
+        batch: &sawtooth_sdk::messages::batch::Batch,
     ) -> Vec<sawtooth_sdk::messages::transaction::Transaction> {
         let mut transactions = batch.transactions.clone();
         transactions.sort_by_key(|tx| tx.header_signature.clone());
@@ -762,11 +762,11 @@ pub mod test {
             // Parse the request into a `ClientBatchSubmitRequest` object and extract the first batch.
             let req: ClientBatchSubmitRequest =
                 protobuf::Message::parse_from_bytes(request).unwrap();
-            let mut batch = req.batches.into_iter().next().unwrap();
+            let batch = req.batches.into_iter().next().unwrap();
 
             // Log some debug information about the batch and sort its transactions.
             debug!(received_batch = ?batch, transactions = ?batch.transactions);
-            let transactions = get_sorted_transactions(&mut batch);
+            let transactions = get_sorted_transactions(&batch);
 
             // Get the current state and events before applying the transactions.
             let preprocessing_state_and_events = {

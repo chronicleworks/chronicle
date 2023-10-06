@@ -2,7 +2,7 @@ use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, ID,
 };
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
@@ -41,13 +41,14 @@ pub async fn activity_timeline<'a>(
 
     // Default from and to to the maximum possible time range
     let from = from.or_else(|| {
-        Some(DateTime::<Utc>::from_utc(
-            NaiveDateTime::new(
-                NaiveDate::from_ymd_opt(1582, 10, 16).unwrap(),
-                NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        Some(
+            Utc.from_utc_datetime(
+                &NaiveDate::from_ymd_opt(1582, 10, 16)
+                    .expect("Invalid date")
+                    .and_hms_opt(0, 0, 0)
+                    .expect("Invalid time"),
             ),
-            Utc,
-        ))
+        )
     });
 
     let to = to.or_else(|| Some(Utc::now()));

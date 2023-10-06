@@ -33,7 +33,7 @@ impl TpOpa {
 
     pub fn executor_context(
         &self,
-        ctx: &mut dyn TransactionContext,
+        ctx: &dyn TransactionContext,
     ) -> Result<ExecutorContext, ApplyError> {
         let policy_name_settings_entry =
             ctx.get_state_entry(&sawtooth_settings_address("chronicle.opa.policy_name"))?;
