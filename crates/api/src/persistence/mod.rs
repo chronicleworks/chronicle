@@ -1052,7 +1052,6 @@ impl Store {
             .select(schema::entity::external_id)
             .load::<String>(connection)?
         {
-            let used = used;
             model.used(namespaceid.clone(), &id, &EntityId::from_external_id(used));
         }
 
@@ -1065,7 +1064,6 @@ impl Store {
             .select(schema::activity::external_id)
             .load::<String>(connection)?
         {
-            let wasinformedby = wasinformedby;
             model.was_informed_by(
                 namespaceid.clone(),
                 &id,
@@ -1446,7 +1444,6 @@ impl Store {
                     .select(schema::entity::external_id)
                     .load::<String>(connection)?
                 {
-                    let used = used;
                     model.used(
                         namespace.clone(),
                         activity_id,
