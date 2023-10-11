@@ -362,12 +362,12 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 
         #[doc = #_(#start_doc)]
         async fn started(&self) -> Option<#date_time<#utc>> {
-            self.0.started.map(|x| #date_time::from_utc(x, #utc))
+            self.0.started.map(|x| #date_time::from_naive_utc_and_offset(x, #utc))
         }
 
         #[doc = #_(#end_doc)]
         async fn ended(&self) -> Option<#date_time<#utc>> {
-            self.0.ended.map(|x| #date_time::from_utc(x, #utc))
+            self.0.ended.map(|x| #date_time::from_naive_utc_and_offset(x, #utc))
         }
 
         #[doc = #_(#type_doc)]

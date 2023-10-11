@@ -557,7 +557,7 @@ mod test {
     async fn api_calls_resulting_in_no_data_changes_return_null() {
         let (schema, _database) = test_schema().await;
 
-        let from = DateTime::<Utc>::from_utc(
+        let from = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(1968, 9, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
@@ -2355,7 +2355,7 @@ mod test {
 
         let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
 
-        let from = DateTime::<Utc>::from_utc(
+        let from = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2023, 3, 20)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
@@ -2370,7 +2370,7 @@ mod test {
 
         let test_agent = chronicle::async_graphql::Name::new("Certifier");
 
-        let to = DateTime::<Utc>::from_utc(
+        let to = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2023, 3, 21)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
@@ -3119,7 +3119,7 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let from = DateTime::<Utc>::from_utc(
+        let from = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(1968, 9, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
