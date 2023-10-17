@@ -85,17 +85,6 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn register_key() (external_id in external_id(),namespace in namespace(), publickey in "[0-9a-f]{64}") -> RegisterKey {
-        let id = AgentId::from_external_id(&external_id);
-        RegisterKey {
-            namespace,
-            id,
-            publickey
-        }
-    }
-}
-
-prop_compose! {
     fn create_activity() (external_id in external_id(),namespace in namespace()) -> ActivityExists {
         ActivityExists {
             namespace,
@@ -304,7 +293,6 @@ prop_compose! {
 fn transaction() -> impl Strategy<Value = ChronicleOperation> {
     prop_oneof![
         1 => create_agent().prop_map(ChronicleOperation::AgentExists),
-        1 => register_key().prop_map(ChronicleOperation::RegisterKey),
         1 => create_activity().prop_map(ChronicleOperation::ActivityExists),
         1 => start_activity().prop_map(ChronicleOperation::StartActivity),
         1 => end_activity().prop_map(ChronicleOperation::EndActivity),
@@ -438,22 +426,6 @@ proptest! {
                     prop_assert!(has_delegation);
 
                 }
-                ChronicleOperation::RegisterKey(
-                    RegisterKey { namespace, id, publickey}) => {
-                        let agent = &prov.agents.get(&(namespace.clone(),id.clone()));
-                        prop_assert!(agent.is_some());
-                        let agent = agent.unwrap();
-                        let identity = &prov.has_identity.get(&(namespace.clone(), agent.id.clone()));
-                        prop_assert!(identity.is_some());
-                        let identity = identity.unwrap();
-                        let identity = prov.identities.get(identity);
-                        prop_assert!(identity.is_some());
-                        let identity = identity.unwrap();
-
-                        prop_assert_eq!(&agent.external_id, id.external_id_part());
-                        prop_assert_eq!(&agent.namespaceid, &namespace.clone());
-                        prop_assert_eq!(&identity.public_key, &publickey.clone());
-                },
                 ChronicleOperation::ActivityExists(
                     ActivityExists { namespace,  external_id }) => {
                     let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_external_id(external_id)));

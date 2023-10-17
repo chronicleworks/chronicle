@@ -8,12 +8,12 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, EndActivity, EntityDerive, EntityExists, RegisterKey, SetAttributes,
+            CreateNamespace, EndActivity, EntityDerive, EntityExists, SetAttributes,
             StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
         },
         to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
-        ExternalIdPart, IdentityId, NamespaceId, ParseIriError, ProcessorError, ProvModel,
+        NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
 };
 
@@ -396,20 +396,6 @@ impl ChronicleOperation {
                     LedgerAddress::in_namespace(namespace, AgentId::from_external_id(external_id)),
                 ]
             }
-            // Key registration requires identity + agent
-            ChronicleOperation::RegisterKey(RegisterKey {
-                namespace,
-                id,
-                publickey,
-                ..
-            }) => vec![
-                LedgerAddress::namespace(namespace),
-                LedgerAddress::in_namespace(namespace, id.clone()),
-                LedgerAddress::in_namespace(
-                    namespace,
-                    IdentityId::from_external_id(id.external_id_part(), publickey),
-                ),
-            ],
             ChronicleOperation::ActivityExists(ActivityExists {
                 namespace,
                 external_id,

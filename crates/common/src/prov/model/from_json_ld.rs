@@ -16,7 +16,7 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, 
             SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
             WasInformedBy,
         },
@@ -818,15 +818,6 @@ impl ChronicleOperation {
                         o.optional_role(),
                     ),
                 ))
-            } else if o.has_type(&id_from_iri(&ChronicleOperations::RegisterKey)) {
-                let namespace = o.namespace();
-                let id = o.agent();
-                let publickey = o.key();
-                Ok(ChronicleOperation::RegisterKey(RegisterKey {
-                    namespace,
-                    id,
-                    publickey,
-                }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::ActivityExists)) {
                 let namespace = o.namespace();
                 let activity_id = o.optional_activity().unwrap();

@@ -1,6 +1,9 @@
 mod graphlql_scalars;
 use async_graphql::OneofObject;
+use frame_support::storage::types::EncodeLikeTuple;
 pub use graphlql_scalars::*;
+use parity_scale_codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 use tracing::trace;
 
 use std::{fmt::Display, str::FromStr};
@@ -36,6 +39,9 @@ custom_error::custom_error! {pub ParseIriError
     Hash,
     Serialize,
     Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
     AsExpression,
     FromSqlRow,
 )]
@@ -99,6 +105,9 @@ impl AsRef<str> for &Role {
     Hash,
     Serialize,
     Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
     AsExpression,
     FromSqlRow,
 )]
@@ -192,7 +201,20 @@ impl<T: Display> FromCompact for T {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub enum ChronicleIri {
     Identity(IdentityId),
     Namespace(NamespaceId),
@@ -203,6 +225,12 @@ pub enum ChronicleIri {
     Association(AssociationId),
     Attribution(AttributionId),
     Delegation(DelegationId),
+}
+
+impl MaxEncodedLen for ChronicleIri {
+    fn max_encoded_len() -> usize {
+        2048usize
+    }
 }
 
 impl Display for ChronicleIri {
@@ -354,7 +382,20 @@ fn optional_component(external_id: &str, component: &str) -> Result<Option<Strin
 }
 
 // A composite identifier of agent, activity and role
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct DelegationId {
     delegate: ExternalId,
     responsible: ExternalId,
@@ -435,7 +476,20 @@ impl From<&DelegationId> for IriRefBuf {
 }
 
 // A composite identifier of agent, activity and role
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct AssociationId {
     agent: ExternalId,
     activity: ExternalId,
@@ -502,7 +556,20 @@ impl From<&AssociationId> for IriRefBuf {
 }
 
 // A composite identifier of agent, entity, and role
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct AttributionId {
     agent: ExternalId,
     entity: ExternalId,
@@ -568,7 +635,20 @@ impl From<&AttributionId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct IdentityId {
     external_id: ExternalId,
     public_key: String,
@@ -626,7 +706,20 @@ impl From<&IdentityId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct DomaintypeId(ExternalId);
 
 impl Display for DomaintypeId {
@@ -672,6 +765,53 @@ impl From<&DomaintypeId> for IriRefBuf {
 pub struct NamespaceId {
     external_id: ExternalId,
     uuid: Uuid,
+}
+
+impl TypeInfo for NamespaceId {
+    type Identity = Self;
+
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("NamespaceId", module_path!()))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<ExternalId>()
+                            .name("ExtenalId")
+                            .type_name("ExternalId")
+                    })
+                    .field(|f| f.ty::<Vec<u8>>().name("Uuid").type_name("Uuid")),
+            )
+    }
+}
+
+impl Encode for NamespaceId {
+    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
+        self.external_id.encode_to(dest);
+        self.uuid.as_bytes().encode_to(dest);
+    }
+
+    fn size_hint(&self) -> usize {
+        self.external_id.size_hint() + 32
+    }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut r = Vec::with_capacity(self.size_hint());
+        self.encode_to(&mut r);
+        r
+    }
+}
+
+impl Decode for NamespaceId {
+    fn decode<I: parity_scale_codec::Input>(
+        input: &mut I,
+    ) -> Result<Self, parity_scale_codec::Error> {
+        let external_id = ExternalId::decode(input)?;
+        let uuid_bytes = Vec::<u8>::decode(input)?;
+        let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
+
+        Ok(Self { external_id, uuid })
+    }
 }
 
 impl Display for NamespaceId {
@@ -726,7 +866,20 @@ impl From<&NamespaceId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct EntityId(ExternalId);
 
 impl Display for EntityId {
@@ -786,7 +939,20 @@ impl From<EntityIdOrExternal> for EntityId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct AgentId(ExternalId);
 
 impl Display for AgentId {
@@ -845,7 +1011,20 @@ impl From<AgentIdOrExternal> for AgentId {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
 pub struct ActivityId(ExternalId);
 
 impl Display for ActivityId {

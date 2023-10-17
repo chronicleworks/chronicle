@@ -27,7 +27,7 @@ use common::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, 
             SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
             WasInformedBy,
         },
@@ -715,15 +715,6 @@ where
                     } else {
                         model
                     }
-                }
-                ChronicleOperation::RegisterKey(RegisterKey { namespace, id, .. }) => {
-                    model.namespace_context(namespace);
-                    self.store.apply_prov_model_for_agent_id(
-                        connection,
-                        model,
-                        id,
-                        namespace.external_id_part(),
-                    )?
                 }
                 ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
                     namespace,

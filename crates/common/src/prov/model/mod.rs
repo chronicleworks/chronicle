@@ -1,13 +1,15 @@
 mod contradiction;
 pub use contradiction::Contradiction;
 pub mod transaction;
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 pub use transaction::ChronicleTransaction;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use iref::IriBuf;
 use json_ld::NoLoader;
 use lazy_static::lazy_static;
 use locspan::Meta;
+use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf};
 use serde::Serialize;
 use serde_json::Value;
@@ -31,8 +33,8 @@ use super::{
     id,
     operations::{
         ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-        CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, RegisterKey,
-        SetAttributes, StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
+        CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, SetAttributes,
+        StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, AttributionId, ChronicleIri, DelegationId, DomaintypeId,
     EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, Role, UuidPart,
@@ -107,7 +109,7 @@ pub enum ChronicleTransactionIdError {
     InvalidTransactionId { id: String },
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, PartialEq, Eq, Debug, Clone)]
 pub struct ChronicleTransactionId(String);
 
 impl Display for ChronicleTransactionId {
@@ -140,6 +142,53 @@ pub struct Namespace {
     pub external_id: ExternalId,
 }
 
+impl TypeInfo for Namespace {
+    type Identity = Self;
+
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("Namespace", module_path!()))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<NamespaceId>()
+                            .name("NamespaceId")
+                            .type_name("NamespaceId")
+                    })
+                    .field(|f| f.ty::<Vec<u8>>().name("Uuid").type_name("Uuid"))
+                    .field(|f| {
+                        f.ty::<ExternalId>()
+                            .name("ExternalId")
+                            .type_name("ExternalId")
+                    }),
+            )
+    }
+}
+
+impl Encode for Namespace {
+    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
+        self.id.encode_to(dest);
+        self.uuid.as_bytes().encode_to(dest);
+        self.external_id.encode_to(dest);
+    }
+}
+
+impl Decode for Namespace {
+    fn decode<I: parity_scale_codec::Input>(
+        input: &mut I,
+    ) -> Result<Self, parity_scale_codec::Error> {
+        let id = NamespaceId::decode(input)?;
+        let uuid_bytes = Vec::<u8>::decode(input)?;
+        let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
+        let external_id = ExternalId::decode(input)?;
+        Ok(Self {
+            id,
+            uuid,
+            external_id,
+        })
+    }
+}
+
 impl Namespace {
     pub fn new(id: NamespaceId, uuid: Uuid, external_id: &ExternalId) -> Self {
         Self {
@@ -150,7 +199,7 @@ impl Namespace {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct Agent {
     pub id: AgentId,
     pub namespaceid: NamespaceId,
@@ -159,7 +208,7 @@ pub struct Agent {
     pub attributes: BTreeMap<String, Attribute>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct Identity {
     pub id: IdentityId,
     pub namespaceid: NamespaceId,
@@ -217,6 +266,75 @@ pub struct Activity {
     pub ended: Option<DateTime<Utc>>,
 }
 
+impl TypeInfo for Activity {
+    type Identity = Self;
+
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("Activity", module_path!()))
+            .composite(
+                Fields::named()
+                    .field(|f| f.ty::<ActivityId>().name("Id").type_name("ActivityId"))
+                    .field(|f| {
+                        f.ty::<NamespaceId>()
+                            .name("NamespaceId")
+                            .type_name("NamespaceId")
+                    })
+                    .field(|f| {
+                        f.ty::<ExternalId>()
+                            .name("ExternalId")
+                            .type_name("ExternalId")
+                    })
+                    .field(|f| {
+                        f.ty::<Option<DomaintypeId>>()
+                            .name("DomaintypeId")
+                            .type_name("Option<DomaintypeId>")
+                    })
+                    .field(|f| {
+                        f.ty::<BTreeMap<String, Attribute>>()
+                            .name("Attributes")
+                            .type_name("BTreeMap<String, Attribute>")
+                    })
+                    .field(|f| {
+                        f.ty::<Option<i64>>()
+                            .name("Started")
+                            .type_name("Option<i64>")
+                    })
+                    .field(|f| f.ty::<Option<i64>>().name("Ended").type_name("Option<i64>")),
+            )
+    }
+}
+
+impl Encode for Activity {
+    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
+        self.id.encode_to(dest);
+        self.namespaceid.encode_to(dest);
+        self.external_id.encode_to(dest);
+        self.domaintypeid.encode_to(dest);
+        self.attributes.encode_to(dest);
+        self.started.map(|x| x.timestamp()).encode_to(dest);
+        self.ended.map(|x| x.timestamp()).encode_to(dest);
+    }
+}
+
+impl Decode for Activity {
+    fn decode<I: parity_scale_codec::Input>(
+        input: &mut I,
+    ) -> Result<Self, parity_scale_codec::Error> {
+        Ok(Self {
+            id: Decode::decode(input)?,
+            namespaceid: Decode::decode(input)?,
+            external_id: Decode::decode(input)?,
+            domaintypeid: Decode::decode(input)?,
+            attributes: Decode::decode(input)?,
+            started: Option::decode(input)?
+                .map(|x| DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(x, 0), Utc)),
+            ended: Option::decode(input)?
+                .map(|x| DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(x, 0), Utc)),
+        })
+    }
+}
+
 impl Activity {
     pub fn has_attributes(self, attributes: Attributes) -> Self {
         let Self {
@@ -252,7 +370,7 @@ impl Activity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct Entity {
     pub id: EntityId,
     pub namespaceid: NamespaceId,
@@ -289,7 +407,20 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Derivation {
     pub generated_id: EntityId,
     pub used_id: EntityId,
@@ -297,7 +428,20 @@ pub struct Derivation {
     pub typ: DerivationType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Delegation {
     pub namespace_id: NamespaceId,
     pub id: DelegationId,
@@ -331,7 +475,20 @@ impl Delegation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Association {
     pub namespace_id: NamespaceId,
     pub id: AssociationId,
@@ -357,25 +514,77 @@ impl Association {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Usage {
     pub activity_id: ActivityId,
     pub entity_id: EntityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Generation {
     pub activity_id: ActivityId,
     pub generated_id: EntityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct GeneratedEntity {
     pub entity_id: EntityId,
     pub generated_id: ActivityId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+    TypeInfo,
+)]
 pub struct Attribution {
     pub namespace_id: NamespaceId,
     pub id: AttributionId,
@@ -407,7 +616,9 @@ type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 type NamespacedIdentity = NamespacedId<IdentityId>;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo,
+)]
 pub struct ProvModel {
     pub namespaces: BTreeMap<NamespaceId, Namespace>,
     pub agents: BTreeMap<NamespacedAgent, Agent>,
@@ -425,6 +636,32 @@ pub struct ProvModel {
     pub was_informed_by: BTreeMap<NamespacedActivity, BTreeSet<NamespacedActivity>>,
     pub generated: BTreeMap<NamespacedActivity, BTreeSet<GeneratedEntity>>,
     pub attribution: BTreeMap<NamespacedEntity, BTreeSet<Attribution>>,
+}
+
+impl MaxEncodedLen for ProvModel {
+    fn max_encoded_len() -> usize {
+        64 * 1024usize
+    }
+}
+
+pub trait ProvModelTrait {
+    fn was_derived_from(
+        &mut self,
+        namespace_id: NamespaceId,
+        typ: DerivationType,
+        used_id: EntityId,
+        id: EntityId,
+        activity_id: Option<ActivityId>,
+    );
+
+    fn qualified_delegation(
+        &mut self,
+        namespace_id: &NamespaceId,
+        responsible_id: &AgentId,
+        delegate_id: &AgentId,
+        activity_id: Option<ActivityId>,
+        role: Option<Role>,
+    );
 }
 
 impl ProvModel {
@@ -741,19 +978,6 @@ impl ProvModel {
                     activity_id,
                     role,
                 );
-
-                Ok(())
-            }
-            ChronicleOperation::RegisterKey(RegisterKey {
-                namespace,
-                id,
-                publickey,
-                ..
-            }) => {
-                self.namespace_context(&namespace);
-                self.agent_context(&namespace, &id);
-
-                self.new_identity(&namespace, &id, &publickey);
 
                 Ok(())
             }

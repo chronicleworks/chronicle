@@ -584,35 +584,6 @@ impl ToJson for ChronicleOperation {
 
                 o
             }
-            ChronicleOperation::RegisterKey(RegisterKey {
-                namespace,
-                id,
-                publickey,
-            }) => {
-                let mut o = Value::new_operation(ChronicleOperations::RegisterKey);
-
-                o.has_value(
-                    OperationValue::string(namespace.external_id_part()),
-                    ChronicleOperations::NamespaceName,
-                );
-
-                o.has_value(
-                    OperationValue::string(namespace.uuid_part()),
-                    ChronicleOperations::NamespaceUuid,
-                );
-
-                o.has_value(
-                    OperationValue::string(id.external_id_part()),
-                    ChronicleOperations::AgentName,
-                );
-
-                o.has_value(
-                    OperationValue::string(publickey.to_owned()),
-                    ChronicleOperations::PublicKey,
-                );
-
-                o
-            }
             ChronicleOperation::ActivityExists(ActivityExists {
                 namespace,
                 external_id,
