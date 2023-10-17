@@ -216,7 +216,6 @@ impl<T: Display> FromCompact for T {
     PartialOrd,
 )]
 pub enum ChronicleIri {
-    Identity(IdentityId),
     Namespace(NamespaceId),
     Domaintype(DomaintypeId),
     Entity(EntityId),
@@ -236,7 +235,6 @@ impl MaxEncodedLen for ChronicleIri {
 impl Display for ChronicleIri {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ChronicleIri::Identity(id) => write!(f, "{id}"),
             ChronicleIri::Namespace(id) => write!(f, "{id}"),
             ChronicleIri::Domaintype(id) => write!(f, "{id}"),
             ChronicleIri::Entity(id) => write!(f, "{id}"),
@@ -246,12 +244,6 @@ impl Display for ChronicleIri {
             ChronicleIri::Attribution(id) => write!(f, "{id}"),
             ChronicleIri::Delegation(id) => write!(f, "{id}"),
         }
-    }
-}
-
-impl From<IdentityId> for ChronicleIri {
-    fn from(val: IdentityId) -> Self {
-        ChronicleIri::Identity(val)
     }
 }
 
@@ -330,7 +322,6 @@ impl FromStr for ChronicleIri {
             ["activity", ..] => Ok(ActivityId::try_from(iri.as_iri()?)?.into()),
             ["entity", ..] => Ok(EntityId::try_from(iri.as_iri()?)?.into()),
             ["domaintype", ..] => Ok(DomaintypeId::try_from(iri.as_iri()?)?.into()),
-            ["identity", ..] => Ok(IdentityId::try_from(iri.as_iri()?)?.into()),
             ["association", ..] => Ok(AssociationId::try_from(iri.as_iri()?)?.into()),
             ["attribution", ..] => Ok(AttributionId::try_from(iri.as_iri()?)?.into()),
             ["delegation", ..] => Ok(DelegationId::try_from(iri.as_iri()?)?.into()),
@@ -632,77 +623,6 @@ impl From<&AttributionId> for IriRefBuf {
             &val.role,
         )
         .into()
-    }
-}
-
-#[derive(
-    Serialize,
-    Deserialize,
-    Encode,
-    Decode,
-    TypeInfo,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    Clone,
-    Ord,
-    PartialOrd,
-)]
-pub struct IdentityId {
-    external_id: ExternalId,
-    public_key: String,
-}
-
-impl Display for IdentityId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(Into::<IriRefBuf>::into(self).as_str())
-    }
-}
-
-impl IdentityId {
-    pub fn from_external_id(external_id: impl AsRef<str>, public_key: impl AsRef<str>) -> Self {
-        Self {
-            external_id: external_id.as_ref().into(),
-            public_key: public_key.as_ref().to_string(),
-        }
-    }
-}
-
-impl ExternalIdPart for IdentityId {
-    fn external_id_part(&self) -> &ExternalId {
-        &self.external_id
-    }
-}
-
-impl PublicKeyPart for IdentityId {
-    fn public_key_part(&self) -> &str {
-        &self.public_key
-    }
-}
-
-impl<'a> TryFrom<Iri<'a>> for IdentityId {
-    type Error = ParseIriError;
-
-    fn try_from(value: Iri) -> Result<Self, Self::Error> {
-        let de_compacted = value.de_compact();
-
-        let value = Iri::from_str(&de_compacted)?;
-
-        match fragment_components(value).as_slice() {
-            [_, external_id, public_key] => Ok(Self {
-                external_id: ExternalId::from(external_id.as_str()),
-                public_key: public_key.to_string(),
-            }),
-
-            _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
-        }
-    }
-}
-
-impl From<&IdentityId> for IriRefBuf {
-    fn from(val: &IdentityId) -> Self {
-        Chronicle::identity(val.external_id_part(), &val.public_key).into()
     }
 }
 

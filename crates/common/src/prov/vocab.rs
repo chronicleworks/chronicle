@@ -9,6 +9,7 @@ use super::{ActivityId, AgentId, EntityId, ExternalId, ExternalIdPart, Role};
 pub enum ChronicleOperations {
     #[iri("chronicleop:CreateNamespace")]
     CreateNamespace,
+
     #[iri("chronicleop:namespaceName")]
     NamespaceName,
     #[iri("chronicleop:namespaceUuid")]
@@ -49,8 +50,6 @@ pub enum ChronicleOperations {
     ActivityUses,
     #[iri("chronicleop:entityName")]
     EntityName,
-    #[iri("chronicleop:identity")]
-    Identity,
     #[iri("chronicleop:locator")]
     Locator,
     #[iri("chronicleop:role")]

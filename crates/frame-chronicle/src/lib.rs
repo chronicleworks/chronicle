@@ -97,7 +97,6 @@ pub mod pallet {
             // https://docs.substrate.io/main-docs/build/origins/
             let who = ensure_signed(origin)?;
 
-            let prov = common::prov::ProvModel::default();
             // Get operations and load their dependencies
             let ops: Vec<common::prov::operations::ChronicleOperation> = operations.into();
 
@@ -112,6 +111,8 @@ pub mod pallet {
                 .iter()
                 .filter_map(Provenance::<T>::get)
                 .collect();
+
+            let prov_before_application = common::prov::ProvModel::apply(input_models);
 
             // Update storage.
 

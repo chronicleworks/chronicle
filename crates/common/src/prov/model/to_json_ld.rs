@@ -31,19 +31,6 @@ impl ToJson for ProvModel {
             }))
         }
 
-        for ((ns, id), identity) in self.identities.iter() {
-            doc.push(json!({
-                "@id": (*id.de_compact()),
-                "@type": [Iri::from(Chronicle::Identity).as_str()],
-                "http://btp.works/chronicle/ns#publicKey": [{
-                    "@value": identity.public_key.to_string(),
-                }],
-                "http://btp.works/chronicle/ns#hasNamespace": [{
-                    "@id": ns.de_compact()
-                }],
-            }))
-        }
-
         for ((_, id), agent) in self.agents.iter() {
             let mut typ = vec![Iri::from(Prov::Agent).to_string()];
             if let Some(x) = agent.domaintypeid.as_ref() {
@@ -58,25 +45,6 @@ impl ToJson for ProvModel {
                 }]
             }) {
                 let agent_key = (agent.namespaceid.clone(), agent.id.clone());
-
-                if let Some((_, identity)) = self.has_identity.get(&agent_key) {
-                    agentdoc.insert(
-                        Iri::from(Chronicle::HasIdentity).to_string(),
-                        json!([{"@id": identity.de_compact()}]),
-                    );
-                }
-
-                if let Some(identities) = self.had_identity.get(&agent_key) {
-                    let mut values = Vec::new();
-
-                    for (_, id) in identities {
-                        values.push(json!({ "@id": id.de_compact()}));
-                    }
-                    agentdoc.insert(
-                        Iri::from(Chronicle::HadIdentity).to_string(),
-                        Value::Array(values),
-                    );
-                }
 
                 if let Some(delegation) = self
                     .acted_on_behalf_of

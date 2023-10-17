@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures::{future::BoxFuture, FutureExt};
-use iref::{AsIri, Iri, IriBuf, IriRefBuf};
+use iref::{AsIri, Iri, IriBuf};
 use json_ld::{
     syntax::IntoJsonWithContextMeta, Indexed, Loader, Node, Profile, RemoteDocument, Term,
 };
@@ -16,17 +16,16 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists, 
+            CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
             SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
             WasInformedBy,
         },
         vocab::{Chronicle, ChronicleOperations, Prov},
-        ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart, IdentityId, NamespaceId, Role,
-        UuidPart,
+        ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart, NamespaceId, Role, UuidPart,
     },
 };
 
-use super::{Activity, Agent, Entity, Identity, ProcessorError, ProvModel};
+use super::{Activity, Agent, Entity, ProcessorError, ProvModel};
 
 pub struct ContextLoader;
 
@@ -176,8 +175,6 @@ impl ProvModel {
                     self.apply_node_as_activity(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Entity)) {
                     self.apply_node_as_entity(o)?;
-                } else if o.has_type(&id_from_iri(&Chronicle::Identity)) {
-                    self.apply_node_as_identity(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Delegation)) {
                     self.apply_node_as_delegation(o)?;
                 } else if o.has_type(&id_from_iri(&Prov::Association)) {
@@ -383,20 +380,6 @@ impl ProvModel {
 
         let attributes = Self::extract_attributes(agent)?;
 
-        for identity in extract_reference_ids(&Chronicle::HasIdentity, agent)?
-            .into_iter()
-            .map(|id| IdentityId::try_from(id.as_iri()))
-        {
-            self.has_identity(namespaceid.clone(), &id, &identity?);
-        }
-
-        for identity in extract_reference_ids(&Chronicle::HadIdentity, agent)?
-            .into_iter()
-            .map(|id| IdentityId::try_from(id.as_iri()))
-        {
-            self.had_identity(namespaceid.clone(), &id, &identity?);
-        }
-
         let agent = Agent::exists(namespaceid, id).has_attributes(attributes);
 
         self.add_agent(agent);
@@ -459,38 +442,6 @@ impl ProvModel {
         }
 
         self.add_activity(activity);
-
-        Ok(())
-    }
-
-    fn apply_node_as_identity(
-        &mut self,
-        identity: &Node<IriBuf, BlankIdBuf, ()>,
-    ) -> Result<(), ProcessorError> {
-        let namespaceid = extract_namespace(identity)?;
-
-        let id = IdentityId::try_from(Iri::from_str(
-            identity
-                .id()
-                .ok_or_else(|| ProcessorError::MissingId {
-                    object: as_json(identity),
-                })?
-                .as_str(),
-        )?)?;
-
-        let public_key = extract_scalar_prop(&Chronicle::PublicKey, identity)
-            .ok()
-            .and_then(|x| x.as_str().map(|x| x.to_string()))
-            .ok_or_else(|| ProcessorError::MissingProperty {
-                iri: Chronicle::PublicKey.as_iri().to_string(),
-                object: as_json(identity),
-            })?;
-
-        self.add_identity(Identity {
-            id,
-            namespaceid,
-            public_key,
-        });
 
         Ok(())
     }
@@ -587,7 +538,6 @@ trait Operation {
     fn optional_activity(&self) -> Option<ActivityId>;
     fn activity(&self) -> ActivityId;
     fn optional_role(&self) -> Option<Role>;
-    fn identity(&self) -> Option<IdentityId>;
     fn key(&self) -> String;
     fn start_time(&self) -> String;
     fn locator(&self) -> Option<String>;
@@ -731,23 +681,6 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
         let mut name_objects = self.get(&id_from_iri(&ChronicleOperations::ActivityName));
         let external_id = name_objects.next().unwrap().as_str().unwrap();
         ActivityId::from_external_id(external_id)
-    }
-
-    fn identity(&self) -> Option<IdentityId> {
-        let mut id_objects = self.get(&id_from_iri(&ChronicleOperations::Identity));
-        let id = match id_objects.next() {
-            Some(id) => id,
-            None => return None,
-        };
-        Some(
-            IdentityId::try_from(
-                IriRefBuf::from_string(id.as_str().unwrap().to_owned())
-                    .unwrap()
-                    .as_iri()
-                    .unwrap(),
-            )
-            .unwrap(),
-        )
     }
 
     fn locator(&self) -> Option<String> {

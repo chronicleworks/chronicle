@@ -37,7 +37,7 @@ use super::{
         StartActivity, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
     },
     ActivityId, AgentId, AssociationId, AttributionId, ChronicleIri, DelegationId, DomaintypeId,
-    EntityId, ExternalId, ExternalIdPart, IdentityId, NamespaceId, Role, UuidPart,
+    EntityId, ExternalId, ExternalIdPart, NamespaceId, Role, UuidPart,
 };
 
 pub mod to_json_ld;
@@ -206,23 +206,6 @@ pub struct Agent {
     pub external_id: ExternalId,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-pub struct Identity {
-    pub id: IdentityId,
-    pub namespaceid: NamespaceId,
-    pub public_key: String,
-}
-
-impl Identity {
-    pub fn new(namespace: &NamespaceId, agent: &AgentId, public_key: &str) -> Self {
-        Self {
-            id: IdentityId::from_external_id(agent.external_id_part(), public_key),
-            namespaceid: namespace.clone(),
-            public_key: public_key.to_owned(),
-        }
-    }
 }
 
 impl Agent {
@@ -614,7 +597,6 @@ type NamespacedId<T> = (NamespaceId, T);
 type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
-type NamespacedIdentity = NamespacedId<IdentityId>;
 
 #[derive(
     Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo,
@@ -624,9 +606,6 @@ pub struct ProvModel {
     pub agents: BTreeMap<NamespacedAgent, Agent>,
     pub activities: BTreeMap<NamespacedActivity, Activity>,
     pub entities: BTreeMap<NamespacedEntity, Entity>,
-    pub identities: BTreeMap<NamespacedIdentity, Identity>,
-    pub has_identity: BTreeMap<NamespacedAgent, NamespacedIdentity>,
-    pub had_identity: BTreeMap<NamespacedAgent, BTreeSet<NamespacedIdentity>>,
     pub association: BTreeMap<NamespacedActivity, BTreeSet<Association>>,
     pub derivation: BTreeMap<NamespacedEntity, BTreeSet<Derivation>>,
     pub delegation: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
@@ -642,26 +621,6 @@ impl MaxEncodedLen for ProvModel {
     fn max_encoded_len() -> usize {
         64 * 1024usize
     }
-}
-
-pub trait ProvModelTrait {
-    fn was_derived_from(
-        &mut self,
-        namespace_id: NamespaceId,
-        typ: DerivationType,
-        used_id: EntityId,
-        id: EntityId,
-        activity_id: Option<ActivityId>,
-    );
-
-    fn qualified_delegation(
-        &mut self,
-        namespace_id: &NamespaceId,
-        responsible_id: &AgentId,
-        delegate_id: &AgentId,
-        activity_id: Option<ActivityId>,
-        role: Option<Role>,
-    );
 }
 
 impl ProvModel {
@@ -818,34 +777,6 @@ impl ProvModel {
                 entity_id: entity_id.clone(),
                 role,
             });
-    }
-
-    pub fn had_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
-        self.had_identity
-            .entry((namespace.clone(), agent.clone()))
-            .or_default()
-            .insert((namespace, identity.clone()));
-    }
-
-    pub fn has_identity(&mut self, namespace: NamespaceId, agent: &AgentId, identity: &IdentityId) {
-        self.has_identity.insert(
-            (namespace.clone(), agent.clone()),
-            (namespace, identity.clone()),
-        );
-    }
-
-    fn new_identity(&mut self, namespace: &NamespaceId, agent: &AgentId, signature: &str) {
-        let new_identity = Identity::new(namespace, agent, signature);
-
-        if let Some((_, old_identity)) = self
-            .has_identity
-            .remove(&(namespace.clone(), agent.clone()))
-        {
-            self.had_identity(namespace.clone(), agent, &old_identity);
-        }
-
-        self.has_identity(namespace.clone(), agent, &new_identity.id);
-        self.add_identity(new_identity);
     }
 
     /// Ensure we have the referenced namespace in our model
@@ -1293,13 +1224,6 @@ impl ProvModel {
                 contradictions,
             ))
         }
-    }
-
-    pub(crate) fn add_identity(&mut self, identity: Identity) {
-        self.identities.insert(
-            (identity.namespaceid.clone(), identity.id.clone()),
-            identity,
-        );
     }
 
     pub(crate) fn add_agent(&mut self, agent: Agent) {
