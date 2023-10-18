@@ -68,7 +68,7 @@ prop_compose! {
         let (external_id,uuid) = (id.external_id_part(), id.uuid_part());
         CreateNamespace {
             id: id.clone(),
-            uuid: *uuid,
+            uuid: (*uuid).into(),
             external_id: external_id.to_owned(),
         }
     }
@@ -103,7 +103,7 @@ prop_compose! {
         StartActivity {
             namespace,
             id,
-            time: today - chrono::Duration::days(offset as _)
+            time: (today - chrono::Duration::days(offset as _)).into()
         }
     }
 }
@@ -118,7 +118,7 @@ prop_compose! {
         EndActivity {
             namespace,
             id,
-            time: today - chrono::Duration::days(offset as _)
+            time: (today - chrono::Duration::days(offset as _)).into()
         }
     }
 }
@@ -171,7 +171,7 @@ prop_compose! {
 
         Attribute {
             typ,
-            value: serde_json::Value::String("data".to_owned()),
+            value: serde_json::Value::String("data".to_owned()).into(),
         }
     }
 }

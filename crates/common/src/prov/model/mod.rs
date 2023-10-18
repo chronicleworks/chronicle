@@ -1,6 +1,7 @@
 mod contradiction;
 pub use contradiction::Contradiction;
 pub mod transaction;
+use scale_info::prelude::sync::Arc;
 use scale_info::{build::Fields, Path, Type, TypeInfo};
 pub use transaction::ChronicleTransaction;
 
@@ -29,6 +30,8 @@ use crate::{
     prov::operations::WasAttributedTo,
 };
 
+use super::operations::TimeWrapper;
+use super::UuidWrapper;
 use super::{
     id,
     operations::{
@@ -135,65 +138,18 @@ impl ChronicleTransactionId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Namespace {
     pub id: NamespaceId,
-    pub uuid: Uuid,
+    pub uuid: UuidWrapper,
     pub external_id: ExternalId,
-}
-
-impl TypeInfo for Namespace {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("Namespace", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| {
-                        f.ty::<NamespaceId>()
-                            .name("NamespaceId")
-                            .type_name("NamespaceId")
-                    })
-                    .field(|f| f.ty::<Vec<u8>>().name("Uuid").type_name("Uuid"))
-                    .field(|f| {
-                        f.ty::<ExternalId>()
-                            .name("ExternalId")
-                            .type_name("ExternalId")
-                    }),
-            )
-    }
-}
-
-impl Encode for Namespace {
-    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.id.encode_to(dest);
-        self.uuid.as_bytes().encode_to(dest);
-        self.external_id.encode_to(dest);
-    }
-}
-
-impl Decode for Namespace {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
-        let id = NamespaceId::decode(input)?;
-        let uuid_bytes = Vec::<u8>::decode(input)?;
-        let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
-        let external_id = ExternalId::decode(input)?;
-        Ok(Self {
-            id,
-            uuid,
-            external_id,
-        })
-    }
 }
 
 impl Namespace {
     pub fn new(id: NamespaceId, uuid: Uuid, external_id: &ExternalId) -> Self {
         Self {
             id,
-            uuid,
+            uuid: uuid.into(),
             external_id: external_id.to_owned(),
         }
     }
@@ -238,84 +194,15 @@ impl Agent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Activity {
     pub id: ActivityId,
     pub namespaceid: NamespaceId,
     pub external_id: ExternalId,
     pub domaintypeid: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,
-    pub started: Option<DateTime<Utc>>,
-    pub ended: Option<DateTime<Utc>>,
-}
-
-impl TypeInfo for Activity {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("Activity", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| f.ty::<ActivityId>().name("Id").type_name("ActivityId"))
-                    .field(|f| {
-                        f.ty::<NamespaceId>()
-                            .name("NamespaceId")
-                            .type_name("NamespaceId")
-                    })
-                    .field(|f| {
-                        f.ty::<ExternalId>()
-                            .name("ExternalId")
-                            .type_name("ExternalId")
-                    })
-                    .field(|f| {
-                        f.ty::<Option<DomaintypeId>>()
-                            .name("DomaintypeId")
-                            .type_name("Option<DomaintypeId>")
-                    })
-                    .field(|f| {
-                        f.ty::<BTreeMap<String, Attribute>>()
-                            .name("Attributes")
-                            .type_name("BTreeMap<String, Attribute>")
-                    })
-                    .field(|f| {
-                        f.ty::<Option<i64>>()
-                            .name("Started")
-                            .type_name("Option<i64>")
-                    })
-                    .field(|f| f.ty::<Option<i64>>().name("Ended").type_name("Option<i64>")),
-            )
-    }
-}
-
-impl Encode for Activity {
-    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.id.encode_to(dest);
-        self.namespaceid.encode_to(dest);
-        self.external_id.encode_to(dest);
-        self.domaintypeid.encode_to(dest);
-        self.attributes.encode_to(dest);
-        self.started.map(|x| x.timestamp()).encode_to(dest);
-        self.ended.map(|x| x.timestamp()).encode_to(dest);
-    }
-}
-
-impl Decode for Activity {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
-        Ok(Self {
-            id: Decode::decode(input)?,
-            namespaceid: Decode::decode(input)?,
-            external_id: Decode::decode(input)?,
-            domaintypeid: Decode::decode(input)?,
-            attributes: Decode::decode(input)?,
-            started: Option::decode(input)?
-                .map(|x| DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(x, 0), Utc)),
-            ended: Option::decode(input)?
-                .map(|x| DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(x, 0), Utc)),
-        })
-    }
+    pub started: Option<TimeWrapper>,
+    pub ended: Option<TimeWrapper>,
 }
 
 impl Activity {
@@ -598,23 +485,21 @@ type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 
-#[derive(
-    Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo,
-)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct ProvModel {
-    pub namespaces: BTreeMap<NamespaceId, Namespace>,
-    pub agents: BTreeMap<NamespacedAgent, Agent>,
-    pub activities: BTreeMap<NamespacedActivity, Activity>,
-    pub entities: BTreeMap<NamespacedEntity, Entity>,
-    pub association: BTreeMap<NamespacedActivity, BTreeSet<Association>>,
-    pub derivation: BTreeMap<NamespacedEntity, BTreeSet<Derivation>>,
-    pub delegation: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
-    pub acted_on_behalf_of: BTreeMap<NamespacedAgent, BTreeSet<Delegation>>,
-    pub generation: BTreeMap<NamespacedEntity, BTreeSet<Generation>>,
-    pub usage: BTreeMap<NamespacedActivity, BTreeSet<Usage>>,
-    pub was_informed_by: BTreeMap<NamespacedActivity, BTreeSet<NamespacedActivity>>,
-    pub generated: BTreeMap<NamespacedActivity, BTreeSet<GeneratedEntity>>,
-    pub attribution: BTreeMap<NamespacedEntity, BTreeSet<Attribution>>,
+    pub namespaces: BTreeMap<NamespaceId, Arc<Namespace>>,
+    pub agents: BTreeMap<NamespacedAgent, Arc<Agent>>,
+    pub acted_on_behalf_of: BTreeMap<NamespacedAgent, Arc<BTreeSet<Delegation>>>,
+    pub delegation: BTreeMap<NamespacedAgent, Arc<BTreeSet<Delegation>>>,
+    pub entities: BTreeMap<NamespacedEntity, Arc<Entity>>,
+    pub derivation: BTreeMap<NamespacedEntity, Arc<BTreeSet<Derivation>>>,
+    pub generation: BTreeMap<NamespacedEntity, Arc<BTreeSet<Generation>>>,
+    pub attribution: BTreeMap<NamespacedEntity, Arc<BTreeSet<Attribution>>>,
+    pub activities: BTreeMap<NamespacedActivity, Arc<Activity>>,
+    pub was_informed_by: BTreeMap<NamespacedActivity, Arc<BTreeSet<NamespacedActivity>>>,
+    pub generated: BTreeMap<NamespacedActivity, Arc<BTreeSet<GeneratedEntity>>>,
+    pub association: BTreeMap<NamespacedActivity, Arc<BTreeSet<Association>>>,
+    pub usage: BTreeMap<NamespacedActivity, Arc<BTreeSet<Usage>>>,
 }
 
 impl MaxEncodedLen for ProvModel {
@@ -624,6 +509,23 @@ impl MaxEncodedLen for ProvModel {
 }
 
 impl ProvModel {
+    /// Merge the supplied ProvModel into this one
+    pub fn combine(&mut self, other: &ProvModel) {
+        self.namespaces.extend(other.namespaces.clone());
+        self.agents.extend(other.agents.clone());
+        self.acted_on_behalf_of
+            .extend(other.acted_on_behalf_of.clone());
+        self.delegation.extend(other.delegation.clone());
+        self.entities.extend(other.entities.clone());
+        self.derivation.extend(other.derivation.clone());
+        self.generation.extend(other.generation.clone());
+        self.attribution.extend(other.attribution.clone());
+        self.activities.extend(other.activities.clone());
+        self.was_informed_by.extend(other.was_informed_by.clone());
+        self.generated.extend(other.generated.clone());
+        self.association.extend(other.association.clone());
+        self.usage.extend(other.usage.clone());
+    }
     /// Apply a sequence of `ChronicleTransaction` to an empty model, then return it
     pub fn from_tx<'a, I>(tx: I) -> Result<Self, Contradiction>
     where
@@ -646,15 +548,18 @@ impl ProvModel {
         id: EntityId,
         activity_id: Option<ActivityId>,
     ) {
-        self.derivation
-            .entry((namespace_id, id.clone()))
-            .or_default()
-            .insert(Derivation {
-                typ,
-                generated_id: id,
-                used_id,
-                activity_id,
-            });
+        let derivation_set = Arc::make_mut(
+            self.derivation
+                .entry((namespace_id, id.clone()))
+                .or_default(),
+        );
+
+        derivation_set.insert(Derivation {
+            typ,
+            generated_id: id,
+            used_id,
+            activity_id,
+        });
     }
 
     /// Append a delegation to the model
@@ -679,14 +584,21 @@ impl ProvModel {
             activity_id,
             role,
         };
-        self.delegation
-            .entry((namespace_id.clone(), responsible_id.clone()))
-            .or_default()
-            .insert(delegation.clone());
-        self.acted_on_behalf_of
-            .entry((namespace_id.clone(), delegate_id.clone()))
-            .or_default()
-            .insert(delegation);
+
+        let delegation_set = Arc::make_mut(
+            self.delegation
+                .entry((namespace_id.clone(), responsible_id.clone()))
+                .or_default(),
+        );
+        delegation_set.insert(delegation.clone());
+
+        let acted_on_behalf_of_set = Arc::make_mut(
+            self.acted_on_behalf_of
+                .entry((namespace_id.clone(), responsible_id.clone()))
+                .or_default(),
+        );
+
+        acted_on_behalf_of_set.insert(delegation);
     }
 
     pub fn qualified_association(
@@ -696,68 +608,87 @@ impl ProvModel {
         agent_id: &AgentId,
         role: Option<Role>,
     ) {
-        self.association
-            .entry((namespace_id.clone(), activity_id.clone()))
-            .or_default()
-            .insert(Association {
-                namespace_id: namespace_id.clone(),
-                id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
-                agent_id: agent_id.clone(),
-                activity_id: activity_id.clone(),
-                role,
-            });
+        let association_set = Arc::make_mut(
+            self.association
+                .entry((namespace_id.clone(), activity_id.clone()))
+                .or_default(),
+        );
+
+        association_set.insert(Association {
+            namespace_id: namespace_id.clone(),
+            id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
+            agent_id: agent_id.clone(),
+            activity_id: activity_id.clone(),
+            role,
+        });
     }
 
     pub fn was_generated_by(
         &mut self,
-        namespace: NamespaceId,
+        namespace_id: NamespaceId,
         generated_id: &EntityId,
         activity_id: &ActivityId,
     ) {
-        self.generation
-            .entry((namespace, generated_id.clone()))
-            .or_default()
-            .insert(Generation {
-                activity_id: activity_id.clone(),
-                generated_id: generated_id.clone(),
-            });
+        let generation_set = Arc::make_mut(
+            self.generation
+                .entry((namespace_id.clone(), generated_id.clone()))
+                .or_default(),
+        );
+        generation_set.insert(Generation {
+            activity_id: activity_id.clone(),
+            generated_id: generated_id.clone(),
+        });
     }
 
     pub fn generated(
         &mut self,
-        namespace: NamespaceId,
+        namespace_id: NamespaceId,
         generated_id: &ActivityId,
         entity_id: &EntityId,
     ) {
-        self.generated
-            .entry((namespace, generated_id.clone()))
-            .or_default()
-            .insert(GeneratedEntity {
-                entity_id: entity_id.clone(),
-                generated_id: generated_id.clone(),
-            });
+        let generated_set = Arc::make_mut(
+            self.generated
+                .entry((namespace_id.clone(), generated_id.clone()))
+                .or_default(),
+        );
+
+        generated_set.insert(GeneratedEntity {
+            entity_id: entity_id.clone(),
+            generated_id: generated_id.clone(),
+        });
     }
 
-    pub fn used(&mut self, namespace: NamespaceId, activity_id: &ActivityId, entity_id: &EntityId) {
-        self.usage
-            .entry((namespace, activity_id.clone()))
-            .or_default()
-            .insert(Usage {
-                activity_id: activity_id.clone(),
-                entity_id: entity_id.clone(),
-            });
+    pub fn used(
+        &mut self,
+        namespace_id: NamespaceId,
+        activity_id: &ActivityId,
+        entity_id: &EntityId,
+    ) {
+        let usage_set = Arc::make_mut(
+            self.usage
+                .entry((namespace_id.clone(), activity_id.clone()))
+                .or_default(),
+        );
+
+        usage_set.insert(Usage {
+            activity_id: activity_id.clone(),
+            entity_id: entity_id.clone(),
+        });
     }
 
     pub fn was_informed_by(
         &mut self,
-        namespace: NamespaceId,
-        activity: &ActivityId,
-        informing_activity: &ActivityId,
+        namespace_id: NamespaceId,
+        activity_id: &ActivityId,
+        informing_activity_id: &ActivityId,
     ) {
-        self.was_informed_by
-            .entry((namespace.clone(), activity.clone()))
-            .or_default()
-            .insert((namespace, informing_activity.clone()));
+        let was_informed_by_set = Arc::make_mut(
+            self.was_informed_by
+                .entry((namespace_id.clone(), activity_id.clone()))
+                .or_default(),
+        );
+
+        was_informed_by_set.insert((namespace_id, informing_activity_id.clone()));
     }
 
     pub fn qualified_attribution(
@@ -767,16 +698,19 @@ impl ProvModel {
         agent_id: &AgentId,
         role: Option<Role>,
     ) {
-        self.attribution
-            .entry((namespace_id.clone(), entity_id.clone()))
-            .or_default()
-            .insert(Attribution {
-                namespace_id: namespace_id.clone(),
-                id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
-                agent_id: agent_id.clone(),
-                entity_id: entity_id.clone(),
-                role,
-            });
+        let attribution_set = Arc::make_mut(
+            self.attribution
+                .entry((namespace_id.clone(), entity_id.clone()))
+                .or_default(),
+        );
+
+        attribution_set.insert(Attribution {
+            namespace_id: namespace_id.clone(),
+            id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
+            agent_id: agent_id.clone(),
+            entity_id: entity_id.clone(),
+            role,
+        });
     }
 
     /// Ensure we have the referenced namespace in our model
@@ -787,9 +721,10 @@ impl ProvModel {
             ns.clone(),
             Namespace {
                 id: ns.clone(),
-                uuid: uuid.to_owned(),
+                uuid: uuid.to_owned().into(),
                 external_id: namespace_name.to_owned(),
-            },
+            }
+            .into(),
         );
     }
 
@@ -798,20 +733,24 @@ impl ProvModel {
     pub fn agent_context(&mut self, ns: &NamespaceId, agent: &AgentId) {
         self.agents
             .entry((ns.clone(), agent.clone()))
-            .or_insert_with(|| Agent::exists(ns.clone(), agent.clone()));
+            .or_insert_with(|| Agent::exists(ns.clone(), agent.clone()).into());
     }
 
     pub fn get_agent(&mut self, ns: &NamespaceId, agent: &AgentId) -> Option<&Agent> {
-        self.agents.get(&(ns.clone(), agent.clone()))
+        self.agents
+            .get(&(ns.clone(), agent.clone()))
+            .map(|arc| arc.as_ref())
     }
-
     pub fn modify_agent<F: FnOnce(&mut Agent) + 'static>(
         &mut self,
         ns: &NamespaceId,
         agent: &AgentId,
         f: F,
     ) {
-        self.agents.entry((ns.clone(), agent.clone())).and_modify(f);
+        if let Some(arc) = self.agents.get_mut(&(ns.clone(), agent.clone())) {
+            let agent: &mut Agent = Arc::make_mut(arc);
+            f(agent);
+        }
     }
 
     /// Ensure we have the referenced entity in our model, so that open world
@@ -819,11 +758,13 @@ impl ProvModel {
     pub fn entity_context(&mut self, ns: &NamespaceId, entity: &EntityId) {
         self.entities
             .entry((ns.clone(), entity.clone()))
-            .or_insert_with(|| Entity::exists(ns.clone(), entity.clone()));
+            .or_insert_with(|| Entity::exists(ns.clone(), entity.clone()).into());
     }
 
     pub fn get_entity(&mut self, ns: &NamespaceId, entity: &EntityId) -> Option<&Entity> {
-        self.entities.get(&(ns.clone(), entity.clone()))
+        self.entities
+            .get(&(ns.clone(), entity.clone()))
+            .map(|arc| arc.as_ref())
     }
 
     pub fn modify_entity<F: FnOnce(&mut Entity) + 'static>(
@@ -832,9 +773,10 @@ impl ProvModel {
         entity: &EntityId,
         f: F,
     ) {
-        self.entities
-            .entry((ns.clone(), entity.clone()))
-            .and_modify(f);
+        if let Some(arc) = self.entities.get_mut(&(ns.clone(), entity.clone())) {
+            let entity: &mut Entity = Arc::make_mut(arc);
+            f(entity);
+        }
     }
 
     /// Ensure we have the referenced activity in our model, so that open world
@@ -842,11 +784,13 @@ impl ProvModel {
     pub fn activity_context(&mut self, ns: &NamespaceId, activity: &ActivityId) {
         self.activities
             .entry((ns.clone(), activity.clone()))
-            .or_insert_with(|| Activity::exists(ns.clone(), activity.clone()));
+            .or_insert_with(|| Activity::exists(ns.clone(), activity.clone()).into());
     }
 
     pub fn get_activity(&mut self, ns: &NamespaceId, activity: &ActivityId) -> Option<&Activity> {
-        self.activities.get(&(ns.clone(), activity.clone()))
+        self.activities
+            .get(&(ns.clone(), activity.clone()))
+            .map(|arc| arc.as_ref())
     }
 
     pub fn modify_activity<F: FnOnce(&mut Activity) + 'static>(
@@ -855,9 +799,10 @@ impl ProvModel {
         activity: &ActivityId,
         f: F,
     ) {
-        self.activities
-            .entry((ns.clone(), activity.clone()))
-            .and_modify(f);
+        if let Some(arc) = self.activities.get_mut(&(ns.clone(), activity.clone())) {
+            let activity: &mut Activity = Arc::make_mut(arc);
+            f(activity);
+        }
     }
 
     /// Transform a sequence of `ChronicleOperation` events into a provenance model,
@@ -937,19 +882,19 @@ impl ProvModel {
                     activity.and_then(|activity| activity.started),
                     activity.and_then(|activity| activity.ended),
                 ) {
-                    (Some(started), _) if started != time => {
+                    (Some(TimeWrapper(started)), _) if started != time.0 => {
                         return Err(Contradiction::start_date_alteration(
                             id.into(),
                             namespace,
                             started,
-                            time,
+                            time.0,
                         ));
                     }
-                    (_, Some(ended)) if ended < time => {
+                    (_, Some(TimeWrapper(ended))) if ended < time.0 => {
                         return Err(Contradiction::invalid_range(
                             id.into(),
                             namespace,
-                            time,
+                            time.0,
                             ended,
                         ));
                     }
@@ -977,20 +922,20 @@ impl ProvModel {
                     activity.and_then(|activity| activity.started),
                     activity.and_then(|activity| activity.ended),
                 ) {
-                    (_, Some(ended)) if ended != time => {
+                    (_, Some(TimeWrapper(ended))) if ended != time.0 => {
                         return Err(Contradiction::end_date_alteration(
                             id.into(),
                             namespace,
                             ended,
-                            time,
+                            time.0,
                         ));
                     }
-                    (Some(started), _) if started > time => {
+                    (Some(TimeWrapper(started)), _) if started > time.0 => {
                         return Err(Contradiction::invalid_range(
                             id.into(),
                             namespace,
                             started,
-                            time,
+                            time.0,
                         ));
                     }
                     _ => {}
@@ -1228,19 +1173,21 @@ impl ProvModel {
 
     pub(crate) fn add_agent(&mut self, agent: Agent) {
         self.agents
-            .insert((agent.namespaceid.clone(), agent.id.clone()), agent);
+            .insert((agent.namespaceid.clone(), agent.id.clone()), agent.into());
     }
 
     pub(crate) fn add_activity(&mut self, activity: Activity) {
         self.activities.insert(
             (activity.namespaceid.clone(), activity.id.clone()),
-            activity,
+            activity.into(),
         );
     }
 
     pub(crate) fn add_entity(&mut self, entity: Entity) {
-        self.entities
-            .insert((entity.namespaceid.clone(), entity.id.clone()), entity);
+        self.entities.insert(
+            (entity.namespaceid.clone(), entity.id.clone()),
+            entity.into(),
+        );
     }
 }
 

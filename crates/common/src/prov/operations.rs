@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use diesel::{
     backend::Backend,
     deserialize::FromSql,
@@ -7,15 +7,15 @@ use diesel::{
     AsExpression, QueryId, SqlType,
 };
 
-use parity_scale_codec::{Encode, Decode, Input, Error};
-use scale_info::{TypeInfo, Type, Path, build::Fields};
+use parity_scale_codec::{Decode, Encode, Error, Input};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 use uuid::Uuid;
 
 use crate::attributes::Attributes;
 
 use super::{
     ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, ExternalId,
-    NamespaceId, Role,
+    NamespaceId, Role, UuidWrapper,
 };
 
 #[derive(
@@ -104,63 +104,24 @@ impl DerivationType {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct CreateNamespace {
     pub id: NamespaceId,
     pub external_id: ExternalId,
-    pub uuid: Uuid,
+    pub uuid: UuidWrapper,
 }
-
-impl Encode for CreateNamespace {
-    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.id.encode_to(dest);
-        self.external_id.encode_to(dest);
-        self.uuid.as_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for CreateNamespace {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
-        let id = NamespaceId::decode(input)?;
-        let external_id = ExternalId::decode(input)?;
-        let uuid_bytes = Vec::<u8>::decode(input)?;
-        let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
-
-        Ok(Self {
-            id,
-            external_id,
-            uuid,
-        })
-    }
-}
-
-impl TypeInfo for CreateNamespace {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("CreateNamespace", "common"))
-            .composite(
-                Fields::named()
-                    .field(|f| f.ty::<NamespaceId>().name("Id").type_name("NamespaceId"))
-                    .field(|f| f.ty::<ExternalId>().name("ExternalId").type_name("ExternalId"))
-                    .field(|f| f.ty::<Vec<u8>>().name("Uuid").type_name("Uuid"))
-            )
-    }
-}
-
 
 impl CreateNamespace {
     pub fn new(id: NamespaceId, external_id: impl AsRef<str>, uuid: Uuid) -> Self {
         Self {
             id,
             external_id: external_id.as_ref().into(),
-            uuid,
+            uuid: uuid.into(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize,  Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct AgentExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
@@ -175,7 +136,7 @@ impl AgentExists {
     }
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct ActsOnBehalfOf {
     pub id: DelegationId,
     pub role: Option<Role>,
@@ -209,114 +170,103 @@ impl ActsOnBehalfOf {
     }
 }
 
-
-
 #[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
 }
 
-#[derive(Serialize, Deserialize,PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TimeWrapper(pub DateTime<Utc>);
+
+impl TimeWrapper {
+    pub fn to_rfc3339(&self) -> String {
+        self.0.to_rfc3339()
+    }
+}
+
+impl std::fmt::Display for TimeWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_rfc3339())
+    }
+}
+
+impl From<DateTime<Utc>> for TimeWrapper {
+    fn from(dt: DateTime<Utc>) -> Self {
+        TimeWrapper(dt)
+    }
+}
+
+impl Encode for TimeWrapper {
+    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
+        let timestamp = self.0.timestamp();
+        let subsec_nanos = self.0.timestamp_subsec_nanos();
+        (timestamp, subsec_nanos).encode_to(dest);
+    }
+}
+
+impl Decode for TimeWrapper {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+        let (timestamp, subsec_nanos) = <(i64, u32)>::decode(input)?;
+
+        let datetime = Utc.from_utc_datetime(
+            &NaiveDateTime::from_timestamp_opt(timestamp, subsec_nanos)
+                .ok_or("Invalid timestamp")?,
+        );
+
+        Ok(Self(datetime))
+    }
+}
+
+impl TypeInfo for TimeWrapper {
+    type Identity = Self;
+
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("TimeWrapper", module_path!()))
+            .composite(
+                Fields::unnamed()
+                    .field(|f| f.ty::<i64>().type_name("Timestamp"))
+                    .field(|f| f.ty::<u32>().type_name("SubsecNanos")),
+            )
+    }
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct StartActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
-    pub time: DateTime<Utc>,
+    pub time: TimeWrapper,
 }
 
-impl Encode for StartActivity {
-    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.namespace.encode_to(dest);
-        self.id.encode_to(dest);
-        self.time.timestamp().encode_to(dest);
-    }
-}
-
-impl Decode for StartActivity {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        let namespace = NamespaceId::decode(input)?;
-        let id = ActivityId::decode(input)?;
-        let time = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(i64::decode(input)?, 0), Utc);
-        Ok(Self { namespace, id, time })
-    }
-}
-
-impl TypeInfo for StartActivity {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("StartActivity", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| f.ty::<NamespaceId>().name("Namespace").type_name("NamespaceId"))
-                    .field(|f| f.ty::<ActivityId>().name("Id").type_name("ActivityId"))
-                    .field(|f| f.ty::<Option<i64>>().name("Time"))
-            )
-    }
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct EndActivity {
     pub namespace: NamespaceId,
     pub id: ActivityId,
-    pub time: DateTime<Utc>,
+    pub time: TimeWrapper,
 }
 
-impl Encode for EndActivity {
-    fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.namespace.encode_to(dest);
-        self.id.encode_to(dest);
-        self.time.timestamp().encode_to(dest);
-    }
-}
-
-impl Decode for EndActivity {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        let namespace = NamespaceId::decode(input)?;
-        let id = ActivityId::decode(input)?;
-        let time = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(i64::decode(input)?, 0), Utc);
-        Ok(Self { namespace, id, time })
-    }
-}
-
-impl TypeInfo for EndActivity {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("EndActivity", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| f.ty::<NamespaceId>().name("Namespace").type_name("NamespaceId"))
-                    .field(|f| f.ty::<ActivityId>().name("Id").type_name("ActivityId"))
-                    .field(|f| f.ty::<Option<i64>>().name("Time"))
-            )
-    }
-}
-
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityUses {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct EntityExists {
     pub namespace: NamespaceId,
     pub external_id: ExternalId,
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct WasGeneratedBy {
     pub namespace: NamespaceId,
     pub id: EntityId,
     pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct EntityDerive {
     pub namespace: NamespaceId,
     pub id: EntityId,
@@ -325,7 +275,7 @@ pub struct EntityDerive {
     pub typ: DerivationType,
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct WasAssociatedWith {
     pub id: AssociationId,
     pub role: Option<Role>,
@@ -351,7 +301,7 @@ impl WasAssociatedWith {
     }
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct WasAttributedTo {
     pub id: AttributionId,
     pub role: Option<Role>,
@@ -377,14 +327,14 @@ impl WasAttributedTo {
     }
 }
 
-#[derive(Serialize, Deserialize,Encode, Decode, TypeInfo,  PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub struct WasInformedBy {
     pub namespace: NamespaceId,
     pub activity: ActivityId,
     pub informing_activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize,Encode,Decode,TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
 pub enum SetAttributes {
     Entity {
         namespace: NamespaceId,

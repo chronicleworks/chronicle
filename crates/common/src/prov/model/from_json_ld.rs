@@ -218,7 +218,7 @@ impl ProvModel {
                                     typ.clone(),
                                     Attribute {
                                         typ: typ.clone(),
-                                        value: value.clone(),
+                                        value: value.clone().into(),
                                     },
                                 )
                             })
@@ -426,11 +426,11 @@ impl ProvModel {
         let mut activity = Activity::exists(namespaceid.clone(), id).has_attributes(attributes);
 
         if let Some(started) = started {
-            activity.started = Some(DateTime::<Utc>::from(started?));
+            activity.started = Some(DateTime::<Utc>::from(started?).into());
         }
 
         if let Some(ended) = ended {
-            activity.ended = Some(DateTime::<Utc>::from(ended?));
+            activity.ended = Some(DateTime::<Utc>::from(ended?).into());
         }
 
         for entity in used {
@@ -648,7 +648,10 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
                 if let serde_json::Value::Object(object) = serde_object {
                     Ok(object
                         .into_iter()
-                        .map(|(typ, value)| Attribute { typ, value })
+                        .map(|(typ, value)| Attribute {
+                            typ,
+                            value: value.into(),
+                        })
                         .collect::<Vec<_>>())
                 } else {
                     Err(ProcessorError::NotAnObject {})
@@ -726,7 +729,7 @@ impl ChronicleOperation {
                 Ok(ChronicleOperation::CreateNamespace(CreateNamespace {
                     id: namespace,
                     external_id,
-                    uuid,
+                    uuid: uuid.into(),
                 }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::AgentExists)) {
                 let namespace = o.namespace();
@@ -766,7 +769,7 @@ impl ChronicleOperation {
                 Ok(ChronicleOperation::StartActivity(StartActivity {
                     namespace,
                     id,
-                    time,
+                    time: time.into(),
                 }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::EndActivity)) {
                 let namespace = o.namespace();
@@ -775,7 +778,7 @@ impl ChronicleOperation {
                 Ok(ChronicleOperation::EndActivity(EndActivity {
                     namespace,
                     id,
-                    time,
+                    time: time.into(),
                 }))
             } else if o.has_type(&id_from_iri(&ChronicleOperations::ActivityUses)) {
                 let namespace = o.namespace();

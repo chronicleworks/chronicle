@@ -1,6 +1,8 @@
 use derivative::Derivative;
 
 use opa_tp_protocol::async_stl_client::{error::SawtoothCommunicationError, ledger::BlockId};
+use parity_scale_codec::MaxEncodedLen;
+use scale_info::TypeInfo;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -8,10 +10,9 @@ use crate::{
     prov::{
         operations::{
             ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-            CreateNamespace, EndActivity, EntityDerive, EntityExists, SetAttributes,
-            StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
+            CreateNamespace, EndActivity, EntityDerive, EntityExists, SetAttributes, StartActivity,
+            WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
         },
-        to_json_ld::ToJson,
         ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
         NamespaceId, ParseIriError, ProcessorError, ProvModel,
     },
@@ -179,11 +180,27 @@ impl SubmissionStage {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord)]
+#[derive(
+    parity_scale_codec::Encode,
+    parity_scale_codec::Decode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    Clone,
+)]
 pub struct LedgerAddress {
     // Namespaces do not have a namespace
     namespace: Option<NamespaceId>,
     resource: ChronicleIri,
+}
+
+impl MaxEncodedLen for LedgerAddress {
+    fn max_encoded_len() -> usize {
+        2048usize
+    }
 }
 
 impl Display for LedgerAddress {
@@ -243,103 +260,208 @@ impl LedgerAddress {
     }
 }
 
+// Split a ProvModel into a snapshot list of its components - Namespaces, Entities, Activities and Agents
+pub trait ProvSnapshot {
+    fn to_snapshot(&self) -> Vec<((Option<NamespaceId>, ChronicleIri), ProvModel)>;
+}
+
+impl ProvSnapshot for ProvModel {
+    fn to_snapshot(&self) -> Vec<((Option<NamespaceId>, ChronicleIri), ProvModel)> {
+        let mut snapshot = Vec::new();
+
+        for (namespace_id, namespace) in &self.namespaces {
+            snapshot.push((
+                (None, namespace_id.clone().into()),
+                ProvModel {
+                    namespaces: vec![(namespace_id.clone(), namespace.clone())]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                },
+            ));
+        }
+
+        for ((ns, agent_id), agent) in &self.agents {
+            let mut delegation = BTreeMap::new();
+            if let Some(delegation_set) = self.delegation.get(&(ns.clone(), agent_id.clone())) {
+                delegation.insert((ns.clone(), agent_id.clone()), delegation_set.clone());
+            }
+            let mut acted_on_behalf_of = BTreeMap::new();
+            if let Some(acted_on_behalf_of_set) =
+                self.acted_on_behalf_of.get(&(ns.clone(), agent_id.clone()))
+            {
+                acted_on_behalf_of.insert(
+                    (ns.clone(), agent_id.clone()),
+                    acted_on_behalf_of_set.clone(),
+                );
+            }
+            snapshot.push((
+                (Some(ns.clone()), agent_id.clone().into()),
+                ProvModel {
+                    agents: vec![((ns.clone(), agent_id.clone()), agent.clone())]
+                        .into_iter()
+                        .collect(),
+                    delegation,
+                    acted_on_behalf_of,
+                    ..Default::default()
+                },
+            ));
+        }
+
+        for ((ns, activity_id), activity) in &self.activities {
+            let mut was_informed_by = BTreeMap::new();
+            if let Some(was_informed_by_set) =
+                self.was_informed_by.get(&(ns.clone(), activity_id.clone()))
+            {
+                was_informed_by.insert(
+                    (ns.clone(), activity_id.clone()),
+                    was_informed_by_set.clone(),
+                );
+            }
+            let mut generated = BTreeMap::new();
+            if let Some(generated_set) = self.generated.get(&(ns.clone(), activity_id.clone())) {
+                generated.insert((ns.clone(), activity_id.clone()), generated_set.clone());
+            }
+            let mut usage = BTreeMap::new();
+            if let Some(usage_set) = self.usage.get(&(ns.clone(), activity_id.clone())) {
+                usage.insert((ns.clone(), activity_id.clone()), usage_set.clone());
+            }
+            let mut association = BTreeMap::new();
+            if let Some(association_set) = self.association.get(&(ns.clone(), activity_id.clone()))
+            {
+                association.insert((ns.clone(), activity_id.clone()), association_set.clone());
+            }
+
+            snapshot.push((
+                (Some(ns.clone()), activity_id.clone().into()),
+                ProvModel {
+                    activities: vec![((ns.clone(), activity_id.clone()), activity.clone())]
+                        .into_iter()
+                        .collect(),
+                    was_informed_by,
+                    usage,
+                    generated,
+                    association,
+                    ..Default::default()
+                },
+            ));
+        }
+
+        for ((ns, entity_id), entity) in &self.entities {
+            let mut derivation = BTreeMap::new();
+            if let Some(derivation_set) = self.derivation.get(&(ns.clone(), entity_id.clone())) {
+                derivation.insert((ns.clone(), entity_id.clone()), derivation_set.clone());
+            }
+            let mut generation = BTreeMap::new();
+            if let Some(generation_set) = self.generation.get(&(ns.clone(), entity_id.clone())) {
+                generation.insert((ns.clone(), entity_id.clone()), generation_set.clone());
+            }
+            let mut attribution = BTreeMap::new();
+            if let Some(attribution_set) = self.attribution.get(&(ns.clone(), entity_id.clone())) {
+                attribution.insert((ns.clone(), entity_id.clone()), attribution_set.clone());
+            }
+            snapshot.push((
+                (Some(ns.clone()), entity_id.clone().into()),
+                ProvModel {
+                    entities: vec![((ns.clone(), entity_id.clone()), entity.clone())]
+                        .into_iter()
+                        .collect(),
+                    derivation,
+                    generation,
+                    attribution,
+                    ..Default::default()
+                },
+            ));
+        }
+
+        snapshot
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StateInput {
-    data: String,
+    data: ProvModel,
 }
 
 impl StateInput {
-    pub fn new(data: String) -> Self {
+    pub fn new(data: ProvModel) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &[u8] {
-        self.data.as_bytes()
+    pub fn data(&self) -> &ProvModel {
+        &self.data
     }
 }
 
 #[derive(Debug)]
-pub struct StateOutput<T> {
-    pub address: T,
-    pub data: String,
+pub struct StateOutput {
+    pub address: LedgerAddress,
+    pub data: ProvModel,
 }
 
-impl<T> StateOutput<T> {
-    pub fn new(address: T, data: impl ToString) -> Self {
-        Self {
-            address,
-            data: data.to_string(),
-        }
+impl StateOutput {
+    pub fn new(address: LedgerAddress, data: ProvModel) -> Self {
+        Self { address, data }
     }
 
-    pub fn address(&self) -> &T {
+    pub fn address(&self) -> &LedgerAddress {
         &self.address
     }
 
-    pub fn data(&self) -> &[u8] {
-        self.data.as_bytes()
-    }
-}
-
-impl<T> From<StateOutput<T>> for (T, String) {
-    fn from(output: StateOutput<T>) -> (T, String) {
-        (output.address, output.data)
+    pub fn data(&self) -> &ProvModel {
+        &self.data
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Version {
     pub(crate) version: u32,
-    pub(crate) value: Option<String>,
+    pub(crate) value: Option<ProvModel>,
 }
 
 impl Version {
-    pub fn write(&mut self, value: Option<String>) {
+    pub fn write(&mut self, value: Option<ProvModel>) {
         if value != self.value {
             self.version += 1;
-            self.value = value;
+            self.value = value
         }
     }
 }
 
 /// Hold a cache of `LedgerWriter::submit` input and output address data
-pub struct OperationState<T>
-where
-    T: Ord,
-{
-    state: BTreeMap<T, Version>,
+pub struct OperationState {
+    state: BTreeMap<LedgerAddress, Version>,
 }
 
-impl<T> Default for OperationState<T>
-where
-    T: Ord,
-{
+impl Default for OperationState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> OperationState<T>
-where
-    T: Ord,
-{
+impl OperationState {
     pub fn new() -> Self {
         Self {
             state: BTreeMap::new(),
         }
     }
 
+    pub fn update_state_from_output(&mut self, output: impl Iterator<Item = StateOutput>) {
+        self.update_state(output.map(|output| (output.address, Some(output.data))))
+    }
     /// Load input values into `OperationState`
-    pub fn update_state(&mut self, input: impl Iterator<Item = (T, Option<String>)>) {
-        for (address, value) in input {
-            self.state
-                .entry(address)
-                .or_insert_with(|| Version {
-                    version: 0,
-                    value: value.clone(),
-                })
-                .write(value);
-        }
+    pub fn update_state(
+        &mut self,
+        input: impl Iterator<Item = (LedgerAddress, Option<ProvModel>)>,
+    ) {
+        input.for_each(|(address, value)| {
+            let entry = self.state.entry(address);
+            if let std::collections::btree_map::Entry::Vacant(e) = entry {
+                e.insert(Version { version: 0, value });
+            } else if let std::collections::btree_map::Entry::Occupied(mut e) = entry {
+                e.get_mut().write(value);
+            }
+        });
     }
 
     /// Return the input data held in `OperationState`
@@ -354,7 +476,7 @@ where
 
     /// Check if the data associated with an address has changed in processing
     /// while outputting a stream of dirty `StateOutput`s
-    pub fn dirty(self) -> impl Iterator<Item = StateOutput<T>> {
+    pub fn dirty(self) -> impl Iterator<Item = StateOutput> {
         self.state
             .into_iter()
             .filter_map(|(addr, data)| {
@@ -369,7 +491,7 @@ where
     }
 
     /// Return the input data held in `OperationState` for `addresses` as a vector of `StateInput`s
-    pub fn opa_context(&self, addresses: HashSet<T>) -> Vec<StateInput> {
+    pub fn opa_context(&self, addresses: HashSet<LedgerAddress>) -> Vec<StateInput> {
         self.state
             .iter()
             .filter(|(addr, _data)| addresses.iter().any(|a| &a == addr))
@@ -548,139 +670,33 @@ impl ChronicleOperation {
     }
 
     /// Apply an operation's input states to the prov model
-    pub async fn dependencies_graph(
-        &self,
-        model: &mut ProvModel,
-        input: Vec<StateInput>,
-    ) -> Result<serde_json::Value, ProcessorError> {
-        for input in input {
-            let graph: serde_json::Value = serde_json::from_str(&input.data)?;
-            trace!(input_model=%serde_json::to_string_pretty(&graph).map_or_else(|e| format!("error: {e}"), |x| x));
-            let resource = serde_json::json!({
-                "@graph": [graph],
-            });
-            model.apply_json_ld(resource).await?;
-        }
-
-        model.apply(self)?;
-        let mut json_ld = model.to_json().compact_stable_order().await?;
-
-        json_ld
-            .as_object_mut()
-            .map(|graph| graph.remove("@context"));
-        Ok(json_ld)
-    }
-
     /// Take input states and apply them to the prov model, then apply transaction,
-    /// then transform to the compact representation and write each resource to the output state,
+    /// then return a snapshot of output state for diff calculation
     #[instrument(level = "debug", skip(self, model, input))]
-    pub async fn process(
+    pub fn process(
         &self,
         mut model: ProvModel,
         input: Vec<StateInput>,
-    ) -> Result<(Vec<StateOutput<LedgerAddress>>, ProvModel), ProcessorError> {
-        let json_ld = self.dependencies_graph(&mut model, input).await?;
+    ) -> Result<(Vec<StateOutput>, ProvModel), ProcessorError> {
+        for input in input.iter() {
+            model.combine(input.data())
+        }
+        model.apply(self)?;
         Ok((
-            if let Some(graph) = json_ld.get("@graph").and_then(|g| g.as_array()) {
-                // Separate graph into discrete outputs
-                graph
-                    .iter()
-                    .map(|resource| {
-                        Ok(StateOutput {
-                            address: LedgerAddress::from_ld(
-                                resource
-                                    .get("namespace")
-                                    .and_then(|resource| resource.as_str()),
-                                resource
-                                    .get("@id")
-                                    .and_then(|id| id.as_str())
-                                    .ok_or(ProcessorError::NotANode(resource.clone()))?,
-                            )?,
-                            data: serde_json::to_string(resource).unwrap(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, ProcessorError>>()?
-            } else {
-                vec![StateOutput {
-                    address: LedgerAddress::from_ld(
-                        json_ld
-                            .get("namespace")
-                            .and_then(|resource| resource.as_str()),
-                        json_ld
-                            .get("@id")
-                            .and_then(|id| id.as_str())
-                            .ok_or(ProcessorError::NotANode(json_ld.clone()))?,
-                    )?,
-                    data: serde_json::to_string(&json_ld).unwrap(),
-                }]
-            },
+            model
+                .to_snapshot()
+                .into_iter()
+                .map(|((namespace, resource), prov)| {
+                    StateOutput::new(
+                        LedgerAddress {
+                            namespace,
+                            resource,
+                        },
+                        prov,
+                    )
+                })
+                .collect::<Vec<_>>(),
             model,
         ))
-    }
-
-    /// Apply the list of operation dependencies to the prov model and transform to the compact representation,
-    /// then transform the model's @graph to a list of dependency objects with the @id as the key.
-    #[instrument(level = "debug", skip(self, model, deps))]
-    pub async fn opa_context_state(
-        &self,
-        mut model: ProvModel,
-        deps: Vec<StateInput>,
-    ) -> Result<Vec<serde_json::Value>, ProcessorError> {
-        if deps.is_empty() {
-            // No @graph to process in this case
-            Ok(vec![serde_json::Value::default()])
-        } else {
-            let mut json_ld = self.dependencies_graph(&mut model, deps).await?;
-            Ok(
-                if let Some(graph) = json_ld.get_mut("@graph").and_then(|g| g.as_array_mut()) {
-                    graph
-                        .iter_mut()
-                        .map(transform_context_graph_object)
-                        .collect::<Result<Vec<_>, ProcessorError>>()?
-                } else {
-                    vec![transform_context_graph_object(&mut json_ld)?]
-                },
-            )
-        }
-    }
-}
-
-fn transform_context_graph_object(
-    value: &mut serde_json::Value,
-) -> Result<serde_json::Value, ProcessorError> {
-    Ok(serde_json::json!({
-        value
-            .as_object_mut()
-            .and_then(|o| o.remove("@id"))
-            .as_ref()
-            .and_then(|v| v.as_str())
-            .ok_or(ProcessorError::NotANode(value.clone()))?: value
-    }))
-}
-
-/// Ensure ledgerwriter only writes dirty values back
-#[cfg(test)]
-pub mod test {
-
-    #[test]
-    fn test_transform_context_graph_object() {
-        let mut graph_object = serde_json::json!(
-            {
-                "@id": "http://example.org/library",
-                "@type": "ex:Library",
-                "ex:contains": "http://example.org/library/the-republic"
-            }
-        );
-
-        insta::assert_json_snapshot!(
-            super::transform_context_graph_object(&mut graph_object).unwrap(),
-            @r###"
-        {
-          "http://example.org/library": {
-            "@type": "ex:Library",
-            "ex:contains": "http://example.org/library/the-republic"
-          }
-        }
-        "###);
     }
 }

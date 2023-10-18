@@ -1259,8 +1259,10 @@ dependencies = [
  "k256 0.11.6",
  "lazy_static",
  "locspan",
+ "macro-attr-2018",
  "mime",
  "mockito",
+ "newtype-derive-2018",
  "opa",
  "opa-tp-protocol",
  "openssl",
@@ -2490,10 +2492,13 @@ dependencies = [
 name = "frame-chronicle"
 version = "0.7.5"
 dependencies = [
+ "chronicle-telemetry",
  "common",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "macro-attr-2018",
+ "newtype-derive-2018",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -2501,6 +2506,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "tracing",
+ "uuid 1.4.1",
 ]
 
 [[package]]
@@ -2794,6 +2800,12 @@ dependencies = [
  "version_check",
  "zeroize",
 ]
+
+[[package]]
+name = "generics"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf88d375dffa56ba9e04298c989d0145b8fe216d2a44484b3f6294ab93381a2"
 
 [[package]]
 name = "getrandom"
@@ -3953,6 +3965,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro-attr-2018"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe791c238364878e7c86d00b9237f7b6a309c75243beb6eab8132c396d2da37"
+
+[[package]]
 name = "macro_magic"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4305,6 +4323,15 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "newtype-derive-2018"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "742e162dd2b575e1870f918cb1032962aca5ea2dfb6a6988ce1455e74a0f8e83"
+dependencies = [
+ "generics",
 ]
 
 [[package]]

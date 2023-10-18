@@ -15,11 +15,15 @@ frame-support = {workspace = true}
 frame-system = {workspace = true}
 frame-benchmarking  = {workspace = true}
 tracing = {workspace=true}
+newtype-derive-2018 = {workspace=true}
+macro-attr-2018 = {workspace=true}
 
 [dev-dependencies]
 sp-runtime = {workspace = true}
 sp-io = {workspace = true}
 sp-core = {workspace = true}
+uuid = {workspace = true}
+chronicle-telemetry = {path="../chronicle-telemetry"}
 
 [features]
 default = ["std"]

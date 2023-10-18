@@ -1,67 +1,102 @@
-use std::collections::BTreeMap;
-use parity_scale_codec:: {Encode,Decode};
-use scale_info::{TypeInfo, Type, Path, build::Fields};
+use parity_scale_codec::{Decode, Encode};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::prov::DomaintypeId;
 
-#[derive(Debug, Clone,  Serialize, Deserialize, PartialEq, Eq)]
-pub struct Attribute {
-    pub typ: String,
-    pub value: Value,
-}
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct SerdeWrapper(pub Value);
 
-
-impl TypeInfo for Attribute {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("Attribute", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| f.ty::<String>().name("Type").type_name("String"))
-                    .field(|f| f.ty::<String>().name("Value").type_name("String"))
-            )
-    }
-}
-
-
-
-
-
-
-impl Encode for Attribute {
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
-        self.typ.encode_to(dest);
-        self.value.to_string().encode_to(dest);
-    }
-
-    fn size_hint(&self) -> usize {
-        self.typ.size_hint() + self.value.to_string().size_hint()
-    }
-}
-
-impl Decode for Attribute {
-    fn decode<I: parity_scale_codec::Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
-        let typ = String::decode(input)?;
-        let value_str = String::decode(input)?;
-        let value = serde_json::from_str(&value_str).map_err(|_| parity_scale_codec::Error::from("Failed to decode Value"))?;
-        Ok(Self { typ, value })
-    }
-}
-
-
-impl Attribute {
-    pub fn new(typ: impl AsRef<str>, value: Value) -> Self {
-        Self {
-            typ: typ.as_ref().to_owned(),
-            value,
+impl std::fmt::Display for SerdeWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(&self.0) {
+            Ok(json_string) => write!(f, "{}", json_string),
+            Err(e) => {
+                tracing::error!("Failed to serialize Value to JSON string: {}", e);
+                Err(std::fmt::Error)
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Default)]
+impl Encode for SerdeWrapper {
+    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+        let json_string =
+            serde_json::to_string(&self.0).expect("Failed to serialize Value to JSON string");
+        json_string.encode_to(dest);
+    }
+}
+
+impl From<Value> for SerdeWrapper {
+    fn from(value: Value) -> Self {
+        SerdeWrapper(value)
+    }
+}
+
+impl From<SerdeWrapper> for Value {
+    fn from(wrapper: SerdeWrapper) -> Self {
+        wrapper.0
+    }
+}
+
+impl Decode for SerdeWrapper {
+    fn decode<I: parity_scale_codec::Input>(
+        input: &mut I,
+    ) -> Result<Self, parity_scale_codec::Error> {
+        let json_string = String::decode(input)?;
+        let value = serde_json::from_str(&json_string).map_err(|_| {
+            parity_scale_codec::Error::from("Failed to deserialize JSON string to Value")
+        })?;
+        Ok(SerdeWrapper(value))
+    }
+}
+
+impl TypeInfo for SerdeWrapper {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("SerdeWrapper", module_path!()))
+            .composite(Fields::unnamed().field(|f| f.ty::<String>().type_name("Json")))
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Attribute {
+    pub typ: String,
+    pub value: SerdeWrapper,
+}
+
+impl std::fmt::Display for Attribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Type: {}, Value: {}",
+            self.typ,
+            serde_json::to_string(&self.value.0).unwrap_or_else(|_| String::from("Invalid Value"))
+        )
+    }
+}
+
+impl Attribute {
+    pub fn get_type(&self) -> &String {
+        &self.typ
+    }
+
+    pub fn get_value(&self) -> &Value {
+        &self.value.0
+    }
+    pub fn new(typ: impl AsRef<str>, value: Value) -> Self {
+        Self {
+            typ: typ.as_ref().to_owned(),
+            value: value.into(),
+        }
+    }
+}
+
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Default,
+)]
 pub struct Attributes {
     pub typ: Option<DomaintypeId>,
     pub attributes: BTreeMap<String, Attribute>,

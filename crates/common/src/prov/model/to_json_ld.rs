@@ -87,7 +87,7 @@ impl ToJson for ProvModel {
         }
 
         for (_, associations) in self.association.iter() {
-            for association in associations {
+            for association in (*associations).iter() {
                 if let Value::Object(mut associationdoc) = json!({
                     "@id": association.id.de_compact(),
                     "@type": [Iri::from(Prov::Association).as_str()],
@@ -134,7 +134,7 @@ impl ToJson for ProvModel {
         }
 
         for (_, attributions) in self.attribution.iter() {
-            for attribution in attributions {
+            for attribution in (*attributions).iter() {
                 if let Value::Object(mut attribution_doc) = json!({
                     "@id": attribution.id.de_compact(),
                     "@type": [Iri::from(Prov::Attribution).as_str()],
@@ -181,7 +181,7 @@ impl ToJson for ProvModel {
         }
 
         for (_, delegations) in self.delegation.iter() {
-            for delegation in delegations {
+            for delegation in (*delegations).iter() {
                 if let Value::Object(mut delegationdoc) = json!({
                     "@id": delegation.id.de_compact(),
                     "@type": [Iri::from(Prov::Delegation).as_str()],
@@ -317,7 +317,7 @@ impl ToJson for ProvModel {
                 {
                     let mut values = Vec::new();
 
-                    for (_, activity) in activities {
+                    for (_, activity) in (*activities).iter() {
                         values.push(json!({
                             "@id": Value::String(activity.de_compact()),
                         }));
@@ -456,7 +456,7 @@ impl ProvModel {
         let mut attribute_node = serde_json::Map::new();
 
         for attribute in attributes {
-            attribute_node.insert(attribute.typ.clone(), attribute.value.clone());
+            attribute_node.insert(attribute.typ.clone(), attribute.value.0.clone());
         }
 
         doc.insert(
@@ -1031,7 +1031,7 @@ impl Operate for Value {
         if let Value::Object(map) = self {
             let mut attribute_node = serde_json::Map::new();
             for attribute in attributes.attributes.values() {
-                attribute_node.insert(attribute.typ.clone(), attribute.value.clone());
+                attribute_node.insert(attribute.typ.clone(), attribute.value.0.clone());
             }
             map.insert(
                 iref::Iri::from(ChronicleOperations::Attributes).to_string(),

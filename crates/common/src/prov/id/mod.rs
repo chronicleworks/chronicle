@@ -681,57 +681,57 @@ impl From<&DomaintypeId> for IriRefBuf {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
-pub struct NamespaceId {
-    external_id: ExternalId,
-    uuid: Uuid,
-}
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+pub struct UuidWrapper(Uuid);
 
-impl TypeInfo for NamespaceId {
-    type Identity = Self;
-
-    fn type_info() -> Type {
-        Type::builder()
-            .path(Path::new("NamespaceId", module_path!()))
-            .composite(
-                Fields::named()
-                    .field(|f| {
-                        f.ty::<ExternalId>()
-                            .name("ExtenalId")
-                            .type_name("ExternalId")
-                    })
-                    .field(|f| f.ty::<Vec<u8>>().name("Uuid").type_name("Uuid")),
-            )
+impl From<Uuid> for UuidWrapper {
+    fn from(uuid: Uuid) -> Self {
+        Self(uuid)
     }
 }
 
-impl Encode for NamespaceId {
+impl Encode for UuidWrapper {
     fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-        self.external_id.encode_to(dest);
-        self.uuid.as_bytes().encode_to(dest);
-    }
-
-    fn size_hint(&self) -> usize {
-        self.external_id.size_hint() + 32
-    }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut r = Vec::with_capacity(self.size_hint());
-        self.encode_to(&mut r);
-        r
+        self.0.as_bytes().encode_to(dest);
     }
 }
 
-impl Decode for NamespaceId {
+impl Decode for UuidWrapper {
     fn decode<I: parity_scale_codec::Input>(
         input: &mut I,
     ) -> Result<Self, parity_scale_codec::Error> {
-        let external_id = ExternalId::decode(input)?;
-        let uuid_bytes = Vec::<u8>::decode(input)?;
+        let uuid_bytes = <[u8; 16]>::decode(input)?;
         let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
-
-        Ok(Self { external_id, uuid })
+        Ok(Self(uuid))
     }
+}
+
+impl TypeInfo for UuidWrapper {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("UuidWrapper", module_path!()))
+            .composite(Fields::unnamed().field(|f| f.ty::<[u8; 16]>().type_name("Uuid")))
+    }
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Decode,
+    Encode,
+    TypeInfo,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+)]
+pub struct NamespaceId {
+    external_id: ExternalId,
+    uuid: UuidWrapper,
 }
 
 impl Display for NamespaceId {
@@ -744,7 +744,7 @@ impl NamespaceId {
     pub fn from_external_id(external_id: impl AsRef<str>, uuid: Uuid) -> Self {
         Self {
             external_id: external_id.as_ref().into(),
-            uuid,
+            uuid: uuid.into(),
         }
     }
 }
@@ -757,7 +757,7 @@ impl ExternalIdPart for NamespaceId {
 
 impl UuidPart for NamespaceId {
     fn uuid_part(&self) -> &Uuid {
-        &self.uuid
+        &self.uuid.0
     }
 }
 
@@ -772,7 +772,7 @@ impl<'a> TryFrom<Iri<'a>> for NamespaceId {
         match fragment_components(value).as_slice() {
             [_, external_id, uuid] => Ok(Self {
                 external_id: ExternalId::from(external_id.as_str()),
-                uuid: Uuid::parse_str(uuid.as_str())?,
+                uuid: Uuid::parse_str(uuid.as_str())?.into(),
             }),
 
             _ => Err(ParseIriError::UnparsableIri { iri: value.into() }),
@@ -782,7 +782,7 @@ impl<'a> TryFrom<Iri<'a>> for NamespaceId {
 
 impl From<&NamespaceId> for IriRefBuf {
     fn from(val: &NamespaceId) -> Self {
-        Chronicle::namespace(&val.external_id, &val.uuid).into()
+        Chronicle::namespace(&val.external_id, &val.uuid.0).into()
     }
 }
 

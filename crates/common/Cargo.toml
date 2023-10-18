@@ -42,7 +42,8 @@ prost = "0.10.0"
 frame-support = {workspace=true}
 scale-info = {workspace=true}
 parity-scale-codec = {workspace = true}
-
+newtype-derive-2018 = {workspace=true}
+macro-attr-2018 = {workspace=true}
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
