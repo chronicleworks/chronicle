@@ -5,12 +5,12 @@ A tool for recording and querying provenance data stored on distributed ledgers.
 ## Getting Started
 
 We recommend you start by exploring the Chronicle examples repo, and trying
-to build and experiment with one of the runnable application domains there: <https://github.com/btpworks/chronicle-examples>
+to build and experiment with one of the runnable application domains there: <https://github.com/chronicleworks/chronicle-examples>
 
 ## Documentation
 
-- Examples: <https://examples.btp.works/>
-- Chronicle: <https://docs.btp.works/chronicle/>
+- Examples: <https://examples.chronicle.works/>
+- Chronicle: <https://docs.chronicle.works/>
 
 ## Provenance
 

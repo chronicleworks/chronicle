@@ -1,10 +1,16 @@
-site_name: chronicle
-site_author: BTP
+---
+site_name: Chronicle
+site_author: Chronicle Team
+docs_dir: docs
 theme:
   name: material
   palette:
-    scheme: default
-copyright: Copyright &copy; 2022-23 Blockchain Technology Partners
+    scheme: Chronicle
+  logo: assets/logos/logo.png
+  favicon: assets/logos/favicon.png
+  features:
+    - content.code.copy
+copyright: Copyright &copy; 2023 The Chronicle Authors | Documentation distributed under CC BY 4.0
 strict: false
 markdown_extensions:
   - pymdownx.highlight:
@@ -54,3 +60,5 @@ nav:
       - Authorization checking: oidc-opa-flow.md
       - Importing data: importing.md
   - Upgrading: upgrading.md
+  - Cookbooks:
+      - SUSE Rancher: rancher.md
