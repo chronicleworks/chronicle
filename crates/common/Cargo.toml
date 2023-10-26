@@ -7,60 +7,45 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { workspace = true }
-async-graphql = { workspace = true, features = [
+anyhow = { version="1", default-features=false}
+async-graphql = { version="5.0.9", features = [
   "opentelemetry",
   "chrono",
   "unblock",
   "default",
-  "uuid",
-] }
+  "uuid"], optional=true }
+sp-std= {version="11.0.0", optional=true}
 async-trait = { workspace = true }
-chronicle-signing = { workspace = true }
-chrono = { workspace = true }
-custom_error = { workspace = true }
-derivative = { workspace = true }
-diesel = { workspace = true }
-futures = { workspace = true }
-glob = { workspace = true }
-hashbrown = { workspace = true }
-hex = { workspace = true }
-iref = { workspace = true }
-iref-enum = { workspace = true }
-json-ld = { workspace = true }
-json-syntax = { workspace = true }
-k256 = { workspace = true }
-lazy_static = { workspace = true }
-locspan = { workspace = true }
-mime = { workspace = true }
-opa = { workspace = true }
-opa-tp-protocol = { path = "../opa-tp-protocol" }
-openssl = { workspace = true }
-percent-encoding = { workspace = true }
-pkcs8 = { workspace = true }
-prost = "0.10.0"
-frame-support = {workspace=true}
-scale-info = {workspace=true}
-parity-scale-codec = {workspace = true}
+chrono = { version="0.4", default-features=false,features=["serde","alloc"] }
+diesel = { version="2.0.0-rc.0",features = [
+  "postgres",
+  "uuid",
+  "chrono",
+  "r2d2",
+], optional=true}
+iref= {version="2.2", optional = true}
+futures = { version="0.3", default-features=false}
+hex = { version="0.4", default-features=false, features=["alloc"]}
+rdf-types={ version="0.14", optional=true}
+json-ld = { version="0.14", optional=true}
+hashbrown = {version="0.13", optional=true}
+json-syntax = { version="0.9", features=["serde","serde_json"], optional = true }
+k256 = { version="0.11.3",default-features=false,features=["ecdsa","pkcs8"] }
+lazy_static = { version="1.4" }
+locspan = { version="0.7", optional=true}
+mime = { version="0.3", optional=true }
+scale-info = {version="2.10.0", default-features=false, features=["derive"]}
+parity-scale-codec = {version = "3.6.5", default-features=false,features=["derive","max-encoded-len"]}
 newtype-derive-2018 = {workspace=true}
 macro-attr-2018 = {workspace=true}
-r2d2 = { workspace = true }
-rand = { workspace = true }
-rand_core = { workspace = true }
-rdf-types = { workspace = true }
-reqwest = { workspace = true }
-rust-embed = { workspace = true }
-serde = { workspace = true }
-serde_derive = { workspace = true }
-serde_json = { workspace = true }
-static-iref = { workspace = true }
-testcontainers = { workspace = true }
+serde = { version="1.0", default-features=false }
+serde_derive = { version="1.0",default-features=false }
+serde_json = { version="1.0", default-features=false }
+iri-string = {version="0.7",default-features=false, features=["alloc"]}
 thiserror = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
-url = { workspace = true }
-uuid = { workspace = true }
-zmq = { workspace = true }
+thiserror-no-std = {version="2.0.2" }
+tracing = { version="0.1.40", default-features=false, features=["attributes"]}
+uuid = {version="1.5.0", default-features=false, features=["serde"]}
 
 [build-dependencies]
 glob        = { workspace = true }
@@ -68,15 +53,20 @@ lazy_static = { workspace = true }
 serde_json  = { workspace = true }
 
 [dev-dependencies]
+tokio={workspace=true}
+testcontainers = { workspace = true }
 criterion    = { workspace = true }
 insta        = { workspace = true, features = ["json"] }
 mockito      = { workspace = true }
 proptest     = { workspace = true }
 tempfile     = { workspace = true }
 
-[[bench]]
-harness = false
-name    = "opa_executor"
-
 [features]
-strict = []
+std = ["k256/std","tracing/std","serde/std","serde_json/std","hex/std","futures/std","iri-string/std","chrono/std","anyhow/std"]
+default = ["std","graphql-bindings","diesel-bindings","json-ld"]
+# Enable parity support, annoyingly lazy_static has a non standard way of enabling non_std
+parity = ["lazy_static/spin_no_std"]
+# At this point, LD should be a seperate crate
+json-ld = ["dep:json-ld","dep:json-syntax","dep:rdf-types","dep:hashbrown","dep:mime","dep:locspan","dep:iref"]
+graphql-bindings = ["async-graphql"]
+diesel-bindings  = ["diesel"]

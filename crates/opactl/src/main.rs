@@ -1,6 +1,6 @@
 use async_stl_client::{
-    sawtooth::MessageBuilder,
-    zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
+	sawtooth::MessageBuilder,
+	zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
 };
 use chronicle_signing::{OpaKnownKeyNamesSigner, SecretError, OPA_PK};
 use clap::ArgMatches;
@@ -8,19 +8,19 @@ use cli::{configure_signing, Wait};
 use common::import::{load_bytes_from_url, FromUrlError};
 use futures::{channel::oneshot, Future, FutureExt, StreamExt};
 use k256::{
-    pkcs8::{EncodePrivateKey, LineEnding},
-    SecretKey,
+	pkcs8::{EncodePrivateKey, LineEnding},
+	SecretKey,
 };
 use opa_tp_protocol::{
-    address::{FAMILY, VERSION},
-    async_stl_client::{
-        error::SawtoothCommunicationError,
-        ledger::{LedgerReader, LedgerWriter, TransactionId},
-    },
-    state::{key_address, policy_address, Keys, OpaOperationEvent},
-    submission::SubmissionBuilder,
-    transaction::OpaSubmitTransaction,
-    OpaLedger,
+	address::{FAMILY, VERSION},
+	async_stl_client::{
+		error::SawtoothCommunicationError,
+		ledger::{LedgerReader, LedgerWriter, TransactionId},
+	},
+	state::{key_address, policy_address, Keys, OpaOperationEvent},
+	submission::SubmissionBuilder,
+	transaction::OpaSubmitTransaction,
+	OpaLedger,
 };
 use serde::Deserialize;
 use serde_derive::Serialize;
@@ -37,119 +37,119 @@ mod cli;
 
 #[derive(Error, Debug)]
 pub enum OpaCtlError {
-    #[error("Operation cancelled {0}")]
-    Cancelled(oneshot::Canceled),
+	#[error("Operation cancelled {0}")]
+	Cancelled(oneshot::Canceled),
 
-    #[error("Communication error: {0}")]
-    Communication(#[from] SawtoothCommunicationError),
+	#[error("Communication error: {0}")]
+	Communication(#[from] SawtoothCommunicationError),
 
-    #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+	#[error("IO error: {0}")]
+	IO(#[from] std::io::Error),
 
-    #[error("Json error: {0}")]
-    Json(#[from] serde_json::Error),
+	#[error("Json error: {0}")]
+	Json(#[from] serde_json::Error),
 
-    #[error("Pkcs8 error")]
-    Pkcs8,
+	#[error("Pkcs8 error")]
+	Pkcs8,
 
-    #[error("Transaction failed: {0}")]
-    TransactionFailed(String),
+	#[error("Transaction failed: {0}")]
+	TransactionFailed(String),
 
-    #[error("Transaction not found after wait: {0}")]
-    TransactionNotFound(TransactionId),
+	#[error("Transaction not found after wait: {0}")]
+	TransactionNotFound(TransactionId),
 
-    #[error("Error loading from URL: {0}")]
-    Url(#[from] FromUrlError),
+	#[error("Error loading from URL: {0}")]
+	Url(#[from] FromUrlError),
 
-    #[error("Utf8 error: {0}")]
-    Utf8(#[from] std::str::Utf8Error),
+	#[error("Utf8 error: {0}")]
+	Utf8(#[from] std::str::Utf8Error),
 
-    #[error("Signing: {0}")]
-    Signing(#[from] SecretError),
+	#[error("Signing: {0}")]
+	Signing(#[from] SecretError),
 
-    #[error("Missing Argument")]
-    MissingArgument(String),
+	#[error("Missing Argument")]
+	MissingArgument(String),
 }
 
 impl UFE for OpaCtlError {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Waited {
-    NoWait,
-    WaitedAndFound(OpaOperationEvent),
-    WaitedAndOperationFailed(OpaOperationEvent),
-    WaitedAndDidNotFind,
+	NoWait,
+	WaitedAndFound(OpaOperationEvent),
+	WaitedAndOperationFailed(OpaOperationEvent),
+	WaitedAndDidNotFind,
 }
 
 pub struct RetryLedgerWriter<W: LedgerWriter + Send + Sync> {
-    inner: W,
+	inner: W,
 }
 
 impl<
-        W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
-            + Send
-            + Sync,
-    > RetryLedgerWriter<W>
+		W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+			+ Send
+			+ Sync,
+	> RetryLedgerWriter<W>
 {
-    pub fn new(inner: W) -> Self {
-        Self { inner }
-    }
+	pub fn new(inner: W) -> Self {
+		Self { inner }
+	}
 }
 
 #[async_trait::async_trait]
 impl<
-        W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
-            + Send
-            + Sync,
-    > LedgerWriter for RetryLedgerWriter<W>
+		W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+			+ Send
+			+ Sync,
+	> LedgerWriter for RetryLedgerWriter<W>
 {
-    type Error = W::Error;
-    type Transaction = W::Transaction;
+	type Error = W::Error;
+	type Transaction = W::Transaction;
 
-    async fn submit(
-        &self,
-        tx: &Self::Transaction,
-    ) -> Result<TransactionId, (Option<TransactionId>, Self::Error)> {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        loop {
-            match self.inner.submit(tx).await {
-                Err((_id, SawtoothCommunicationError::NoConnectedValidators)) => {
-                    debug!("Awaiting validator connection, retrying");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-                other => return other,
-            }
-        }
-    }
+	async fn submit(
+		&self,
+		tx: &Self::Transaction,
+	) -> Result<TransactionId, (Option<TransactionId>, Self::Error)> {
+		tokio::time::sleep(Duration::from_secs(1)).await;
+		loop {
+			match self.inner.submit(tx).await {
+				Err((_id, SawtoothCommunicationError::NoConnectedValidators)) => {
+					debug!("Awaiting validator connection, retrying");
+					tokio::time::sleep(Duration::from_secs(1)).await;
+				},
+				other => return other,
+			}
+		}
+	}
 
-    fn message_builder(&self) -> &MessageBuilder {
-        self.inner.message_builder()
-    }
+	fn message_builder(&self) -> &MessageBuilder {
+		self.inner.message_builder()
+	}
 }
 
 /// Collect incoming transaction ids before running submission, as there is the
 /// potential to miss transactions if we do not collect them 'before' submission
 async fn ambient_transactions<
-    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
+	R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
 >(
-    reader: R,
-    goal_tx_id: TransactionId,
-    max_steps: u64,
+	reader: R,
+	goal_tx_id: TransactionId,
+	max_steps: u64,
 ) -> impl Future<Output = Result<Waited, oneshot::Canceled>> {
-    let span = span!(Level::DEBUG, "wait_for_opa_transaction");
+	let span = span!(Level::DEBUG, "wait_for_opa_transaction");
 
-    // Set up a oneshot channel to notify the returned task
-    let (notify_tx, notify_rx) = oneshot::channel::<Waited>();
+	// Set up a oneshot channel to notify the returned task
+	let (notify_tx, notify_rx) = oneshot::channel::<Waited>();
 
-    // And a oneshot channel to ensure we are receiving events from the chain
-    // before we return
-    let (receiving_events_tx, receiving_events_rx) = oneshot::channel::<()>();
+	// And a oneshot channel to ensure we are receiving events from the chain
+	// before we return
+	let (receiving_events_tx, receiving_events_rx) = oneshot::channel::<()>();
 
-    Handle::current().spawn(async move {
+	Handle::current().spawn(async move {
         // We can immediately return if we are not waiting
         debug!(waiting_for=?goal_tx_id, max_steps=?max_steps);
         let goal_clone = goal_tx_id.clone();
@@ -203,746 +203,707 @@ async fn ambient_transactions<
         }
     }.instrument(span));
 
-    // Wait for the task to start receiving events
-    let _ = receiving_events_rx.await;
+	// Wait for the task to start receiving events
+	let _ = receiving_events_rx.await;
 
-    notify_rx
+	notify_rx
 }
 
 #[instrument(skip(reader, writer, matches, submission))]
 async fn handle_wait<
-    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
-        + Send
-        + Sync,
+	R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+		+ Clone
+		+ Send
+		+ Sync
+		+ 'static,
+	W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+		+ Send
+		+ Sync,
 >(
-    matches: &ArgMatches,
-    reader: R,
-    writer: W,
-    submission: OpaSubmitTransaction,
+	matches: &ArgMatches,
+	reader: R,
+	writer: W,
+	submission: OpaSubmitTransaction,
 ) -> Result<(Waited, R), OpaCtlError> {
-    let wait = Wait::from_matches(matches);
-    let writer = RetryLedgerWriter::new(writer);
-    match wait {
-        Wait::NoWait => {
-            writer.submit(&submission).await.map_err(|(_id, e)| e)?;
+	let wait = Wait::from_matches(matches);
+	let writer = RetryLedgerWriter::new(writer);
+	match wait {
+		Wait::NoWait => {
+			writer.submit(&submission).await.map_err(|(_id, e)| e)?;
 
-            Ok((Waited::NoWait, reader))
-        }
-        Wait::NumberOfBlocks(blocks) => {
-            let tx_id = writer.submit(&submission).await.map_err(|(_id, e)| e)?;
-            let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
-            debug!(awaiting_tx=%tx_id, waiting_blocks=%blocks);
-            match waiter.await {
-                Ok(Waited::WaitedAndDidNotFind) => Err(OpaCtlError::TransactionNotFound(tx_id)),
-                Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e))) => {
-                    Err(OpaCtlError::TransactionFailed(e))
-                }
-                Ok(x) => Ok((x, reader)),
-                Err(e) => Err(OpaCtlError::Cancelled(e)),
-            }
-        }
-    }
+			Ok((Waited::NoWait, reader))
+		},
+		Wait::NumberOfBlocks(blocks) => {
+			let tx_id = writer.submit(&submission).await.map_err(|(_id, e)| e)?;
+			let waiter = ambient_transactions(reader.clone(), tx_id.clone(), blocks).await;
+			debug!(awaiting_tx=%tx_id, waiting_blocks=%blocks);
+			match waiter.await {
+				Ok(Waited::WaitedAndDidNotFind) => Err(OpaCtlError::TransactionNotFound(tx_id)),
+				Ok(Waited::WaitedAndOperationFailed(OpaOperationEvent::Error(e))) =>
+					Err(OpaCtlError::TransactionFailed(e)),
+				Ok(x) => Ok((x, reader)),
+				Err(e) => Err(OpaCtlError::Cancelled(e)),
+			}
+		},
+	}
 }
 
 async fn dispatch_args<
-    W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
-        + Send
-        + Sync,
-    R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
+	W: LedgerWriter<Transaction = OpaSubmitTransaction, Error = SawtoothCommunicationError>
+		+ Send
+		+ Sync,
+	R: LedgerReader<Event = OpaOperationEvent, Error = SawtoothCommunicationError>
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
 >(
-    matches: ArgMatches,
-    writer: W,
-    reader: R,
+	matches: ArgMatches,
+	writer: W,
+	reader: R,
 ) -> Result<(Waited, R), OpaCtlError> {
-    let span = span!(Level::TRACE, "dispatch_args");
-    let _entered = span.enter();
-    let span_id = span.id().map(|x| x.into_u64()).unwrap_or(u64::MAX);
-    match matches.subcommand() {
-        Some(("bootstrap", command_matches)) => {
-            let signing = configure_signing(vec![], &matches, command_matches).await?;
-            let bootstrap =
-                SubmissionBuilder::bootstrap_root(signing.opa_verifying().await?).build(span_id);
-            Ok(handle_wait(
-                command_matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::bootstrap_root(bootstrap, &signing),
-            )
-            .await?)
-        }
-        Some(("generate", matches)) => {
-            let key = SecretKey::random(StdRng::from_entropy());
-            let key = key
-                .to_pkcs8_pem(LineEnding::CRLF)
-                .map_err(|_| OpaCtlError::Pkcs8)?;
+	let span = span!(Level::TRACE, "dispatch_args");
+	let _entered = span.enter();
+	let span_id = span.id().map(|x| x.into_u64()).unwrap_or(u64::MAX);
+	match matches.subcommand() {
+		Some(("bootstrap", command_matches)) => {
+			let signing = configure_signing(vec![], &matches, command_matches).await?;
+			let bootstrap =
+				SubmissionBuilder::bootstrap_root(signing.opa_verifying().await?).build(span_id);
+			Ok(handle_wait(
+				command_matches,
+				reader,
+				writer,
+				OpaSubmitTransaction::bootstrap_root(bootstrap, &signing),
+			)
+			.await?)
+		},
+		Some(("generate", matches)) => {
+			let key = SecretKey::random(StdRng::from_entropy());
+			let key = key.to_pkcs8_pem(LineEnding::CRLF).map_err(|_| OpaCtlError::Pkcs8)?;
 
-            if let Some(path) = matches.get_one::<PathBuf>("output") {
-                let mut file = File::create(path)?;
-                file.write_all(key.as_bytes())?;
-            } else {
-                print!("{}", *key);
-            }
+			if let Some(path) = matches.get_one::<PathBuf>("output") {
+				let mut file = File::create(path)?;
+				file.write_all(key.as_bytes())?;
+			} else {
+				print!("{}", *key);
+			}
 
-            Ok((Waited::NoWait, reader))
-        }
-        Some(("rotate-root", command_matches)) => {
-            let signing =
-                configure_signing(vec!["new-root-key"], &matches, command_matches).await?;
-            let rotate_key = SubmissionBuilder::rotate_key(
-                "root",
-                &signing,
-                OPA_PK,
-                command_matches
-                    .get_one::<String>("new-root-key")
-                    .ok_or_else(|| OpaCtlError::MissingArgument("new-root-key".to_owned()))?,
-            )
-            .await?
-            .build(span_id);
-            Ok(handle_wait(
-                command_matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::rotate_root(rotate_key, &signing),
-            )
-            .await?)
-        }
-        Some(("register-key", command_matches)) => {
-            let signing = configure_signing(vec!["new-key"], &matches, command_matches).await?;
-            let new_key = &command_matches
-                .get_one::<String>("new-key")
-                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
-            let id = command_matches.get_one::<String>("id").unwrap();
-            let overwrite_existing = command_matches.get_flag("overwrite");
-            let register_key =
-                SubmissionBuilder::register_key(id, new_key, &signing, overwrite_existing)
-                    .await?
-                    .build(span_id);
-            Ok(handle_wait(
-                command_matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::register_key(id, register_key, &signing, overwrite_existing),
-            )
-            .await?)
-        }
-        Some(("rotate-key", command_matches)) => {
-            let signing =
-                configure_signing(vec!["current-key", "new-key"], &matches, command_matches)
-                    .await?;
+			Ok((Waited::NoWait, reader))
+		},
+		Some(("rotate-root", command_matches)) => {
+			let signing =
+				configure_signing(vec!["new-root-key"], &matches, command_matches).await?;
+			let rotate_key = SubmissionBuilder::rotate_key(
+				"root",
+				&signing,
+				OPA_PK,
+				command_matches
+					.get_one::<String>("new-root-key")
+					.ok_or_else(|| OpaCtlError::MissingArgument("new-root-key".to_owned()))?,
+			)
+			.await?
+			.build(span_id);
+			Ok(handle_wait(
+				command_matches,
+				reader,
+				writer,
+				OpaSubmitTransaction::rotate_root(rotate_key, &signing),
+			)
+			.await?)
+		},
+		Some(("register-key", command_matches)) => {
+			let signing = configure_signing(vec!["new-key"], &matches, command_matches).await?;
+			let new_key = &command_matches
+				.get_one::<String>("new-key")
+				.ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+			let id = command_matches.get_one::<String>("id").unwrap();
+			let overwrite_existing = command_matches.get_flag("overwrite");
+			let register_key =
+				SubmissionBuilder::register_key(id, new_key, &signing, overwrite_existing)
+					.await?
+					.build(span_id);
+			Ok(handle_wait(
+				command_matches,
+				reader,
+				writer,
+				OpaSubmitTransaction::register_key(id, register_key, &signing, overwrite_existing),
+			)
+			.await?)
+		},
+		Some(("rotate-key", command_matches)) => {
+			let signing =
+				configure_signing(vec!["current-key", "new-key"], &matches, command_matches)
+					.await?;
 
-            let current_key = &command_matches
-                .get_one::<String>("current-key")
-                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
-            let new_key = &command_matches
-                .get_one::<String>("new-key")
-                .ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
-            let id = command_matches.get_one::<String>("id").unwrap();
-            let rotate_key = SubmissionBuilder::rotate_key(id, &signing, new_key, current_key)
-                .await?
-                .build(span_id);
-            Ok(handle_wait(
-                command_matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::rotate_key(id, rotate_key, &signing),
-            )
-            .await?)
-        }
-        Some(("set-policy", command_matches)) => {
-            let signing = configure_signing(vec![], &matches, command_matches).await?;
-            let policy: &String = command_matches.get_one("policy").unwrap();
+			let current_key = &command_matches
+				.get_one::<String>("current-key")
+				.ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+			let new_key = &command_matches
+				.get_one::<String>("new-key")
+				.ok_or_else(|| OpaCtlError::MissingArgument("new-key".to_owned()))?;
+			let id = command_matches.get_one::<String>("id").unwrap();
+			let rotate_key = SubmissionBuilder::rotate_key(id, &signing, new_key, current_key)
+				.await?
+				.build(span_id);
+			Ok(handle_wait(
+				command_matches,
+				reader,
+				writer,
+				OpaSubmitTransaction::rotate_key(id, rotate_key, &signing),
+			)
+			.await?)
+		},
+		Some(("set-policy", command_matches)) => {
+			let signing = configure_signing(vec![], &matches, command_matches).await?;
+			let policy: &String = command_matches.get_one("policy").unwrap();
 
-            let policy = load_bytes_from_url(policy).await?;
+			let policy = load_bytes_from_url(policy).await?;
 
-            let id = command_matches.get_one::<String>("id").unwrap();
+			let id = command_matches.get_one::<String>("id").unwrap();
 
-            let bootstrap = SubmissionBuilder::set_policy(id, policy, &signing)
-                .await?
-                .build(span_id);
-            Ok(handle_wait(
-                command_matches,
-                reader,
-                writer,
-                OpaSubmitTransaction::set_policy(id, bootstrap, &signing),
-            )
-            .await?)
-        }
-        Some(("get-key", matches)) => {
-            let key: Vec<u8> = reader
-                .get_state_entry(&key_address(matches.get_one::<String>("id").unwrap()))
-                .await?;
+			let bootstrap =
+				SubmissionBuilder::set_policy(id, policy, &signing).await?.build(span_id);
+			Ok(handle_wait(
+				command_matches,
+				reader,
+				writer,
+				OpaSubmitTransaction::set_policy(id, bootstrap, &signing),
+			)
+			.await?)
+		},
+		Some(("get-key", matches)) => {
+			let key: Vec<u8> = reader
+				.get_state_entry(&key_address(matches.get_one::<String>("id").unwrap()))
+				.await?;
 
-            debug!(loaded_key = ?from_utf8(&key));
+			debug!(loaded_key = ?from_utf8(&key));
 
-            let key: Keys = serde_json::from_slice(&key)?;
+			let key: Keys = serde_json::from_slice(&key)?;
 
-            let key = key.current.key;
+			let key = key.current.key;
 
-            if let Some(path) = matches.get_one::<String>("output") {
-                let mut file = File::create(path)?;
-                file.write_all(key.as_bytes())?;
-            } else {
-                print!("{key}");
-            }
+			if let Some(path) = matches.get_one::<String>("output") {
+				let mut file = File::create(path)?;
+				file.write_all(key.as_bytes())?;
+			} else {
+				print!("{key}");
+			}
 
-            Ok((Waited::NoWait, reader))
-        }
-        Some(("get-policy", matches)) => {
-            let policy: Result<Vec<u8>, _> = reader
-                .get_state_entry(&policy_address(matches.get_one::<String>("id").unwrap()))
-                .await;
+			Ok((Waited::NoWait, reader))
+		},
+		Some(("get-policy", matches)) => {
+			let policy: Result<Vec<u8>, _> = reader
+				.get_state_entry(&policy_address(matches.get_one::<String>("id").unwrap()))
+				.await;
 
-            if let Err(SawtoothCommunicationError::ResourceNotFound) = policy {
-                print!("No policy found");
-                return Ok((Waited::NoWait, reader));
-            }
+			if let Err(SawtoothCommunicationError::ResourceNotFound) = policy {
+				print!("No policy found");
+				return Ok((Waited::NoWait, reader))
+			}
 
-            let policy = policy?;
+			let policy = policy?;
 
-            if let Some(path) = matches.get_one::<String>("output") {
-                let mut file = File::create(path)?;
-                file.write_all(&policy)?;
-            }
+			if let Some(path) = matches.get_one::<String>("output") {
+				let mut file = File::create(path)?;
+				file.write_all(&policy)?;
+			}
 
-            Ok((Waited::NoWait, reader))
-        }
-        _ => Ok((Waited::NoWait, reader)),
-    }
+			Ok((Waited::NoWait, reader))
+		},
+		_ => Ok((Waited::NoWait, reader)),
+	}
 }
 
 #[tokio::main]
 async fn main() {
-    chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-    let args = cli::cli().get_matches();
-    let address: &Url = args.get_one("sawtooth-address").unwrap();
-    let client = ZmqRequestResponseSawtoothChannel::new(
-        &format!("opactl-{}", uuid::Uuid::new_v4()),
-        &[format!(
-            "{}:{}",
-            address.host().expect("host").to_owned(),
-            address.port().unwrap_or(4004)
-        )
-        .to_socket_addrs()
-        .unwrap()
-        .next()
-        .unwrap()],
-        HighestBlockValidatorSelector,
-    )
-    .unwrap()
-    .retrying();
+	chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+	let args = cli::cli().get_matches();
+	let address: &Url = args.get_one("sawtooth-address").unwrap();
+	let client = ZmqRequestResponseSawtoothChannel::new(
+		&format!("opactl-{}", uuid::Uuid::new_v4()),
+		&[format!(
+			"{}:{}",
+			address.host().expect("host").to_owned(),
+			address.port().unwrap_or(4004)
+		)
+		.to_socket_addrs()
+		.unwrap()
+		.next()
+		.unwrap()],
+		HighestBlockValidatorSelector,
+	)
+	.unwrap()
+	.retrying();
 
-    let reader = OpaLedger::new(client, FAMILY, VERSION);
-    let writer = reader.clone();
+	let reader = OpaLedger::new(client, FAMILY, VERSION);
+	let writer = reader.clone();
 
-    dispatch_args(args, writer, reader)
-        .await
-        .map_err(|opactl| {
-            error!(?opactl);
-            opactl.into_ufe().print();
-            std::process::exit(1);
-        })
-        .map(|(waited, _reader)| {
-            if let Waited::WaitedAndFound(op) = waited {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::to_value(op).unwrap()).unwrap()
-                );
-            }
-        })
-        .ok();
+	dispatch_args(args, writer, reader)
+		.await
+		.map_err(|opactl| {
+			error!(?opactl);
+			opactl.into_ufe().print();
+			std::process::exit(1);
+		})
+		.map(|(waited, _reader)| {
+			if let Waited::WaitedAndFound(op) = waited {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&serde_json::to_value(op).unwrap()).unwrap()
+				);
+			}
+		})
+		.ok();
 }
 
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`
 #[cfg(test)]
 pub mod test {
-    use async_stl_client::{
-        error::SawtoothCommunicationError,
-        ledger::SawtoothLedger,
-        messages::{
-            message::MessageType, BlockHeader, ClientBatchSubmitResponse,
-            ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockListResponse,
-            ClientEventsSubscribeResponse, ClientStateGetRequest, ClientStateGetResponse,
-        },
-        zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
-    };
-    use clap::ArgMatches;
-    use futures::{select, FutureExt, SinkExt, StreamExt};
-    use opa_tp_protocol::{
-        address::{FAMILY, VERSION},
-        messages::OpaEvent,
-        state::OpaOperationEvent,
-        transaction::OpaSubmitTransaction,
-    };
+	use async_stl_client::{
+		error::SawtoothCommunicationError,
+		ledger::SawtoothLedger,
+		messages::{
+			message::MessageType, BlockHeader, ClientBatchSubmitResponse,
+			ClientBlockGetByNumRequest, ClientBlockGetResponse, ClientBlockListResponse,
+			ClientEventsSubscribeResponse, ClientStateGetRequest, ClientStateGetResponse,
+		},
+		zmq_client::{HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel},
+	};
+	use clap::ArgMatches;
+	use futures::{select, FutureExt, SinkExt, StreamExt};
+	use opa_tp_protocol::{
+		address::{FAMILY, VERSION},
+		messages::OpaEvent,
+		state::OpaOperationEvent,
+		transaction::OpaSubmitTransaction,
+	};
 
-    use k256::{
-        pkcs8::{EncodePrivateKey, LineEnding},
-        SecretKey,
-    };
-    use opa_tp::{abstract_tp::TP, tp::OpaTransactionHandler};
+	use k256::{
+		pkcs8::{EncodePrivateKey, LineEnding},
+		SecretKey,
+	};
+	use opa_tp::{abstract_tp::TP, tp::OpaTransactionHandler};
 
-    use prost::Message;
-    use rand::rngs::StdRng;
-    use rand_core::SeedableRng;
-    use sawtooth_sdk::{
-        messages::client_batch_submit::ClientBatchSubmitRequest,
-        processor::handler::{ContextError, TransactionContext},
-    };
-    use serde_json::{self, Value};
-    use tmq::{router, Context, Multipart};
-    use tokio::runtime;
-    use uuid::Uuid;
+	use prost::Message;
+	use rand::rngs::StdRng;
+	use rand_core::SeedableRng;
+	use sawtooth_sdk::{
+		messages::client_batch_submit::ClientBatchSubmitRequest,
+		processor::handler::{ContextError, TransactionContext},
+	};
+	use serde_json::{self, Value};
+	use tmq::{router, Context, Multipart};
+	use tokio::runtime;
+	use uuid::Uuid;
 
-    use std::{
-        cell::RefCell,
-        collections::BTreeMap,
-        io::Write,
-        net::{Ipv4Addr, SocketAddr},
-        sync::{Arc, Mutex},
-        thread,
-        time::Duration,
-    };
-    use tempfile::{NamedTempFile, TempDir};
-    use tokio_stream::wrappers::UnboundedReceiverStream;
-    use tracing::{debug, error, info, instrument};
+	use std::{
+		cell::RefCell,
+		collections::BTreeMap,
+		io::Write,
+		net::{Ipv4Addr, SocketAddr},
+		sync::{Arc, Mutex},
+		thread,
+		time::Duration,
+	};
+	use tempfile::{NamedTempFile, TempDir};
+	use tokio_stream::wrappers::UnboundedReceiverStream;
+	use tracing::{debug, error, info, instrument};
 
-    use crate::{cli, dispatch_args};
+	use crate::{cli, dispatch_args};
 
-    type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
+	type TestTxEvents = Vec<(String, Vec<(String, String)>, Vec<u8>)>;
 
-    #[async_trait::async_trait]
-    pub trait SimulatedSawtoothBehavior {
-        async fn handle_request(
-            &self,
-            message_type: MessageType,
-            request: Vec<u8>,
-        ) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError>;
-    }
+	#[async_trait::async_trait]
+	pub trait SimulatedSawtoothBehavior {
+		async fn handle_request(
+			&self,
+			message_type: MessageType,
+			request: Vec<u8>,
+		) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError>;
+	}
 
-    pub type OpaLedger =
-        SawtoothLedger<ZmqRequestResponseSawtoothChannel, OpaOperationEvent, OpaSubmitTransaction>;
+	pub type OpaLedger =
+		SawtoothLedger<ZmqRequestResponseSawtoothChannel, OpaOperationEvent, OpaSubmitTransaction>;
 
-    type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
+	type PrintableEvent = Vec<(String, Vec<(String, String)>, Value)>;
 
-    #[derive(Clone)]
-    pub struct TestTransactionContext {
-        pub state: RefCell<BTreeMap<String, Vec<u8>>>,
-        pub events: RefCell<TestTxEvents>,
-        tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
-    }
+	#[derive(Clone)]
+	pub struct TestTransactionContext {
+		pub state: RefCell<BTreeMap<String, Vec<u8>>>,
+		pub events: RefCell<TestTxEvents>,
+		tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
+	}
 
-    impl TestTransactionContext {
-        pub fn new(tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>) -> Self {
-            Self {
-                state: RefCell::new(BTreeMap::new()),
-                events: RefCell::new(vec![]),
-                tx,
-            }
-        }
+	impl TestTransactionContext {
+		pub fn new(tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>) -> Self {
+			Self { state: RefCell::new(BTreeMap::new()), events: RefCell::new(vec![]), tx }
+		}
 
-        pub fn new_with_state(
-            tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
-            state: BTreeMap<String, Vec<u8>>,
-        ) -> Self {
-            Self {
-                state: state.into(),
-                events: RefCell::new(vec![]),
-                tx,
-            }
-        }
+		pub fn new_with_state(
+			tx: tokio::sync::mpsc::UnboundedSender<Option<(MessageType, Vec<u8>)>>,
+			state: BTreeMap<String, Vec<u8>>,
+		) -> Self {
+			Self { state: state.into(), events: RefCell::new(vec![]), tx }
+		}
 
-        pub fn readable_state(&self) -> Vec<(String, Value)> {
-            // Deal with the fact that policies are raw bytes, but meta data and
-            // keys are json
-            self.state
-                .borrow()
-                .iter()
-                .map(|(k, v)| {
-                    let as_string = String::from_utf8(v.clone()).unwrap();
-                    if serde_json::from_str::<Value>(&as_string).is_ok() {
-                        (k.clone(), serde_json::from_str(&as_string).unwrap())
-                    } else {
-                        (k.clone(), serde_json::to_value(v.clone()).unwrap())
-                    }
-                })
-                .collect()
-        }
+		pub fn readable_state(&self) -> Vec<(String, Value)> {
+			// Deal with the fact that policies are raw bytes, but meta data and
+			// keys are json
+			self.state
+				.borrow()
+				.iter()
+				.map(|(k, v)| {
+					let as_string = String::from_utf8(v.clone()).unwrap();
+					if serde_json::from_str::<Value>(&as_string).is_ok() {
+						(k.clone(), serde_json::from_str(&as_string).unwrap())
+					} else {
+						(k.clone(), serde_json::to_value(v.clone()).unwrap())
+					}
+				})
+				.collect()
+		}
 
-        pub fn readable_events(&self) -> PrintableEvent {
-            self.events
-                .borrow()
-                .iter()
-                .map(|(k, attr, data)| {
-                    (
-                        k.clone(),
-                        attr.clone(),
-                        match &<OpaEvent as prost::Message>::decode(&**data)
-                            .unwrap()
-                            .payload
-                            .unwrap()
-                        {
-                            opa_tp_protocol::messages::opa_event::Payload::Operation(operation) => {
-                                serde_json::from_str(operation).unwrap()
-                            }
-                            opa_tp_protocol::messages::opa_event::Payload::Error(error) => {
-                                serde_json::from_str(error).unwrap()
-                            }
-                        },
-                    )
-                })
-                .collect()
-        }
-    }
+		pub fn readable_events(&self) -> PrintableEvent {
+			self.events
+				.borrow()
+				.iter()
+				.map(|(k, attr, data)| {
+					(
+						k.clone(),
+						attr.clone(),
+						match &<OpaEvent as prost::Message>::decode(&**data)
+							.unwrap()
+							.payload
+							.unwrap()
+						{
+							opa_tp_protocol::messages::opa_event::Payload::Operation(operation) =>
+								serde_json::from_str(operation).unwrap(),
+							opa_tp_protocol::messages::opa_event::Payload::Error(error) =>
+								serde_json::from_str(error).unwrap(),
+						},
+					)
+				})
+				.collect()
+		}
+	}
 
-    impl sawtooth_sdk::processor::handler::TransactionContext for TestTransactionContext {
-        fn add_receipt_data(
-            self: &TestTransactionContext,
-            _data: &[u8],
-        ) -> Result<(), ContextError> {
-            unimplemented!()
-        }
+	impl sawtooth_sdk::processor::handler::TransactionContext for TestTransactionContext {
+		fn add_receipt_data(
+			self: &TestTransactionContext,
+			_data: &[u8],
+		) -> Result<(), ContextError> {
+			unimplemented!()
+		}
 
-        #[instrument(skip(self))]
-        fn add_event(
-            self: &TestTransactionContext,
-            event_type: String,
-            attributes: Vec<(String, String)>,
-            data: &[u8],
-        ) -> Result<(), ContextError> {
-            let stl_event = async_stl_client::messages::Event {
-                event_type: event_type.clone(),
-                attributes: attributes
-                    .iter()
-                    .map(|(k, v)| async_stl_client::messages::event::Attribute {
-                        key: k.clone(),
-                        value: v.clone(),
-                    })
-                    .collect(),
-                data: data.to_vec(),
-            };
+		#[instrument(skip(self))]
+		fn add_event(
+			self: &TestTransactionContext,
+			event_type: String,
+			attributes: Vec<(String, String)>,
+			data: &[u8],
+		) -> Result<(), ContextError> {
+			let stl_event = async_stl_client::messages::Event {
+				event_type: event_type.clone(),
+				attributes: attributes
+					.iter()
+					.map(|(k, v)| async_stl_client::messages::event::Attribute {
+						key: k.clone(),
+						value: v.clone(),
+					})
+					.collect(),
+				data: data.to_vec(),
+			};
 
-            let list = async_stl_client::messages::EventList {
-                events: vec![stl_event],
-            };
-            let stl_event: Vec<u8> = list.encode_to_vec();
+			let list = async_stl_client::messages::EventList { events: vec![stl_event] };
+			let stl_event: Vec<u8> = list.encode_to_vec();
 
-            self.tx
-                .send(Some((MessageType::ClientEvents, stl_event)))
-                .unwrap();
+			self.tx.send(Some((MessageType::ClientEvents, stl_event))).unwrap();
 
-            self.events
-                .borrow_mut()
-                .push((event_type, attributes, data.to_vec()));
+			self.events.borrow_mut().push((event_type, attributes, data.to_vec()));
 
-            Ok(())
-        }
+			Ok(())
+		}
 
-        fn delete_state_entries(
-            self: &TestTransactionContext,
-            _addresses: &[std::string::String],
-        ) -> Result<Vec<String>, ContextError> {
-            unimplemented!()
-        }
+		fn delete_state_entries(
+			self: &TestTransactionContext,
+			_addresses: &[std::string::String],
+		) -> Result<Vec<String>, ContextError> {
+			unimplemented!()
+		}
 
-        fn get_state_entries(
-            &self,
-            addresses: &[String],
-        ) -> Result<Vec<(String, Vec<u8>)>, ContextError> {
-            Ok(self
-                .state
-                .borrow()
-                .iter()
-                .filter(|(k, _)| addresses.contains(k))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect())
-        }
+		fn get_state_entries(
+			&self,
+			addresses: &[String],
+		) -> Result<Vec<(String, Vec<u8>)>, ContextError> {
+			Ok(self
+				.state
+				.borrow()
+				.iter()
+				.filter(|(k, _)| addresses.contains(k))
+				.map(|(k, v)| (k.clone(), v.clone()))
+				.collect())
+		}
 
-        fn set_state_entries(
-            self: &TestTransactionContext,
-            entries: Vec<(String, Vec<u8>)>,
-        ) -> std::result::Result<(), sawtooth_sdk::processor::handler::ContextError> {
-            for entry in entries {
-                self.state.borrow_mut().insert(entry.0, entry.1);
-            }
+		fn set_state_entries(
+			self: &TestTransactionContext,
+			entries: Vec<(String, Vec<u8>)>,
+		) -> std::result::Result<(), sawtooth_sdk::processor::handler::ContextError> {
+			for entry in entries {
+				self.state.borrow_mut().insert(entry.0, entry.1);
+			}
 
-            Ok(())
-        }
-    }
+			Ok(())
+		}
+	}
 
-    fn apply_transactions(
-        handler: &OpaTransactionHandler,
-        context: &mut TestTransactionContext,
-        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
-    ) {
-        for tx in transactions {
-            let req = sawtooth_sdk::messages::processor::TpProcessRequest {
-                payload: tx.get_payload().to_vec(),
-                header: Some(protobuf::Message::parse_from_bytes(tx.get_header()).unwrap()).into(),
-                signature: tx.get_header_signature().to_string(),
-                ..Default::default()
-            };
-            handler.apply(&req, context).unwrap();
-        }
-    }
+	fn apply_transactions(
+		handler: &OpaTransactionHandler,
+		context: &mut TestTransactionContext,
+		transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+	) {
+		for tx in transactions {
+			let req = sawtooth_sdk::messages::processor::TpProcessRequest {
+				payload: tx.get_payload().to_vec(),
+				header: Some(protobuf::Message::parse_from_bytes(tx.get_header()).unwrap()).into(),
+				signature: tx.get_header_signature().to_string(),
+				..Default::default()
+			};
+			handler.apply(&req, context).unwrap();
+		}
+	}
 
-    fn get_sorted_transactions(
-        batch: &sawtooth_sdk::messages::batch::Batch,
-    ) -> Vec<sawtooth_sdk::messages::transaction::Transaction> {
-        let mut transactions = batch.transactions.clone();
-        transactions.sort_by_key(|tx| tx.header_signature.clone());
-        transactions.to_vec()
-    }
+	fn get_sorted_transactions(
+		batch: &sawtooth_sdk::messages::batch::Batch,
+	) -> Vec<sawtooth_sdk::messages::transaction::Transaction> {
+		let mut transactions = batch.transactions.clone();
+		transactions.sort_by_key(|tx| tx.header_signature.clone());
+		transactions.to_vec()
+	}
 
-    fn process_transactions(
-        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
-        context: &mut TestTransactionContext,
-        handler: &OpaTransactionHandler,
-    ) -> (Vec<(String, Value)>, PrintableEvent) {
-        apply_transactions(handler, context, transactions);
-        (context.readable_state(), context.readable_events())
-    }
+	fn process_transactions(
+		transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+		context: &mut TestTransactionContext,
+		handler: &OpaTransactionHandler,
+	) -> (Vec<(String, Value)>, PrintableEvent) {
+		apply_transactions(handler, context, transactions);
+		(context.readable_state(), context.readable_events())
+	}
 
-    fn test_determinism(
-        transactions: &[sawtooth_sdk::messages::transaction::Transaction],
-        context: &TestTransactionContext,
-        number_of_determinism_checking_cycles: usize,
-    ) -> Vec<(Vec<(String, Value)>, PrintableEvent)> {
-        let handler = OpaTransactionHandler::new();
+	fn test_determinism(
+		transactions: &[sawtooth_sdk::messages::transaction::Transaction],
+		context: &TestTransactionContext,
+		number_of_determinism_checking_cycles: usize,
+	) -> Vec<(Vec<(String, Value)>, PrintableEvent)> {
+		let handler = OpaTransactionHandler::new();
 
-        let contexts = (0..number_of_determinism_checking_cycles)
-            .map(|_| {
-                let mut context = context.clone();
-                process_transactions(transactions, &mut context, &handler)
-            })
-            .collect::<Vec<_>>();
+		let contexts = (0..number_of_determinism_checking_cycles)
+			.map(|_| {
+				let mut context = context.clone();
+				process_transactions(transactions, &mut context, &handler)
+			})
+			.collect::<Vec<_>>();
 
-        // Check if the contexts are the same after running apply
-        assert!(
-            contexts.iter().all(|context| contexts[0] == *context),
-            "All contexts must be the same after running apply. Contexts: {:?}",
-            contexts,
-        );
+		// Check if the contexts are the same after running apply
+		assert!(
+			contexts.iter().all(|context| contexts[0] == *context),
+			"All contexts must be the same after running apply. Contexts: {:?}",
+			contexts,
+		);
 
-        contexts
-    }
+		contexts
+	}
 
-    fn assert_output_determinism(
-        expected_contexts: &[(Vec<(String, Value)>, PrintableEvent)],
-        readable_state_and_events: &(Vec<(String, Value)>, PrintableEvent),
-    ) {
-        // Check if the updated context is the same as the determinism check results
-        assert!(
-            expected_contexts
-                .iter()
-                .all(|context| readable_state_and_events == context),
-            "Updated context must be the same as previously run tests"
-        );
-    }
+	fn assert_output_determinism(
+		expected_contexts: &[(Vec<(String, Value)>, PrintableEvent)],
+		readable_state_and_events: &(Vec<(String, Value)>, PrintableEvent),
+	) {
+		// Check if the updated context is the same as the determinism check results
+		assert!(
+			expected_contexts.iter().all(|context| readable_state_and_events == context),
+			"Updated context must be the same as previously run tests"
+		);
+	}
 
-    #[derive(Clone)]
-    struct WellBehavedBehavior {
-        handler: Arc<OpaTransactionHandler>,
-        context: Arc<Mutex<TestTransactionContext>>,
-    }
+	#[derive(Clone)]
+	struct WellBehavedBehavior {
+		handler: Arc<OpaTransactionHandler>,
+		context: Arc<Mutex<TestTransactionContext>>,
+	}
 
-    impl WellBehavedBehavior {
-        /// Submits a batch of transactions to the validator and performs determinism checks.
-        async fn submit_batch(
-            &self,
-            request: &[u8],
-        ) -> Result<Vec<u8>, SawtoothCommunicationError> {
-            // Parse the request into a `ClientBatchSubmitRequest` object and extract the first batch.
-            let req: ClientBatchSubmitRequest =
-                protobuf::Message::parse_from_bytes(request).unwrap();
-            let batch = req.batches.into_iter().next().unwrap();
+	impl WellBehavedBehavior {
+		/// Submits a batch of transactions to the validator and performs determinism checks.
+		async fn submit_batch(
+			&self,
+			request: &[u8],
+		) -> Result<Vec<u8>, SawtoothCommunicationError> {
+			// Parse the request into a `ClientBatchSubmitRequest` object and extract the first
+			// batch.
+			let req: ClientBatchSubmitRequest =
+				protobuf::Message::parse_from_bytes(request).unwrap();
+			let batch = req.batches.into_iter().next().unwrap();
 
-            // Log some debug information about the batch and sort its transactions.
-            debug!(received_batch = ?batch, transactions = ?batch.transactions);
-            let transactions = get_sorted_transactions(&batch);
+			// Log some debug information about the batch and sort its transactions.
+			debug!(received_batch = ?batch, transactions = ?batch.transactions);
+			let transactions = get_sorted_transactions(&batch);
 
-            // Get the current state and events before applying the transactions.
-            let preprocessing_state_and_events = {
-                let context = self.context.lock().unwrap();
-                (context.readable_state(), context.readable_events())
-            };
+			// Get the current state and events before applying the transactions.
+			let preprocessing_state_and_events = {
+				let context = self.context.lock().unwrap();
+				(context.readable_state(), context.readable_events())
+			};
 
-            // Run the TP process in a seperate task, so it does not complete before subscriptions
-            // The simulation is only tacitly ordered - events sent before subscription will not be recieved
-            let self_clone = self.clone();
-            tokio::task::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(5)).await;
+			// Run the TP process in a seperate task, so it does not complete before subscriptions
+			// The simulation is only tacitly ordered - events sent before subscription will not be
+			// recieved
+			let self_clone = self.clone();
+			tokio::task::spawn(async move {
+				tokio::time::sleep(Duration::from_secs(5)).await;
 
-                // Perform determinism checking and get the expected contexts
-                let number_of_determinism_checking_cycles = 5;
-                let context =
-                    { TestTransactionContext::clone(&self_clone.context.lock().unwrap()) };
-                let expected_contexts = test_determinism(
-                    transactions.as_slice(),
-                    &context,
-                    number_of_determinism_checking_cycles,
-                );
+				// Perform determinism checking and get the expected contexts
+				let number_of_determinism_checking_cycles = 5;
+				let context =
+					{ TestTransactionContext::clone(&self_clone.context.lock().unwrap()) };
+				let expected_contexts = test_determinism(
+					transactions.as_slice(),
+					&context,
+					number_of_determinism_checking_cycles,
+				);
 
-                // Update the context and perform an output determinism check.
-                let mut context = self_clone.context.lock().unwrap();
-                apply_transactions(&self_clone.handler, &mut context, transactions.as_slice());
-                let updated_readable_state_and_events =
-                    (context.readable_state(), context.readable_events());
-                assert_ne!(
-                    preprocessing_state_and_events, updated_readable_state_and_events,
-                    "Context must be updated after running apply"
-                );
-                assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
-            });
-            // Create a response with an "OK" status and write it to a byte vector.
-            let mut response = ClientBatchSubmitResponse::default();
-            response
-                .set_status(async_stl_client::messages::client_batch_submit_response::Status::Ok);
-            Ok(response.encode_to_vec())
-        }
-    }
+				// Update the context and perform an output determinism check.
+				let mut context = self_clone.context.lock().unwrap();
+				apply_transactions(&self_clone.handler, &mut context, transactions.as_slice());
+				let updated_readable_state_and_events =
+					(context.readable_state(), context.readable_events());
+				assert_ne!(
+					preprocessing_state_and_events, updated_readable_state_and_events,
+					"Context must be updated after running apply"
+				);
+				assert_output_determinism(&expected_contexts, &updated_readable_state_and_events);
+			});
+			// Create a response with an "OK" status and write it to a byte vector.
+			let mut response = ClientBatchSubmitResponse::default();
+			response
+				.set_status(async_stl_client::messages::client_batch_submit_response::Status::Ok);
+			Ok(response.encode_to_vec())
+		}
+	}
 
-    #[async_trait::async_trait]
-    impl SimulatedSawtoothBehavior for WellBehavedBehavior {
-        #[instrument(skip(self, request))]
-        async fn handle_request(
-            &self,
-            message_type: MessageType,
-            request: Vec<u8>,
-        ) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError> {
-            match message_type {
-                // Batch submit request, decode and apply the transactions
-                // in the batch
-                MessageType::ClientBatchSubmitRequest => {
-                    let buf = self.submit_batch(&request).await?;
-                    Ok((MessageType::ClientBatchSubmitResponse, buf))
-                }
-                // Always respond with a block height of one
-                MessageType::ClientBlockListRequest => {
-                    let mut response = ClientBlockListResponse::default();
-                    let block_header = BlockHeader {
-                        block_num: 1,
-                        ..Default::default()
-                    };
-                    let block_header_bytes = block_header.encode_to_vec();
-                    response.blocks = vec![async_stl_client::messages::Block {
-                        header: block_header_bytes,
-                        ..Default::default()
-                    }];
-                    response.set_status(
-                        async_stl_client::messages::client_block_list_response::Status::Ok,
-                    );
-                    Ok((
-                        MessageType::ClientBlockListResponse,
-                        response.encode_to_vec(),
-                    ))
-                }
-                // We can just return Ok here, no need to fake routing
-                MessageType::ClientEventsSubscribeRequest => {
-                    let mut response = ClientEventsSubscribeResponse::default();
-                    response.set_status(
-                        async_stl_client::messages::client_events_subscribe_response::Status::Ok,
-                    );
-                    Ok((
-                        MessageType::ClientEventsSubscribeResponse,
-                        response.encode_to_vec(),
-                    ))
-                }
-                MessageType::ClientStateGetRequest => {
-                    let request = ClientStateGetRequest::decode(&*request).unwrap();
-                    let address = request.address;
+	#[async_trait::async_trait]
+	impl SimulatedSawtoothBehavior for WellBehavedBehavior {
+		#[instrument(skip(self, request))]
+		async fn handle_request(
+			&self,
+			message_type: MessageType,
+			request: Vec<u8>,
+		) -> Result<(MessageType, Vec<u8>), SawtoothCommunicationError> {
+			match message_type {
+				// Batch submit request, decode and apply the transactions
+				// in the batch
+				MessageType::ClientBatchSubmitRequest => {
+					let buf = self.submit_batch(&request).await?;
+					Ok((MessageType::ClientBatchSubmitResponse, buf))
+				},
+				// Always respond with a block height of one
+				MessageType::ClientBlockListRequest => {
+					let mut response = ClientBlockListResponse::default();
+					let block_header = BlockHeader { block_num: 1, ..Default::default() };
+					let block_header_bytes = block_header.encode_to_vec();
+					response.blocks = vec![async_stl_client::messages::Block {
+						header: block_header_bytes,
+						..Default::default()
+					}];
+					response.set_status(
+						async_stl_client::messages::client_block_list_response::Status::Ok,
+					);
+					Ok((MessageType::ClientBlockListResponse, response.encode_to_vec()))
+				},
+				// We can just return Ok here, no need to fake routing
+				MessageType::ClientEventsSubscribeRequest => {
+					let mut response = ClientEventsSubscribeResponse::default();
+					response.set_status(
+						async_stl_client::messages::client_events_subscribe_response::Status::Ok,
+					);
+					Ok((MessageType::ClientEventsSubscribeResponse, response.encode_to_vec()))
+				},
+				MessageType::ClientStateGetRequest => {
+					let request = ClientStateGetRequest::decode(&*request).unwrap();
+					let address = request.address;
 
-                    let state = self
-                        .context
-                        .lock()
-                        .unwrap()
-                        .get_state_entries(&[address])
-                        .unwrap();
+					let state = self.context.lock().unwrap().get_state_entries(&[address]).unwrap();
 
-                    let mut response = ClientStateGetResponse {
-                        status: async_stl_client::messages::client_state_get_response::Status::Ok
-                            as i32,
-                        ..Default::default()
-                    };
+					let mut response = ClientStateGetResponse {
+						status: async_stl_client::messages::client_state_get_response::Status::Ok
+							as i32,
+						..Default::default()
+					};
 
-                    if state.is_empty() {
-                        response.set_status(async_stl_client::messages::client_state_get_response::Status::NoResource);
-                    } else {
-                        response.value = state[0].1.clone();
-                    }
+					if state.is_empty() {
+						response.set_status(async_stl_client::messages::client_state_get_response::Status::NoResource);
+					} else {
+						response.value = state[0].1.clone();
+					}
 
-                    let buf = response.encode_to_vec();
-                    Ok((MessageType::ClientStateGetResponse, buf))
-                }
-                MessageType::ClientBlockGetByNumRequest => {
-                    let req = ClientBlockGetByNumRequest::decode(&*request).unwrap();
-                    let mut response = ClientBlockGetResponse::default();
-                    let block_header = BlockHeader {
-                        block_num: req.block_num,
-                        previous_block_id: hex::encode([0; 32]),
-                        ..Default::default()
-                    };
-                    let block_header_bytes = block_header.encode_to_vec();
-                    response.block = Some(async_stl_client::messages::Block {
-                        header: block_header_bytes,
-                        ..Default::default()
-                    });
+					let buf = response.encode_to_vec();
+					Ok((MessageType::ClientStateGetResponse, buf))
+				},
+				MessageType::ClientBlockGetByNumRequest => {
+					let req = ClientBlockGetByNumRequest::decode(&*request).unwrap();
+					let mut response = ClientBlockGetResponse::default();
+					let block_header = BlockHeader {
+						block_num: req.block_num,
+						previous_block_id: hex::encode([0; 32]),
+						..Default::default()
+					};
+					let block_header_bytes = block_header.encode_to_vec();
+					response.block = Some(async_stl_client::messages::Block {
+						header: block_header_bytes,
+						..Default::default()
+					});
 
-                    response.set_status(
-                        async_stl_client::messages::client_block_get_response::Status::Ok,
-                    );
-                    let buf = response.encode_to_vec();
-                    Ok((MessageType::ClientBlockListResponse, buf))
-                }
-                _ => panic!("Unexpected message type {} received", message_type as i32),
-            }
-        }
-    }
+					response.set_status(
+						async_stl_client::messages::client_block_get_response::Status::Ok,
+					);
+					let buf = response.encode_to_vec();
+					Ok((MessageType::ClientBlockListResponse, buf))
+				},
+				_ => panic!("Unexpected message type {} received", message_type as i32),
+			}
+		}
+	}
 
-    struct EmbeddedOpaTp {
-        pub ledger: OpaLedger,
-        context: Arc<Mutex<TestTransactionContext>>,
-    }
+	struct EmbeddedOpaTp {
+		pub ledger: OpaLedger,
+		context: Arc<Mutex<TestTransactionContext>>,
+	}
 
-    impl EmbeddedOpaTp {
-        pub fn new_with_state(
-            state: BTreeMap<String, Vec<u8>>,
-        ) -> Result<Self, SawtoothCommunicationError> {
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+	impl EmbeddedOpaTp {
+		pub fn new_with_state(
+			state: BTreeMap<String, Vec<u8>>,
+		) -> Result<Self, SawtoothCommunicationError> {
+			let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-            let context = Arc::new(Mutex::new(TestTransactionContext::new_with_state(
-                tx, state,
-            )));
+			let context = Arc::new(Mutex::new(TestTransactionContext::new_with_state(tx, state)));
 
-            let handler = Arc::new(OpaTransactionHandler::new());
+			let handler = Arc::new(OpaTransactionHandler::new());
 
-            let behavior = WellBehavedBehavior {
-                handler,
-                context: context.clone(),
-            };
+			let behavior = WellBehavedBehavior { handler, context: context.clone() };
 
-            let listen_port = portpicker::pick_unused_port().expect("No ports free");
-            let listen_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
-            let connect_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+			let listen_port = portpicker::pick_unused_port().expect("No ports free");
+			let listen_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
+			let connect_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), listen_port);
 
-            let behavior_clone = behavior;
-            thread::spawn(move || {
-                let rt = runtime::Builder::new_current_thread()
-                    .enable_io()
-                    .enable_time()
-                    .build()
-                    .unwrap();
-                let mut rx = UnboundedReceiverStream::new(rx);
-                let local = tokio::task::LocalSet::new();
+			let behavior_clone = behavior;
+			thread::spawn(move || {
+				let rt = runtime::Builder::new_current_thread()
+					.enable_io()
+					.enable_time()
+					.build()
+					.unwrap();
+				let mut rx = UnboundedReceiverStream::new(rx);
+				let local = tokio::task::LocalSet::new();
 
-                let task = local.run_until(async move {
+				let task = local.run_until(async move {
                 tokio::task::spawn_local(async move {
                     let (mut router_tx, mut router_rx) = router(&Context::new())
                         .bind(&format!("tcp://{}", listen_addr))
@@ -1014,78 +975,76 @@ pub mod test {
                 })
                 .await
             });
-                rt.block_on(task).ok();
-            });
+				rt.block_on(task).ok();
+			});
 
-            let channel = ZmqRequestResponseSawtoothChannel::new(
-                &format!("test_{}", Uuid::new_v4()),
-                &[connect_addr],
-                HighestBlockValidatorSelector,
-            )?;
+			let channel = ZmqRequestResponseSawtoothChannel::new(
+				&format!("test_{}", Uuid::new_v4()),
+				&[connect_addr],
+				HighestBlockValidatorSelector,
+			)?;
 
-            Ok(Self {
-                ledger: OpaLedger::new(channel, FAMILY, VERSION),
-                context,
-            })
-        }
+			Ok(Self { ledger: OpaLedger::new(channel, FAMILY, VERSION), context })
+		}
 
-        pub fn readable_state(&self) -> Vec<(String, Value)> {
-            self.context.lock().unwrap().readable_state()
-        }
+		pub fn readable_state(&self) -> Vec<(String, Value)> {
+			self.context.lock().unwrap().readable_state()
+		}
 
-        pub fn new() -> Self {
-            EmbeddedOpaTp::new_with_state(BTreeMap::new()).unwrap()
-        }
-    }
+		pub fn new() -> Self {
+			EmbeddedOpaTp::new_with_state(BTreeMap::new()).unwrap()
+		}
+	}
 
-    fn embed_opa_tp() -> EmbeddedOpaTp {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-        EmbeddedOpaTp::new()
-    }
+	fn embed_opa_tp() -> EmbeddedOpaTp {
+		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+		EmbeddedOpaTp::new()
+	}
 
-    fn reuse_opa_tp_state(tp: EmbeddedOpaTp) -> EmbeddedOpaTp {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-        EmbeddedOpaTp::new_with_state(tp.context.lock().unwrap().state.borrow().clone()).unwrap()
-    }
+	fn reuse_opa_tp_state(tp: EmbeddedOpaTp) -> EmbeddedOpaTp {
+		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+		EmbeddedOpaTp::new_with_state(tp.context.lock().unwrap().state.borrow().clone()).unwrap()
+	}
 
-    fn get_opactl_cmd(command_line: &str) -> ArgMatches {
-        let cli = cli::cli();
-        cli.get_matches_from(command_line.split_whitespace())
-    }
+	fn get_opactl_cmd(command_line: &str) -> ArgMatches {
+		let cli = cli::cli();
+		cli.get_matches_from(command_line.split_whitespace())
+	}
 
-    fn key_from_seed(seed: u8) -> String {
-        let secret: SecretKey = SecretKey::random(StdRng::from_seed([seed; 32]));
-        secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
-    }
+	fn key_from_seed(seed: u8) -> String {
+		let secret: SecretKey = SecretKey::random(StdRng::from_seed([seed; 32]));
+		secret.to_pkcs8_pem(LineEnding::CRLF).unwrap().to_string()
+	}
 
-    // Cli should automatically create ephemeral batcher keys, but we need to supply named keyfiles in a temp directory
-    async fn bootstrap_root_state() -> (String, EmbeddedOpaTp, TempDir) {
-        let root_key = key_from_seed(0);
+	// Cli should automatically create ephemeral batcher keys, but we need to supply named keyfiles
+	// in a temp directory
+	async fn bootstrap_root_state() -> (String, EmbeddedOpaTp, TempDir) {
+		let root_key = key_from_seed(0);
 
-        let keystore = tempfile::tempdir().unwrap();
-        let keyfile_path = keystore.path().join("./opa-pk");
-        std::fs::write(&keyfile_path, root_key.as_bytes()).unwrap();
+		let keystore = tempfile::tempdir().unwrap();
+		let keyfile_path = keystore.path().join("./opa-pk");
+		std::fs::write(&keyfile_path, root_key.as_bytes()).unwrap();
 
-        let matches = get_opactl_cmd(&format!(
-            "opactl --batcher-key-generated --keystore-path {} bootstrap",
-            keystore.path().display()
-        ));
+		let matches = get_opactl_cmd(&format!(
+			"opactl --batcher-key-generated --keystore-path {} bootstrap",
+			keystore.path().display()
+		));
 
-        let opa_tp = embed_opa_tp();
+		let opa_tp = embed_opa_tp();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
-            .await
-            .unwrap();
+		tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+		dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
+			.await
+			.unwrap();
 
-        (root_key, reuse_opa_tp_state(opa_tp), keystore)
-    }
+		(root_key, reuse_opa_tp_state(opa_tp), keystore)
+	}
 
-    #[tokio::test]
-    async fn bootstrap_root_and_get_key() {
-        let (_root_key, opa_tp, _keystore) = bootstrap_root_state().await;
-        //Generate a key pem and set env vars
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
+	#[tokio::test]
+	async fn bootstrap_root_and_get_key() {
+		let (_root_key, opa_tp, _keystore) = bootstrap_root_state().await;
+		//Generate a key pem and set env vars
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         } ,@r###"
@@ -1098,35 +1057,35 @@ pub mod test {
             id: root
         "###);
 
-        let opa_tp = reuse_opa_tp_state(opa_tp);
+		let opa_tp = reuse_opa_tp_state(opa_tp);
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+		tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-        let out_keyfile = NamedTempFile::new().unwrap();
+		let out_keyfile = NamedTempFile::new().unwrap();
 
-        let matches = get_opactl_cmd(
-            format!("opactl get-key --output {}", out_keyfile.path().display(),).as_str(),
-        );
+		let matches = get_opactl_cmd(
+			format!("opactl get-key --output {}", out_keyfile.path().display(),).as_str(),
+		);
 
-        insta::assert_yaml_snapshot!(
+		insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap().0, @r###"
         ---
         NoWait
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn rotate_root() {
-        let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
+	#[tokio::test]
+	async fn rotate_root() {
+		let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
-        let new_root_key = key_from_seed(1);
+		let new_root_key = key_from_seed(1);
 
-        let keyfile_path = keystore.path().join("./new-root-1");
-        std::fs::write(&keyfile_path, new_root_key.as_bytes()).unwrap();
+		let keyfile_path = keystore.path().join("./new-root-1");
+		std::fs::write(&keyfile_path, new_root_key.as_bytes()).unwrap();
 
-        let matches = get_opactl_cmd(
+		let matches = get_opactl_cmd(
             format!(
                 "opactl --batcher-key-generated --opa-key-from-path --keystore-path {} rotate-root  --new-root-key new-root-1",
                 keystore.path().display(),
@@ -1134,7 +1093,7 @@ pub mod test {
             .as_str(),
         );
 
-        insta::assert_yaml_snapshot!(
+		insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap().0, {
@@ -1153,7 +1112,7 @@ pub mod test {
               version: 0
         "###);
 
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(),{
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(),{
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         }, @r###"
@@ -1167,18 +1126,18 @@ pub mod test {
               version: 0
             id: root
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn register_and_rotate_key() {
-        let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
+	#[tokio::test]
+	async fn register_and_rotate_key() {
+		let (_root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
-        let new_key = key_from_seed(1);
+		let new_key = key_from_seed(1);
 
-        let keyfile_path = keystore.path().join("./new-key-1");
-        std::fs::write(&keyfile_path, new_key.as_bytes()).unwrap();
+		let keyfile_path = keystore.path().join("./new-key-1");
+		std::fs::write(&keyfile_path, new_key.as_bytes()).unwrap();
 
-        let matches = get_opactl_cmd(
+		let matches = get_opactl_cmd(
             format!(
                 "opactl --batcher-key-generated --keystore-path {} register-key  --new-key new-key-1 --id test",
                 keystore.path().display(),
@@ -1186,7 +1145,7 @@ pub mod test {
             .as_str(),
         );
 
-        insta::assert_yaml_snapshot!(
+		insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap().0, {
@@ -1203,7 +1162,7 @@ pub mod test {
             expired: ~
         "###);
 
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         }, @r###"
@@ -1222,12 +1181,12 @@ pub mod test {
             id: test
         "###);
 
-        let new_key_2 = key_from_seed(1);
+		let new_key_2 = key_from_seed(1);
 
-        let keyfile_path = keystore.path().join("./new-key-2");
-        std::fs::write(&keyfile_path, new_key_2.as_bytes()).unwrap();
+		let keyfile_path = keystore.path().join("./new-key-2");
+		std::fs::write(&keyfile_path, new_key_2.as_bytes()).unwrap();
 
-        let matches = get_opactl_cmd(
+		let matches = get_opactl_cmd(
             format!(
                 "opactl --batcher-key-generated --keystore-path {} rotate-key  --current-key new-key-1 --new-key new-key-2 --id test",
                 keystore.path().display(),
@@ -1235,9 +1194,9 @@ pub mod test {
             .as_str(),
         );
 
-        let opa_tp = reuse_opa_tp_state(opa_tp);
+		let opa_tp = reuse_opa_tp_state(opa_tp);
 
-        insta::assert_yaml_snapshot!(
+		insta::assert_yaml_snapshot!(
         dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap().0, {
@@ -1256,7 +1215,7 @@ pub mod test {
               version: 0
         "###);
 
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
             ".**.date" => "[date]",
             ".**.key" => "[pem]",
         } ,@r###"
@@ -1276,19 +1235,19 @@ pub mod test {
               version: 0
             id: test
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn set_and_update_policy() {
-        let (root_key, opa_tp, keystore) = bootstrap_root_state().await;
+	#[tokio::test]
+	async fn set_and_update_policy() {
+		let (root_key, opa_tp, keystore) = bootstrap_root_state().await;
 
-        let mut root_keyfile = NamedTempFile::new().unwrap();
-        root_keyfile.write_all(root_key.as_bytes()).unwrap();
+		let mut root_keyfile = NamedTempFile::new().unwrap();
+		root_keyfile.write_all(root_key.as_bytes()).unwrap();
 
-        let mut policy = NamedTempFile::new().unwrap();
-        policy.write_all(&[0]).unwrap();
+		let mut policy = NamedTempFile::new().unwrap();
+		policy.write_all(&[0]).unwrap();
 
-        let matches = get_opactl_cmd(
+		let matches = get_opactl_cmd(
             format!(
                 "opactl --batcher-key-generated --keystore-path {} set-policy  --id test  --policy {}",
                 keystore.path().display(),
@@ -1297,7 +1256,7 @@ pub mod test {
             .as_str(),
         );
 
-        insta::assert_yaml_snapshot!(dispatch_args(
+		insta::assert_yaml_snapshot!(dispatch_args(
             matches,
             opa_tp.ledger.clone(),
             opa_tp.ledger.clone()
@@ -1314,7 +1273,7 @@ pub mod test {
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
           ".**.date" => "[date]",
           ".**.key" => "[pem]"
         } ,@r###"
@@ -1333,9 +1292,9 @@ pub mod test {
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
 
-        policy.write_all(&[1]).unwrap();
+		policy.write_all(&[1]).unwrap();
 
-        let matches = get_opactl_cmd(
+		let matches = get_opactl_cmd(
             format!(
                 "opactl --batcher-key-generated --keystore-path {} set-policy  --id test  --policy {}",
                 keystore.path().display(),
@@ -1344,9 +1303,9 @@ pub mod test {
             .as_str(),
         );
 
-        let opa_tp = reuse_opa_tp_state(opa_tp);
+		let opa_tp = reuse_opa_tp_state(opa_tp);
 
-        insta::assert_yaml_snapshot!(dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
+		insta::assert_yaml_snapshot!(dispatch_args(matches, opa_tp.ledger.clone(), opa_tp.ledger.clone())
             .await
             .unwrap().0, {
               ".**.date" => "[date]"
@@ -1359,7 +1318,7 @@ pub mod test {
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "### );
 
-        insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
+		insta::assert_yaml_snapshot!(opa_tp.readable_state(), {
           ".**.date" => "[date]",
           ".**.key" => "[pem]"
         } ,@r###"
@@ -1378,5 +1337,5 @@ pub mod test {
             id: test
             policy_address: 7ed1931c262a4be700b69974438a35ae56a07ce96778b276c8a061dc254d9862c7ecff
         "###);
-    }
+	}
 }

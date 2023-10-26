@@ -4,34 +4,34 @@ mod opa;
 #[cfg(feature = "inmem")]
 use api::inmem::EmbeddedChronicleTp;
 use api::{
-    chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
-    Api, ApiDispatch, ApiError, StoreError, UuidGen,
+	chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
+	Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
 use async_graphql::{async_trait, ObjectType};
 #[cfg(not(feature = "inmem"))]
 use chronicle_protocol::{
-    address::{FAMILY, VERSION},
-    ChronicleLedger,
+	address::{FAMILY, VERSION},
+	ChronicleLedger,
 };
 use chronicle_signing::{
-    chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
-    CHRONICLE_NAMESPACE,
+	chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+	CHRONICLE_NAMESPACE,
 };
 use clap::{ArgMatches, Command};
 use clap_complete::{generate, Generator, Shell};
 pub use cli::*;
 use common::{
-    commands::ApiResponse,
-    database::{get_connection_with_retry, DatabaseConnector},
-    identity::AuthId,
-    import::{load_bytes_from_stdin, load_bytes_from_url},
-    k256::{
-        pkcs8::{EncodePrivateKey, LineEnding},
-        SecretKey,
-    },
-    ledger::SubmissionStage,
-    opa::ExecutorContext,
-    prov::{operations::ChronicleOperation, to_json_ld::ToJson, NamespaceId},
+	commands::ApiResponse,
+	database::{get_connection_with_retry, DatabaseConnector},
+	identity::AuthId,
+	import::{load_bytes_from_stdin, load_bytes_from_url},
+	k256::{
+		pkcs8::{EncodePrivateKey, LineEnding},
+		SecretKey,
+	},
+	ledger::SubmissionStage,
+	opa::ExecutorContext,
+	prov::{operations::ChronicleOperation, to_json_ld::ToJson, NamespaceId},
 };
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
@@ -40,20 +40,20 @@ use tracing::{debug, error, info, instrument, warn};
 use user_error::UFE;
 
 use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    PgConnection,
+	r2d2::{ConnectionManager, Pool},
+	PgConnection,
 };
 
 use chronicle_telemetry::{self, ConsoleLogging};
 use url::Url;
 
 use std::{
-    collections::{BTreeSet, HashMap},
-    fs::File,
-    io::{self, Write},
-    net::{SocketAddr, ToSocketAddrs},
-    path::PathBuf,
-    str::FromStr,
+	collections::{BTreeSet, HashMap},
+	fs::File,
+	io::{self, Write},
+	net::{SocketAddr, ToSocketAddrs},
+	path::PathBuf,
+	str::FromStr,
 };
 
 use crate::codegen::ChronicleDomainDef;
@@ -62,47 +62,45 @@ use self::opa::opa_executor_from_embedded_policy;
 
 #[cfg(not(feature = "inmem"))]
 fn sawtooth_address(options: &ArgMatches) -> Result<Vec<SocketAddr>, CliError> {
-    Ok(options
-        .value_of("sawtooth")
-        .map(str::to_string)
-        .ok_or(CliError::MissingArgument {
-            arg: "sawtooth".to_owned(),
-        })
-        .and_then(|s| Url::parse(&s).map_err(CliError::from))
-        .map(|u| u.socket_addrs(|| Some(4004)))
-        .map_err(CliError::from)??)
+	Ok(options
+		.value_of("sawtooth")
+		.map(str::to_string)
+		.ok_or(CliError::MissingArgument { arg: "sawtooth".to_owned() })
+		.and_then(|s| Url::parse(&s).map_err(CliError::from))
+		.map(|u| u.socket_addrs(|| Some(4004)))
+		.map_err(CliError::from)??)
 }
 
 #[allow(dead_code)]
 #[cfg(not(feature = "inmem"))]
 fn ledger(options: &ArgMatches) -> Result<ChronicleLedger, CliError> {
-    use async_stl_client::zmq_client::{
-        HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
-    };
+	use async_stl_client::zmq_client::{
+		HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
+	};
 
-    Ok(ChronicleLedger::new(
-        ZmqRequestResponseSawtoothChannel::new(
-            "inmem",
-            &sawtooth_address(options)?,
-            HighestBlockValidatorSelector,
-        )?
-        .retrying(),
-        FAMILY,
-        VERSION,
-    ))
+	Ok(ChronicleLedger::new(
+		ZmqRequestResponseSawtoothChannel::new(
+			"inmem",
+			&sawtooth_address(options)?,
+			HighestBlockValidatorSelector,
+		)?
+		.retrying(),
+		FAMILY,
+		VERSION,
+	))
 }
 
 #[allow(dead_code)]
 fn in_mem_ledger(
-    _options: &ArgMatches,
+	_options: &ArgMatches,
 ) -> Result<crate::api::inmem::EmbeddedChronicleTp, ApiError> {
-    Ok(crate::api::inmem::EmbeddedChronicleTp::new()?)
+	Ok(crate::api::inmem::EmbeddedChronicleTp::new()?)
 }
 
 #[cfg(feature = "inmem")]
 #[allow(dead_code)]
 fn ledger() -> Result<EmbeddedChronicleTp, ApiError> {
-    Ok(EmbeddedChronicleTp::new()?)
+	Ok(EmbeddedChronicleTp::new()?)
 }
 
 #[derive(Debug, Clone)]
@@ -113,241 +111,217 @@ impl UuidGen for UniqueUuid {}
 type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 
 struct RemoteDatabaseConnector {
-    db_uri: String,
+	db_uri: String,
 }
 
 #[async_trait::async_trait]
 impl DatabaseConnector<(), StoreError> for RemoteDatabaseConnector {
-    async fn try_connect(&self) -> Result<((), Pool<ConnectionManager<PgConnection>>), StoreError> {
-        use diesel::Connection;
-        PgConnection::establish(&self.db_uri)?;
-        Ok((
-            (),
-            Pool::builder().build(ConnectionManager::<PgConnection>::new(&self.db_uri))?,
-        ))
-    }
+	async fn try_connect(&self) -> Result<((), Pool<ConnectionManager<PgConnection>>), StoreError> {
+		use diesel::Connection;
+		PgConnection::establish(&self.db_uri)?;
+		Ok(((), Pool::builder().build(ConnectionManager::<PgConnection>::new(&self.db_uri))?))
+	}
 
-    fn should_retry(&self, error: &StoreError) -> bool {
-        matches!(
-            error,
-            StoreError::DbConnection(diesel::ConnectionError::BadConnection(_))
-        )
-    }
+	fn should_retry(&self, error: &StoreError) -> bool {
+		matches!(error, StoreError::DbConnection(diesel::ConnectionError::BadConnection(_)))
+	}
 }
 
 #[instrument(skip(db_uri))] //Do not log db_uri, as it can contain passwords
 async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> {
-    let (_, pool) = get_connection_with_retry(RemoteDatabaseConnector {
-        db_uri: db_uri.to_string(),
-    })
-    .await?;
-    Ok(pool)
+	let (_, pool) =
+		get_connection_with_retry(RemoteDatabaseConnector { db_uri: db_uri.to_string() }).await?;
+	Ok(pool)
 }
 
 pub async fn api_server<Query, Mutation>(
-    api: &ApiDispatch,
-    pool: &ConnectionPool,
-    gql: ChronicleGraphQl<Query, Mutation>,
-    interface: Option<Vec<SocketAddr>>,
-    security_conf: SecurityConf,
-    serve_graphql: bool,
-    serve_data: bool,
+	api: &ApiDispatch,
+	pool: &ConnectionPool,
+	gql: ChronicleGraphQl<Query, Mutation>,
+	interface: Option<Vec<SocketAddr>>,
+	security_conf: SecurityConf,
+	serve_graphql: bool,
+	serve_data: bool,
 ) -> Result<(), ApiError>
 where
-    Query: ObjectType + Copy,
-    Mutation: ObjectType + Copy,
+	Query: ObjectType + Copy,
+	Mutation: ObjectType + Copy,
 {
-    if let Some(addresses) = interface {
-        gql.serve_api(
-            pool.clone(),
-            api.clone(),
-            addresses,
-            security_conf,
-            serve_graphql,
-            serve_data,
-        )
-        .await?
-    }
+	if let Some(addresses) = interface {
+		gql.serve_api(
+			pool.clone(),
+			api.clone(),
+			addresses,
+			security_conf,
+			serve_graphql,
+			serve_data,
+		)
+		.await?
+	}
 
-    Ok(())
+	Ok(())
 }
 
 #[allow(dead_code)]
 fn namespace_bindings(options: &ArgMatches) -> Vec<NamespaceId> {
-    options
-        .values_of("namespace-bindings")
-        .map(|values| {
-            values
-                .map(|value| {
-                    let (id, uuid) = value.split_once(':').unwrap();
+	options
+		.values_of("namespace-bindings")
+		.map(|values| {
+			values
+				.map(|value| {
+					let (id, uuid) = value.split_once(':').unwrap();
 
-                    let uuid = uuid::Uuid::parse_str(uuid).unwrap();
-                    NamespaceId::from_external_id(id, uuid)
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+					let uuid = uuid::Uuid::parse_str(uuid).unwrap();
+					NamespaceId::from_external_id(id, uuid)
+				})
+				.collect()
+		})
+		.unwrap_or_default()
 }
 
 fn vault_secrets_options(options: &ArgMatches) -> Result<ChronicleSecretsOptions, CliError> {
-    let vault_url = options
-        .value_of("vault-url")
-        .ok_or_else(|| CliError::missing_argument("vault-url"))?;
-    let token = options
-        .value_of("vault-token")
-        .ok_or_else(|| CliError::missing_argument("vault-token"))?;
-    let mount_path = options
-        .value_of("vault-mount-path")
-        .ok_or_else(|| CliError::missing_argument("vault-mount-path"))?;
-    Ok(ChronicleSecretsOptions::stored_in_vault(
-        &Url::parse(vault_url)?,
-        token,
-        mount_path,
-    ))
+	let vault_url = options
+		.value_of("vault-url")
+		.ok_or_else(|| CliError::missing_argument("vault-url"))?;
+	let token = options
+		.value_of("vault-token")
+		.ok_or_else(|| CliError::missing_argument("vault-token"))?;
+	let mount_path = options
+		.value_of("vault-mount-path")
+		.ok_or_else(|| CliError::missing_argument("vault-mount-path"))?;
+	Ok(ChronicleSecretsOptions::stored_in_vault(&Url::parse(vault_url)?, token, mount_path))
 }
 
 async fn chronicle_signing(options: &ArgMatches) -> Result<ChronicleSigning, CliError> {
-    // Determine batcher configuration
-    let batcher_options = match (
-        options.get_one::<PathBuf>("batcher-key-from-path"),
-        options.get_flag("batcher-key-from-vault"),
-        options.get_flag("batcher-key-generated"),
-    ) {
-        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
-        (_, true, _) => vault_secrets_options(options)?,
-        (_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
-        _ => unreachable!("CLI should always set batcher key"),
-    };
+	// Determine batcher configuration
+	let batcher_options = match (
+		options.get_one::<PathBuf>("batcher-key-from-path"),
+		options.get_flag("batcher-key-from-vault"),
+		options.get_flag("batcher-key-generated"),
+	) {
+		(Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
+		(_, true, _) => vault_secrets_options(options)?,
+		(_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
+		_ => unreachable!("CLI should always set batcher key"),
+	};
 
-    let chronicle_options = match (
-        options.get_one::<PathBuf>("chronicle-key-from-path"),
-        options.get_flag("chronicle-key-from-vault"),
-        options.get_flag("chronicle-key-generated"),
-    ) {
-        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
-        (_, true, _) => vault_secrets_options(options)?,
-        (_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
-        _ => unreachable!("CLI should always set chronicle key"),
-    };
+	let chronicle_options = match (
+		options.get_one::<PathBuf>("chronicle-key-from-path"),
+		options.get_flag("chronicle-key-from-vault"),
+		options.get_flag("chronicle-key-generated"),
+	) {
+		(Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
+		(_, true, _) => vault_secrets_options(options)?,
+		(_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
+		_ => unreachable!("CLI should always set chronicle key"),
+	};
 
-    Ok(ChronicleSigning::new(
-        chronicle_secret_names(),
-        vec![
-            (CHRONICLE_NAMESPACE.to_string(), chronicle_options),
-            (BATCHER_NAMESPACE.to_string(), batcher_options),
-        ],
-    )
-    .await?)
+	Ok(ChronicleSigning::new(
+		chronicle_secret_names(),
+		vec![
+			(CHRONICLE_NAMESPACE.to_string(), chronicle_options),
+			(BATCHER_NAMESPACE.to_string(), batcher_options),
+		],
+	)
+	.await?)
 }
 
 #[cfg(not(feature = "inmem"))]
 pub async fn api(
-    pool: &ConnectionPool,
-    options: &ArgMatches,
-    policy_name: Option<String>,
-    liveness_check_interval: Option<u64>,
+	pool: &ConnectionPool,
+	options: &ArgMatches,
+	policy_name: Option<String>,
+	liveness_check_interval: Option<u64>,
 ) -> Result<ApiDispatch, CliError> {
-    let ledger = ledger(options)?;
+	let ledger = ledger(options)?;
 
-    Ok(Api::new(
-        pool.clone(),
-        ledger,
-        UniqueUuid,
-        chronicle_signing(options).await?,
-        namespace_bindings(options),
-        policy_name,
-        liveness_check_interval,
-    )
-    .await?)
+	Ok(Api::new(
+		pool.clone(),
+		ledger,
+		UniqueUuid,
+		chronicle_signing(options).await?,
+		namespace_bindings(options),
+		policy_name,
+		liveness_check_interval,
+	)
+	.await?)
 }
 
 #[cfg(feature = "inmem")]
 pub async fn api(
-    pool: &ConnectionPool,
-    options: &ArgMatches,
-    remote_opa: Option<String>,
-    liveness_check_interval: Option<u64>,
+	pool: &ConnectionPool,
+	options: &ArgMatches,
+	remote_opa: Option<String>,
+	liveness_check_interval: Option<u64>,
 ) -> Result<api::ApiDispatch, CliError> {
-    let embedded_tp = in_mem_ledger(options)?;
+	let embedded_tp = in_mem_ledger(options)?;
 
-    Ok(Api::new(
-        pool.clone(),
-        embedded_tp.ledger,
-        UniqueUuid,
-        chronicle_signing(options).await?,
-        vec![],
-        remote_opa,
-        liveness_check_interval,
-    )
-    .await?)
+	Ok(Api::new(
+		pool.clone(),
+		embedded_tp.ledger,
+		UniqueUuid,
+		chronicle_signing(options).await?,
+		vec![],
+		remote_opa,
+		liveness_check_interval,
+	)
+	.await?)
 }
 
 fn construct_db_uri(matches: &ArgMatches) -> String {
-    fn encode(string: &str) -> String {
-        use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-        utf8_percent_encode(string, NON_ALPHANUMERIC).to_string()
-    }
+	fn encode(string: &str) -> String {
+		use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+		utf8_percent_encode(string, NON_ALPHANUMERIC).to_string()
+	}
 
-    let password = match std::env::var("PGPASSWORD") {
-        Ok(password) => {
-            debug!("PGPASSWORD is set, using for DB connection");
-            format!(":{}", encode(password.as_str()))
-        }
-        Err(_) => {
-            debug!("PGPASSWORD is not set, omitting for DB connection");
-            String::new()
-        }
-    };
+	let password = match std::env::var("PGPASSWORD") {
+		Ok(password) => {
+			debug!("PGPASSWORD is set, using for DB connection");
+			format!(":{}", encode(password.as_str()))
+		},
+		Err(_) => {
+			debug!("PGPASSWORD is not set, omitting for DB connection");
+			String::new()
+		},
+	};
 
-    format!(
-        "postgresql://{}{}@{}:{}/{}",
-        encode(
-            matches
-                .value_of("database-username")
-                .expect("CLI should always set database user")
-        ),
-        password,
-        encode(
-            matches
-                .value_of("database-host")
-                .expect("CLI should always set database host")
-        ),
-        encode(
-            matches
-                .value_of("database-port")
-                .expect("CLI should always set database port")
-        ),
-        encode(
-            matches
-                .value_of("database-name")
-                .expect("CLI should always set database name")
-        )
-    )
+	format!(
+		"postgresql://{}{}@{}:{}/{}",
+		encode(
+			matches
+				.value_of("database-username")
+				.expect("CLI should always set database user")
+		),
+		password,
+		encode(matches.value_of("database-host").expect("CLI should always set database host")),
+		encode(matches.value_of("database-port").expect("CLI should always set database port")),
+		encode(matches.value_of("database-name").expect("CLI should always set database name"))
+	)
 }
 
 #[derive(Debug, Clone)]
 pub enum ConfiguredOpa {
-    Embedded(ExecutorContext),
-    Remote(ExecutorContext, chronicle_protocol::settings::OpaSettings),
-    Url(ExecutorContext),
+	Embedded(ExecutorContext),
+	Remote(ExecutorContext, chronicle_protocol::settings::OpaSettings),
+	Url(ExecutorContext),
 }
 
 impl ConfiguredOpa {
-    pub fn context(&self) -> &ExecutorContext {
-        match self {
-            ConfiguredOpa::Embedded(context) => context,
-            ConfiguredOpa::Remote(context, _) => context,
-            ConfiguredOpa::Url(context) => context,
-        }
-    }
+	pub fn context(&self) -> &ExecutorContext {
+		match self {
+			ConfiguredOpa::Embedded(context) => context,
+			ConfiguredOpa::Remote(context, _) => context,
+			ConfiguredOpa::Url(context) => context,
+		}
+	}
 
-    pub fn remote_settings(&self) -> Option<String> {
-        match self {
-            ConfiguredOpa::Embedded(_) => None,
-            ConfiguredOpa::Remote(_, settings) => Some(settings.policy_name.clone()),
-            ConfiguredOpa::Url(_) => None,
-        }
-    }
+	pub fn remote_settings(&self) -> Option<String> {
+		match self {
+			ConfiguredOpa::Embedded(_) => None,
+			ConfiguredOpa::Remote(_, settings) => Some(settings.policy_name.clone()),
+			ConfiguredOpa::Url(_) => None,
+		}
+	}
 }
 
 /// If embedded-opa-policy is set, we will use the embedded policy, otherwise we
@@ -356,238 +330,227 @@ impl ConfiguredOpa {
 #[cfg(feature = "inmem")]
 #[allow(unused_variables)]
 async fn configure_opa(options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
-    let (default_policy_name, entrypoint) =
-        ("allow_transactions", "allow_transactions.allowed_users");
-    let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
-    Ok(ConfiguredOpa::Embedded(opa))
+	let (default_policy_name, entrypoint) =
+		("allow_transactions", "allow_transactions.allowed_users");
+	let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
+	Ok(ConfiguredOpa::Embedded(opa))
 }
 
 #[cfg(not(feature = "inmem"))]
 #[instrument(skip(options))]
 async fn configure_opa(options: &ArgMatches) -> Result<ConfiguredOpa, CliError> {
-    if options.is_present("embedded-opa-policy") {
-        let (default_policy_name, entrypoint) =
-            ("allow_transactions", "allow_transactions.allowed_users");
-        let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
-        tracing::warn!(
-            "Chronicle operating in an insecure mode with an embedded default OPA policy"
-        );
-        Ok(ConfiguredOpa::Embedded(opa))
-    } else if let Some(url) = options.value_of("opa-bundle-address") {
-        let (policy_name, entrypoint) = (
-            options.value_of("opa-policy-name").unwrap(),
-            options.value_of("opa-policy-entrypoint").unwrap(),
-        );
-        let opa = self::opa::opa_executor_from_url(url, policy_name, entrypoint).await?;
-        tracing::info!("Chronicle operating with OPA policy from URL");
+	if options.is_present("embedded-opa-policy") {
+		let (default_policy_name, entrypoint) =
+			("allow_transactions", "allow_transactions.allowed_users");
+		let opa = opa_executor_from_embedded_policy(default_policy_name, entrypoint).await?;
+		tracing::warn!(
+			"Chronicle operating in an insecure mode with an embedded default OPA policy"
+		);
+		Ok(ConfiguredOpa::Embedded(opa))
+	} else if let Some(url) = options.value_of("opa-bundle-address") {
+		let (policy_name, entrypoint) = (
+			options.value_of("opa-policy-name").unwrap(),
+			options.value_of("opa-policy-entrypoint").unwrap(),
+		);
+		let opa = self::opa::opa_executor_from_url(url, policy_name, entrypoint).await?;
+		tracing::info!("Chronicle operating with OPA policy from URL");
 
-        Ok(ConfiguredOpa::Url(opa))
-    } else {
-        let (opa, settings) =
-            self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(options)?).await?;
-        tracing::info!(use_on_chain_opa= ?settings, "Chronicle operating in secure mode with on chain OPA policy");
+		Ok(ConfiguredOpa::Url(opa))
+	} else {
+		let (opa, settings) =
+			self::opa::opa_executor_from_sawtooth_settings(&sawtooth_address(options)?).await?;
+		tracing::info!(use_on_chain_opa= ?settings, "Chronicle operating in secure mode with on chain OPA policy");
 
-        Ok(ConfiguredOpa::Remote(opa, settings))
-    }
+		Ok(ConfiguredOpa::Remote(opa, settings))
+	}
 }
 
-/// If `--liveness-check` is set, we use either the interval in seconds provided or the default of 1800.
-/// Otherwise, we use `None` to disable the depth charge.
+/// If `--liveness-check` is set, we use either the interval in seconds provided or the default of
+/// 1800. Otherwise, we use `None` to disable the depth charge.
 fn configure_depth_charge(matches: &ArgMatches) -> Option<u64> {
-    if let Some(serve_api_matches) = matches.subcommand_matches("serve-api") {
-        if let Some(interval) = serve_api_matches.value_of("liveness-check") {
-            let parsed_interval = interval.parse::<u64>().unwrap_or_else(|e| {
-                warn!("Failed to parse '--liveness-check' value: {e}");
-                1800
-            });
+	if let Some(serve_api_matches) = matches.subcommand_matches("serve-api") {
+		if let Some(interval) = serve_api_matches.value_of("liveness-check") {
+			let parsed_interval = interval.parse::<u64>().unwrap_or_else(|e| {
+				warn!("Failed to parse '--liveness-check' value: {e}");
+				1800
+			});
 
-            if parsed_interval == 1800 {
-                debug!("Using default liveness health check interval value: 1800");
-            } else {
-                debug!("Using custom liveness health check interval value: {parsed_interval}");
-            }
-            return Some(parsed_interval);
-        }
-    }
-    debug!("Liveness health check disabled");
-    None
+			if parsed_interval == 1800 {
+				debug!("Using default liveness health check interval value: 1800");
+			} else {
+				debug!("Using custom liveness health check interval value: {parsed_interval}");
+			}
+			return Some(parsed_interval)
+		}
+	}
+	debug!("Liveness health check disabled");
+	None
 }
 
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
-    gql: ChronicleGraphQl<Query, Mutation>,
-    cli: CliModel,
+	gql: ChronicleGraphQl<Query, Mutation>,
+	cli: CliModel,
 ) -> Result<(ApiResponse, ApiDispatch), CliError>
 where
-    Query: ObjectType + Copy,
-    Mutation: ObjectType + Copy,
+	Query: ObjectType + Copy,
+	Mutation: ObjectType + Copy,
 {
-    dotenvy::dotenv().ok();
+	dotenvy::dotenv().ok();
 
-    let matches = cli.as_cmd().get_matches();
+	let matches = cli.as_cmd().get_matches();
 
-    let pool = pool_remote(&construct_db_uri(&matches)).await?;
+	let pool = pool_remote(&construct_db_uri(&matches)).await?;
 
-    let opa = configure_opa(&matches).await?;
+	let opa = configure_opa(&matches).await?;
 
-    let liveness_check_interval = configure_depth_charge(&matches);
+	let liveness_check_interval = configure_depth_charge(&matches);
 
-    let api = api(
-        &pool,
-        &matches,
-        opa.remote_settings(),
-        liveness_check_interval,
-    )
-    .await?;
-    let ret_api = api.clone();
+	let api = api(&pool, &matches, opa.remote_settings(), liveness_check_interval).await?;
+	let ret_api = api.clone();
 
-    if let Some(matches) = matches.subcommand_matches("serve-api") {
-        let interface = match matches.get_many::<String>("interface") {
-            Some(interface_args) => {
-                let mut addrs = Vec::new();
-                for interface_arg in interface_args {
-                    addrs.extend(interface_arg.to_socket_addrs()?);
-                }
-                Some(addrs)
-            }
-            None => None,
-        };
+	if let Some(matches) = matches.subcommand_matches("serve-api") {
+		let interface = match matches.get_many::<String>("interface") {
+			Some(interface_args) => {
+				let mut addrs = Vec::new();
+				for interface_arg in interface_args {
+					addrs.extend(interface_arg.to_socket_addrs()?);
+				}
+				Some(addrs)
+			},
+			None => None,
+		};
 
-        let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
-            Some(JwksUri::new(Url::from_str(uri)?))
-        } else {
-            None
-        };
+		let jwks_uri = if let Some(uri) = matches.value_of("jwks-address") {
+			Some(JwksUri::new(Url::from_str(uri)?))
+		} else {
+			None
+		};
 
-        let userinfo_uri = if let Some(uri) = matches.value_of("userinfo-address") {
-            Some(UserInfoUri::new(Url::from_str(uri)?))
-        } else {
-            None
-        };
+		let userinfo_uri = if let Some(uri) = matches.value_of("userinfo-address") {
+			Some(UserInfoUri::new(Url::from_str(uri)?))
+		} else {
+			None
+		};
 
-        let allow_anonymous = !matches.is_present("require-auth");
+		let allow_anonymous = !matches.is_present("require-auth");
 
-        let id_claims = matches.get_many::<String>("id-claims").map(|id_claims| {
-            let mut id_keys = BTreeSet::new();
-            for id_claim in id_claims {
-                id_keys.extend(id_claim.split_whitespace().map(|s| s.to_string()));
-            }
-            id_keys
-        });
+		let id_claims = matches.get_many::<String>("id-claims").map(|id_claims| {
+			let mut id_keys = BTreeSet::new();
+			for id_claim in id_claims {
+				id_keys.extend(id_claim.split_whitespace().map(|s| s.to_string()));
+			}
+			id_keys
+		});
 
-        let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
-        for (name, value) in std::env::vars() {
-            if let Some(name) = name.strip_prefix("JWT_MUST_CLAIM_") {
-                jwt_must_claim.insert(name.to_lowercase(), value);
-            }
-        }
-        if let Some(mut claims) = matches.get_many::<String>("jwt-must-claim") {
-            while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
-                jwt_must_claim.insert(name.clone(), value.clone());
-            }
-        }
+		let mut jwt_must_claim: HashMap<String, String> = HashMap::new();
+		for (name, value) in std::env::vars() {
+			if let Some(name) = name.strip_prefix("JWT_MUST_CLAIM_") {
+				jwt_must_claim.insert(name.to_lowercase(), value);
+			}
+		}
+		if let Some(mut claims) = matches.get_many::<String>("jwt-must-claim") {
+			while let (Some(name), Some(value)) = (claims.next(), claims.next()) {
+				jwt_must_claim.insert(name.clone(), value.clone());
+			}
+		}
 
-        let endpoints: Vec<String> = matches
-            .get_many("offer-endpoints")
-            .unwrap()
-            .map(String::clone)
-            .collect();
+		let endpoints: Vec<String> =
+			matches.get_many("offer-endpoints").unwrap().map(String::clone).collect();
 
-        api_server(
-            &api,
-            &pool,
-            gql,
-            interface,
-            SecurityConf::new(
-                jwks_uri,
-                userinfo_uri,
-                id_claims,
-                jwt_must_claim,
-                allow_anonymous,
-                opa.context().clone(),
-            ),
-            endpoints.contains(&"graphql".to_string()),
-            endpoints.contains(&"data".to_string()),
-        )
-        .await?;
+		api_server(
+			&api,
+			&pool,
+			gql,
+			interface,
+			SecurityConf::new(
+				jwks_uri,
+				userinfo_uri,
+				id_claims,
+				jwt_must_claim,
+				allow_anonymous,
+				opa.context().clone(),
+			),
+			endpoints.contains(&"graphql".to_string()),
+			endpoints.contains(&"data".to_string()),
+		)
+		.await?;
 
-        Ok((ApiResponse::Unit, ret_api))
-    } else if let Some(matches) = matches.subcommand_matches("import") {
-        let namespace = get_namespace(matches);
+		Ok((ApiResponse::Unit, ret_api))
+	} else if let Some(matches) = matches.subcommand_matches("import") {
+		let namespace = get_namespace(matches);
 
-        let data = if let Some(url) = matches.value_of("url") {
-            let data = load_bytes_from_url(url).await?;
-            info!("Loaded import data from {:?}", url);
-            data
-        } else {
-            if std::io::stdin().is_terminal() {
-                eprintln!("Attempting to import data from standard input, press Ctrl-D to finish.");
-            }
-            info!("Attempting to read import data from stdin...");
-            let data = load_bytes_from_stdin()?;
-            info!("Loaded {} bytes of import data from stdin", data.len());
-            data
-        };
+		let data = if let Some(url) = matches.value_of("url") {
+			let data = load_bytes_from_url(url).await?;
+			info!("Loaded import data from {:?}", url);
+			data
+		} else {
+			if std::io::stdin().is_terminal() {
+				eprintln!("Attempting to import data from standard input, press Ctrl-D to finish.");
+			}
+			info!("Attempting to read import data from stdin...");
+			let data = load_bytes_from_stdin()?;
+			info!("Loaded {} bytes of import data from stdin", data.len());
+			data
+		};
 
-        let data = std::str::from_utf8(&data)?;
+		let data = std::str::from_utf8(&data)?;
 
-        if data.trim().is_empty() {
-            eprintln!("Import data is empty, nothing to import");
-            return Ok((ApiResponse::Unit, ret_api));
-        }
+		if data.trim().is_empty() {
+			eprintln!("Import data is empty, nothing to import");
+			return Ok((ApiResponse::Unit, ret_api))
+		}
 
-        let json_array = serde_json::from_str::<Vec<serde_json::Value>>(data)?;
+		let json_array = serde_json::from_str::<Vec<serde_json::Value>>(data)?;
 
-        let mut operations = Vec::new();
-        for value in json_array.into_iter() {
-            let op = ChronicleOperation::from_json(&value)
-                .await
-                .expect("Failed to parse imported JSON-LD to ChronicleOperation");
-            // Only import operations for the specified namespace
-            if op.namespace() == &namespace {
-                operations.push(op);
-            }
-        }
+		let mut operations = Vec::new();
+		for value in json_array.into_iter() {
+			let op = ChronicleOperation::from_json(&value)
+				.await
+				.expect("Failed to parse imported JSON-LD to ChronicleOperation");
+			// Only import operations for the specified namespace
+			if op.namespace() == &namespace {
+				operations.push(op);
+			}
+		}
 
-        info!("Loading import data complete");
+		info!("Loading import data complete");
 
-        let identity = AuthId::chronicle();
-        info!("Importing data as root to Chronicle namespace: {namespace}");
+		let identity = AuthId::chronicle();
+		info!("Importing data as root to Chronicle namespace: {namespace}");
 
-        let response = api
-            .handle_import_command(identity, namespace, operations)
-            .await?;
+		let response = api.handle_import_command(identity, namespace, operations).await?;
 
-        Ok((response, ret_api))
-    } else if let Some(cmd) = cli.matches(&matches)? {
-        let identity = AuthId::chronicle();
-        Ok((api.dispatch(cmd, identity).await?, ret_api))
-    } else {
-        Ok((ApiResponse::Unit, ret_api))
-    }
+		Ok((response, ret_api))
+	} else if let Some(cmd) = cli.matches(&matches)? {
+		let identity = AuthId::chronicle();
+		Ok((api.dispatch(cmd, identity).await?, ret_api))
+	} else {
+		Ok((ApiResponse::Unit, ret_api))
+	}
 }
 
 fn get_namespace(matches: &ArgMatches) -> NamespaceId {
-    let namespace_id = matches.value_of("namespace-id").unwrap();
-    let namespace_uuid = matches.value_of("namespace-uuid").unwrap();
-    let uuid = uuid::Uuid::try_parse(namespace_uuid)
-        .unwrap_or_else(|_| panic!("cannot parse namespace UUID: {}", namespace_uuid));
-    NamespaceId::from_external_id(namespace_id, uuid)
+	let namespace_id = matches.value_of("namespace-id").unwrap();
+	let namespace_uuid = matches.value_of("namespace-uuid").unwrap();
+	let uuid = uuid::Uuid::try_parse(namespace_uuid)
+		.unwrap_or_else(|_| panic!("cannot parse namespace UUID: {}", namespace_uuid));
+	NamespaceId::from_external_id(namespace_id, uuid)
 }
 
 async fn config_and_exec<Query, Mutation>(
-    gql: ChronicleGraphQl<Query, Mutation>,
-    model: CliModel,
+	gql: ChronicleGraphQl<Query, Mutation>,
+	model: CliModel,
 ) -> Result<(), CliError>
 where
-    Query: ObjectType + Copy,
-    Mutation: ObjectType + Copy,
+	Query: ObjectType + Copy,
+	Mutation: ObjectType + Copy,
 {
-    use colored_json::prelude::*;
+	use colored_json::prelude::*;
 
-    let response = execute_subcommand(gql, model).await?;
+	let response = execute_subcommand(gql, model).await?;
 
-    match response {
+	match response {
         (
             ApiResponse::Submission {
                 subject,
@@ -705,312 +668,291 @@ where
             "DepthChargeSubmitted is an unexpected API response for transaction: {tx_id}. Depth charge not implemented."
         ),
     };
-    Ok(())
+	Ok(())
 }
 
 fn print_completions<G: Generator>(gen: G, app: &mut Command) {
-    generate(gen, app, app.get_name().to_string(), &mut io::stdout());
+	generate(gen, app, app.get_name().to_string(), &mut io::stdout());
 }
 
 pub async fn bootstrap<Query, Mutation>(
-    domain: ChronicleDomainDef,
-    gql: ChronicleGraphQl<Query, Mutation>,
+	domain: ChronicleDomainDef,
+	gql: ChronicleGraphQl<Query, Mutation>,
 ) where
-    Query: ObjectType + 'static + Copy,
-    Mutation: ObjectType + 'static + Copy,
+	Query: ObjectType + 'static + Copy,
+	Mutation: ObjectType + 'static + Copy,
 {
-    let matches = cli(domain.clone()).as_cmd().get_matches();
+	let matches = cli(domain.clone()).as_cmd().get_matches();
 
-    if let Some(generator) = matches.subcommand_matches("completions") {
-        let shell = generator
-            .get_one::<String>("shell")
-            .unwrap()
-            .parse::<Shell>()
-            .unwrap();
-        print_completions(shell.to_owned(), &mut cli(domain.clone()).as_cmd());
-        std::process::exit(0);
-    }
+	if let Some(generator) = matches.subcommand_matches("completions") {
+		let shell = generator.get_one::<String>("shell").unwrap().parse::<Shell>().unwrap();
+		print_completions(shell.to_owned(), &mut cli(domain.clone()).as_cmd());
+		std::process::exit(0);
+	}
 
-    if matches.subcommand_matches("export-schema").is_some() {
-        print!("{}", gql.exportable_schema());
-        std::process::exit(0);
-    }
-    chronicle_telemetry::telemetry(
-        matches
-            .get_one::<String>("instrument")
-            .map(|s| Url::parse(s).expect("cannot parse instrument as URI: {s}")),
-        if matches.contains_id("console-logging") {
-            match matches.get_one::<String>("console-logging") {
-                Some(level) => match level.as_str() {
-                    "pretty" => ConsoleLogging::Pretty,
-                    "json" => ConsoleLogging::Json,
-                    _ => ConsoleLogging::Off,
-                },
-                _ => ConsoleLogging::Off,
-            }
-        } else if matches.subcommand_name() == Some("serve-api") {
-            ConsoleLogging::Pretty
-        } else {
-            ConsoleLogging::Off
-        },
-    );
+	if matches.subcommand_matches("export-schema").is_some() {
+		print!("{}", gql.exportable_schema());
+		std::process::exit(0);
+	}
+	chronicle_telemetry::telemetry(
+		matches
+			.get_one::<String>("instrument")
+			.map(|s| Url::parse(s).expect("cannot parse instrument as URI: {s}")),
+		if matches.contains_id("console-logging") {
+			match matches.get_one::<String>("console-logging") {
+				Some(level) => match level.as_str() {
+					"pretty" => ConsoleLogging::Pretty,
+					"json" => ConsoleLogging::Json,
+					_ => ConsoleLogging::Off,
+				},
+				_ => ConsoleLogging::Off,
+			}
+		} else if matches.subcommand_name() == Some("serve-api") {
+			ConsoleLogging::Pretty
+		} else {
+			ConsoleLogging::Off
+		},
+	);
 
-    if matches.subcommand_matches("generate-key").is_some() {
-        let key = SecretKey::random(StdRng::from_entropy());
-        let key = key.to_pkcs8_pem(LineEnding::CRLF).unwrap();
+	if matches.subcommand_matches("generate-key").is_some() {
+		let key = SecretKey::random(StdRng::from_entropy());
+		let key = key.to_pkcs8_pem(LineEnding::CRLF).unwrap();
 
-        if let Some(path) = matches.get_one::<PathBuf>("output") {
-            //TODO - clean up these unwraps, they always come up with fs / cli
-            let mut file = File::create(path).unwrap();
-            file.write_all(key.as_bytes()).unwrap();
-        } else {
-            print!("{}", *key);
-        }
+		if let Some(path) = matches.get_one::<PathBuf>("output") {
+			//TODO - clean up these unwraps, they always come up with fs / cli
+			let mut file = File::create(path).unwrap();
+			file.write_all(key.as_bytes()).unwrap();
+		} else {
+			print!("{}", *key);
+		}
 
-        std::process::exit(0);
-    }
+		std::process::exit(0);
+	}
 
-    config_and_exec(gql, domain.into())
-        .await
-        .map_err(|e| {
-            error!(?e, "Api error");
-            e.into_ufe().print();
-            std::process::exit(1);
-        })
-        .ok();
+	config_and_exec(gql, domain.into())
+		.await
+		.map_err(|e| {
+			error!(?e, "Api error");
+			e.into_ufe().print();
+			std::process::exit(1);
+		})
+		.ok();
 
-    std::process::exit(0);
+	std::process::exit(0);
 }
 
 /// We can only sensibly test subcommand parsing for the CLI's PROV actions,
 /// configuration + server execution would get a little tricky in the context of a unit test.
 #[cfg(test)]
 pub mod test {
-    use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
-    use async_stl_client::prost::Message;
-    use chronicle_signing::{
-        chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
-        CHRONICLE_NAMESPACE,
-    };
-    use common::{
-        commands::{ApiCommand, ApiResponse},
-        database::TemporaryDatabase,
-        identity::AuthId,
-        k256::sha2::{Digest, Sha256},
-        ledger::SubmissionStage,
-        prov::{
-            to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
-            EntityId, ProvModel,
-        },
-    };
-    use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-    use uuid::Uuid;
+	use api::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
+	use async_stl_client::prost::Message;
+	use chronicle_signing::{
+		chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+		CHRONICLE_NAMESPACE,
+	};
+	use common::{
+		commands::{ApiCommand, ApiResponse},
+		database::TemporaryDatabase,
+		identity::AuthId,
+		k256::sha2::{Digest, Sha256},
+		ledger::SubmissionStage,
+		prov::{
+			to_json_ld::ToJson, ActivityId, AgentId, ChronicleIri, ChronicleTransactionId,
+			EntityId, ProvModel,
+		},
+	};
+	use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
+	use uuid::Uuid;
 
-    use super::{CliModel, SubCommand};
-    use crate::codegen::ChronicleDomainDef;
+	use super::{CliModel, SubCommand};
+	use crate::codegen::ChronicleDomainDef;
 
-    struct TestDispatch<'a> {
-        api: ApiDispatch,
-        _db: TemporaryDatabase<'a>, // share lifetime
-        _tp: EmbeddedChronicleTp,
-    }
+	struct TestDispatch<'a> {
+		api: ApiDispatch,
+		_db: TemporaryDatabase<'a>, // share lifetime
+		_tp: EmbeddedChronicleTp,
+	}
 
-    impl TestDispatch<'_> {
-        pub async fn dispatch(
-            &mut self,
-            command: ApiCommand,
-            identity: AuthId,
-        ) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
-            // We can sort of get final on chain state here by using a map of subject to model
-            if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
-                loop {
-                    let submission = self
-                        .api
-                        .notify_commit
-                        .subscribe()
-                        .recv()
-                        .await
-                        .expect("failed to receive response to submission");
+	impl TestDispatch<'_> {
+		pub async fn dispatch(
+			&mut self,
+			command: ApiCommand,
+			identity: AuthId,
+		) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
+			// We can sort of get final on chain state here by using a map of subject to model
+			if let ApiResponse::Submission { .. } = self.api.dispatch(command, identity).await? {
+				loop {
+					let submission = self
+						.api
+						.notify_commit
+						.subscribe()
+						.recv()
+						.await
+						.expect("failed to receive response to submission");
 
-                    if let SubmissionStage::Committed(commit, _) = submission {
-                        break Ok(Some((commit.delta, commit.tx_id)));
-                    }
-                    if let SubmissionStage::NotCommitted((_, contradiction, _)) = submission {
-                        panic!("Contradiction: {contradiction}");
-                    }
-                }
-            } else {
-                Ok(None)
-            }
-        }
-    }
+					if let SubmissionStage::Committed(commit, _) = submission {
+						break Ok(Some((commit.delta, commit.tx_id)))
+					}
+					if let SubmissionStage::NotCommitted((_, contradiction, _)) = submission {
+						panic!("Contradiction: {contradiction}");
+					}
+				}
+			} else {
+				Ok(None)
+			}
+		}
+	}
 
-    #[derive(Debug, Clone)]
-    struct SameUuid;
+	#[derive(Debug, Clone)]
+	struct SameUuid;
 
-    impl UuidGen for SameUuid {
-        fn uuid() -> Uuid {
-            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
-        }
-    }
+	impl UuidGen for SameUuid {
+		fn uuid() -> Uuid {
+			Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+		}
+	}
 
-    async fn test_api<'a>() -> TestDispatch<'a> {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+	async fn test_api<'a>() -> TestDispatch<'a> {
+		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-        let secrets = ChronicleSigning::new(
-            chronicle_secret_names(),
-            vec![
-                (
-                    CHRONICLE_NAMESPACE.to_string(),
-                    ChronicleSecretsOptions::generate_in_memory(),
-                ),
-                (
-                    BATCHER_NAMESPACE.to_string(),
-                    ChronicleSecretsOptions::generate_in_memory(),
-                ),
-            ],
-        )
-        .await
-        .unwrap();
+		let secrets = ChronicleSigning::new(
+			chronicle_secret_names(),
+			vec![
+				(CHRONICLE_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
+				(BATCHER_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
+			],
+		)
+		.await
+		.unwrap();
 
-        let buf = async_stl_client::messages::Setting {
-            entries: vec![async_stl_client::messages::setting::Entry {
-                key: "chronicle.opa.policy_name".to_string(),
-                value: "allow_transactions".to_string(),
-            }],
-        }
-        .encode_to_vec();
-        let setting_id = (
-            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
-            buf,
-        );
-        let buf = async_stl_client::messages::Setting {
-            entries: vec![async_stl_client::messages::setting::Entry {
-                key: "chronicle.opa.entrypoint".to_string(),
-                value: "allow_transactions.allowed_users".to_string(),
-            }],
-        }
-        .encode_to_vec();
+		let buf = async_stl_client::messages::Setting {
+			entries: vec![async_stl_client::messages::setting::Entry {
+				key: "chronicle.opa.policy_name".to_string(),
+				value: "allow_transactions".to_string(),
+			}],
+		}
+		.encode_to_vec();
+		let setting_id = (
+			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
+			buf,
+		);
+		let buf = async_stl_client::messages::Setting {
+			entries: vec![async_stl_client::messages::setting::Entry {
+				key: "chronicle.opa.entrypoint".to_string(),
+				value: "allow_transactions.allowed_users".to_string(),
+			}],
+		}
+		.encode_to_vec();
 
-        let setting_entrypoint = (
-            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
-            buf,
-        );
+		let setting_entrypoint = (
+			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
+			buf,
+		);
 
-        let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
-        let bin = std::fs::read(d).unwrap();
+		let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
+		let bin = std::fs::read(d).unwrap();
 
-        let meta = PolicyMeta {
-            id: "allow_transactions".to_string(),
-            hash: hex::encode(Sha256::digest(&bin)),
-            policy_address: policy_address("allow_transactions"),
-        };
+		let meta = PolicyMeta {
+			id: "allow_transactions".to_string(),
+			hash: hex::encode(Sha256::digest(&bin)),
+			policy_address: policy_address("allow_transactions"),
+		};
 
-        let embedded_tp = EmbeddedChronicleTp::new_with_state(
-            vec![
-                setting_id,
-                setting_entrypoint,
-                (policy_address("allow_transactions"), bin),
-                (
-                    policy_meta_address("allow_transactions"),
-                    serde_json::to_vec(&meta).unwrap(),
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
+		let embedded_tp = EmbeddedChronicleTp::new_with_state(
+			vec![
+				setting_id,
+				setting_entrypoint,
+				(policy_address("allow_transactions"), bin),
+				(policy_meta_address("allow_transactions"), serde_json::to_vec(&meta).unwrap()),
+			]
+			.into_iter()
+			.collect(),
+		)
+		.unwrap();
 
-        let database = TemporaryDatabase::default();
-        let pool = database.connection_pool().unwrap();
+		let database = TemporaryDatabase::default();
+		let pool = database.connection_pool().unwrap();
 
-        let liveness_check_interval = None;
+		let liveness_check_interval = None;
 
-        let dispatch = Api::new(
-            pool,
-            embedded_tp.ledger.clone(),
-            SameUuid,
-            secrets,
-            vec![],
-            Some("allow_transactions".to_owned()),
-            liveness_check_interval,
-        )
-        .await
-        .unwrap();
+		let dispatch = Api::new(
+			pool,
+			embedded_tp.ledger.clone(),
+			SameUuid,
+			secrets,
+			vec![],
+			Some("allow_transactions".to_owned()),
+			liveness_check_interval,
+		)
+		.await
+		.unwrap();
 
-        TestDispatch {
-            api: dispatch,
-            _db: database,
-            _tp: embedded_tp,
-        }
-    }
+		TestDispatch { api: dispatch, _db: database, _tp: embedded_tp }
+	}
 
-    fn get_api_cmd(command_line: &str) -> ApiCommand {
-        let cli = test_cli_model();
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
-        cli.matches(&matches).unwrap().unwrap()
-    }
+	fn get_api_cmd(command_line: &str) -> ApiCommand {
+		let cli = test_cli_model();
+		let matches = cli.as_cmd().get_matches_from(command_line.split_whitespace());
+		cli.matches(&matches).unwrap().unwrap()
+	}
 
-    async fn parse_and_execute(command_line: &str, cli: CliModel) -> Box<ProvModel> {
-        let mut api = test_api().await;
+	async fn parse_and_execute(command_line: &str, cli: CliModel) -> Box<ProvModel> {
+		let mut api = test_api().await;
 
-        let matches = cli
-            .as_cmd()
-            .get_matches_from(command_line.split_whitespace());
+		let matches = cli.as_cmd().get_matches_from(command_line.split_whitespace());
 
-        let cmd = cli.matches(&matches).unwrap().unwrap();
+		let cmd = cli.matches(&matches).unwrap().unwrap();
 
-        let identity = AuthId::chronicle();
+		let identity = AuthId::chronicle();
 
-        api.dispatch(cmd, identity).await.unwrap().unwrap().0
-    }
+		api.dispatch(cmd, identity).await.unwrap().unwrap().0
+	}
 
-    fn test_cli_model() -> CliModel {
-        CliModel::from(
-            ChronicleDomainDef::build("test")
-                .with_attribute_type("testString", None, crate::PrimitiveType::String)
-                .unwrap()
-                .with_attribute_type("testBool", None, crate::PrimitiveType::Bool)
-                .unwrap()
-                .with_attribute_type("testInt", None, crate::PrimitiveType::Int)
-                .unwrap()
-                .with_attribute_type("testJSON", None, crate::PrimitiveType::JSON)
-                .unwrap()
-                .with_activity("testActivity", None, |b| {
-                    b.with_attribute("testString")
-                        .unwrap()
-                        .with_attribute("testBool")
-                        .unwrap()
-                        .with_attribute("testInt")
-                })
-                .unwrap()
-                .with_agent("testAgent", None, |b| {
-                    b.with_attribute("testString")
-                        .unwrap()
-                        .with_attribute("testBool")
-                        .unwrap()
-                        .with_attribute("testInt")
-                })
-                .unwrap()
-                .with_entity("testEntity", None, |b| {
-                    b.with_attribute("testString")
-                        .unwrap()
-                        .with_attribute("testBool")
-                        .unwrap()
-                        .with_attribute("testInt")
-                })
-                .unwrap()
-                .build(),
-        )
-    }
+	fn test_cli_model() -> CliModel {
+		CliModel::from(
+			ChronicleDomainDef::build("test")
+				.with_attribute_type("testString", None, crate::PrimitiveType::String)
+				.unwrap()
+				.with_attribute_type("testBool", None, crate::PrimitiveType::Bool)
+				.unwrap()
+				.with_attribute_type("testInt", None, crate::PrimitiveType::Int)
+				.unwrap()
+				.with_attribute_type("testJSON", None, crate::PrimitiveType::JSON)
+				.unwrap()
+				.with_activity("testActivity", None, |b| {
+					b.with_attribute("testString")
+						.unwrap()
+						.with_attribute("testBool")
+						.unwrap()
+						.with_attribute("testInt")
+				})
+				.unwrap()
+				.with_agent("testAgent", None, |b| {
+					b.with_attribute("testString")
+						.unwrap()
+						.with_attribute("testBool")
+						.unwrap()
+						.with_attribute("testInt")
+				})
+				.unwrap()
+				.with_entity("testEntity", None, |b| {
+					b.with_attribute("testString")
+						.unwrap()
+						.with_attribute("testBool")
+						.unwrap()
+						.with_attribute("testInt")
+				})
+				.unwrap()
+				.build(),
+		)
+	}
 
-    #[tokio::test]
-    async fn agent_define() {
-        let command_line = r#"chronicle test-agent-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+	#[tokio::test]
+	async fn agent_define() {
+		let command_line = r#"chronicle test-agent-agent define test_agent --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1039,16 +981,16 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_define_id() {
-        let id = ChronicleIri::from(common::prov::AgentId::from_external_id("test_agent"));
-        let command_line = format!(
-            r#"chronicle test-agent-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
-        );
+	#[tokio::test]
+	async fn agent_define_id() {
+		let id = ChronicleIri::from(common::prov::AgentId::from_external_id("test_agent"));
+		let command_line = format!(
+			r#"chronicle test-agent-agent define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
+		);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1077,18 +1019,18 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_use() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn agent_use() {
+		let mut api = test_api().await;
 
-        // note, if you don't supply all three types of attribute this won't run
-        let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 23 "#;
+		// note, if you don't supply all three types of attribute this won't run
+		let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 23 "#;
 
-        let cmd = get_api_cmd(command_line);
+		let cmd = get_api_cmd(command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1118,20 +1060,20 @@ pub mod test {
         }
         "###);
 
-        let id = AgentId::from_external_id("testagent");
+		let id = AgentId::from_external_id("testagent");
 
-        let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
-        let cmd = get_api_cmd(&command_line);
+		let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
+		let cmd = get_api_cmd(&command_line);
 
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ActivityId::from_external_id("testactivity");
-        let command_line = format!(
-            r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let id = ActivityId::from_external_id("testactivity");
+		let command_line = format!(
+			r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1169,14 +1111,14 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_define() {
-        let command_line = r#"chronicle test-entity-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
-        let _delta = parse_and_execute(command_line, test_cli_model());
+	#[tokio::test]
+	async fn entity_define() {
+		let command_line = r#"chronicle test-entity-entity define test_entity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+		let _delta = parse_and_execute(command_line, test_cli_model());
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1205,16 +1147,16 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_define_id() {
-        let id = ChronicleIri::from(common::prov::EntityId::from_external_id("test_entity"));
-        let command_line = format!(
-            r#"chronicle test-entity-entity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
-        );
+	#[tokio::test]
+	async fn entity_define_id() {
+		let id = ChronicleIri::from(common::prov::EntityId::from_external_id("test_entity"));
+		let command_line = format!(
+			r#"chronicle test-entity-entity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
+		);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1243,21 +1185,21 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_derive_abstract() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn entity_derive_abstract() {
+		let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
-        let used_entity_id = EntityId::from_external_id("testusedentity");
+		let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+		let used_entity_id = EntityId::from_external_id("testusedentity");
 
-        let command_line = format!(
-            r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let command_line = format!(
+			r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1289,21 +1231,21 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_derive_primary_source() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn entity_derive_primary_source() {
+		let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
-        let used_entity_id = EntityId::from_external_id("testusedentity");
+		let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+		let used_entity_id = EntityId::from_external_id("testusedentity");
 
-        let command_line = format!(
-            r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype primary-source "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let command_line = format!(
+			r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype primary-source "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1335,21 +1277,21 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_derive_revision() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn entity_derive_revision() {
+		let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
-        let used_entity_id = EntityId::from_external_id("testusedentity");
+		let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+		let used_entity_id = EntityId::from_external_id("testusedentity");
 
-        let command_line = format!(
-            r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype revision "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let command_line = format!(
+			r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype revision "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1381,21 +1323,21 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_derive_quotation() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn entity_derive_quotation() {
+		let mut api = test_api().await;
 
-        let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
-        let used_entity_id = EntityId::from_external_id("testusedentity");
+		let generated_entity_id = EntityId::from_external_id("testgeneratedentity");
+		let used_entity_id = EntityId::from_external_id("testusedentity");
 
-        let command_line = format!(
-            r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype quotation "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let command_line = format!(
+			r#"chronicle test-entity-entity derive {generated_entity_id} {used_entity_id} --namespace testns --subtype quotation "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1427,13 +1369,13 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_define() {
-        let command_line = r#"chronicle test-activity-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
+	#[tokio::test]
+	async fn activity_define() {
+		let command_line = r#"chronicle test-activity-activity define test_activity --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns "#;
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1462,16 +1404,16 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_define_id() {
-        let id = ChronicleIri::from(common::prov::ActivityId::from_external_id("test_activity"));
-        let command_line = format!(
-            r#"chronicle test-activity-activity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
-        );
+	#[tokio::test]
+	async fn activity_define_id() {
+		let id = ChronicleIri::from(common::prov::ActivityId::from_external_id("test_activity"));
+		let command_line = format!(
+			r#"chronicle test-activity-activity define --test-bool-attr false --test-string-attr "test" --test-int-attr 23 --namespace testns --id {id} "#
+		);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &parse_and_execute(&command_line, test_cli_model()).await.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1500,29 +1442,29 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_start() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn activity_start() {
+		let mut api = test_api().await;
 
-        let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
-        let cmd = get_api_cmd(command_line);
+		let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+		let cmd = get_api_cmd(command_line);
 
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
-        let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
-        let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
+		let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
+		let cmd = get_api_cmd(&command_line);
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
-        let command_line = format!(
-            r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
+		let command_line = format!(
+			r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1560,37 +1502,37 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_end() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn activity_end() {
+		let mut api = test_api().await;
 
-        let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
-        let cmd = get_api_cmd(command_line);
+		let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+		let cmd = get_api_cmd(command_line);
 
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
-        let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
-        let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
+		let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
+		let cmd = get_api_cmd(&command_line);
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
-        let command_line = format!(
-            r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
-        );
-        let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		let id = ChronicleIri::from(ActivityId::from_external_id("testactivity"));
+		let command_line = format!(
+			r#"chronicle test-activity-activity start {id} --namespace testns --time 2014-07-08T09:10:11Z "#
+		);
+		let cmd = get_api_cmd(&command_line);
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        // Should end the last opened activity
-        let id = ActivityId::from_external_id("testactivity");
-        let command_line = format!(
-            r#"chronicle test-activity-activity end --namespace testns --time 2014-08-09T09:10:12Z {id} "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		// Should end the last opened activity
+		let id = ActivityId::from_external_id("testactivity");
+		let command_line = format!(
+			r#"chronicle test-activity-activity end --namespace testns --time 2014-08-09T09:10:12Z {id} "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1614,25 +1556,25 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_generate() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn activity_generate() {
+		let mut api = test_api().await;
 
-        let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
-        let cmd = get_api_cmd(command_line);
+		let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+		let cmd = get_api_cmd(command_line);
 
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let activity_id = ActivityId::from_external_id("testactivity");
-        let entity_id = EntityId::from_external_id("testentity");
-        let command_line = format!(
-            r#"chronicle test-activity-activity generate --namespace testns {entity_id} {activity_id} "#
-        );
-        let cmd = get_api_cmd(&command_line);
+		let activity_id = ActivityId::from_external_id("testactivity");
+		let entity_id = EntityId::from_external_id("testentity");
+		let command_line = format!(
+			r#"chronicle test-activity-activity generate --namespace testns {entity_id} {activity_id} "#
+		);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1657,35 +1599,35 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_use() {
-        let mut api = test_api().await;
+	#[tokio::test]
+	async fn activity_use() {
+		let mut api = test_api().await;
 
-        let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
-        let cmd = get_api_cmd(command_line);
+		let command_line = r#"chronicle test-agent-agent define testagent --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+		let cmd = get_api_cmd(command_line);
 
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
-        let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
-        let cmd = get_api_cmd(&command_line);
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		let id = ChronicleIri::from(AgentId::from_external_id("testagent"));
+		let command_line = format!(r#"chronicle test-agent-agent use --namespace testns {id} "#);
+		let cmd = get_api_cmd(&command_line);
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
-        let cmd = get_api_cmd(command_line);
-        api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
+		let command_line = r#"chronicle test-activity-activity define testactivity --namespace testns --test-string-attr "test" --test-bool-attr true --test-int-attr 40 "#;
+		let cmd = get_api_cmd(command_line);
+		api.dispatch(cmd, AuthId::chronicle()).await.unwrap();
 
-        let activity_id = ActivityId::from_external_id("testactivity");
-        let entity_id = EntityId::from_external_id("testentity");
-        let command_line = format!(
-            r#"chronicle test-activity-activity use --namespace testns {entity_id} {activity_id} "#
-        );
+		let activity_id = ActivityId::from_external_id("testactivity");
+		let entity_id = EntityId::from_external_id("testentity");
+		let command_line = format!(
+			r#"chronicle test-activity-activity use --namespace testns {entity_id} {activity_id} "#
+		);
 
-        let cmd = get_api_cmd(&command_line);
+		let cmd = get_api_cmd(&command_line);
 
-        insta::assert_snapshot!(
+		insta::assert_snapshot!(
           serde_json::to_string_pretty(
           &api.dispatch(cmd, AuthId::chronicle()).await.unwrap().unwrap().0.to_json().compact_stable_order().await.unwrap()
         ).unwrap() , @r###"
@@ -1724,5 +1666,5 @@ pub mod test {
           ]
         }
         "###);
-    }
+	}
 }

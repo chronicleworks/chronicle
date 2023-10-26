@@ -1,15 +1,16 @@
 use chronicle::{
-    api::chronicle_graphql::ChronicleGraphQl, bootstrap, codegen::ChronicleDomainDef, tokio,
+	api::chronicle_graphql::ChronicleGraphQl, bootstrap, codegen::ChronicleDomainDef, tokio,
 };
 use generated::{Mutation, Query};
 
 #[allow(dead_code)]
 mod generated;
 
-///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the actual pattern
+///Entry point here is jigged a little, as we want to run unit tests, see chronicle-untyped for the
+/// actual pattern
 #[tokio::main]
 pub async fn main() {
-    let s = r#"
+	let s = r#"
     name: "airworthiness"
     attributes:
       CertId:
@@ -53,178 +54,169 @@ pub async fn main() {
       - MANUFACTURER
       - SUBMITTER
      "#
-    .to_string();
+	.to_string();
 
-    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
+	let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
-    bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
+	bootstrap(model, ChronicleGraphQl::new(Query, Mutation)).await
 }
 
 #[cfg(test)]
 mod test {
-    use super::{Mutation, Query};
-    use async_stl_client::prost::Message;
-    use chronicle::{
-        api::{
-            chronicle_graphql::{OpaCheck, Store, Subscription},
-            inmem::EmbeddedChronicleTp,
-            Api, UuidGen,
-        },
-        async_graphql::{Request, Response, Schema},
-        chrono::{NaiveDate, TimeZone, Utc},
-        common::{
-            database::TemporaryDatabase,
-            identity::AuthId,
-            k256::sha2::{Digest, Sha256},
-            opa::{CliPolicyLoader, ExecutorContext},
-        },
-        serde_json, tokio,
-        uuid::Uuid,
-    };
-    use chronicle_signing::{
-        chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
-        CHRONICLE_NAMESPACE,
-    };
-    use core::future::Future;
-    use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-    use std::time::Duration;
+	use super::{Mutation, Query};
+	use async_stl_client::prost::Message;
+	use chronicle::{
+		api::{
+			chronicle_graphql::{OpaCheck, Store, Subscription},
+			inmem::EmbeddedChronicleTp,
+			Api, UuidGen,
+		},
+		async_graphql::{Request, Response, Schema},
+		chrono::{NaiveDate, TimeZone, Utc},
+		common::{
+			database::TemporaryDatabase,
+			identity::AuthId,
+			k256::sha2::{Digest, Sha256},
+			opa::{CliPolicyLoader, ExecutorContext},
+		},
+		serde_json, tokio,
+		uuid::Uuid,
+	};
+	use chronicle_signing::{
+		chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
+		CHRONICLE_NAMESPACE,
+	};
+	use core::future::Future;
+	use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
+	use std::time::Duration;
 
-    #[derive(Debug, Clone)]
-    struct SameUuid;
+	#[derive(Debug, Clone)]
+	struct SameUuid;
 
-    impl UuidGen for SameUuid {
-        fn uuid() -> Uuid {
-            Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
-        }
-    }
+	impl UuidGen for SameUuid {
+		fn uuid() -> Uuid {
+			Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
+		}
+	}
 
-    async fn test_schema<'a>() -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
-        let loader = CliPolicyLoader::from_embedded_policy(
-            "allow_transactions",
-            "allow_transactions.allowed_users",
-        )
-        .unwrap();
-        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
+	async fn test_schema<'a>() -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
+		let loader = CliPolicyLoader::from_embedded_policy(
+			"allow_transactions",
+			"allow_transactions.allowed_users",
+		)
+		.unwrap();
+		let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
-        test_schema_with_opa(opa_executor).await
-    }
+		test_schema_with_opa(opa_executor).await
+	}
 
-    async fn test_schema_blocked_api<'a>(
-    ) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
-        let loader = CliPolicyLoader::from_embedded_policy(
-            "allow_transactions",
-            "allow_transactions.deny_all",
-        )
-        .unwrap();
-        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
+	async fn test_schema_blocked_api<'a>(
+	) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
+		let loader = CliPolicyLoader::from_embedded_policy(
+			"allow_transactions",
+			"allow_transactions.deny_all",
+		)
+		.unwrap();
+		let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
 
-        test_schema_with_opa(opa_executor).await
-    }
+		test_schema_with_opa(opa_executor).await
+	}
 
-    async fn test_schema_with_opa<'a>(
-        opa_executor: ExecutorContext,
-    ) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
-        chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+	async fn test_schema_with_opa<'a>(
+		opa_executor: ExecutorContext,
+	) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
+		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-        let signing = ChronicleSigning::new(
-            chronicle_secret_names(),
-            vec![
-                (
-                    CHRONICLE_NAMESPACE.to_string(),
-                    ChronicleSecretsOptions::test_keys(),
-                ),
-                (
-                    BATCHER_NAMESPACE.to_string(),
-                    ChronicleSecretsOptions::test_keys(),
-                ),
-            ],
-        )
-        .await
-        .unwrap();
+		let signing = ChronicleSigning::new(
+			chronicle_secret_names(),
+			vec![
+				(CHRONICLE_NAMESPACE.to_string(), ChronicleSecretsOptions::test_keys()),
+				(BATCHER_NAMESPACE.to_string(), ChronicleSecretsOptions::test_keys()),
+			],
+		)
+		.await
+		.unwrap();
 
-        let buf = async_stl_client::messages::Setting {
-            entries: vec![async_stl_client::messages::setting::Entry {
-                key: "chronicle.opa.policy_name".to_string(),
-                value: "allow_transactions".to_string(),
-            }],
-        }
-        .encode_to_vec();
+		let buf = async_stl_client::messages::Setting {
+			entries: vec![async_stl_client::messages::setting::Entry {
+				key: "chronicle.opa.policy_name".to_string(),
+				value: "allow_transactions".to_string(),
+			}],
+		}
+		.encode_to_vec();
 
-        let setting_id = (
-            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
-            buf,
-        );
-        let buf = async_stl_client::messages::Setting {
-            entries: vec![async_stl_client::messages::setting::Entry {
-                key: "chronicle.opa.entrypoint".to_string(),
-                value: "allow_transactions.allowed_users".to_string(),
-            }],
-        }
-        .encode_to_vec();
+		let setting_id = (
+			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
+			buf,
+		);
+		let buf = async_stl_client::messages::Setting {
+			entries: vec![async_stl_client::messages::setting::Entry {
+				key: "chronicle.opa.entrypoint".to_string(),
+				value: "allow_transactions.allowed_users".to_string(),
+			}],
+		}
+		.encode_to_vec();
 
-        let setting_entrypoint = (
-            chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
-            buf,
-        );
+		let setting_entrypoint = (
+			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
+			buf,
+		);
 
-        let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
-        let bin = std::fs::read(d).unwrap();
+		let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
+		let bin = std::fs::read(d).unwrap();
 
-        let meta = PolicyMeta {
-            id: "allow_transactions".to_string(),
-            hash: hex::encode(Sha256::digest(&bin)),
-            policy_address: policy_address("allow_transactions"),
-        };
+		let meta = PolicyMeta {
+			id: "allow_transactions".to_string(),
+			hash: hex::encode(Sha256::digest(&bin)),
+			policy_address: policy_address("allow_transactions"),
+		};
 
-        let tp = EmbeddedChronicleTp::new_with_state(
-            vec![
-                setting_id,
-                setting_entrypoint,
-                (policy_address("allow_transactions"), bin),
-                (
-                    policy_meta_address("allow_transactions"),
-                    serde_json::to_vec(&meta).unwrap(),
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
+		let tp = EmbeddedChronicleTp::new_with_state(
+			vec![
+				setting_id,
+				setting_entrypoint,
+				(policy_address("allow_transactions"), bin),
+				(policy_meta_address("allow_transactions"), serde_json::to_vec(&meta).unwrap()),
+			]
+			.into_iter()
+			.collect(),
+		)
+		.unwrap();
 
-        let ledger = tp.ledger.clone();
+		let ledger = tp.ledger.clone();
 
-        let database = TemporaryDatabase::default();
-        let pool = database.connection_pool().unwrap();
-        let liveness_check_interval = None;
+		let database = TemporaryDatabase::default();
+		let pool = database.connection_pool().unwrap();
+		let liveness_check_interval = None;
 
-        let dispatch = Api::new(
-            pool.clone(),
-            ledger,
-            SameUuid,
-            signing,
-            vec![],
-            None,
-            liveness_check_interval,
-        )
-        .await
-        .unwrap();
+		let dispatch = Api::new(
+			pool.clone(),
+			ledger,
+			SameUuid,
+			signing,
+			vec![],
+			None,
+			liveness_check_interval,
+		)
+		.await
+		.unwrap();
 
-        let schema = Schema::build(Query, Mutation, Subscription)
-            .extension(OpaCheck { claim_parser: None })
-            .data(Store::new(pool))
-            .data(dispatch)
-            .data(AuthId::chronicle())
-            .data(opa_executor)
-            .finish();
+		let schema = Schema::build(Query, Mutation, Subscription)
+			.extension(OpaCheck { claim_parser: None })
+			.data(Store::new(pool))
+			.data(dispatch)
+			.data(AuthId::chronicle())
+			.data(opa_executor)
+			.finish();
 
-        (schema, database)
-    }
+		(schema, database)
+	}
 
-    #[tokio::test]
-    async fn accept_long_form_including_original_name_iris() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn accept_long_form_including_original_name_iris() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -243,9 +235,9 @@ mod test {
         context = 'chronicle:agent:testagent'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -282,13 +274,13 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_timeline_no_duplicates() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn activity_timeline_no_duplicates() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
         .execute(Request::new(
             r#"
             mutation defineContractorAndManufactureAndAssociate {
@@ -336,9 +328,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation d1 {
@@ -358,9 +350,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation d2 {
@@ -380,9 +372,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation d3 {
@@ -402,9 +394,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation g1 {
@@ -424,9 +416,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation g2 {
@@ -446,9 +438,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               mutation g3 {
@@ -468,9 +460,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query a {
@@ -551,27 +543,24 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn api_calls_resulting_in_no_data_changes_return_null() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn api_calls_resulting_in_no_data_changes_return_null() {
+		let (schema, _database) = test_schema().await;
 
-        let from = Utc
-            .from_utc_datetime(
-                &NaiveDate::from_ymd_opt(1968, 9, 1)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
-            .checked_add_signed(chronicle::chrono::Duration::days(1))
-            .unwrap()
-            .to_rfc3339();
+		let from = Utc
+			.from_utc_datetime(
+				&NaiveDate::from_ymd_opt(1968, 9, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+			)
+			.checked_add_signed(chronicle::chrono::Duration::days(1))
+			.unwrap()
+			.to_rfc3339();
 
-        let id_one = chronicle::async_graphql::Name::new("1");
-        let id_two = chronicle::async_graphql::Name::new("2");
+		let id_one = chronicle::async_graphql::Name::new("1");
+		let id_two = chronicle::async_graphql::Name::new("2");
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
             r#"
@@ -755,7 +744,7 @@ mod test {
         }
         "###);
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
               r#"
@@ -927,7 +916,7 @@ mod test {
         }
         "###);
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
               r#"
@@ -1098,15 +1087,15 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn one_of_id_or_external() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn one_of_id_or_external() {
+		let (schema, _database) = test_schema().await;
 
-        let external_id_input = chronicle::async_graphql::Name::new("withexternalid");
+		let external_id_input = chronicle::async_graphql::Name::new("withexternalid");
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
             r#"
@@ -1267,9 +1256,9 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
             r#"
@@ -1314,20 +1303,20 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn generic_json_object_attribute() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn generic_json_object_attribute() {
+		let (schema, _database) = test_schema().await;
 
-        // We doctor the test JSON input data as done in the `async_graphql` library JSON tests
-        // https://docs.rs/async-graphql/latest/src/async_graphql/types/json.rs.html#20.
-        // In fact, if you make the JSON input more complex, nesting data further, etc, it will cause
-        // "expected Name" errors. However, complex JSON inputs have been tested with success in the GraphQL
-        // Playground, as documented here: https://blockchaintp.atlassian.net/l/cp/0aocArV4
-        let res = schema
-            .execute(Request::new(
-                r#"
+		// We doctor the test JSON input data as done in the `async_graphql` library JSON tests
+		// https://docs.rs/async-graphql/latest/src/async_graphql/types/json.rs.html#20.
+		// In fact, if you make the JSON input more complex, nesting data further, etc, it will
+		// cause "expected Name" errors. However, complex JSON inputs have been tested with success
+		// in the GraphQL Playground, as documented here: https://blockchaintp.atlassian.net/l/cp/0aocArV4
+		let res = schema
+			.execute(Request::new(
+				r#"
             mutation {
               defineNCBAgent(
                   externalId: "testagent2"
@@ -1343,14 +1332,14 @@ mod test {
                 }
               }
         "#,
-            ))
-            .await;
+			))
+			.await;
 
-        assert_eq!(res.errors, vec![]);
+		assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             r#"
             query agent {
@@ -1381,13 +1370,13 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_delegation() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn agent_delegation() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -1406,9 +1395,9 @@ mod test {
         context = 'chronicle:agent:testagent'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1445,15 +1434,15 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_delegation_for_activity() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn agent_delegation_for_activity() {
+		let (schema, _database) = test_schema().await;
 
-        // create contractors
+		// create contractors
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -1471,9 +1460,9 @@ mod test {
             context = 'chronicle:agent:huey'
           "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
               mutation {
@@ -1491,9 +1480,9 @@ mod test {
               context = 'chronicle:agent:dewey'
               "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
               .execute(Request::new(
                   r#"
                 mutation {
@@ -1511,11 +1500,11 @@ mod test {
                 context = 'chronicle:agent:louie'
                   "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        // create activities
+		// create activities
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1533,9 +1522,9 @@ mod test {
         context = 'chronicle:activity:manufacture'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1553,11 +1542,11 @@ mod test {
         context = 'chronicle:activity:certification'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        // associate contractors with activities
+		// associate contractors with activities
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1576,9 +1565,9 @@ mod test {
           context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1597,9 +1586,9 @@ mod test {
           context = 'chronicle:agent:dewey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1619,11 +1608,11 @@ mod test {
         context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        // check responsible and delegate are correct for activities
+		// check responsible and delegate are correct for activities
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1675,7 +1664,7 @@ mod test {
           }
         "###);
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1722,9 +1711,9 @@ mod test {
           }
         "###);
 
-        // use the same delegated contractor for two different roles
+		// use the same delegated contractor for two different roles
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -1743,11 +1732,11 @@ mod test {
           context = 'chronicle:agent:huey'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+		tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        // check that same delegate is returned twice over
+		// check that same delegate is returned twice over
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1812,13 +1801,13 @@ mod test {
             }
           }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn untyped_derivation() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn untyped_derivation() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -1834,9 +1823,9 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1862,13 +1851,13 @@ mod test {
         [[data.entityById.wasDerivedFrom]]
         id = 'chronicle:entity:testentity2'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn primary_source() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn primary_source() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -1884,9 +1873,9 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1921,13 +1910,13 @@ mod test {
         [[data.entityById.hadPrimarySource]]
         id = 'chronicle:entity:testentity2'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn revision() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn revision() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -1943,9 +1932,9 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -1979,13 +1968,13 @@ mod test {
         [[data.entityById.wasRevisionOf]]
         id = 'chronicle:entity:testentity2'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn quotation() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn quotation() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -2001,9 +1990,9 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -2037,13 +2026,13 @@ mod test {
         [[data.entityById.wasQuotedFrom]]
         id = 'chronicle:entity:testentity2'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_can_be_created() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn agent_can_be_created() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -2057,13 +2046,13 @@ mod test {
         [data.defineAgent]
         context = 'chronicle:agent:testentity1'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn agent_by_type() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn agent_by_type() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -2078,9 +2067,9 @@ mod test {
         context = 'chronicle:agent:testagent1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -2097,13 +2086,13 @@ mod test {
         [[data.agentsByType.nodes]]
         id = 'chronicle:agent:testagent1'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn activity_by_type() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn activity_by_type() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -2118,9 +2107,9 @@ mod test {
         context = 'chronicle:activity:testactivity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           query {
@@ -2137,13 +2126,13 @@ mod test {
         [[data.activitiesByType.nodes]]
         id = 'chronicle:activity:testactivity1'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn entity_by_type() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn entity_by_type() {
+		let (schema, _database) = test_schema().await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation {
@@ -2158,11 +2147,11 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let agent = schema
-            .execute(Request::new(
-                r#"
+		let agent = schema
+			.execute(Request::new(
+				r#"
             query {
                 entitiesByType(entityType: CertificateEntity) {
                   nodes {
@@ -2172,21 +2161,21 @@ mod test {
                   }
                 }
             }"#,
-            ))
-            .await;
+			))
+			.await;
 
-        insta::assert_toml_snapshot!(agent, @r###"
+		insta::assert_toml_snapshot!(agent, @r###"
         [[data.entitiesByType.nodes]]
         id = 'chronicle:entity:testentity1'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn was_informed_by() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn was_informed_by() {
+		let (schema, _database) = test_schema().await;
 
-        // create an activity
-        insta::assert_toml_snapshot!(schema
+		// create an activity
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
                   mutation one {
@@ -2201,8 +2190,8 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
-        // create another activity
-        insta::assert_toml_snapshot!(schema
+		// create another activity
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation two {
@@ -2218,8 +2207,8 @@ mod test {
         context = 'chronicle:activity:testactivityid2'
         "###);
 
-        // establish WasInformedBy relationship
-        insta::assert_toml_snapshot!(schema
+		// establish WasInformedBy relationship
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation exec {
@@ -2236,10 +2225,10 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query WasInformedBy relationship
-        insta::assert_toml_snapshot!(schema
+		// query WasInformedBy relationship
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query test {
@@ -2270,10 +2259,10 @@ mod test {
         externalId = 'testactivityid2'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // create a third activity
-        insta::assert_toml_snapshot!(schema
+		// create a third activity
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
                     mutation three {
@@ -2288,10 +2277,10 @@ mod test {
         context = 'chronicle:activity:testactivityid3'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // establish another WasInformedBy relationship
-        insta::assert_toml_snapshot!(schema
+		// establish another WasInformedBy relationship
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation execagain {
@@ -2308,10 +2297,10 @@ mod test {
         context = 'chronicle:activity:testactivityid1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query WasInformedBy relationship
-        insta::assert_toml_snapshot!(schema
+		// query WasInformedBy relationship
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
                 query test {
@@ -2347,42 +2336,36 @@ mod test {
         id = 'chronicle:activity:testactivityid3'
         externalId = 'testactivityid3'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn was_attributed_to() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn was_attributed_to() {
+		let (schema, _database) = test_schema().await;
 
-        let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
+		let test_activity = chronicle::async_graphql::Name::new("ItemCertified");
 
-        let from = Utc
-            .from_utc_datetime(
-                &NaiveDate::from_ymd_opt(2023, 3, 20)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
-            .checked_add_signed(chronicle::chrono::Duration::days(1))
-            .unwrap()
-            .to_rfc3339();
+		let from = Utc
+			.from_utc_datetime(
+				&NaiveDate::from_ymd_opt(2023, 3, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+			)
+			.checked_add_signed(chronicle::chrono::Duration::days(1))
+			.unwrap()
+			.to_rfc3339();
 
-        let test_entity = chronicle::async_graphql::Name::new("Certificate");
+		let test_entity = chronicle::async_graphql::Name::new("Certificate");
 
-        let test_agent = chronicle::async_graphql::Name::new("Certifier");
+		let test_agent = chronicle::async_graphql::Name::new("Certifier");
 
-        let to = Utc
-            .from_utc_datetime(
-                &NaiveDate::from_ymd_opt(2023, 3, 21)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
-            .checked_add_signed(chronicle::chrono::Duration::days(1))
-            .unwrap()
-            .to_rfc3339();
+		let to = Utc
+			.from_utc_datetime(
+				&NaiveDate::from_ymd_opt(2023, 3, 21).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+			)
+			.checked_add_signed(chronicle::chrono::Duration::days(1))
+			.unwrap()
+			.to_rfc3339();
 
-        // create an activity that used an entity and was associated with an agent
-        insta::assert_json_snapshot!(schema
+		// create an activity that used an entity and was associated with an agent
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
             &format!(
             r#"
@@ -2445,10 +2428,10 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // attribute the entity to the agent
-        insta::assert_json_snapshot!(schema
+		// attribute the entity to the agent
+		insta::assert_json_snapshot!(schema
               .execute(Request::new(
                 &format!(
                 r#"
@@ -2469,10 +2452,10 @@ mod test {
               }
               "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query WasAttributedTo relationship
-        insta::assert_toml_snapshot!(schema
+		// query WasAttributedTo relationship
+		insta::assert_toml_snapshot!(schema
                   .execute(Request::new(
                     &format!(
                 r#"
@@ -2513,9 +2496,9 @@ mod test {
         locationAttribute = 'SomeLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
                   .execute(Request::new(
                 r#"
                   query queryWasAttributedToAnotherWay {
@@ -2557,9 +2540,9 @@ mod test {
         locationAttribute = 'SomeLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
                   &format!(
                     r#"
@@ -2600,9 +2583,9 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
                     r#"
                 query queryAgentAttributionAnotherWay {
@@ -2644,10 +2627,10 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // create another agent and attribute the entity to that other agent as well
-        insta::assert_json_snapshot!(schema
+		// create another agent and attribute the entity to that other agent as well
+		insta::assert_json_snapshot!(schema
               .execute(Request::new(
                 &format!(
                 r#"
@@ -2674,10 +2657,10 @@ mod test {
         }
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query WasAttributedTo relationship
-        insta::assert_toml_snapshot!(schema
+		// query WasAttributedTo relationship
+		insta::assert_toml_snapshot!(schema
               .execute(Request::new(
                 &format!(
                   r#"
@@ -2727,9 +2710,9 @@ mod test {
         locationAttribute = 'AnotherLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query queryWasAttributedToSecondAgentAnotherWay {
@@ -2780,9 +2763,9 @@ mod test {
         locationAttribute = 'AnotherLocation'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
                     r#"
                 query querySecondAgentAttribution {
@@ -2822,9 +2805,9 @@ mod test {
         certIdAttribute = 'SomeCertId'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        insta::assert_toml_snapshot!(schema
+		insta::assert_toml_snapshot!(schema
                 .execute(Request::new(
                     r#"
                 query querySecondAgentAttributionAnotherWay {
@@ -2878,14 +2861,14 @@ mod test {
         id = 'chronicle:entity:Certificate'
         certIdAttribute = 'SomeCertId'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn generated() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn generated() {
+		let (schema, _database) = test_schema().await;
 
-        // create an activity
-        insta::assert_toml_snapshot!(schema
+		// create an activity
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
                   mutation activity {
@@ -2900,8 +2883,8 @@ mod test {
         context = 'chronicle:activity:testactivity1'
         "###);
 
-        // create an entity
-        insta::assert_toml_snapshot!(schema
+		// create an entity
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
                   mutation entity {
@@ -2916,8 +2899,8 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        // establish Generated relationship
-        insta::assert_toml_snapshot!(schema
+		// establish Generated relationship
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
           mutation generated {
@@ -2934,10 +2917,10 @@ mod test {
         context = 'chronicle:entity:testentity1'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query Generated relationship
-        insta::assert_toml_snapshot!(schema
+		// query Generated relationship
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             query test {
@@ -2968,11 +2951,11 @@ mod test {
         externalId = 'testentity1'
         "###);
 
-        // The following demonstrates that a second wasGeneratedBy
-        // relationship cannot be made once the first has been established.
+		// The following demonstrates that a second wasGeneratedBy
+		// relationship cannot be made once the first has been established.
 
-        // create another entity
-        insta::assert_toml_snapshot!(schema
+		// create another entity
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             mutation second {
@@ -2988,8 +2971,8 @@ mod test {
         context = 'chronicle:entity:testitem'
         "###);
 
-        // establish another Generated relationship
-        insta::assert_toml_snapshot!(schema
+		// establish another Generated relationship
+		insta::assert_toml_snapshot!(schema
             .execute(Request::new(
                 r#"
             mutation again {
@@ -3006,10 +2989,10 @@ mod test {
         context = 'chronicle:entity:testitem'
         "###);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // query Generated relationship
-        insta::assert_toml_snapshot!(schema
+		// query Generated relationship
+		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
               query testagain {
@@ -3043,13 +3026,13 @@ mod test {
         id = 'chronicle:entity:testentity1'
         externalId = 'testentity1'
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn query_activity_timeline() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn query_activity_timeline() {
+		let (schema, _database) = test_schema().await;
 
-        let res = schema
+		let res = schema
                 .execute(Request::new(
                     r#"
             mutation {
@@ -3061,13 +3044,13 @@ mod test {
                 ))
                 .await;
 
-        assert_eq!(res.errors, vec![]);
+		assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let res = schema
-            .execute(Request::new(
-                r#"
+		let res = schema
+			.execute(Request::new(
+				r#"
             mutation {
               defineNCBAgent(
                   externalId: "testagent2"
@@ -3080,14 +3063,14 @@ mod test {
                 }
               }
         "#,
-            ))
-            .await;
+			))
+			.await;
 
-        assert_eq!(res.errors, vec![]);
+		assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let res = schema
+		let res = schema
                 .execute(Request::new(
                     r#"
             mutation {
@@ -3099,42 +3082,39 @@ mod test {
                 ))
                 .await;
 
-        assert_eq!(res.errors, vec![]);
+		assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let res = schema
-            .execute(Request::new(
-                r#"
+		let res = schema
+			.execute(Request::new(
+				r#"
             mutation {
               defineNCBRecordEntity(externalId:"testentity2") {
                     context
                 }
             }
         "#,
-            ))
-            .await;
+			))
+			.await;
 
-        assert_eq!(res.errors, vec![]);
+		assert_eq!(res.errors, vec![]);
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let from = Utc.from_utc_datetime(
-            &NaiveDate::from_ymd_opt(1968, 9, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-        );
+		let from = Utc.from_utc_datetime(
+			&NaiveDate::from_ymd_opt(1968, 9, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+		);
 
-        for i in 1..10 {
-            let activity_name = if i % 2 == 0 {
-                format!("testactivity{i}")
-            } else {
-                format!("anothertestactivity{i}")
-            };
+		for i in 1..10 {
+			let activity_name = if i % 2 == 0 {
+				format!("testactivity{i}")
+			} else {
+				format!("anothertestactivity{i}")
+			};
 
-            if (i % 2) == 0 {
-                let res = schema
+			if (i % 2) == 0 {
+				let res = schema
                     .execute(Request::new(
                         &format!(
                             r#"
@@ -3148,25 +3128,25 @@ mod test {
                     ))
                     .await;
 
-                assert_eq!(res.errors, vec![]);
-            } else {
-                let res = schema
-                    .execute(Request::new(&format!(
-                        r#"
+				assert_eq!(res.errors, vec![]);
+			} else {
+				let res = schema
+					.execute(Request::new(&format!(
+						r#"
                     mutation {{
                       defineItemCodifiedActivity(externalId:"{activity_name}") {{
                             context
                         }}
                     }}
                 "#
-                    )))
-                    .await;
+					)))
+					.await;
 
-                assert_eq!(res.errors, vec![]);
-            }
+				assert_eq!(res.errors, vec![]);
+			}
 
-            tokio::time::sleep(Duration::from_millis(1000)).await;
-            let res = schema
+			tokio::time::sleep(Duration::from_millis(1000)).await;
+			let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
@@ -3177,55 +3157,51 @@ mod test {
         "#
                 )))
                 .await;
-            assert_eq!(res.errors, vec![]);
+			assert_eq!(res.errors, vec![]);
 
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-            let res = schema
-                .execute(Request::new(format!(
-                    r#"
+			let res = schema
+				.execute(Request::new(format!(
+					r#"
                   mutation {{
                       startActivity( time: "{}", id: {{id: "chronicle:activity:{}" }}) {{
                           context
                       }}
                   }}
                 "#,
-                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
-                        .unwrap()
-                        .to_rfc3339(),
-                    activity_name
-                )))
-                .await;
+					from.checked_add_signed(chronicle::chrono::Duration::days(i))
+						.unwrap()
+						.to_rfc3339(),
+					activity_name
+				)))
+				.await;
 
-            assert_eq!(res.errors, vec![]);
+			assert_eq!(res.errors, vec![]);
 
-            let res = schema
-                .execute(Request::new(format!(
-                    r#"
+			let res = schema
+				.execute(Request::new(format!(
+					r#"
             mutation {{
                 endActivity( time: "{}", id: {{ id: "chronicle:activity:{}" }}) {{
                     context
                 }}
             }}
         "#,
-                    from.checked_add_signed(chronicle::chrono::Duration::days(i))
-                        .unwrap()
-                        .to_rfc3339(),
-                    activity_name
-                )))
-                .await;
+					from.checked_add_signed(chronicle::chrono::Duration::days(i))
+						.unwrap()
+						.to_rfc3339(),
+					activity_name
+				)))
+				.await;
 
-            assert_eq!(res.errors, vec![]);
+			assert_eq!(res.errors, vec![]);
 
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-            let agent = if i % 2 == 0 {
-                "testagent1"
-            } else {
-                "testagent2"
-            };
+			let agent = if i % 2 == 0 { "testagent1" } else { "testagent2" };
 
-            let res = schema
+			let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
@@ -3237,15 +3213,15 @@ mod test {
                 )))
                 .await;
 
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-            assert_eq!(res.errors, vec![]);
-        }
+			assert_eq!(res.errors, vec![]);
+		}
 
-        tokio::time::sleep(Duration::from_millis(3000)).await;
+		tokio::time::sleep(Duration::from_millis(3000)).await;
 
-        // Entire timeline in order
-        insta::assert_json_snapshot!(schema
+		// Entire timeline in order
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -3615,8 +3591,8 @@ mod test {
         }
         "###);
 
-        // Entire timeline reverse order
-        insta::assert_json_snapshot!(schema
+		// Entire timeline reverse order
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -3986,12 +3962,12 @@ mod test {
         }
         "###);
 
-        // By activity type
+		// By activity type
 
-        // Note the case of `ItemCertified` and `ItemCodified` in the `activityTypes`
-        // field of the query here, as it is not standard GraphQL but is tailored to
-        // meet client requirements of preserving domain case inflections.
-        insta::assert_json_snapshot!(schema
+		// Note the case of `ItemCertified` and `ItemCodified` in the `activityTypes`
+		// field of the query here, as it is not standard GraphQL but is tailored to
+		// meet client requirements of preserving domain case inflections.
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4088,8 +4064,8 @@ mod test {
         }
         "###);
 
-        // As previous but omitting forEntity and forAgent
-        insta::assert_json_snapshot!(schema
+		// As previous but omitting forEntity and forAgent
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4184,8 +4160,8 @@ mod test {
         }
         "###);
 
-        // By agent
-        insta::assert_json_snapshot!(schema
+		// By agent
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4258,8 +4234,8 @@ mod test {
         }
         "###);
 
-        // As previous but omitting forEntity and activityTypes
-        insta::assert_json_snapshot!(schema
+		// As previous but omitting forEntity and activityTypes
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4329,14 +4305,14 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn query_agents_by_cursor() {
-        let (schema, _database) = test_schema().await;
+	#[tokio::test]
+	async fn query_agents_by_cursor() {
+		let (schema, _database) = test_schema().await;
 
-        for i in 0..100 {
-            let res = schema
+		for i in 0..100 {
+			let res = schema
                 .execute(Request::new(format!(
                     r#"
             mutation {{
@@ -4348,17 +4324,17 @@ mod test {
                 )))
                 .await;
 
-            assert_eq!(res.errors, vec![]);
-        }
+			assert_eq!(res.errors, vec![]);
+		}
 
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+		tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // Default cursor
+		// Default cursor
 
-        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
-        // the query here, as it is not standard GraphQL but is tailored to meet
-        // client requirements of preserving domain case inflections.
-        insta::assert_json_snapshot!(schema
+		// Note the case of `Contractor` in the `agentsByType(agentType:` field of
+		// the query here, as it is not standard GraphQL but is tailored to meet
+		// client requirements of preserving domain case inflections.
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4491,12 +4467,12 @@ mod test {
         }
         "###);
 
-        // Middle cursor
+		// Middle cursor
 
-        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
-        // the query here, as it is not standard GraphQL but is tailored to meet
-        // client requirements of preserving domain case inflections.
-        insta::assert_json_snapshot!(schema
+		// Note the case of `Contractor` in the `agentsByType(agentType:` field of
+		// the query here, as it is not standard GraphQL but is tailored to meet
+		// client requirements of preserving domain case inflections.
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4719,12 +4695,12 @@ mod test {
         }
         "###);
 
-        // Out of bound cursor
+		// Out of bound cursor
 
-        // Note the case of `Contractor` in the `agentsByType(agentType:` field of
-        // the query here, as it is not standard GraphQL but is tailored to meet
-        // client requirements of preserving domain case inflections.
-        insta::assert_json_snapshot!(schema
+		// Note the case of `Contractor` in the `agentsByType(agentType:` field of
+		// the query here, as it is not standard GraphQL but is tailored to meet
+		// client requirements of preserving domain case inflections.
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
               query {
@@ -4847,26 +4823,26 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    #[tokio::test]
-    async fn subscribe_commit_notification() {
-        use chronicle::async_graphql::futures_util::StreamExt;
+	#[tokio::test]
+	async fn subscribe_commit_notification() {
+		use chronicle::async_graphql::futures_util::StreamExt;
 
-        let (schema, _database) = test_schema().await;
+		let (schema, _database) = test_schema().await;
 
-        let mut stream = schema.execute_stream(Request::new(
-            r#"
+		let mut stream = schema.execute_stream(Request::new(
+			r#"
           subscription {
             commitNotifications {
               stage
             }
           }
           "#
-            .to_string(),
-        ));
+			.to_string(),
+		));
 
-        insta::assert_json_snapshot!(schema
+		insta::assert_json_snapshot!(schema
           .execute(Request::new(
               r#"
             mutation {
@@ -4889,9 +4865,9 @@ mod test {
           }
           "#);
 
-        let res = stream.next().await.unwrap();
+		let res = stream.next().await.unwrap();
 
-        insta::assert_json_snapshot!(res, @r###"
+		insta::assert_json_snapshot!(res, @r###"
         {
           "data": {
             "commitNotifications": {
@@ -4900,84 +4876,80 @@ mod test {
           }
         }
         "###);
-    }
+	}
 
-    async fn subscription_response(
-        schema: &Schema<Query, Mutation, Subscription>,
-        subscription: &str,
-        mutation: &str,
-    ) -> Response {
-        use futures::StreamExt;
+	async fn subscription_response(
+		schema: &Schema<Query, Mutation, Subscription>,
+		subscription: &str,
+		mutation: &str,
+	) -> Response {
+		use futures::StreamExt;
 
-        let mut stream = schema.execute_stream(Request::new(subscription));
-        assert!(schema.execute(Request::new(mutation)).await.is_ok());
-        stream.next().await.unwrap()
-    }
+		let mut stream = schema.execute_stream(Request::new(subscription));
+		assert!(schema.execute(Request::new(mutation)).await.is_ok());
+		stream.next().await.unwrap()
+	}
 
-    struct SchemaPair<'a> {
-        schema_allow: Schema<Query, Mutation, Subscription>,
-        schema_deny: Schema<Query, Mutation, Subscription>,
-        _databases: (TemporaryDatabase<'a>, TemporaryDatabase<'a>),
-    }
+	struct SchemaPair<'a> {
+		schema_allow: Schema<Query, Mutation, Subscription>,
+		schema_deny: Schema<Query, Mutation, Subscription>,
+		_databases: (TemporaryDatabase<'a>, TemporaryDatabase<'a>),
+	}
 
-    impl<'a> SchemaPair<'a> {
-        fn new(
-            (schema_allow, database_allow): (
-                Schema<Query, Mutation, Subscription>,
-                TemporaryDatabase<'a>,
-            ),
-            (schema_deny, database_deny): (
-                Schema<Query, Mutation, Subscription>,
-                TemporaryDatabase<'a>,
-            ),
-        ) -> Self {
-            Self {
-                schema_allow,
-                schema_deny,
-                _databases: (database_allow, database_deny),
-            }
-        }
+	impl<'a> SchemaPair<'a> {
+		fn new(
+			(schema_allow, database_allow): (
+				Schema<Query, Mutation, Subscription>,
+				TemporaryDatabase<'a>,
+			),
+			(schema_deny, database_deny): (
+				Schema<Query, Mutation, Subscription>,
+				TemporaryDatabase<'a>,
+			),
+		) -> Self {
+			Self { schema_allow, schema_deny, _databases: (database_allow, database_deny) }
+		}
 
-        async fn check_responses(
-            res_allow: impl Future<Output = Response>,
-            res_deny: impl Future<Output = Response>,
-        ) {
-            use chronicle::async_graphql::Value;
+		async fn check_responses(
+			res_allow: impl Future<Output = Response>,
+			res_deny: impl Future<Output = Response>,
+		) {
+			use chronicle::async_graphql::Value;
 
-            let res_allow = res_allow.await;
-            let res_deny = res_deny.await;
+			let res_allow = res_allow.await;
+			let res_deny = res_deny.await;
 
-            assert_ne!(res_allow.data, Value::Null);
-            assert!(res_allow.errors.is_empty());
+			assert_ne!(res_allow.data, Value::Null);
+			assert!(res_allow.errors.is_empty());
 
-            assert_eq!(res_deny.data, Value::Null);
-            assert!(!res_deny.errors.is_empty());
-        }
+			assert_eq!(res_deny.data, Value::Null);
+			assert!(!res_deny.errors.is_empty());
+		}
 
-        async fn check_responses_qm(&self, query: &str) {
-            Self::check_responses(
-                self.schema_allow.execute(Request::new(query)),
-                self.schema_deny.execute(Request::new(query)),
-            )
-            .await;
-        }
+		async fn check_responses_qm(&self, query: &str) {
+			Self::check_responses(
+				self.schema_allow.execute(Request::new(query)),
+				self.schema_deny.execute(Request::new(query)),
+			)
+			.await;
+		}
 
-        async fn check_responses_s(&self, subscription: &str, mutation: &str) {
-            Self::check_responses(
-                subscription_response(&self.schema_allow, subscription, mutation),
-                subscription_response(&self.schema_deny, subscription, mutation),
-            )
-            .await;
-        }
-    }
+		async fn check_responses_s(&self, subscription: &str, mutation: &str) {
+			Self::check_responses(
+				subscription_response(&self.schema_allow, subscription, mutation),
+				subscription_response(&self.schema_deny, subscription, mutation),
+			)
+			.await;
+		}
+	}
 
-    #[tokio::test]
-    async fn query_api_secured() {
-        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
+	#[tokio::test]
+	async fn query_api_secured() {
+		let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 activityTimeline(
                   activityTypes: [],
@@ -4989,12 +4961,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 agentsByType(
                   agentType: ContractorAgent
@@ -5006,12 +4978,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 activitiesByType(
                   activityType: ItemCertifiedActivity
@@ -5023,12 +4995,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 entitiesByType(
                   entityType: CertificateEntity
@@ -5040,12 +5012,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 agentById(id: { id: "chronicle:agent:testagent" }) {
                   ... on ProvAgent {
@@ -5053,12 +5025,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 activityById(id: { id: "chronicle:activity:testactivity" }) {
                   ... on ProvActivity {
@@ -5066,12 +5038,12 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               query {
                 entityById(id: { id: "chronicle:entity:testentity" }) {
                   ... on ProvEntity {
@@ -5079,30 +5051,30 @@ mod test {
                   }
                 }
               }"#,
-            )
-            .await;
-    }
+			)
+			.await;
+	}
 
-    #[tokio::test]
-    async fn subscribe_api_secured() {
-        let loader = CliPolicyLoader::from_embedded_policy(
-            "allow_transactions",
-            "allow_transactions.allow_defines",
-        )
-        .unwrap();
-        let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
-        let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
-        let schemas = SchemaPair::new(test_schema().await, test_schema_allow_defines);
+	#[tokio::test]
+	async fn subscribe_api_secured() {
+		let loader = CliPolicyLoader::from_embedded_policy(
+			"allow_transactions",
+			"allow_transactions.allow_defines",
+		)
+		.unwrap();
+		let opa_executor = ExecutorContext::from_loader(&loader).unwrap();
+		let test_schema_allow_defines = test_schema_with_opa(opa_executor).await;
+		let schemas = SchemaPair::new(test_schema().await, test_schema_allow_defines);
 
-        schemas
-            .check_responses_s(
-                r#"
+		schemas
+			.check_responses_s(
+				r#"
               subscription {
                 commitNotifications {
                   stage
                 }
               }"#,
-                r#"
+				r#"
               mutation {
                 defineContractorAgent(
                   externalId: "testagent"
@@ -5111,53 +5083,53 @@ mod test {
                   context
                 }
               }"#,
-            )
-            .await;
-    }
+			)
+			.await;
+	}
 
-    #[tokio::test]
-    async fn mutation_api_secured() {
-        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
+	#[tokio::test]
+	async fn mutation_api_secured() {
+		let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineAgent(
                   externalId: "test agent",
                   attributes: {}
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineActivity(
                   externalId: "test activity",
                   attributes: {}
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineEntity(
                   externalId: "test entity",
                   attributes: {}
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 actedOnBehalfOf(
                   responsible: { externalId: "test agent 1" },
@@ -5165,36 +5137,36 @@ mod test {
                   role: MANUFACTURER
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasDerivedFrom(
                   generatedEntity: { externalId: "test entity 1" },
                   usedEntity: { externalId: "test entity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasRevisionOf(
                   generatedEntity: { externalId: "test entity 1" },
                   usedEntity: { externalId: "test entity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 hadPrimarySource(
                   generatedEntity: { externalId: "test entity 1" },
@@ -5202,57 +5174,57 @@ mod test {
                 ) { context }
               }
               "#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasQuotedFrom(
                   generatedEntity: { externalId: "test entity 1" },
                   usedEntity: { externalId: "test entity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 instantActivity(
                   id: { externalId: "test activity 1" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 startActivity(
                   id: { externalId: "test activity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 endActivity(
                   id: { externalId: "test activity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasAssociatedWith(
                   responsible: { externalId: "test agent" },
@@ -5260,84 +5232,84 @@ mod test {
                   role: MANUFACTURER
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 used(
                   activity: { externalId: "test activity" },
                   id: { externalId: "test entity" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasInformedBy(
                   activity: { externalId: "test activity 1" },
                   informingActivity: { externalId: "test activity 2" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 wasGeneratedBy(
                   activity: { externalId: "test activity" },
                   id: { externalId: "test entity" }
                 ) { context }
               }"#,
-            )
-            .await;
-    }
+			)
+			.await;
+	}
 
-    #[tokio::test]
-    async fn mutation_generated_api_secured() {
-        let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
+	#[tokio::test]
+	async fn mutation_generated_api_secured() {
+		let schemas = SchemaPair::new(test_schema().await, test_schema_blocked_api().await);
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineContractorAgent(
                   externalId: "test agent"
                   attributes: { locationAttribute: "location" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineItemCertifiedActivity(
                   externalId: "test activity",
                   attributes: { certIdAttribute: "12345" }
                 ) { context }
               }"#,
-            )
-            .await;
+			)
+			.await;
 
-        schemas
-            .check_responses_qm(
-                r#"
+		schemas
+			.check_responses_qm(
+				r#"
               mutation {
                 defineCertificateEntity(
                   externalId: "test entity",
                   attributes: { certIdAttribute: "12345" }
                 ) { context }
               }"#,
-            )
-            .await;
-    }
+			)
+			.await;
+	}
 }

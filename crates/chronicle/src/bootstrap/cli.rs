@@ -4,18 +4,18 @@ use api::ApiError;
 use chronicle_protocol::async_stl_client::error::SawtoothCommunicationError;
 use chronicle_signing::SecretError;
 use clap::{
-    builder::{PossibleValuesParser, StringValueParser},
-    *,
+	builder::{PossibleValuesParser, StringValueParser},
+	*,
 };
 use common::{
-    attributes::{Attribute, Attributes},
-    commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
-    import::FromUrlError,
-    opa::{OpaExecutorError, PolicyLoaderError},
-    prov::{
-        operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
-        ExternalId, ExternalIdPart, ParseIriError,
-    },
+	attributes::{Attribute, Attributes},
+	commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
+	import::FromUrlError,
+	opa::{OpaExecutorError, PolicyLoaderError},
+	prov::{
+		operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
+		ExternalId, ExternalIdPart, ParseIriError,
+	},
 };
 use iref::Iri;
 use thiserror::Error;
@@ -24,312 +24,289 @@ use tracing::info;
 use user_error::UFE;
 
 use crate::{
-    codegen::{
-        ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, CliName, EntityDef, TypeName,
-    },
-    PrimitiveType,
+	codegen::{
+		ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, CliName, EntityDef, TypeName,
+	},
+	PrimitiveType,
 };
 
 #[derive(Debug, Error)]
 pub enum CliError {
-    #[error("Missing argument: {arg}")]
-    MissingArgument { arg: String },
+	#[error("Missing argument: {arg}")]
+	MissingArgument { arg: String },
 
-    #[error("Invalid argument {arg} expected {expected} got {got}")]
-    InvalidArgument {
-        arg: String,
-        expected: String,
-        got: String,
-    },
+	#[error("Invalid argument {arg} expected {expected} got {got}")]
+	InvalidArgument { arg: String, expected: String, got: String },
 
-    #[error("Bad argument: {0}")]
-    ArgumentParsing(#[from] clap::Error),
+	#[error("Bad argument: {0}")]
+	ArgumentParsing(#[from] clap::Error),
 
-    #[error("Invalid IRI: {0}")]
-    InvalidIri(#[from] iref::Error),
+	#[error("Invalid IRI: {0}")]
+	InvalidIri(#[from] iref::Error),
 
-    #[error("Invalid Chronicle IRI: {0}")]
-    InvalidChronicleIri(#[from] ParseIriError),
+	#[error("Invalid Chronicle IRI: {0}")]
+	InvalidChronicleIri(#[from] ParseIriError),
 
-    #[error("Invalid JSON: {0}")]
-    InvalidJson(#[from] serde_json::Error),
+	#[error("Invalid JSON: {0}")]
+	InvalidJson(#[from] serde_json::Error),
 
-    #[error("Invalid URI: {0}")]
-    InvalidUri(#[from] url::ParseError),
+	#[error("Invalid URI: {0}")]
+	InvalidUri(#[from] url::ParseError),
 
-    #[error("Invalid timestamp: {0}")]
-    InvalidTimestamp(#[from] chrono::ParseError),
+	#[error("Invalid timestamp: {0}")]
+	InvalidTimestamp(#[from] chrono::ParseError),
 
-    #[error("Invalid coercion: {arg}")]
-    InvalidCoercion { arg: String },
+	#[error("Invalid coercion: {arg}")]
+	InvalidCoercion { arg: String },
 
-    #[error("API failure: {0}")]
-    ApiError(#[from] ApiError),
+	#[error("API failure: {0}")]
+	ApiError(#[from] ApiError),
 
-    #[error("Secrets : {0}")]
-    Secrets(#[from] SecretError),
+	#[error("Secrets : {0}")]
+	Secrets(#[from] SecretError),
 
-    #[error("IO error: {0}")]
-    InputOutput(#[from] std::io::Error),
+	#[error("IO error: {0}")]
+	InputOutput(#[from] std::io::Error),
 
-    #[error("Invalid configuration file: {0}")]
-    ConfigInvalid(#[from] toml::de::Error),
+	#[error("Invalid configuration file: {0}")]
+	ConfigInvalid(#[from] toml::de::Error),
 
-    #[error("Invalid path: {path}")]
-    InvalidPath { path: String },
+	#[error("Invalid path: {path}")]
+	InvalidPath { path: String },
 
-    #[error("Invalid JSON-LD: {0}")]
-    Ld(#[from] CompactionError),
+	#[error("Invalid JSON-LD: {0}")]
+	Ld(#[from] CompactionError),
 
-    #[error("Failure in commit notification stream: {0}")]
-    CommitNoticiationStream(#[from] RecvError),
+	#[error("Failure in commit notification stream: {0}")]
+	CommitNoticiationStream(#[from] RecvError),
 
-    #[error("Policy loader error: {0}")]
-    OpaPolicyLoader(#[from] PolicyLoaderError),
+	#[error("Policy loader error: {0}")]
+	OpaPolicyLoader(#[from] PolicyLoaderError),
 
-    #[error("OPA executor error: {0}")]
-    OpaExecutor(#[from] OpaExecutorError),
+	#[error("OPA executor error: {0}")]
+	OpaExecutor(#[from] OpaExecutorError),
 
-    #[error("Sawtooth communication error: {source}")]
-    SawtoothCommunicationError {
-        #[from]
-        source: SawtoothCommunicationError,
-    },
+	#[error("Sawtooth communication error: {source}")]
+	SawtoothCommunicationError {
+		#[from]
+		source: SawtoothCommunicationError,
+	},
 
-    #[error("Error loading from URL: {0}")]
-    UrlError(#[from] FromUrlError),
+	#[error("Error loading from URL: {0}")]
+	UrlError(#[from] FromUrlError),
 
-    #[error("UTF-8 error: {0}")]
-    Utf8Error(#[from] std::str::Utf8Error),
+	#[error("UTF-8 error: {0}")]
+	Utf8Error(#[from] std::str::Utf8Error),
 }
 
 impl CliError {
-    pub fn missing_argument(arg: impl Into<String>) -> Self {
-        Self::MissingArgument { arg: arg.into() }
-    }
+	pub fn missing_argument(arg: impl Into<String>) -> Self {
+		Self::MissingArgument { arg: arg.into() }
+	}
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
 impl From<Infallible> for CliError {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
-    }
+	fn from(_: Infallible) -> Self {
+		unreachable!()
+	}
 }
 
 impl UFE for CliError {}
 
 pub(crate) trait SubCommand {
-    fn as_cmd(&self) -> Command;
-    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError>;
+	fn as_cmd(&self) -> Command;
+	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError>;
 }
 
 pub struct AttributeCliModel {
-    pub attribute: AttributeDef,
-    pub attribute_name: String,
-    pub attribute_help: String,
+	pub attribute: AttributeDef,
+	pub attribute_name: String,
+	pub attribute_help: String,
 }
 
 impl AttributeCliModel {
-    pub fn new(attribute: AttributeDef) -> Self {
-        Self {
-            attribute_name: format!("{}-attr", attribute.as_cli_name()),
-            attribute_help: format!("The value of the {} attribute", attribute.as_type_name()),
-            attribute,
-        }
-    }
+	pub fn new(attribute: AttributeDef) -> Self {
+		Self {
+			attribute_name: format!("{}-attr", attribute.as_cli_name()),
+			attribute_help: format!("The value of the {} attribute", attribute.as_type_name()),
+			attribute,
+		}
+	}
 
-    pub fn as_arg(&self) -> Arg {
-        Arg::new(&*self.attribute_name)
-            .long(&self.attribute_name)
-            .help(&*self.attribute_help)
-            .takes_value(true)
-            .required(true)
-    }
+	pub fn as_arg(&self) -> Arg {
+		Arg::new(&*self.attribute_name)
+			.long(&self.attribute_name)
+			.help(&*self.attribute_help)
+			.takes_value(true)
+			.required(true)
+	}
 }
 
 pub struct AgentCliModel {
-    pub agent: AgentDef,
-    pub attributes: Vec<AttributeCliModel>,
-    pub about: String,
-    pub define_about: String,
-    pub external_id: String,
+	pub agent: AgentDef,
+	pub attributes: Vec<AttributeCliModel>,
+	pub about: String,
+	pub define_about: String,
+	pub external_id: String,
 }
 
 impl AgentCliModel {
-    pub fn new(agent: &AgentDef) -> Self {
-        let attributes = agent
-            .attributes
-            .iter()
-            .map(|attr| AttributeCliModel::new(attr.clone()))
-            .collect();
-        Self {
+	pub fn new(agent: &AgentDef) -> Self {
+		let attributes = agent
+			.attributes
+			.iter()
+			.map(|attr| AttributeCliModel::new(attr.clone()))
+			.collect();
+		Self {
             agent: agent.clone(),
             attributes,
             external_id: agent.as_cli_name(),
             about: format!("Operations on {} agents", agent.as_type_name()),
             define_about: format!("Define an agent of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", agent.as_type_name())
         }
-    }
+	}
 }
 
 fn name_from<'a, Id>(
-    args: &'a ArgMatches,
-    name_param: &str,
-    id_param: &str,
+	args: &'a ArgMatches,
+	name_param: &str,
+	id_param: &str,
 ) -> Result<ExternalId, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
-    if let Some(external_id) = args.get_one::<String>(name_param) {
-        Ok(ExternalId::from(external_id))
-    } else if let Some(id) = args.get_one::<String>(id_param) {
-        let iri = Iri::from_str(id)?;
-        let id = Id::try_from(iri)?;
-        Ok(id.external_id_part().to_owned())
-    } else {
-        Err(CliError::MissingArgument {
-            arg: format!("Missing {name_param} and {id_param}"),
-        })
-    }
+	if let Some(external_id) = args.get_one::<String>(name_param) {
+		Ok(ExternalId::from(external_id))
+	} else if let Some(id) = args.get_one::<String>(id_param) {
+		let iri = Iri::from_str(id)?;
+		let id = Id::try_from(iri)?;
+		Ok(id.external_id_part().to_owned())
+	} else {
+		Err(CliError::MissingArgument { arg: format!("Missing {name_param} and {id_param}") })
+	}
 }
 
 fn id_from<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Id, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
-    if let Some(id) = args.get_one::<String>(id_param) {
-        Ok(Id::try_from(Iri::from_str(id)?)?)
-    } else {
-        Err(CliError::MissingArgument {
-            arg: format!("Missing {id_param} "),
-        })
-    }
+	if let Some(id) = args.get_one::<String>(id_param) {
+		Ok(Id::try_from(Iri::from_str(id)?)?)
+	} else {
+		Err(CliError::MissingArgument { arg: format!("Missing {id_param} ") })
+	}
 }
 
 fn id_from_option<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Option<Id>, CliError>
 where
-    Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
 {
-    match id_from(args, id_param) {
-        Err(CliError::MissingArgument { .. }) => Ok(None),
-        Err(e) => Err(e),
-        Ok(id) => Ok(Some(id)),
-    }
+	match id_from(args, id_param) {
+		Err(CliError::MissingArgument { .. }) => Ok(None),
+		Err(e) => Err(e),
+		Ok(id) => Ok(Some(id)),
+	}
 }
 
 fn namespace_from(args: &ArgMatches) -> Result<ExternalId, CliError> {
-    if let Some(namespace) = args.get_one::<String>("namespace") {
-        Ok(ExternalId::from(namespace))
-    } else {
-        Err(CliError::MissingArgument {
-            arg: "namespace".to_owned(),
-        })
-    }
+	if let Some(namespace) = args.get_one::<String>("namespace") {
+		Ok(ExternalId::from(namespace))
+	} else {
+		Err(CliError::MissingArgument { arg: "namespace".to_owned() })
+	}
 }
 
-/// Deserialize to a JSON value and ensure that it matches the specified primitive type, we need to force any bare literal text to be quoted
-/// use of coercion afterwards will produce a proper json value type for non strings
+/// Deserialize to a JSON value and ensure that it matches the specified primitive type, we need to
+/// force any bare literal text to be quoted use of coercion afterwards will produce a proper json
+/// value type for non strings
 fn attribute_value_from_param(
-    arg: &str,
-    value: &str,
-    typ: PrimitiveType,
+	arg: &str,
+	value: &str,
+	typ: PrimitiveType,
 ) -> Result<serde_json::Value, CliError> {
-    let value = {
-        if !value.contains('"') {
-            format!(r#""{value}""#)
-        } else {
-            value.to_owned()
-        }
-    };
+	let value = {
+		if !value.contains('"') {
+			format!(r#""{value}""#)
+		} else {
+			value.to_owned()
+		}
+	};
 
-    let mut value = serde_json::from_str(&value)?;
-    match typ {
-        PrimitiveType::Bool => {
-            if let Some(coerced) = valico::json_dsl::boolean()
-                .coerce(&mut value, ".")
-                .map_err(|_e| CliError::InvalidCoercion {
-                    arg: arg.to_owned(),
-                })?
-            {
-                Ok(coerced)
-            } else {
-                Ok(value)
-            }
-        }
-        PrimitiveType::String => {
-            if let Some(coerced) =
-                valico::json_dsl::string()
-                    .coerce(&mut value, ".")
-                    .map_err(|_e| CliError::InvalidCoercion {
-                        arg: arg.to_owned(),
-                    })?
-            {
-                Ok(coerced)
-            } else {
-                Ok(value)
-            }
-        }
-        PrimitiveType::Int => {
-            if let Some(coerced) =
-                valico::json_dsl::i64()
-                    .coerce(&mut value, ".")
-                    .map_err(|_e| CliError::InvalidCoercion {
-                        arg: arg.to_owned(),
-                    })?
-            {
-                Ok(coerced)
-            } else {
-                Ok(value)
-            }
-        }
-        PrimitiveType::JSON => {
-            if let Some(coerced) =
-                valico::json_dsl::object()
-                    .coerce(&mut value, ".")
-                    .map_err(|_e| CliError::InvalidCoercion {
-                        arg: arg.to_owned(),
-                    })?
-            {
-                Ok(coerced)
-            } else {
-                Ok(value)
-            }
-        }
-    }
+	let mut value = serde_json::from_str(&value)?;
+	match typ {
+		PrimitiveType::Bool => {
+			if let Some(coerced) = valico::json_dsl::boolean()
+				.coerce(&mut value, ".")
+				.map_err(|_e| CliError::InvalidCoercion { arg: arg.to_owned() })?
+			{
+				Ok(coerced)
+			} else {
+				Ok(value)
+			}
+		},
+		PrimitiveType::String => {
+			if let Some(coerced) = valico::json_dsl::string()
+				.coerce(&mut value, ".")
+				.map_err(|_e| CliError::InvalidCoercion { arg: arg.to_owned() })?
+			{
+				Ok(coerced)
+			} else {
+				Ok(value)
+			}
+		},
+		PrimitiveType::Int => {
+			if let Some(coerced) = valico::json_dsl::i64()
+				.coerce(&mut value, ".")
+				.map_err(|_e| CliError::InvalidCoercion { arg: arg.to_owned() })?
+			{
+				Ok(coerced)
+			} else {
+				Ok(value)
+			}
+		},
+		PrimitiveType::JSON => {
+			if let Some(coerced) = valico::json_dsl::object()
+				.coerce(&mut value, ".")
+				.map_err(|_e| CliError::InvalidCoercion { arg: arg.to_owned() })?
+			{
+				Ok(coerced)
+			} else {
+				Ok(value)
+			}
+		},
+	}
 }
 
 fn attributes_from(
-    args: &ArgMatches,
-    typ: impl AsRef<str>,
-    attributes: &[AttributeCliModel],
+	args: &ArgMatches,
+	typ: impl AsRef<str>,
+	attributes: &[AttributeCliModel],
 ) -> Result<Attributes, CliError> {
-    Ok(Attributes {
-        typ: Some(DomaintypeId::from_external_id(typ)),
-        attributes: attributes
-            .iter()
-            .map(|attr| {
-                let value = attribute_value_from_param(
-                    &attr.attribute_name,
-                    args.get_one::<String>(&attr.attribute_name).unwrap(),
-                    attr.attribute.primitive_type,
-                )?;
-                Ok::<_, CliError>((
-                    attr.attribute.as_type_name(),
-                    Attribute {
-                        typ: attr.attribute.as_type_name(),
-                        value,
-                    },
-                ))
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?,
-    })
+	Ok(Attributes {
+		typ: Some(DomaintypeId::from_external_id(typ)),
+		attributes: attributes
+			.iter()
+			.map(|attr| {
+				let value = attribute_value_from_param(
+					&attr.attribute_name,
+					args.get_one::<String>(&attr.attribute_name).unwrap(),
+					attr.attribute.primitive_type,
+				)?;
+				Ok::<_, CliError>((
+					attr.attribute.as_type_name(),
+					Attribute { typ: attr.attribute.as_type_name(), value },
+				))
+			})
+			.collect::<Result<BTreeMap<_, _>, _>>()?,
+	})
 }
 
 impl SubCommand for AgentCliModel {
-    fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&*self.external_id).about(&*self.about);
+	fn as_cmd(&self) -> Command {
+		let cmd = Command::new(&*self.external_id).about(&*self.about);
 
-        let mut define = Command::new("define")
+		let mut define = Command::new("define")
                         .about(&*self.define_about)
                         .arg(Arg::new("external_id")
                             .help("An externally meaningful identifier for the agent, e.g. a URI or relational id")
@@ -350,80 +327,80 @@ impl SubCommand for AgentCliModel {
                                 .takes_value(true),
                         );
 
-        for attr in &self.attributes {
-            define = define.arg(attr.as_arg());
-        }
+		for attr in &self.attributes {
+			define = define.arg(attr.as_arg());
+		}
 
-        cmd.subcommand(define).subcommand(
-            Command::new("use")
-                .about("Make the specified agent the context for activities and entities")
-                .arg(
-                    Arg::new("id")
-                        .help("A valid chronicle agent IRI")
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .default_value("default")
-                        .required(false)
-                        .takes_value(true),
-                ),
-        )
-    }
+		cmd.subcommand(define).subcommand(
+			Command::new("use")
+				.about("Make the specified agent the context for activities and entities")
+				.arg(
+					Arg::new("id")
+						.help("A valid chronicle agent IRI")
+						.required(true)
+						.takes_value(true),
+				)
+				.arg(
+					Arg::new("namespace")
+						.short('n')
+						.long("namespace")
+						.default_value("default")
+						.required(false)
+						.takes_value(true),
+				),
+		)
+	}
 
-    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches("define") {
-            return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
-                external_id: name_from::<AgentId>(matches, "external_id", "id")?,
-                namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
-            })));
-        }
+	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+		if let Some(matches) = matches.subcommand_matches("define") {
+			return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
+				external_id: name_from::<AgentId>(matches, "external_id", "id")?,
+				namespace: namespace_from(matches)?,
+				attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
+			})))
+		}
 
-        if let Some(matches) = matches.subcommand_matches("use") {
-            return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
-                id: id_from(matches, "id")?,
-                namespace: namespace_from(matches)?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("use") {
+			return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
+				id: id_from(matches, "id")?,
+				namespace: namespace_from(matches)?,
+			})))
+		};
 
-        Ok(None)
-    }
+		Ok(None)
+	}
 }
 
 pub struct ActivityCliModel {
-    pub activity: ActivityDef,
-    pub attributes: Vec<AttributeCliModel>,
-    pub about: String,
-    pub define_about: String,
-    pub external_id: String,
+	pub activity: ActivityDef,
+	pub attributes: Vec<AttributeCliModel>,
+	pub about: String,
+	pub define_about: String,
+	pub external_id: String,
 }
 
 impl ActivityCliModel {
-    fn new(activity: &ActivityDef) -> Self {
-        let attributes = activity
-            .attributes
-            .iter()
-            .map(|attr| AttributeCliModel::new(attr.clone()))
-            .collect();
-        Self {
+	fn new(activity: &ActivityDef) -> Self {
+		let attributes = activity
+			.attributes
+			.iter()
+			.map(|attr| AttributeCliModel::new(attr.clone()))
+			.collect();
+		Self {
             activity: activity.clone(),
             attributes,
             external_id: activity.as_cli_name(),
             about: format!("Operations on {} activities", activity.as_type_name()),
             define_about: format!("Define an activity of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", activity.as_type_name()),
         }
-    }
+	}
 }
 
 impl SubCommand for ActivityCliModel {
-    fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&*self.external_id).about(&*self.about);
+	fn as_cmd(&self) -> Command {
+		let cmd = Command::new(&*self.external_id).about(&*self.about);
 
-        let mut define =
+		let mut define =
                     Command::new("define")
                         .about(&*self.define_about)
                         .arg(Arg::new("external_id")
@@ -445,11 +422,11 @@ impl SubCommand for ActivityCliModel {
                                 .takes_value(true),
                         );
 
-        for attr in &self.attributes {
-            define = define.arg(attr.as_arg());
-        }
+		for attr in &self.attributes {
+			define = define.arg(attr.as_arg());
+		}
 
-        cmd.subcommand(define)
+		cmd.subcommand(define)
            .subcommand(
                     Command::new("start")
                         .about("Record this activity as started at the specified time, if no time is specified the current time is used")
@@ -584,103 +561,94 @@ impl SubCommand for ActivityCliModel {
                                 .takes_value(true),
                         )
                     )
-    }
+	}
 
-    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches("define") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
-                external_id: name_from::<ActivityId>(matches, "external_id", "id")?,
-                namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.activity.external_id, &self.attributes)?,
-            })));
-        }
+	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+		if let Some(matches) = matches.subcommand_matches("define") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
+				external_id: name_from::<ActivityId>(matches, "external_id", "id")?,
+				namespace: namespace_from(matches)?,
+				attributes: attributes_from(matches, &self.activity.external_id, &self.attributes)?,
+			})))
+		}
 
-        if let Some(matches) = matches.subcommand_matches("start") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::Start {
-                id: id_from(matches, "id")?,
-                namespace: namespace_from(matches)?,
-                time: matches
-                    .get_one::<String>("time")
-                    .map(|t| t.parse())
-                    .transpose()?,
-                agent: id_from_option(matches, "agent_id")?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("start") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::Start {
+				id: id_from(matches, "id")?,
+				namespace: namespace_from(matches)?,
+				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
+				agent: id_from_option(matches, "agent_id")?,
+			})))
+		};
 
-        if let Some(matches) = matches.subcommand_matches("end") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
-                id: id_from(matches, "id")?,
-                namespace: namespace_from(matches)?,
-                time: matches
-                    .get_one::<String>("time")
-                    .map(|t| t.parse())
-                    .transpose()?,
-                agent: id_from_option(matches, "agent_id")?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("end") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::End {
+				id: id_from(matches, "id")?,
+				namespace: namespace_from(matches)?,
+				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
+				agent: id_from_option(matches, "agent_id")?,
+			})))
+		};
 
-        if let Some(matches) = matches.subcommand_matches("instant") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::Instant {
-                id: id_from(matches, "id")?,
-                namespace: namespace_from(matches)?,
-                time: matches
-                    .get_one::<String>("time")
-                    .map(|t| t.parse())
-                    .transpose()?,
-                agent: id_from_option(matches, "agent_id")?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("instant") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::Instant {
+				id: id_from(matches, "id")?,
+				namespace: namespace_from(matches)?,
+				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
+				agent: id_from_option(matches, "agent_id")?,
+			})))
+		};
 
-        if let Some(matches) = matches.subcommand_matches("use") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
-                id: id_from(matches, "entity_id")?,
-                namespace: namespace_from(matches)?,
-                activity: id_from(matches, "activity_id")?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("use") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::Use {
+				id: id_from(matches, "entity_id")?,
+				namespace: namespace_from(matches)?,
+				activity: id_from(matches, "activity_id")?,
+			})))
+		};
 
-        if let Some(matches) = matches.subcommand_matches("generate") {
-            return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
-                id: id_from(matches, "entity_id")?,
-                namespace: namespace_from(matches)?,
-                activity: id_from(matches, "activity_id")?,
-            })));
-        };
+		if let Some(matches) = matches.subcommand_matches("generate") {
+			return Ok(Some(ApiCommand::Activity(ActivityCommand::Generate {
+				id: id_from(matches, "entity_id")?,
+				namespace: namespace_from(matches)?,
+				activity: id_from(matches, "activity_id")?,
+			})))
+		};
 
-        Ok(None)
-    }
+		Ok(None)
+	}
 }
 
 pub struct EntityCliModel {
-    pub entity: EntityDef,
-    pub attributes: Vec<AttributeCliModel>,
-    pub about: String,
-    pub define_about: String,
-    pub external_id: String,
+	pub entity: EntityDef,
+	pub attributes: Vec<AttributeCliModel>,
+	pub about: String,
+	pub define_about: String,
+	pub external_id: String,
 }
 
 impl EntityCliModel {
-    pub fn new(entity: &EntityDef) -> Self {
-        let attributes = entity
-            .attributes
-            .iter()
-            .map(|attr| AttributeCliModel::new(attr.clone()))
-            .collect();
-        Self {
+	pub fn new(entity: &EntityDef) -> Self {
+		let attributes = entity
+			.attributes
+			.iter()
+			.map(|attr| AttributeCliModel::new(attr.clone()))
+			.collect();
+		Self {
             entity: entity.clone(),
             attributes,
             external_id: entity.as_cli_name(),
             about: format!("Operations on {} entities", entity.as_type_name()),
             define_about: format!("Define an entity of type {} with the given external_id or IRI, redefinition with different attribute values is not allowed", entity.as_type_name()),
         }
-    }
+	}
 }
 
 impl SubCommand for EntityCliModel {
-    fn as_cmd(&self) -> Command {
-        let cmd = Command::new(&self.external_id).about(&*self.about);
+	fn as_cmd(&self) -> Command {
+		let cmd = Command::new(&self.external_id).about(&*self.about);
 
-        let mut define =
+		let mut define =
                     Command::new("define")
                         .about(&*self.define_about)
                         .arg(Arg::new("external_id")
@@ -702,119 +670,115 @@ impl SubCommand for EntityCliModel {
                                 .takes_value(true),
                         );
 
-        for attr in &self.attributes {
-            define = define.arg(attr.as_arg());
-        }
+		for attr in &self.attributes {
+			define = define.arg(attr.as_arg());
+		}
 
-        cmd.subcommand(define).subcommand(
-            Command::new("derive")
-                .about("Derivation of entities from other entities")
-                .arg(
-                    Arg::new("subtype")
-                        .help("The derivation subtype")
-                        .long("subtype")
-                        .required(false)
-                        .takes_value(true)
-                        .value_parser(PossibleValuesParser::new([
-                            "revision",
-                            "quotation",
-                            "primary-source",
-                        ])),
-                )
-                .arg(
-                    Arg::new("generated_entity_id")
-                        .help("A valid chronicle entity IRI for the generated entity")
-                        .takes_value(true)
-                        .required(true),
-                )
-                .arg(
-                    Arg::new("used_entity_id")
-                        .help("A valid chronicle entity IRI for the used entity")
-                        .takes_value(true)
-                        .required(true),
-                )
-                .arg(
-                    Arg::new("activity_id")
-                        .help("The activity IRI that generated the entity")
-                        .long("activity")
-                        .takes_value(true)
-                        .required(false),
-                )
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .default_value("default")
-                        .required(false)
-                        .takes_value(true),
-                ),
-        )
-    }
+		cmd.subcommand(define).subcommand(
+			Command::new("derive")
+				.about("Derivation of entities from other entities")
+				.arg(
+					Arg::new("subtype")
+						.help("The derivation subtype")
+						.long("subtype")
+						.required(false)
+						.takes_value(true)
+						.value_parser(PossibleValuesParser::new([
+							"revision",
+							"quotation",
+							"primary-source",
+						])),
+				)
+				.arg(
+					Arg::new("generated_entity_id")
+						.help("A valid chronicle entity IRI for the generated entity")
+						.takes_value(true)
+						.required(true),
+				)
+				.arg(
+					Arg::new("used_entity_id")
+						.help("A valid chronicle entity IRI for the used entity")
+						.takes_value(true)
+						.required(true),
+				)
+				.arg(
+					Arg::new("activity_id")
+						.help("The activity IRI that generated the entity")
+						.long("activity")
+						.takes_value(true)
+						.required(false),
+				)
+				.arg(
+					Arg::new("namespace")
+						.short('n')
+						.long("namespace")
+						.default_value("default")
+						.required(false)
+						.takes_value(true),
+				),
+		)
+	}
 
-    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        if let Some(matches) = matches.subcommand_matches("define") {
-            return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
-                external_id: name_from::<EntityId>(matches, "external_id", "id")?,
-                namespace: namespace_from(matches)?,
-                attributes: attributes_from(matches, &self.entity.external_id, &self.attributes)?,
-            })));
-        }
+	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+		if let Some(matches) = matches.subcommand_matches("define") {
+			return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
+				external_id: name_from::<EntityId>(matches, "external_id", "id")?,
+				namespace: namespace_from(matches)?,
+				attributes: attributes_from(matches, &self.entity.external_id, &self.attributes)?,
+			})))
+		}
 
-        if let Some(matches) = matches.subcommand_matches("derive") {
-            return Ok(Some(ApiCommand::Entity(EntityCommand::Derive {
-                namespace: namespace_from(matches)?,
-                id: id_from(matches, "generated_entity_id")?,
-                derivation: matches
-                    .get_one::<String>("subtype")
-                    .map(|v| match v.as_str() {
-                        "revision" => DerivationType::Revision,
-                        "quotation" => DerivationType::Quotation,
-                        "primary-source" => DerivationType::PrimarySource,
-                        _ => unreachable!(), // Guaranteed by PossibleValuesParser
-                    })
-                    .unwrap_or(DerivationType::None),
-                activity: id_from_option(matches, "activity_id")?,
-                used_entity: id_from(matches, "used_entity_id")?,
-            })));
-        }
+		if let Some(matches) = matches.subcommand_matches("derive") {
+			return Ok(Some(ApiCommand::Entity(EntityCommand::Derive {
+				namespace: namespace_from(matches)?,
+				id: id_from(matches, "generated_entity_id")?,
+				derivation: matches
+					.get_one::<String>("subtype")
+					.map(|v| match v.as_str() {
+						"revision" => DerivationType::Revision,
+						"quotation" => DerivationType::Quotation,
+						"primary-source" => DerivationType::PrimarySource,
+						_ => unreachable!(), // Guaranteed by PossibleValuesParser
+					})
+					.unwrap_or(DerivationType::None),
+				activity: id_from_option(matches, "activity_id")?,
+				used_entity: id_from(matches, "used_entity_id")?,
+			})))
+		}
 
-        Ok(None)
-    }
+		Ok(None)
+	}
 }
 
 pub struct CliModel {
-    pub domain: ChronicleDomainDef,
-    pub agents: Vec<AgentCliModel>,
-    pub entities: Vec<EntityCliModel>,
-    pub activities: Vec<ActivityCliModel>,
+	pub domain: ChronicleDomainDef,
+	pub agents: Vec<AgentCliModel>,
+	pub entities: Vec<EntityCliModel>,
+	pub activities: Vec<ActivityCliModel>,
 }
 
 pub const LONG_VERSION: &str = const_format::formatcp!(
-    "{}:{} ({})",
-    env!("CARGO_PKG_VERSION"),
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION")),
-    if cfg!(feature = "inmem") {
-        "in memory"
-    } else {
-        "sawtooth"
-    }
+	"{}:{} ({})",
+	env!("CARGO_PKG_VERSION"),
+	include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION")),
+	if cfg!(feature = "inmem") { "in memory" } else { "sawtooth" }
 );
 
 impl From<ChronicleDomainDef> for CliModel {
-    fn from(val: ChronicleDomainDef) -> Self {
-        info!(chronicle_version = LONG_VERSION);
-        CliModel {
-            agents: val.agents.iter().map(AgentCliModel::new).collect(),
-            entities: val.entities.iter().map(EntityCliModel::new).collect(),
-            activities: val.activities.iter().map(ActivityCliModel::new).collect(),
-            domain: val,
-        }
-    }
+	fn from(val: ChronicleDomainDef) -> Self {
+		info!(chronicle_version = LONG_VERSION);
+		CliModel {
+			agents: val.agents.iter().map(AgentCliModel::new).collect(),
+			entities: val.entities.iter().map(EntityCliModel::new).collect(),
+			activities: val.activities.iter().map(ActivityCliModel::new).collect(),
+			domain: val,
+		}
+	}
 }
 
 impl SubCommand for CliModel {
-    fn as_cmd(&self) -> Command {
-        let mut app = Command::new("chronicle")
+	fn as_cmd(&self) -> Command {
+		let mut app = Command::new("chronicle")
             .version(LONG_VERSION)
             .author("Blockchain Technology Partners")
             .about("Write and query provenance data to distributed ledgers")
@@ -1008,47 +972,47 @@ impl SubCommand for CliModel {
                     )
             );
 
-        for agent in self.agents.iter() {
-            app = app.subcommand(agent.as_cmd());
-        }
-        for activity in self.activities.iter() {
-            app = app.subcommand(activity.as_cmd());
-        }
-        for entity in self.entities.iter() {
-            app = app.subcommand(entity.as_cmd());
-        }
+		for agent in self.agents.iter() {
+			app = app.subcommand(agent.as_cmd());
+		}
+		for activity in self.activities.iter() {
+			app = app.subcommand(activity.as_cmd());
+		}
+		for entity in self.entities.iter() {
+			app = app.subcommand(entity.as_cmd());
+		}
 
-        #[cfg(not(feature = "inmem"))]
-        {
-            app = app.arg(
-                Arg::new("batcher-key-from-path")
-                    .long("batcher-key-from-path")
-                    .takes_value(true)
-                    .value_hint(ValueHint::DirPath)
-                    .help("Path to a directory containing the key for signing batches")
-                    .conflicts_with("batcher-key-from-vault")
-                    .conflicts_with("batcher-key-generated"),
-            );
+		#[cfg(not(feature = "inmem"))]
+		{
+			app = app.arg(
+				Arg::new("batcher-key-from-path")
+					.long("batcher-key-from-path")
+					.takes_value(true)
+					.value_hint(ValueHint::DirPath)
+					.help("Path to a directory containing the key for signing batches")
+					.conflicts_with("batcher-key-from-vault")
+					.conflicts_with("batcher-key-generated"),
+			);
 
-            app = app.arg(
-                Arg::new("batcher-key-from-vault")
-                    .long("batcher-key-from-vault")
-                    .takes_value(false)
-                    .help("Use Hashicorp Vault to store the batcher key")
-                    .conflicts_with("batcher-key-from-path")
-                    .conflicts_with("batcher-key-generated"),
-            );
+			app = app.arg(
+				Arg::new("batcher-key-from-vault")
+					.long("batcher-key-from-vault")
+					.takes_value(false)
+					.help("Use Hashicorp Vault to store the batcher key")
+					.conflicts_with("batcher-key-from-path")
+					.conflicts_with("batcher-key-generated"),
+			);
 
-            app = app.arg(
-                Arg::new("batcher-key-generated")
-                    .long("batcher-key-generated")
-                    .takes_value(false)
-                    .help("Generate the batcher key in memory")
-                    .conflicts_with("batcher-key-from-path")
-                    .conflicts_with("batcher-key-from-vault"),
-            );
+			app = app.arg(
+				Arg::new("batcher-key-generated")
+					.long("batcher-key-generated")
+					.takes_value(false)
+					.help("Generate the batcher key in memory")
+					.conflicts_with("batcher-key-from-path")
+					.conflicts_with("batcher-key-from-vault"),
+			);
 
-            app = app.arg(
+			app = app.arg(
                 Arg::new("chronicle-key-from-path")
                     .long("chronicle-key-from-path")
                     .takes_value(true)
@@ -1058,107 +1022,103 @@ impl SubCommand for CliModel {
                     .conflicts_with("chronicle-key-generated"),
             );
 
-            app = app.arg(
-                Arg::new("chronicle-key-from-vault")
-                    .long("chronicle-key-from-vault")
-                    .takes_value(false)
-                    .help("Use Hashicorp Vault to store the Chronicle key")
-                    .conflicts_with("chronicle-key-from-path")
-                    .conflicts_with("chronicle-key-generated"),
-            );
+			app = app.arg(
+				Arg::new("chronicle-key-from-vault")
+					.long("chronicle-key-from-vault")
+					.takes_value(false)
+					.help("Use Hashicorp Vault to store the Chronicle key")
+					.conflicts_with("chronicle-key-from-path")
+					.conflicts_with("chronicle-key-generated"),
+			);
 
-            app = app.arg(
-                Arg::new("chronicle-key-generated")
-                    .long("chronicle-key-generated")
-                    .takes_value(false)
-                    .help("Generate the Chronicle key in memory")
-                    .conflicts_with("chronicle-key-from-path")
-                    .conflicts_with("chronicle-key-from-vault"),
-            );
+			app = app.arg(
+				Arg::new("chronicle-key-generated")
+					.long("chronicle-key-generated")
+					.takes_value(false)
+					.help("Generate the Chronicle key in memory")
+					.conflicts_with("chronicle-key-from-path")
+					.conflicts_with("chronicle-key-from-vault"),
+			);
 
-            app = app.arg(
-                Arg::new("vault-address")
-                    .long("vault-address")
-                    .takes_value(true)
-                    .value_hint(ValueHint::Url)
-                    .help("URL for connecting to Hashicorp Vault")
-                    .env("VAULT_ADDRESS"),
-            );
+			app = app.arg(
+				Arg::new("vault-address")
+					.long("vault-address")
+					.takes_value(true)
+					.value_hint(ValueHint::Url)
+					.help("URL for connecting to Hashicorp Vault")
+					.env("VAULT_ADDRESS"),
+			);
 
-            app = app.arg(
-                Arg::new("vault-token")
-                    .long("vault-token")
-                    .takes_value(true)
-                    .help("Token for connecting to Hashicorp Vault")
-                    .env("VAULT_TOKEN"),
-            );
+			app = app.arg(
+				Arg::new("vault-token")
+					.long("vault-token")
+					.takes_value(true)
+					.help("Token for connecting to Hashicorp Vault")
+					.env("VAULT_TOKEN"),
+			);
 
-            app = app.arg(
-                Arg::new("vault-mount-path")
-                    .long("vault-mount-path")
-                    .takes_value(true)
-                    .value_hint(ValueHint::DirPath)
-                    .help("Mount path for vault secrets")
-                    .env("VAULT_MOUNT_PATH"),
-            );
+			app = app.arg(
+				Arg::new("vault-mount-path")
+					.long("vault-mount-path")
+					.takes_value(true)
+					.value_hint(ValueHint::DirPath)
+					.help("Mount path for vault secrets")
+					.env("VAULT_MOUNT_PATH"),
+			);
 
-            app.arg(
-                // default is provided by cargo.toml
-                Arg::new("sawtooth")
-                    .long("sawtooth")
-                    .value_name("sawtooth")
-                    .value_hint(ValueHint::Url)
-                    .help("Sets sawtooth validator address")
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("embedded-opa-policy")
-                    .long("embedded-opa-policy")
-                    .takes_value(false)
-                    .help(
-                        "Operate without an external OPA policy, using an embedded default policy",
-                    ),
-            )
-        }
-        #[cfg(feature = "inmem")]
-        {
-            app
-        }
-    }
+			app.arg(
+				// default is provided by cargo.toml
+				Arg::new("sawtooth")
+					.long("sawtooth")
+					.value_name("sawtooth")
+					.value_hint(ValueHint::Url)
+					.help("Sets sawtooth validator address")
+					.takes_value(true),
+			)
+			.arg(
+				Arg::new("embedded-opa-policy")
+					.long("embedded-opa-policy")
+					.takes_value(false)
+					.help(
+						"Operate without an external OPA policy, using an embedded default policy",
+					),
+			)
+		}
+		#[cfg(feature = "inmem")]
+		{
+			app
+		}
+	}
 
-    /// Iterate our possible subcommands via model and short circuit with the first one that matches
-    fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
-        for (agent, matches) in self.agents.iter().filter_map(|agent| {
-            matches
-                .subcommand_matches(&agent.external_id)
-                .map(|matches| (agent, matches))
-        }) {
-            if let Some(cmd) = agent.matches(matches)? {
-                return Ok(Some(cmd));
-            }
-        }
-        for (entity, matches) in self.entities.iter().filter_map(|entity| {
-            matches
-                .subcommand_matches(&entity.external_id)
-                .map(|matches| (entity, matches))
-        }) {
-            if let Some(cmd) = entity.matches(matches)? {
-                return Ok(Some(cmd));
-            }
-        }
-        for (activity, matches) in self.activities.iter().filter_map(|activity| {
-            matches
-                .subcommand_matches(&activity.external_id)
-                .map(|matches| (activity, matches))
-        }) {
-            if let Some(cmd) = activity.matches(matches)? {
-                return Ok(Some(cmd));
-            }
-        }
-        Ok(None)
-    }
+	/// Iterate our possible subcommands via model and short circuit with the first one that matches
+	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
+		for (agent, matches) in self.agents.iter().filter_map(|agent| {
+			matches.subcommand_matches(&agent.external_id).map(|matches| (agent, matches))
+		}) {
+			if let Some(cmd) = agent.matches(matches)? {
+				return Ok(Some(cmd))
+			}
+		}
+		for (entity, matches) in self.entities.iter().filter_map(|entity| {
+			matches.subcommand_matches(&entity.external_id).map(|matches| (entity, matches))
+		}) {
+			if let Some(cmd) = entity.matches(matches)? {
+				return Ok(Some(cmd))
+			}
+		}
+		for (activity, matches) in self.activities.iter().filter_map(|activity| {
+			matches
+				.subcommand_matches(&activity.external_id)
+				.map(|matches| (activity, matches))
+		}) {
+			if let Some(cmd) = activity.matches(matches)? {
+				return Ok(Some(cmd))
+			}
+		}
+		Ok(None)
+	}
 }
 
 pub fn cli(domain: ChronicleDomainDef) -> CliModel {
-    CliModel::from(domain)
+	CliModel::from(domain)
 }

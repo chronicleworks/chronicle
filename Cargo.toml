@@ -18,7 +18,9 @@ members = [
   "crates/opa-tp-protocol",
   "crates/opactl",
   "crates/sawtooth-tp",
-  "crates/frame-chronicle"
+  "crates/pallet-chronicle",
+  "node/runtime-chronicle",
+  "node/node-chronicle",
 ]
 
 [workspace.dependencies]
@@ -67,7 +69,6 @@ hex = "0.4.3"
 http = "0.2.9"
 insta = { version = "1.26.0", features = ["redactions", "toml"] }
 iref = "2.2"
-iref-enum = "2.1"
 is-terminal = "0.4"
 json-ld = { version = "0.14" }
 json-syntax = { version = "0.9", features = ["serde", "serde_json"] }
@@ -134,20 +135,12 @@ serde_derive = "1.0.152"
 serde_json = "1.0.93"
 serde_yaml = "0.9.14"
 shellexpand = "3.0.0"
-static-iref = "2.0.0"
-sp-runtime = "27.0.0"
-sp-core= "24.0.0"
-sp-std = "11.0.0"
-sp-io = "26.0.0"
-macro-attr-2018 = "0.3.0"
+macro-attr-2018 = "3.0.0"
 newtype-derive-2018 = "0.2.1"
 temp-dir = "0.1.11"
 tempfile = "3.4.0"
-testcontainers = "0.14"
 thiserror = "1.0"
 tmq = "0.3"
-scale-info = "2.9.0"
-parity-scale-codec = {version = "3.6.1", features=["std"]}
 tokio = { version = "1.27", features = [
   "time",
   "macros",
@@ -173,3 +166,4 @@ uuid = "1.2.2"
 valico = "3.6.0"
 vaultrs = "*"
 zmq = { version = "0.9", features = ["vendored"] }
+testcontainers = "0.14"

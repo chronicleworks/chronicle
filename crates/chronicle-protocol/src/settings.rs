@@ -1,7 +1,7 @@
 use std::iter::repeat;
 
 use async_stl_client::{
-    error::SawtoothCommunicationError, ledger::LedgerReader, messages::Setting,
+	error::SawtoothCommunicationError, ledger::LedgerReader, messages::Setting,
 };
 use k256::sha2::{Digest, Sha256};
 use prost::Message;
@@ -10,22 +10,22 @@ use tracing::error;
 use crate::ChronicleLedger;
 
 fn setting_key_to_address(key: &str) -> String {
-    let mut address = String::new();
-    address.push_str("000000");
-    address.push_str(
-        &key.splitn(4, '.')
-            .chain(repeat(""))
-            .map(short_hash)
-            .take(4)
-            .collect::<Vec<_>>()
-            .join(""),
-    );
+	let mut address = String::new();
+	address.push_str("000000");
+	address.push_str(
+		&key.splitn(4, '.')
+			.chain(repeat(""))
+			.map(short_hash)
+			.take(4)
+			.collect::<Vec<_>>()
+			.join(""),
+	);
 
-    address
+	address
 }
 
 fn short_hash(s: &str) -> String {
-    hex::encode(Sha256::digest(s.as_bytes()))[..16].to_string()
+	hex::encode(Sha256::digest(s.as_bytes()))[..16].to_string()
 }
 
 /// Generates a Sawtooth address for a given setting key.
@@ -53,7 +53,7 @@ fn short_hash(s: &str) -> String {
 /// assert_eq!(address, "000000a87cb5eafdcca6a8b79606fb3afea5bdab274474a6aa82c1c0cbf0fbcaf64c0b");
 /// ```
 pub fn sawtooth_settings_address(s: &str) -> String {
-    setting_key_to_address(s)
+	setting_key_to_address(s)
 }
 
 /// This `SettingsReader` struct is used for extracting particular configuration
@@ -61,56 +61,54 @@ pub fn sawtooth_settings_address(s: &str) -> String {
 pub struct SettingsReader(ChronicleLedger);
 
 impl SettingsReader {
-    pub fn new(reader: ChronicleLedger) -> Self {
-        Self(reader)
-    }
+	pub fn new(reader: ChronicleLedger) -> Self {
+		Self(reader)
+	}
 
-    /// Async function that returns the value of a specific configuration setting, given its key.
-    ///
-    /// # Arguments
-    /// * `key` - a reference to a string that contains the key for the setting to retrieve.
-    ///
-    /// # Errors
-    /// If the value is not found, returns a `SawtoothCommunicationError`, which indicates that there was an error in communicating with the Sawtooth network.
-    ///
-    /// Settings values are not uniform, so we return a `Vec<u8>` for further processing
-    pub async fn read_settings(&self, key: &str) -> Result<Setting, SawtoothCommunicationError> {
-        let address = sawtooth_settings_address(key);
-        loop {
-            let res = self.0.get_state_entry(&address).await;
+	/// Async function that returns the value of a specific configuration setting, given its key.
+	///
+	/// # Arguments
+	/// * `key` - a reference to a string that contains the key for the setting to retrieve.
+	///
+	/// # Errors
+	/// If the value is not found, returns a `SawtoothCommunicationError`, which indicates that
+	/// there was an error in communicating with the Sawtooth network.
+	///
+	/// Settings values are not uniform, so we return a `Vec<u8>` for further processing
+	pub async fn read_settings(&self, key: &str) -> Result<Setting, SawtoothCommunicationError> {
+		let address = sawtooth_settings_address(key);
+		loop {
+			let res = self.0.get_state_entry(&address).await;
 
-            if let Err(e) = res {
-                error!("Error reading settings: {}", e);
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                continue;
-            }
+			if let Err(e) = res {
+				error!("Error reading settings: {}", e);
+				tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+				continue
+			}
 
-            return Ok(Setting::decode(&*res.unwrap())?);
-        }
-    }
+			return Ok(Setting::decode(&*res.unwrap())?)
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
 pub struct OpaSettings {
-    pub policy_name: String,
-    pub entrypoint: String,
+	pub policy_name: String,
+	pub entrypoint: String,
 }
 
 pub async fn read_opa_settings(
-    settings: &SettingsReader,
+	settings: &SettingsReader,
 ) -> Result<OpaSettings, SawtoothCommunicationError> {
-    let policy_id = settings.read_settings("chronicle.opa.policy_name").await?;
-    let entrypoint = settings.read_settings("chronicle.opa.entrypoint").await?;
-    let policy_id = policy_id
-        .entries
-        .first()
-        .ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
-    let entrypoint = entrypoint
-        .entries
-        .first()
-        .ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
-    Ok(OpaSettings {
-        policy_name: policy_id.value.clone(),
-        entrypoint: entrypoint.value.clone(),
-    })
+	let policy_id = settings.read_settings("chronicle.opa.policy_name").await?;
+	let entrypoint = settings.read_settings("chronicle.opa.entrypoint").await?;
+	let policy_id = policy_id
+		.entries
+		.first()
+		.ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
+	let entrypoint = entrypoint
+		.entries
+		.first()
+		.ok_or_else(|| SawtoothCommunicationError::MalformedMessage)?;
+	Ok(OpaSettings { policy_name: policy_id.value.clone(), entrypoint: entrypoint.value.clone() })
 }

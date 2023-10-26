@@ -33,7 +33,6 @@ futures = { workspace = true }
 glob = { workspace = true }
 hex = { workspace = true }
 iref = { workspace = true }
-iref-enum = { workspace = true }
 json-ld = { workspace = true }
 jwtk = { workspace = true }
 lazy_static = { workspace = true }
@@ -55,7 +54,6 @@ sawtooth_tp = { path = "../sawtooth-tp" }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
-static-iref = { workspace = true }
 thiserror = { workspace = true }
 tmq = { workspace = true }
 tokio = { workspace = true }

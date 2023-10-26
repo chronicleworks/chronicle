@@ -3,7 +3,7 @@ use std::process::Command;
 use chronicle::{codegen::ChronicleDomainDef, generate_chronicle_domain_schema};
 
 fn main() {
-    let s = r#"
+	let s = r#"
     name: "airworthiness"
     attributes:
       CertId:
@@ -47,14 +47,14 @@ fn main() {
       - MANUFACTURER
       - SUBMITTER
      "#
-    .to_string();
+	.to_string();
 
-    let model = ChronicleDomainDef::from_input_string(&s).unwrap();
+	let model = ChronicleDomainDef::from_input_string(&s).unwrap();
 
-    generate_chronicle_domain_schema(model, "src/generated.rs");
+	generate_chronicle_domain_schema(model, "src/generated.rs");
 
-    Command::new("cargo")
-        .args(["fmt", "--", "src/generated.rs"])
-        .output()
-        .expect("formatting");
+	Command::new("cargo")
+		.args(["fmt", "--", "src/generated.rs"])
+		.output()
+		.expect("formatting");
 }
