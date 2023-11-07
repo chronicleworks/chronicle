@@ -3,6 +3,7 @@
 !.cargo
 !Cargo.*
 !crates
+!node
 !domain_docs
 !policies
 !docker/chronicle-config

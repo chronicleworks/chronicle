@@ -1,13 +1,11 @@
 #[cfg(feature = "graphql-bindings")]
 mod graphlql_scalars;
+use core::str::FromStr;
+
 #[cfg(feature = "graphql-bindings")]
 use async_graphql::OneofObject;
-#[cfg(feature = "graphql-bindings")]
-pub use graphlql_scalars::*;
 
-use iri_string::types::{IriAbsoluteString, UriAbsoluteString, UriRelativeStr};
-use parity_scale_codec::{Decode, Encode};
-use scale_info::{build::Fields, Path, Type, TypeInfo};
+use iri_string::types::{IriString, UriString};
 use tracing::trace;
 
 #[cfg(feature = "diesel-bindings")]
@@ -41,57 +39,79 @@ pub enum ParseIriError {
 	#[error("Unparsable UUID")]
 	UnparsableUuid(uuid::Error),
 	#[error("Unexpected IRI type")]
-	IncorrectIriKind(String),
+	NotAChronicleUri(String),
 	#[error("Expected {component}")]
 	MissingComponent { component: String },
 }
 
 // Percent decoded, and has the correct authority
-pub struct ProbableChronicleIri(iri_string::types::IriAbsoluteString);
 
-impl ProbableChronicleIri {
+#[derive(Debug)]
+pub struct ProbableChronicleCURIE(Vec<String>);
+
+impl ProbableChronicleCURIE {
 	fn from_string(str: String) -> Result<Self, ParseIriError> {
-		let uri = iri_string::types::UriAbsoluteString::try_from(str)
+		let uri = iri_string::types::UriString::try_from(str)
 			.map_err(|e| ParseIriError::NotAnIri(e.into_source()))?;
 
 		Self::from_uri(uri)
 	}
 
-	fn from_uri(uri: UriAbsoluteString) -> Result<Self, ParseIriError> {
-		let iri: IriAbsoluteString = uri.into();
-		if iri.authority_str() != Some(Chronicle::PREFIX)
-			&& iri.authority_str() != Some(Chronicle::LONG_PREFIX)
-		{
-			return Err(ParseIriError::IncorrectIriKind(iri.to_string()));
+	// Take long or short form uris and return a short form iri
+	fn from_uri(uri: UriString) -> Result<Self, ParseIriError> {
+		let mut uri = uri;
+
+		if uri.as_str().starts_with(Chronicle::LONG_PREFIX) {
+			uri = UriString::from_str(
+				&uri.as_str()
+					.replace(Chronicle::LONG_PREFIX, &(Chronicle::PREFIX.to_owned() + ":")),
+			)
+			.unwrap()
 		}
 
-		Ok(Self(iri))
+		for prefix in Chronicle::LEGACY_PREFIXES {
+			if uri.as_str().starts_with(prefix) {
+				uri = UriString::from_str(
+					&uri.as_str().replace(prefix, &(Chronicle::PREFIX.to_owned() + ":")),
+				)
+				.unwrap()
+			}
+		}
+
+		let iri: IriString = uri.into();
+
+		if iri.scheme_str() != Chronicle::PREFIX {
+			return Err(ParseIriError::NotAChronicleUri(iri.to_string()));
+		}
+
+		Ok(Self(
+			iri.path_str()
+				.split(':')
+				.map(|x| percent_encoding::percent_decode_str(x).decode_utf8_lossy().to_string())
+				.collect::<Vec<_>>(),
+		))
 	}
 
-	fn path_components<'a>(&'a self) -> impl Iterator<Item = &'a str> {
-		self.0.path_str().split(':')
+	fn path_components(&self) -> impl Iterator<Item = &'_ str> {
+		self.0.iter().map(|x| x.as_ref())
 	}
 }
 
-impl core::fmt::Display for ProbableChronicleIri {
+impl core::fmt::Display for ProbableChronicleCURIE {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{}", self.0)
+		write!(f, "{}", self.0.join(":"))
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Hash,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 #[cfg_attr(feature = "diesel-bindings", derive(AsExpression, FromSqlRow))]
 #[cfg_attr(feature = "diesel-bindings", diesel(sql_type = diesel::sql_types::Text))]
@@ -124,19 +144,15 @@ impl AsRef<str> for &Role {
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Hash,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 #[cfg_attr(feature = "diesel-bindings", derive(AsExpression, FromSqlRow))]
 #[cfg_attr(feature = "diesel-bindings", diesel(sql_type = diesel::sql_types::Text))]
@@ -147,6 +163,9 @@ impl core::fmt::Display for ExternalId {
 		write!(f, "{}", self.0)
 	}
 }
+
+#[cfg(feature = "graphql-bindings")]
+async_graphql::scalar!(ExternalId);
 
 impl<T> From<T> for ExternalId
 where
@@ -174,18 +193,7 @@ pub trait ExternalIdPart {
 }
 
 pub trait UuidPart {
-	fn uuid_part(&self) -> &Uuid;
-}
-
-/// Transform a chronicle IRI into its compact representation
-pub trait AsCompact {
-	fn compact(&self) -> String;
-}
-
-impl<T: core::fmt::Display> AsCompact for T {
-	fn compact(&self) -> String {
-		self.to_string().replace(Chronicle::LONG_PREFIX, Chronicle::PREFIX)
-	}
+	fn uuid_part(&self) -> Uuid;
 }
 
 /// Transform a chronicle IRI into its long-form representation
@@ -195,23 +203,20 @@ pub trait FromCompact {
 
 impl<T: core::fmt::Display> FromCompact for T {
 	fn de_compact(&self) -> String {
-		self.to_string().replace(Chronicle::PREFIX, Chronicle::LONG_PREFIX)
+		let replace = Chronicle::PREFIX.to_string() + ":";
+		self.to_string().replace(&replace, Chronicle::LONG_PREFIX)
 	}
 }
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub enum ChronicleIri {
 	Namespace(NamespaceId),
@@ -224,6 +229,7 @@ pub enum ChronicleIri {
 	Delegation(DelegationId),
 }
 
+#[cfg(feature = "parity-encoding")]
 impl parity_scale_codec::MaxEncodedLen for ChronicleIri {
 	fn max_encoded_len() -> usize {
 		2048usize
@@ -300,7 +306,7 @@ impl core::str::FromStr for ChronicleIri {
 		trace!(parsing_iri = %s);
 		//Compacted form, expand
 
-		let iri = ProbableChronicleIri::from_string(s.to_owned())?;
+		let iri = ProbableChronicleCURIE::from_string(s.to_owned())?;
 
 		//TODO: this just needs to extract the first path component
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
@@ -322,7 +328,7 @@ impl ChronicleIri {
 	pub fn namespace(self) -> Result<NamespaceId, ParseIriError> {
 		match self {
 			ChronicleIri::Namespace(ns) => Ok(ns),
-			_ => Err(ParseIriError::IncorrectIriKind(self.to_string())),
+			_ => Err(ParseIriError::NotAChronicleUri(self.to_string())),
 		}
 	}
 }
@@ -343,19 +349,15 @@ fn optional_component(external_id: &str, component: &str) -> Result<Option<Strin
 }
 
 // A composite identifier of agent, activity and role
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct DelegationId {
 	delegate: ExternalId,
@@ -366,7 +368,7 @@ pub struct DelegationId {
 
 impl core::fmt::Display for DelegationId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -406,22 +408,22 @@ impl TryFrom<String> for DelegationId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for DelegationId {
+impl TryFrom<UriString> for DelegationId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for DelegationId {
+impl TryFrom<ProbableChronicleCURIE> for DelegationId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, delegate, responsible, role, activity] => Ok(Self {
 				delegate: ExternalId::from(delegate),
@@ -435,7 +437,7 @@ impl TryFrom<ProbableChronicleIri> for DelegationId {
 	}
 }
 
-impl From<&DelegationId> for UriAbsoluteString {
+impl From<&DelegationId> for UriString {
 	fn from(val: &DelegationId) -> Self {
 		Chronicle::delegation(
 			&AgentId::from_external_id(&val.delegate),
@@ -443,24 +445,20 @@ impl From<&DelegationId> for UriAbsoluteString {
 			&val.activity().map(|n| ActivityId::from_external_id(n.external_id_part())),
 			&val.role,
 		)
-		.into()
+		.unwrap()
 	}
 }
 
 // A composite identifier of agent, activity and role
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct AssociationId {
 	agent: ExternalId,
@@ -470,7 +468,7 @@ pub struct AssociationId {
 
 impl core::fmt::Display for AssociationId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -500,22 +498,22 @@ impl TryFrom<String> for AssociationId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for AssociationId {
+impl TryFrom<UriString> for AssociationId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for AssociationId {
+impl TryFrom<ProbableChronicleCURIE> for AssociationId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, agent, activity, role] => Ok(Self {
 				agent: ExternalId::from(agent),
@@ -528,31 +526,27 @@ impl TryFrom<ProbableChronicleIri> for AssociationId {
 	}
 }
 
-impl From<&AssociationId> for UriAbsoluteString {
+impl From<&AssociationId> for UriString {
 	fn from(val: &AssociationId) -> Self {
 		Chronicle::association(
 			&AgentId::from_external_id(&val.agent),
 			&ActivityId::from_external_id(&val.activity),
 			&val.role,
 		)
-		.into()
+		.unwrap()
 	}
 }
 
 // A composite identifier of agent, entity, and role
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct AttributionId {
 	agent: ExternalId,
@@ -562,7 +556,7 @@ pub struct AttributionId {
 
 impl core::fmt::Display for AttributionId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -592,22 +586,22 @@ impl TryFrom<String> for AttributionId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for AttributionId {
+impl TryFrom<UriString> for AttributionId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for AttributionId {
+impl TryFrom<ProbableChronicleCURIE> for AttributionId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, agent, entity, role] => Ok(Self {
 				agent: ExternalId::from(agent),
@@ -620,36 +614,32 @@ impl TryFrom<ProbableChronicleIri> for AttributionId {
 	}
 }
 
-impl From<&AttributionId> for UriAbsoluteString {
+impl From<&AttributionId> for UriString {
 	fn from(val: &AttributionId) -> Self {
 		Chronicle::attribution(
 			&AgentId::from_external_id(&val.agent),
 			&EntityId::from_external_id(&val.entity),
 			&val.role,
 		)
-		.into()
+		.unwrap()
 	}
 }
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct DomaintypeId(ExternalId);
 
 impl core::fmt::Display for DomaintypeId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -669,22 +659,22 @@ impl TryFrom<String> for DomaintypeId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for DomaintypeId {
+impl TryFrom<UriString> for DomaintypeId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for DomaintypeId {
+impl TryFrom<ProbableChronicleCURIE> for DomaintypeId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, external_id] => Ok(Self(ExternalId::from(external_id))),
 			_ => Err(ParseIriError::UnparsableIri(iri.to_string())),
@@ -692,74 +682,48 @@ impl TryFrom<ProbableChronicleIri> for DomaintypeId {
 	}
 }
 
-impl From<&DomaintypeId> for UriAbsoluteString {
+impl From<&DomaintypeId> for UriString {
 	fn from(val: &DomaintypeId) -> Self {
-		Chronicle::domaintype(&val.0).into()
+		Chronicle::domaintype(&val.0).unwrap()
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
-pub struct UuidWrapper(Uuid);
-
-impl From<Uuid> for UuidWrapper {
-	fn from(uuid: Uuid) -> Self {
-		Self(uuid)
-	}
-}
-
-impl Encode for UuidWrapper {
-	fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
-		self.0.as_bytes().encode_to(dest);
-	}
-}
-
-impl Decode for UuidWrapper {
-	fn decode<I: parity_scale_codec::Input>(
-		input: &mut I,
-	) -> Result<Self, parity_scale_codec::Error> {
-		let uuid_bytes = <[u8; 16]>::decode(input)?;
-		let uuid = Uuid::from_slice(&uuid_bytes).map_err(|_| "Error decoding UUID")?;
-		Ok(Self(uuid))
-	}
-}
-
-impl TypeInfo for UuidWrapper {
-	type Identity = Self;
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("UuidWrapper", module_path!()))
-			.composite(Fields::unnamed().field(|f| f.ty::<[u8; 16]>().type_name("Uuid")))
-	}
-}
-
-#[derive(
-	Serialize,
-	Deserialize,
-	Decode,
-	Encode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct NamespaceId {
 	external_id: ExternalId,
-	uuid: UuidWrapper,
+	uuid: [u8; 16],
 }
 
 impl core::fmt::Display for NamespaceId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
+	}
+}
+
+impl core::fmt::Debug for NamespaceId {
+	fn fmt(
+		&self,
+		f: &mut scale_info::prelude::fmt::Formatter<'_>,
+	) -> scale_info::prelude::fmt::Result {
+		f.debug_struct("NamespaceId")
+			.field("external_id", &self.external_id)
+			.field("uuid", &Uuid::from_bytes(self.uuid))
+			.finish()
 	}
 }
 
 impl NamespaceId {
 	pub fn from_external_id(external_id: impl AsRef<str>, uuid: Uuid) -> Self {
-		Self { external_id: external_id.as_ref().into(), uuid: uuid.into() }
+		Self { external_id: external_id.as_ref().into(), uuid: uuid.into_bytes() }
 	}
 }
 
@@ -770,8 +734,8 @@ impl ExternalIdPart for NamespaceId {
 }
 
 impl UuidPart for NamespaceId {
-	fn uuid_part(&self) -> &Uuid {
-		&self.uuid.0
+	fn uuid_part(&self) -> Uuid {
+		Uuid::from_bytes(self.uuid)
 	}
 }
 
@@ -779,58 +743,54 @@ impl TryFrom<String> for NamespaceId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for NamespaceId {
+impl TryFrom<UriString> for NamespaceId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for NamespaceId {
+impl TryFrom<ProbableChronicleCURIE> for NamespaceId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, external_id, uuid] => Ok(Self {
 				external_id: ExternalId::from(external_id),
-				uuid: Uuid::parse_str(uuid).map_err(ParseIriError::UnparsableUuid)?.into(),
+				uuid: Uuid::parse_str(uuid).map_err(ParseIriError::UnparsableUuid)?.into_bytes(),
 			}),
 
-			_ => Err(ParseIriError::UnparsableIri(iri.to_string())),
+			_ => Err(ParseIriError::UnparsableIri(format!("{:?}", iri))),
 		}
 	}
 }
 
-impl From<&NamespaceId> for UriAbsoluteString {
+impl From<&NamespaceId> for UriString {
 	fn from(val: &NamespaceId) -> Self {
-		Chronicle::namespace(&val.external_id, &val.uuid.0).into()
+		Chronicle::namespace(&val.external_id, &val.uuid_part()).unwrap()
 	}
 }
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct EntityId(ExternalId);
 
 impl core::fmt::Display for EntityId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -850,22 +810,22 @@ impl TryFrom<String> for EntityId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for EntityId {
+impl TryFrom<UriString> for EntityId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for EntityId {
+impl TryFrom<ProbableChronicleCURIE> for EntityId {
 	type Error = ParseIriError;
 
-	fn try_from(value: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(value: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match value.path_components().collect::<Vec<_>>().as_slice() {
 			[_, external_id] => Ok(Self(ExternalId::from(external_id))),
 
@@ -874,15 +834,15 @@ impl TryFrom<ProbableChronicleIri> for EntityId {
 	}
 }
 
-impl From<&EntityId> for UriAbsoluteString {
+impl From<&EntityId> for UriString {
 	fn from(val: &EntityId) -> Self {
-		Chronicle::entity(&val.0).into()
+		Chronicle::entity(&val.0).unwrap()
 	}
 }
 
 /// Input either a short-form `externalId`, e.g. "agreement",
 /// or long-form Chronicle `id`, e.g. "chronicle:entity:agreement"
-#[cfg_attr(feature = "graphql-bindings", derive(OneofObject))]
+#[cfg_attr(feature = "graphql-bindings", derive(async_graphql::OneofObject))]
 pub enum EntityIdOrExternal {
 	ExternalId(String),
 	Id(EntityId),
@@ -897,25 +857,21 @@ impl From<EntityIdOrExternal> for EntityId {
 	}
 }
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct AgentId(ExternalId);
 
 impl core::fmt::Display for AgentId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(Into::<UriAbsoluteString>::into(self).as_str())
+		f.write_str(Into::<UriString>::into(self).as_str())
 	}
 }
 
@@ -935,21 +891,22 @@ impl TryFrom<String> for AgentId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for AgentId {
+impl TryFrom<UriString> for AgentId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for AgentId {
+impl TryFrom<ProbableChronicleCURIE> for AgentId {
 	type Error = ParseIriError;
-	fn try_from(value: ProbableChronicleIri) -> Result<Self, Self::Error> {
+
+	fn try_from(value: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match value.path_components().collect::<Vec<_>>().as_slice() {
 			[_, external_id] => Ok(Self(ExternalId::from(external_id))),
 			_ => Err(ParseIriError::UnparsableIri(value.to_string())),
@@ -957,9 +914,9 @@ impl TryFrom<ProbableChronicleIri> for AgentId {
 	}
 }
 
-impl From<&AgentId> for UriAbsoluteString {
+impl From<&AgentId> for UriString {
 	fn from(val: &AgentId) -> Self {
-		UriAbsoluteString::from(Chronicle::agent(&val.0))
+		Chronicle::agent(&val.0).unwrap()
 	}
 }
 
@@ -980,25 +937,21 @@ impl From<AgentIdOrExternal> for AgentId {
 	}
 }
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Hash,
-	Debug,
-	Clone,
-	Ord,
-	PartialOrd,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Ord, PartialOrd)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 pub struct ActivityId(ExternalId);
 
 impl core::fmt::Display for ActivityId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(UriAbsoluteString::from(self).as_str())
+		f.write_str(UriString::from(self).as_str())
 	}
 }
 
@@ -1018,22 +971,22 @@ impl TryFrom<String> for ActivityId {
 	type Error = ParseIriError;
 
 	fn try_from(value: String) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_string(value)?.try_into()
+		ProbableChronicleCURIE::from_string(value)?.try_into()
 	}
 }
 
-impl TryFrom<UriAbsoluteString> for ActivityId {
+impl TryFrom<UriString> for ActivityId {
 	type Error = ParseIriError;
 
-	fn try_from(value: UriAbsoluteString) -> Result<Self, Self::Error> {
-		ProbableChronicleIri::from_uri(value)?.try_into()
+	fn try_from(value: UriString) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_uri(value)?.try_into()
 	}
 }
 
-impl TryFrom<ProbableChronicleIri> for ActivityId {
+impl TryFrom<ProbableChronicleCURIE> for ActivityId {
 	type Error = ParseIriError;
 
-	fn try_from(iri: ProbableChronicleIri) -> Result<Self, Self::Error> {
+	fn try_from(iri: ProbableChronicleCURIE) -> Result<Self, Self::Error> {
 		match iri.path_components().collect::<Vec<_>>().as_slice() {
 			[_, external_id] => Ok(Self(ExternalId::from(external_id))),
 
@@ -1042,9 +995,9 @@ impl TryFrom<ProbableChronicleIri> for ActivityId {
 	}
 }
 
-impl From<&ActivityId> for UriAbsoluteString {
+impl From<&ActivityId> for UriString {
 	fn from(val: &ActivityId) -> Self {
-		Chronicle::activity(&val.0).into()
+		Chronicle::activity(&val.0).unwrap()
 	}
 }
 

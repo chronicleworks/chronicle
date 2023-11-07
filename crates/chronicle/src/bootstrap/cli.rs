@@ -1,7 +1,9 @@
 use std::{collections::BTreeMap, convert::Infallible};
 
-use api::ApiError;
-use chronicle_protocol::async_stl_client::error::SawtoothCommunicationError;
+use api::{
+	commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
+	ApiError,
+};
 use chronicle_signing::SecretError;
 use clap::{
 	builder::{PossibleValuesParser, StringValueParser},
@@ -9,15 +11,13 @@ use clap::{
 };
 use common::{
 	attributes::{Attribute, Attributes},
-	commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
-	import::FromUrlError,
-	opa::{OpaExecutorError, PolicyLoaderError},
+	opa::std::{FromUrlError, OpaExecutorError, PolicyLoaderError},
 	prov::{
-		operations::DerivationType, ActivityId, AgentId, CompactionError, DomaintypeId, EntityId,
-		ExternalId, ExternalIdPart, ParseIriError,
+		json_ld::CompactionError, operations::DerivationType, ActivityId, AgentId, DomaintypeId,
+		EntityId, ExternalId, ExternalIdPart, ParseIriError,
 	},
 };
-use iref::Iri;
+use protocol_substrate::SubxtClientError;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::info;
@@ -42,7 +42,7 @@ pub enum CliError {
 	ArgumentParsing(#[from] clap::Error),
 
 	#[error("Invalid IRI: {0}")]
-	InvalidIri(#[from] iref::Error),
+	InvalidIri(#[from] iri_string::validate::Error),
 
 	#[error("Invalid Chronicle IRI: {0}")]
 	InvalidChronicleIri(#[from] ParseIriError),
@@ -87,16 +87,19 @@ pub enum CliError {
 	OpaExecutor(#[from] OpaExecutorError),
 
 	#[error("Sawtooth communication error: {source}")]
-	SawtoothCommunicationError {
+	SubstrateError {
 		#[from]
-		source: SawtoothCommunicationError,
+		source: SubxtClientError,
 	},
-
-	#[error("Error loading from URL: {0}")]
-	UrlError(#[from] FromUrlError),
 
 	#[error("UTF-8 error: {0}")]
 	Utf8Error(#[from] std::str::Utf8Error),
+
+	#[error("Url conversion: {0}")]
+	FromUrlError(#[from] FromUrlError),
+
+	#[error("No on chain settings, but they are required by Chronicle")]
+	NoOnChainSettings,
 }
 
 impl CliError {
@@ -114,7 +117,7 @@ impl From<Infallible> for CliError {
 
 impl UFE for CliError {}
 
-pub(crate) trait SubCommand {
+pub trait SubCommand {
 	fn as_cmd(&self) -> Command;
 	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError>;
 }
@@ -174,13 +177,12 @@ fn name_from<'a, Id>(
 	id_param: &str,
 ) -> Result<ExternalId, CliError>
 where
-	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<String, Error = ParseIriError> + ExternalIdPart,
 {
 	if let Some(external_id) = args.get_one::<String>(name_param) {
 		Ok(ExternalId::from(external_id))
-	} else if let Some(id) = args.get_one::<String>(id_param) {
-		let iri = Iri::from_str(id)?;
-		let id = Id::try_from(iri)?;
+	} else if let Some(iri) = args.get_one::<String>(id_param) {
+		let id = Id::try_from(iri.to_string())?;
 		Ok(id.external_id_part().to_owned())
 	} else {
 		Err(CliError::MissingArgument { arg: format!("Missing {name_param} and {id_param}") })
@@ -189,10 +191,10 @@ where
 
 fn id_from<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Id, CliError>
 where
-	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<String, Error = ParseIriError> + ExternalIdPart,
 {
 	if let Some(id) = args.get_one::<String>(id_param) {
-		Ok(Id::try_from(Iri::from_str(id)?)?)
+		Ok(Id::try_from(id.to_string())?)
 	} else {
 		Err(CliError::MissingArgument { arg: format!("Missing {id_param} ") })
 	}
@@ -200,7 +202,7 @@ where
 
 fn id_from_option<'a, Id>(args: &'a ArgMatches, id_param: &str) -> Result<Option<Id>, CliError>
 where
-	Id: 'a + TryFrom<Iri<'a>, Error = ParseIriError> + ExternalIdPart,
+	Id: 'a + TryFrom<String, Error = ParseIriError> + ExternalIdPart,
 {
 	match id_from(args, id_param) {
 		Err(CliError::MissingArgument { .. }) => Ok(None),
@@ -283,9 +285,9 @@ fn attributes_from(
 	typ: impl AsRef<str>,
 	attributes: &[AttributeCliModel],
 ) -> Result<Attributes, CliError> {
-	Ok(Attributes {
-		typ: Some(DomaintypeId::from_external_id(typ)),
-		attributes: attributes
+	Ok(Attributes::new(
+		Some(DomaintypeId::from_external_id(typ)),
+		attributes
 			.iter()
 			.map(|attr| {
 				let value = attribute_value_from_param(
@@ -295,11 +297,11 @@ fn attributes_from(
 				)?;
 				Ok::<_, CliError>((
 					attr.attribute.as_type_name(),
-					Attribute { typ: attr.attribute.as_type_name(), value },
+					Attribute { typ: attr.attribute.as_type_name(), value: value.into() },
 				))
 			})
-			.collect::<Result<BTreeMap<_, _>, _>>()?,
-	})
+			.collect::<Result<Vec<_>, _>>()?,
+	))
 }
 
 impl SubCommand for AgentCliModel {
@@ -357,14 +359,14 @@ impl SubCommand for AgentCliModel {
 				external_id: name_from::<AgentId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
-			})))
+			})));
 		}
 
 		if let Some(matches) = matches.subcommand_matches("use") {
 			return Ok(Some(ApiCommand::Agent(AgentCommand::UseInContext {
 				id: id_from(matches, "id")?,
 				namespace: namespace_from(matches)?,
-			})))
+			})));
 		};
 
 		Ok(None)
@@ -569,7 +571,7 @@ impl SubCommand for ActivityCliModel {
 				external_id: name_from::<ActivityId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.activity.external_id, &self.attributes)?,
-			})))
+			})));
 		}
 
 		if let Some(matches) = matches.subcommand_matches("start") {
@@ -578,7 +580,7 @@ impl SubCommand for ActivityCliModel {
 				namespace: namespace_from(matches)?,
 				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
 				agent: id_from_option(matches, "agent_id")?,
-			})))
+			})));
 		};
 
 		if let Some(matches) = matches.subcommand_matches("end") {
@@ -587,7 +589,7 @@ impl SubCommand for ActivityCliModel {
 				namespace: namespace_from(matches)?,
 				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
 				agent: id_from_option(matches, "agent_id")?,
-			})))
+			})));
 		};
 
 		if let Some(matches) = matches.subcommand_matches("instant") {
@@ -596,7 +598,7 @@ impl SubCommand for ActivityCliModel {
 				namespace: namespace_from(matches)?,
 				time: matches.get_one::<String>("time").map(|t| t.parse()).transpose()?,
 				agent: id_from_option(matches, "agent_id")?,
-			})))
+			})));
 		};
 
 		if let Some(matches) = matches.subcommand_matches("use") {
@@ -604,7 +606,7 @@ impl SubCommand for ActivityCliModel {
 				id: id_from(matches, "entity_id")?,
 				namespace: namespace_from(matches)?,
 				activity: id_from(matches, "activity_id")?,
-			})))
+			})));
 		};
 
 		if let Some(matches) = matches.subcommand_matches("generate") {
@@ -612,7 +614,7 @@ impl SubCommand for ActivityCliModel {
 				id: id_from(matches, "entity_id")?,
 				namespace: namespace_from(matches)?,
 				activity: id_from(matches, "activity_id")?,
-			})))
+			})));
 		};
 
 		Ok(None)
@@ -725,7 +727,7 @@ impl SubCommand for EntityCliModel {
 				external_id: name_from::<EntityId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.entity.external_id, &self.attributes)?,
-			})))
+			})));
 		}
 
 		if let Some(matches) = matches.subcommand_matches("derive") {
@@ -743,7 +745,7 @@ impl SubCommand for EntityCliModel {
 					.unwrap_or(DerivationType::None),
 				activity: id_from_option(matches, "activity_id")?,
 				used_entity: id_from(matches, "used_entity_id")?,
-			})))
+			})));
 		}
 
 		Ok(None)
@@ -761,7 +763,7 @@ pub const LONG_VERSION: &str = const_format::formatcp!(
 	"{}:{} ({})",
 	env!("CARGO_PKG_VERSION"),
 	include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.VERSION")),
-	if cfg!(feature = "inmem") { "in memory" } else { "sawtooth" }
+	if cfg!(feature = "devmode") { "in memory" } else { "substrate" }
 );
 
 impl From<ChronicleDomainDef> for CliModel {
@@ -982,7 +984,7 @@ impl SubCommand for CliModel {
 			app = app.subcommand(entity.as_cmd());
 		}
 
-		#[cfg(not(feature = "inmem"))]
+		#[cfg(not(feature = "devmode"))]
 		{
 			app = app.arg(
 				Arg::new("batcher-key-from-path")
@@ -1068,11 +1070,11 @@ impl SubCommand for CliModel {
 
 			app.arg(
 				// default is provided by cargo.toml
-				Arg::new("sawtooth")
-					.long("sawtooth")
-					.value_name("sawtooth")
+				Arg::new("validator")
+					.long("validator")
+					.value_name("validator")
 					.value_hint(ValueHint::Url)
-					.help("Sets sawtooth validator address")
+					.help("Sets validator address")
 					.takes_value(true),
 			)
 			.arg(
@@ -1084,7 +1086,7 @@ impl SubCommand for CliModel {
 					),
 			)
 		}
-		#[cfg(feature = "inmem")]
+		#[cfg(feature = "devmode")]
 		{
 			app
 		}
@@ -1096,14 +1098,14 @@ impl SubCommand for CliModel {
 			matches.subcommand_matches(&agent.external_id).map(|matches| (agent, matches))
 		}) {
 			if let Some(cmd) = agent.matches(matches)? {
-				return Ok(Some(cmd))
+				return Ok(Some(cmd));
 			}
 		}
 		for (entity, matches) in self.entities.iter().filter_map(|entity| {
 			matches.subcommand_matches(&entity.external_id).map(|matches| (entity, matches))
 		}) {
 			if let Some(cmd) = entity.matches(matches)? {
-				return Ok(Some(cmd))
+				return Ok(Some(cmd));
 			}
 		}
 		for (activity, matches) in self.activities.iter().filter_map(|activity| {
@@ -1112,7 +1114,7 @@ impl SubCommand for CliModel {
 				.map(|matches| (activity, matches))
 		}) {
 			if let Some(cmd) = activity.matches(matches)? {
-				return Ok(Some(cmd))
+				return Ok(Some(cmd));
 			}
 		}
 		Ok(None)

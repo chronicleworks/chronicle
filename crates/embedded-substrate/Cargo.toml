@@ -1,0 +1,28 @@
+[package]
+edition = "2021"
+name    = "embedded-substrate"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow                       = { workspace = true }
+lazy_static                  = { workspace = true }
+node-chronicle               = { path = "../../node/node-chronicle" }
+portpicker                   = { workspace = true }
+protocol-abstract            = { path = "../protocol-abstract" }
+protocol-substrate           = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+sc-cli                       = { version = "0.33.0" }
+sp-io                        = { version = "27.0.0" }
+sp-runtime                   = { version = "28.0.0" }
+subxt                        = { version = "0.34", features = ["substrate-compat"] }
+tempfile                     = { version = "3" }
+thiserror                    = { workspace = true }
+tokio                        = { workspace = true }
+tracing                      = { workspace = true }
+
+
+[dev-dependencies]
+chronicle-signing = { workspace = true }
+uuid              = { workspace = true }

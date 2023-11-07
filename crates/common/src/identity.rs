@@ -1,19 +1,16 @@
 use crate::prov::AgentId;
 
-use k256::{
-	ecdsa::VerifyingKey,
-	sha2::{Digest, Sha512},
-};
+use k256::sha2::{Digest, Sha512};
 use serde_json::{Map, Value};
 use tracing::warn;
 
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::{
 	alloc::collections::BTreeMap, alloc::collections::BTreeSet, alloc::string::String,
-	alloc::vec::Vec,
+	alloc::vec::Vec, Decode, Encode,
 };
 #[cfg(not(feature = "std"))]
-use scale_info::{prelude::borrow::ToOwned, prelude::string::ToString, prelude::*};
+use scale_info::{prelude::borrow::ToOwned, prelude::string::ToString, prelude::*, TypeInfo};
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 
@@ -31,16 +28,13 @@ pub enum IdentityError {
 	JwtClaims,
 
 	#[error("Signer : {0}")]
-	KeyStore(#[from] anyhow::Error),
+	Signing(#[from] anyhow::Error),
 
 	#[error("Malformed JSON: {0}")]
 	SerdeJson(#[from] serde_json::Error),
 
 	#[error("Serialization error: {0}")]
 	SerdeJsonSerialize(String),
-
-	#[error("Signing error: {0}")]
-	Signing(#[from] k256::ecdsa::Error),
 }
 
 /// Contains the scalar ID and identity claims for a user established via JWT
@@ -192,22 +186,26 @@ impl OpaData {
 		))
 	}
 }
-
 /// Signed user identity containing the serialized identity, signature, and
 /// verifying key. Implements `TryFrom` to deserialize to the user identity object
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignedIdentity {
 	pub identity: String,
 	pub signature: Option<Vec<u8>>,
-	pub verifying_key: Option<VerifyingKey>,
+	pub verifying_key: Option<Vec<u8>>,
 }
 
 impl SignedIdentity {
-	fn new(
-		id: &AuthId,
-		signature: Vec<u8>,
-		verifying_key: VerifyingKey,
-	) -> Result<Self, IdentityError> {
+	fn new(id: &AuthId, signature: Vec<u8>, verifying_key: Vec<u8>) -> Result<Self, IdentityError> {
 		Ok(Self {
 			identity: serde_json::to_string(&id)?,
 			signature: Some(signature),

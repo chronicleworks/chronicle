@@ -1,10 +1,12 @@
 mod contradiction;
 pub use contradiction::Contradiction;
+
 #[cfg(feature = "json-ld")]
 pub mod json_ld;
-pub mod transaction;
-
-use parity_scale_codec::{Decode, Encode};
+#[cfg(test)]
+#[cfg(feature = "json-ld")]
+#[cfg(feature = "std")]
+mod proptest;
 
 use core::{convert::Infallible, fmt::Debug};
 #[cfg(not(feature = "std"))]
@@ -13,7 +15,6 @@ use parity_scale_codec::{
 	alloc::string::String,
 	alloc::vec::Vec,
 };
-use scale_info::TypeInfo;
 #[cfg(not(feature = "std"))]
 use scale_info::{
 	prelude::borrow::ToOwned, prelude::string::ToString, prelude::sync::Arc, prelude::*,
@@ -31,7 +32,6 @@ use thiserror::Error;
 use thiserror_no_std::Error;
 
 use tracing::{instrument, trace};
-pub use transaction::ChronicleTransaction;
 use uuid::Uuid;
 
 use crate::{
@@ -48,14 +48,14 @@ use super::{
 		StartActivity, TimeWrapper, WasAssociatedWith, WasGeneratedBy, WasInformedBy,
 	},
 	ActivityId, AgentId, AssociationId, AttributionId, ChronicleIri, DelegationId, DomaintypeId,
-	EntityId, ExternalId, ExternalIdPart, NamespaceId, Role, UuidPart, UuidWrapper,
+	EntityId, ExternalId, ExternalIdPart, NamespaceId, Role, UuidPart,
 };
 
+#[cfg(feature = "json-ld")]
 #[derive(Error, Debug)]
 pub enum ProcessorError {
 	#[error("Invalid address")]
 	Address,
-	#[cfg(feature = "json-ld")]
 	#[error("Json Ld Error {0}")]
 	Compaction(#[from] json_ld::CompactionError),
 	#[error("Contradiction {0}")]
@@ -64,9 +64,41 @@ pub enum ProcessorError {
 	Expansion { inner: String },
 	#[error("IdentityError {0}")]
 	Identity(#[from] IdentityError),
-	#[cfg(feature = "json-ld")]
 	#[error("Invalid IRI {0}")]
 	IRef(#[from] iref::Error),
+	#[error("Not a Chronicle IRI {0}")]
+	NotAChronicleIri(#[from] id::ParseIriError),
+	#[error("Missing @id {object:?}")]
+	MissingId { object: serde_json::Value },
+	#[error("Missing property {iri}:{object:?}")]
+	MissingProperty { iri: String, object: serde_json::Value },
+	#[error("Json LD object is not a node {0}")]
+	NotANode(serde_json::Value),
+	#[error("Chronicle value is not a JSON object")]
+	NotAnObject,
+	#[error("OpaExecutorError: {0}")]
+	OpaExecutor(#[from] anyhow::Error),
+	#[error("Malformed JSON {0}")]
+	SerdeJson(#[from] serde_json::Error),
+	#[error("Unparsable date/time {0}")]
+	SubmissionFormat(#[from] PayloadError),
+	#[error("Submission body format: {0}")]
+	Time(#[from] chrono::ParseError),
+	#[error("Tokio Error")]
+	Tokio,
+	#[error("State is not valid utf8 {0}")]
+	Utf8(#[from] core::str::Utf8Error),
+}
+
+#[cfg(not(feature = "json-ld"))]
+#[derive(Error, Debug)]
+pub enum ProcessorError {
+	#[error("Invalid address")]
+	Address,
+	#[error("Contradiction {0}")]
+	Contradiction(Contradiction),
+	#[error("IdentityError {0}")]
+	Identity(#[from] IdentityError),
 	#[error("Not a Chronicle IRI {0}")]
 	NotAChronicleIri(#[from] id::ParseIriError),
 	#[error("Missing @id {object:?}")]
@@ -115,46 +147,80 @@ pub enum ChronicleTransactionIdError {
 	InvalidTransactionId { id: String },
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, PartialEq, Eq, Debug, Clone)]
-pub struct ChronicleTransactionId(String);
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy, Default)]
+pub struct ChronicleTransactionId([u8; 16]);
 
-impl core::fmt::Display for ChronicleTransactionId {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		f.write_str(&self.0)
-	}
-}
-impl From<Uuid> for ChronicleTransactionId {
-	fn from(u: Uuid) -> Self {
-		Self(u.to_string())
-	}
-}
+impl core::ops::Deref for ChronicleTransactionId {
+	type Target = [u8; 16];
 
-impl From<&str> for ChronicleTransactionId {
-	fn from(s: &str) -> Self {
-		Self(s.to_owned())
-	}
-}
-
-impl ChronicleTransactionId {
-	pub fn as_str(&self) -> &str {
+	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+impl core::fmt::Display for ChronicleTransactionId {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.write_str(&hex::encode(self.0))
+	}
+}
+
+impl From<Uuid> for ChronicleTransactionId {
+	fn from(u: Uuid) -> Self {
+		Self(u.into_bytes())
+	}
+}
+
+impl From<[u8; 16]> for ChronicleTransactionId {
+	fn from(u: [u8; 16]) -> Self {
+		Self(u)
+	}
+}
+
+impl core::convert::TryFrom<String> for ChronicleTransactionId {
+	type Error = hex::FromHexError;
+
+	fn try_from(s: String) -> Result<Self, Self::Error> {
+		Self::try_from(s.as_str())
+	}
+}
+
+impl core::convert::TryFrom<&str> for ChronicleTransactionId {
+	type Error = hex::FromHexError;
+
+	fn try_from(s: &str) -> Result<Self, Self::Error> {
+		let bytes = hex::decode(s)?;
+		let mut array = [0; 16];
+		array.copy_from_slice(&bytes[0..16]);
+		Ok(Self(array))
+	}
+}
+
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Namespace {
 	pub id: NamespaceId,
-	pub uuid: UuidWrapper,
+	pub uuid: [u8; 16],
 	pub external_id: ExternalId,
 }
 
 impl Namespace {
 	pub fn new(id: NamespaceId, uuid: Uuid, external_id: &ExternalId) -> Self {
-		Self { id, uuid: uuid.into(), external_id: external_id.to_owned() }
+		Self { id, uuid: uuid.into_bytes(), external_id: external_id.to_owned() }
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Agent {
 	pub id: AgentId,
 	pub namespaceid: NamespaceId,
@@ -171,8 +237,8 @@ impl Agent {
 			id,
 			namespaceid,
 			external_id,
-			domaintypeid: attributes.typ,
-			attributes: attributes.attributes,
+			domaintypeid: attributes.get_typ().clone(),
+			attributes: attributes.get_items().into_iter().cloned().collect(),
 		}
 	}
 
@@ -188,12 +254,16 @@ impl Agent {
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Activity {
 	pub id: ActivityId,
-	pub namespaceid: NamespaceId,
+	pub namespace_id: NamespaceId,
 	pub external_id: ExternalId,
-	pub domaintypeid: Option<DomaintypeId>,
+	pub domaintype_id: Option<DomaintypeId>,
 	pub attributes: BTreeMap<String, Attribute>,
 	pub started: Option<TimeWrapper>,
 	pub ended: Option<TimeWrapper>,
@@ -201,36 +271,40 @@ pub struct Activity {
 
 impl Activity {
 	pub fn has_attributes(self, attributes: Attributes) -> Self {
-		let Self { id, namespaceid, external_id, started, ended, .. } = self;
+		let Self { id, namespace_id, external_id, started, ended, .. } = self;
 		Self {
 			id,
-			namespaceid,
+			namespace_id,
 			external_id,
 			started,
 			ended,
-			domaintypeid: attributes.typ,
-			attributes: attributes.attributes,
+			domaintype_id: attributes.get_typ().clone(),
+			attributes: attributes.get_items().into_iter().cloned().collect(),
 		}
 	}
 
 	// Create a prototypical agent from its IRI, we can only determine external_id
-	pub fn exists(namespaceid: NamespaceId, id: ActivityId) -> Self {
+	pub fn exists(namespace_id: NamespaceId, id: ActivityId) -> Self {
 		Self {
-			namespaceid,
+			namespace_id,
 			external_id: id.external_id_part().to_owned(),
 			id,
 			started: None,
 			ended: None,
-			domaintypeid: None,
+			domaintype_id: None,
 			attributes: BTreeMap::new(),
 		}
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entity {
 	pub id: EntityId,
-	pub namespaceid: NamespaceId,
+	pub namespace_id: NamespaceId,
 	pub external_id: ExternalId,
 	pub domaintypeid: Option<DomaintypeId>,
 	pub attributes: BTreeMap<String, Attribute>,
@@ -238,13 +312,13 @@ pub struct Entity {
 
 impl Entity {
 	pub fn has_attributes(self, attributes: Attributes) -> Self {
-		let Self { id, namespaceid, external_id, .. } = self;
+		let Self { id, namespace_id: namespaceid, external_id, .. } = self;
 		Self {
 			id,
-			namespaceid,
+			namespace_id: namespaceid,
 			external_id,
-			domaintypeid: attributes.typ,
-			attributes: attributes.attributes,
+			domaintypeid: attributes.get_typ().clone(),
+			attributes: attributes.get_items().into_iter().cloned().collect(),
 		}
 	}
 
@@ -252,26 +326,17 @@ impl Entity {
 		Self {
 			external_id: id.external_id_part().to_owned(),
 			id,
-			namespaceid,
+			namespace_id: namespaceid,
 			domaintypeid: None,
 			attributes: BTreeMap::new(),
 		}
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct Derivation {
 	pub generated_id: EntityId,
@@ -280,19 +345,10 @@ pub struct Derivation {
 	pub typ: DerivationType,
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct Delegation {
 	pub namespace_id: NamespaceId,
@@ -327,20 +383,12 @@ impl Delegation {
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
+
 pub struct Association {
 	pub namespace_id: NamespaceId,
 	pub id: AssociationId,
@@ -366,76 +414,40 @@ impl Association {
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct Usage {
 	pub activity_id: ActivityId,
 	pub entity_id: EntityId,
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct Generation {
 	pub activity_id: ActivityId,
 	pub generated_id: EntityId,
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	PartialOrd,
-	Ord,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct GeneratedEntity {
 	pub entity_id: EntityId,
 	pub generated_id: ActivityId,
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Hash,
-	Ord,
-	PartialOrd,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
 pub struct Attribution {
 	pub namespace_id: NamespaceId,
@@ -467,7 +479,11 @@ type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProvModel {
 	pub namespaces: BTreeMap<NamespaceId, Arc<Namespace>>,
 	pub agents: BTreeMap<NamespacedAgent, Arc<Agent>>,
@@ -484,6 +500,62 @@ pub struct ProvModel {
 	pub usage: BTreeMap<NamespacedActivity, Arc<BTreeSet<Usage>>>,
 }
 
+#[cfg(feature = "parity-encoding")]
+pub mod provmodel_protocol {
+	use super::*;
+	#[derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		Debug,
+		Default,
+		Clone,
+		Serialize,
+		Deserialize,
+		PartialEq,
+		Eq,
+	)]
+	pub struct ProvModelV1 {
+		pub namespaces: BTreeMap<NamespaceId, Arc<Namespace>>, /* We need NamespaceIdV1 /
+		                                                        * NamespaceV1 etc, recursively
+		                                                        * until there are only primitive
+		                                                        * types */
+		pub agents: BTreeMap<NamespacedAgent, Arc<Agent>>,
+		pub acted_on_behalf_of: BTreeMap<NamespacedAgent, Arc<BTreeSet<Delegation>>>,
+		pub delegation: BTreeMap<NamespacedAgent, Arc<BTreeSet<Delegation>>>,
+		pub entities: BTreeMap<NamespacedEntity, Arc<Entity>>,
+		pub derivation: BTreeMap<NamespacedEntity, Arc<BTreeSet<Derivation>>>,
+		pub generation: BTreeMap<NamespacedEntity, Arc<BTreeSet<Generation>>>,
+		pub attribution: BTreeMap<NamespacedEntity, Arc<BTreeSet<Attribution>>>,
+		pub activities: BTreeMap<NamespacedActivity, Arc<Activity>>,
+		pub was_informed_by: BTreeMap<NamespacedActivity, Arc<BTreeSet<NamespacedActivity>>>,
+		pub generated: BTreeMap<NamespacedActivity, Arc<BTreeSet<GeneratedEntity>>>,
+		pub association: BTreeMap<NamespacedActivity, Arc<BTreeSet<Association>>>,
+		pub usage: BTreeMap<NamespacedActivity, Arc<BTreeSet<Usage>>>,
+	}
+
+	impl From<ProvModelV1> for ProvModel {
+		fn from(value: ProvModelV1) -> Self {
+			ProvModel {
+				namespaces: value.namespaces,
+				agents: value.agents,
+				acted_on_behalf_of: value.acted_on_behalf_of,
+				delegation: value.delegation,
+				entities: value.entities,
+				derivation: value.derivation,
+				generation: value.generation,
+				attribution: value.attribution,
+				activities: value.activities,
+				was_informed_by: value.was_informed_by,
+				generated: value.generated,
+				association: value.association,
+				usage: value.usage,
+			}
+		}
+	}
+}
+
+#[cfg(feature = "parity-encoding")]
 // TODO: We can make these structures reasonably bounded (and copy ids with interning) - though JSON
 // attributes may need some handwaving
 impl parity_scale_codec::MaxEncodedLen for ProvModel {
@@ -509,6 +581,7 @@ impl ProvModel {
 		self.association.extend(other.association.clone());
 		self.usage.extend(other.usage.clone());
 	}
+
 	/// Apply a sequence of `ChronicleTransaction` to an empty model, then return it
 	pub fn from_tx<'a, I>(tx: I) -> Result<Self, Contradiction>
 	where
@@ -683,7 +756,7 @@ impl ProvModel {
 			ns.clone(),
 			Namespace {
 				id: ns.clone(),
-				uuid: uuid.to_owned().into(),
+				uuid: uuid.into_bytes(),
 				external_id: namespace_name.to_owned(),
 			}
 			.into(),
@@ -701,6 +774,7 @@ impl ProvModel {
 	pub fn get_agent(&mut self, ns: &NamespaceId, agent: &AgentId) -> Option<&Agent> {
 		self.agents.get(&(ns.clone(), agent.clone())).map(|arc| arc.as_ref())
 	}
+
 	pub fn modify_agent<F: FnOnce(&mut Agent) + 'static>(
 		&mut self,
 		ns: &NamespaceId,
@@ -769,16 +843,11 @@ impl ProvModel {
 	pub fn apply(&mut self, tx: &ChronicleOperation) -> Result<(), Contradiction> {
 		let tx = tx.to_owned();
 		match tx {
-			ChronicleOperation::CreateNamespace(CreateNamespace {
-				id,
-				external_id: _,
-				uuid: _,
-			}) => {
+			ChronicleOperation::CreateNamespace(CreateNamespace { id }) => {
 				self.namespace_context(&id);
 				Ok(())
 			},
 			ChronicleOperation::AgentExists(AgentExists { namespace, external_id, .. }) => {
-				self.namespace_context(&namespace);
 				self.agent_context(&namespace, &AgentId::from_external_id(&external_id));
 
 				Ok(())
@@ -791,7 +860,6 @@ impl ProvModel {
 				role,
 				responsible_id,
 			}) => {
-				self.namespace_context(&namespace);
 				self.agent_context(&namespace, &delegate_id);
 				self.agent_context(&namespace, &responsible_id);
 
@@ -812,13 +880,11 @@ impl ProvModel {
 			ChronicleOperation::ActivityExists(ActivityExists {
 				namespace, external_id, ..
 			}) => {
-				self.namespace_context(&namespace);
 				self.activity_context(&namespace, &ActivityId::from_external_id(&external_id));
 
 				Ok(())
 			},
 			ChronicleOperation::StartActivity(StartActivity { namespace, id, time }) => {
-				self.namespace_context(&namespace);
 				self.activity_context(&namespace, &id);
 
 				let activity = self.get_activity(&namespace, &id);
@@ -854,7 +920,6 @@ impl ProvModel {
 				Ok(())
 			},
 			ChronicleOperation::EndActivity(EndActivity { namespace, id, time }) => {
-				self.namespace_context(&namespace);
 				self.activity_context(&namespace, &id);
 
 				let activity = self.get_activity(&namespace, &id);
@@ -896,7 +961,6 @@ impl ProvModel {
 				activity_id,
 				agent_id,
 			}) => {
-				self.namespace_context(&namespace);
 				self.agent_context(&namespace, &agent_id);
 				self.activity_context(&namespace, &activity_id);
 				self.qualified_association(&namespace, &activity_id, &agent_id, role);
@@ -910,7 +974,6 @@ impl ProvModel {
 				entity_id,
 				agent_id,
 			}) => {
-				self.namespace_context(&namespace);
 				self.agent_context(&namespace, &agent_id);
 				self.entity_context(&namespace, &entity_id);
 				self.qualified_attribution(&namespace, &entity_id, &agent_id, role);
@@ -918,8 +981,6 @@ impl ProvModel {
 				Ok(())
 			},
 			ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }) => {
-				self.namespace_context(&namespace);
-
 				self.activity_context(&namespace, &activity);
 				self.entity_context(&namespace, &id);
 
@@ -928,13 +989,10 @@ impl ProvModel {
 				Ok(())
 			},
 			ChronicleOperation::EntityExists(EntityExists { namespace, external_id, .. }) => {
-				self.namespace_context(&namespace);
 				self.entity_context(&namespace, &EntityId::from_external_id(&external_id));
 				Ok(())
 			},
 			ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }) => {
-				self.namespace_context(&namespace);
-
 				self.entity_context(&namespace, &id);
 				self.activity_context(&namespace, &activity);
 
@@ -947,7 +1005,6 @@ impl ProvModel {
 				activity,
 				informing_activity,
 			}) => {
-				self.namespace_context(&namespace);
 				self.activity_context(&namespace, &activity);
 				self.activity_context(&namespace, &informing_activity);
 
@@ -962,8 +1019,6 @@ impl ProvModel {
 				used_id,
 				activity_id,
 			}) => {
-				self.namespace_context(&namespace);
-
 				self.entity_context(&namespace, &id);
 				self.entity_context(&namespace, &used_id);
 
@@ -980,7 +1035,6 @@ impl ProvModel {
 				id,
 				attributes,
 			}) => {
-				self.namespace_context(&namespace);
 				self.entity_context(&namespace, &id);
 
 				if let Some(current) = self
@@ -997,8 +1051,8 @@ impl ProvModel {
 				};
 
 				self.modify_entity(&namespace, &id, move |entity| {
-					entity.domaintypeid = attributes.typ.clone();
-					entity.attributes = attributes.attributes;
+					entity.domaintypeid = attributes.get_typ().clone();
+					entity.attributes = attributes.get_items().into_iter().cloned().collect();
 				});
 
 				Ok(())
@@ -1008,7 +1062,6 @@ impl ProvModel {
 				id,
 				attributes,
 			}) => {
-				self.namespace_context(&namespace);
 				self.activity_context(&namespace, &id);
 
 				if let Some(current) = self
@@ -1025,8 +1078,8 @@ impl ProvModel {
 				};
 
 				self.modify_activity(&namespace, &id, move |activity| {
-					activity.domaintypeid = attributes.typ.clone();
-					activity.attributes = attributes.attributes;
+					activity.domaintype_id = attributes.get_typ().clone();
+					activity.attributes = attributes.get_items().into_iter().cloned().collect();
 				});
 
 				Ok(())
@@ -1036,7 +1089,6 @@ impl ProvModel {
 				id,
 				attributes,
 			}) => {
-				self.namespace_context(&namespace);
 				self.agent_context(&namespace, &id);
 
 				if let Some(current) =
@@ -1051,8 +1103,8 @@ impl ProvModel {
 				};
 
 				self.modify_agent(&namespace, &id, move |agent| {
-					agent.domaintypeid = attributes.typ.clone();
-					agent.attributes = attributes.attributes;
+					agent.domaintypeid = attributes.get_typ().clone();
+					agent.attributes = attributes.get_items().into_iter().cloned().collect();
 				});
 
 				Ok(())
@@ -1069,7 +1121,7 @@ impl ProvModel {
 		attempted: &Attributes,
 	) -> Result<(), Contradiction> {
 		let contradictions = attempted
-			.attributes
+			.get_items()
 			.iter()
 			.filter_map(|(current_name, current_value)| {
 				if let Some(attempted_value) = current.get(current_name) {
@@ -1095,17 +1147,20 @@ impl ProvModel {
 		}
 	}
 
+	#[cfg(feature = "json-ld")]
 	pub(crate) fn add_agent(&mut self, agent: Agent) {
 		self.agents.insert((agent.namespaceid.clone(), agent.id.clone()), agent.into());
 	}
 
+	#[cfg(feature = "json-ld")]
 	pub(crate) fn add_activity(&mut self, activity: Activity) {
 		self.activities
-			.insert((activity.namespaceid.clone(), activity.id.clone()), activity.into());
+			.insert((activity.namespace_id.clone(), activity.id.clone()), activity.into());
 	}
 
+	#[cfg(feature = "json-ld")]
 	pub(crate) fn add_entity(&mut self, entity: Entity) {
 		self.entities
-			.insert((entity.namespaceid.clone(), entity.id.clone()), entity.into());
+			.insert((entity.namespace_id.clone(), entity.id.clone()), entity.into());
 	}
 }

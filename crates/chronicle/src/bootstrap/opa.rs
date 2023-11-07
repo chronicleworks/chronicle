@@ -1,127 +1,16 @@
-use std::net::SocketAddr;
-
-use async_stl_client::zmq_client::{
-	HighestBlockValidatorSelector, ZmqRequestResponseSawtoothChannel,
-};
-use chronicle_protocol::{
-	address::{FAMILY, VERSION},
-	async_stl_client::ledger::SawtoothLedger,
-	settings::{read_opa_settings, OpaSettings, SettingsReader},
-};
 use clap::ArgMatches;
+
 use common::opa::{
-	CliPolicyLoader, ExecutorContext, PolicyLoader, SawtoothPolicyLoader, UrlPolicyLoader,
+	std::{load_bytes_from_url, ExecutorContext, PolicyLoader, PolicyLoaderError},
+	OpaSettings,
 };
-use tracing::{debug, instrument};
+use opa::bundle::Bundle;
+use protocol_substrate::SubxtClientError;
+use protocol_substrate_chronicle::{ChronicleSubstrateClient, SettingsLoader};
+use protocol_substrate_opa::{loader::SubstratePolicyLoader, policy_hash, OpaSubstrateClient};
+use tracing::{debug, error, info, instrument};
 
 use super::CliError;
-
-pub struct SawtoothPolicyLoader {
-	policy_id: String,
-	address: String,
-	policy: Option<Vec<u8>>,
-	entrypoint: String,
-	ledger: OpaLedger,
-}
-
-impl SawtoothPolicyLoader {
-	pub fn new(
-		address: &SocketAddr,
-		policy_id: &str,
-		entrypoint: &str,
-	) -> Result<Self, SawtoothCommunicationError> {
-		Ok(Self {
-			policy_id: policy_id.to_owned(),
-			address: String::default(),
-			policy: None,
-			entrypoint: entrypoint.to_owned(),
-			ledger: OpaLedger::new(
-				ZmqRequestResponseSawtoothChannel::new(
-					"sawtooth_policy",
-					&[address.to_owned()],
-					HighestBlockValidatorSelector,
-				)?
-				.retrying(),
-				FAMILY,
-				VERSION,
-			),
-		})
-	}
-
-	fn sawtooth_address(&self, policy: impl AsRef<str>) -> String {
-		policy_address(policy)
-	}
-
-	#[instrument(level = "debug", skip(self))]
-	async fn load_bundle_from_chain(&mut self) -> Result<Vec<u8>, SawtoothCommunicationError> {
-		if let Some(policy) = self.policy.as_ref() {
-			return Ok(policy.clone())
-		}
-		let load_policy_from = self.sawtooth_address(&self.policy_id);
-		debug!(load_policy_from=?load_policy_from);
-
-		loop {
-			let res = self.ledger.get_state_entry(&load_policy_from).await;
-
-			if let Err(res) = &res {
-				error!(error=?res, "Failed to load policy from chain");
-				tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-				continue
-			}
-
-			return Ok(res.unwrap())
-		}
-	}
-}
-
-#[async_trait::async_trait]
-impl PolicyLoader for SawtoothPolicyLoader {
-	fn set_address(&mut self, address: &str) {
-		self.address = address.to_owned()
-	}
-
-	fn set_rule_name(&mut self, name: &str) {
-		self.policy_id = name.to_owned()
-	}
-
-	fn set_entrypoint(&mut self, entrypoint: &str) {
-		self.entrypoint = entrypoint.to_owned()
-	}
-
-	fn get_address(&self) -> &str {
-		&self.address
-	}
-
-	fn get_rule_name(&self) -> &str {
-		&self.policy_id
-	}
-
-	fn get_entrypoint(&self) -> &str {
-		&self.entrypoint
-	}
-
-	fn get_policy(&self) -> &[u8] {
-		self.policy.as_ref().unwrap()
-	}
-
-	async fn load_policy(&mut self) -> Result<(), PolicyLoaderError> {
-		let bundle = self.load_bundle_from_chain().await?;
-		info!(fetched_policy_bytes=?bundle.len(), "Fetched policy");
-		if bundle.is_empty() {
-			error!("Policy not found: {}", self.get_rule_name());
-			return Err(PolicyLoaderError::MissingPolicy(self.get_rule_name().to_string()))
-		}
-		self.load_policy_from_bundle(&Bundle::from_bytes(&*bundle)?)
-	}
-
-	fn load_policy_from_bytes(&mut self, policy: &[u8]) {
-		self.policy = Some(policy.to_vec())
-	}
-
-	fn hash(&self) -> String {
-		hex::encode(Sha256::digest(self.policy.as_ref().unwrap()))
-	}
-}
 
 /// OPA policy loader for policies passed via CLI or embedded in Chronicle
 #[derive(Clone, Default)]
@@ -148,7 +37,7 @@ impl CliPolicyLoader {
 
 	/// Create a loaded [`CliPolicyLoader`] from name of an embedded dev policy and entrypoint
 	pub fn from_embedded_policy(policy: &str, entrypoint: &str) -> Result<Self, PolicyLoaderError> {
-		if let Some(file) = EmbeddedOpaPolicies::get("bundle.tar.gz") {
+		if let Some(file) = common::opa::std::EmbeddedOpaPolicies::get("bundle.tar.gz") {
 			let bytes = file.data.as_ref();
 			let bundle = Bundle::from_bytes(bytes)?;
 			let mut loader = CliPolicyLoader::new();
@@ -216,7 +105,7 @@ impl PolicyLoader for CliPolicyLoader {
 	}
 
 	fn hash(&self) -> String {
-		hex::encode(Sha256::digest(&self.policy))
+		hex::encode(policy_hash(&self.policy))
 	}
 }
 
@@ -281,14 +170,14 @@ impl PolicyLoader for UrlPolicyLoader {
 
 		if bundle.is_empty() {
 			error!("Policy not found: {}", self.get_rule_name());
-			return Err(PolicyLoaderError::MissingPolicy(self.get_rule_name().to_string()))
+			return Err(PolicyLoaderError::MissingPolicy(self.get_rule_name().to_string()));
 		}
 
 		self.load_policy_from_bundle(&Bundle::from_bytes(&*bundle)?)
 	}
 
 	fn hash(&self) -> String {
-		hex::encode(Sha256::digest(&self.policy))
+		hex::encode(policy_hash(&self.policy))
 	}
 }
 
@@ -331,29 +220,27 @@ pub async fn opa_executor_from_embedded_policy(
 	Ok(ExecutorContext::from_loader(&loader)?)
 }
 
-#[instrument()]
-pub async fn opa_executor_from_sawtooth_settings(
-	validator_address: &Vec<SocketAddr>,
-) -> Result<(ExecutorContext, OpaSettings), CliError> {
-	let settings = SettingsReader::new(SawtoothLedger::new(
-		ZmqRequestResponseSawtoothChannel::new(
-			"opa_executor",
-			validator_address,
-			HighestBlockValidatorSelector,
-		)?
-		.retrying(),
-		FAMILY,
-		VERSION,
-	));
-	let opa_settings = read_opa_settings(&settings).await?;
+pub async fn read_opa_settings(
+	client: &ChronicleSubstrateClient<protocol_substrate::PolkadotConfig>,
+) -> Result<Option<OpaSettings>, SubxtClientError> {
+	client.load_settings_from_storage().await
+}
+
+#[instrument(skip(chronicle_client, opa_client))]
+pub async fn opa_executor_from_substrate_state(
+	chronicle_client: &ChronicleSubstrateClient<protocol_substrate::PolkadotConfig>,
+	opa_client: &OpaSubstrateClient<protocol_substrate::PolkadotConfig>,
+) -> Result<(ExecutorContext, Option<OpaSettings>), CliError> {
+	let opa_settings = read_opa_settings(chronicle_client).await?;
 	debug!(on_chain_opa_policy = ?opa_settings);
-	let mut loader = SawtoothPolicyLoader::new(
-		validator_address.get(0).unwrap(),
-		&opa_settings.policy_name,
-		&opa_settings.entrypoint,
-	)?;
-	loader.load_policy().await?;
-	Ok((ExecutorContext::from_loader(&loader)?, opa_settings))
+	if let Some(opa_settings) = opa_settings {
+		let mut loader = SubstratePolicyLoader::new(opa_settings.clone(), opa_client);
+		loader.load_policy().await?;
+
+		Ok((ExecutorContext::from_loader(&loader)?, Some(opa_settings)))
+	} else {
+		Err(CliError::NoOnChainSettings)
+	}
 }
 
 #[instrument()]
@@ -370,7 +257,10 @@ pub async fn opa_executor_from_url(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::identity::IdentityContext;
+	use common::{
+		identity::{AuthId, IdentityContext, JwtClaims, OpaData},
+		opa::std::{EmbeddedOpaPolicies, OpaExecutor, OpaExecutorError, WasmtimeOpaExecutor},
+	};
 	use serde_json::Value;
 	use std::{collections::BTreeSet, io::Write};
 
@@ -405,7 +295,7 @@ mod tests {
 	}
 
 	fn jwt_user() -> AuthId {
-		let claims = crate::identity::JwtClaims(
+		let claims = JwtClaims(
 			serde_json::json!({
 				"sub": "abcdef",
 			})
@@ -472,15 +362,9 @@ mod tests {
 		let embedded_bundle = embedded_policy_bundle().unwrap();
 		let (rule, entrypoint) = allow_all_users();
 
-		// Create a temporary HTTP server that serves a policy bundle
 		let mut server = mockito::Server::new_async().await;
-
 		// Start the mock server and define the response
-		let _m = server
-			.mock("GET", "/bundle.tar.gz")
-			.with_body(&embedded_bundle)
-			.create_async()
-			.await;
+		let _m = server.mock("GET", "/bundle.tar.gz").with_body(&embedded_bundle).create();
 
 		// Create the URL policy loader
 		let mut loader =

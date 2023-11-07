@@ -4,9 +4,9 @@
   "@type": {
     "type": "array",
     "length": 1,
-    "content": "http://btp.works/chronicleoperations/ns#AgentExists"
+    "content": "http://chronicle.works/chronicleoperations/ns#AgentExists"
   },
-  "http://btp.works/chronicleoperations/ns#agentName": "@agent_name",
-  "http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-  "http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+  "http://chronicle.works/chronicleoperations/ns#agentName": "@agent_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
 }

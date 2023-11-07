@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use scale_info::TypeInfo;
 
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::{alloc::string::String, alloc::vec::Vec};
@@ -12,9 +11,11 @@ use crate::{
 	prov::{operations::TimeWrapper, ChronicleIri, NamespaceId},
 };
 
-use parity_scale_codec::{Decode, Encode};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
 pub struct Contradiction {
 	pub(crate) id: ChronicleIri,
 	pub(crate) namespace: NamespaceId,
@@ -113,7 +114,11 @@ impl Contradiction {
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
 pub enum ContradictionDetail {
 	AttributeValueChange { name: String, value: Attribute, attempted: Attribute },
 	StartAlteration { value: TimeWrapper, attempted: TimeWrapper },

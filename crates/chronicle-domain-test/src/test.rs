@@ -63,31 +63,28 @@ pub async fn main() {
 
 #[cfg(test)]
 mod test {
-	use super::{Mutation, Query};
-	use async_stl_client::prost::Message;
 	use chronicle::{
 		api::{
 			chronicle_graphql::{OpaCheck, Store, Subscription},
-			inmem::EmbeddedChronicleTp,
 			Api, UuidGen,
 		},
 		async_graphql::{Request, Response, Schema},
+		bootstrap::opa::CliPolicyLoader,
 		chrono::{NaiveDate, TimeZone, Utc},
-		common::{
-			database::TemporaryDatabase,
-			identity::AuthId,
-			k256::sha2::{Digest, Sha256},
-			opa::{CliPolicyLoader, ExecutorContext},
-		},
-		serde_json, tokio,
-		uuid::Uuid,
+		common::opa::std::ExecutorContext,
 	};
 	use chronicle_signing::{
 		chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
 		CHRONICLE_NAMESPACE,
 	};
+	use chronicle_test_infrastructure::substitutes::{embed_substrate, TemporaryDatabase};
+	use common::identity::AuthId;
+
+	use uuid::Uuid;
+
+	use super::{Mutation, Query};
+
 	use core::future::Future;
-	use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
 	use std::time::Duration;
 
 	#[derive(Debug, Clone)]
@@ -127,73 +124,27 @@ mod test {
 	) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
 		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 
-		let signing = ChronicleSigning::new(
+		let secrets = ChronicleSigning::new(
 			chronicle_secret_names(),
 			vec![
-				(CHRONICLE_NAMESPACE.to_string(), ChronicleSecretsOptions::test_keys()),
-				(BATCHER_NAMESPACE.to_string(), ChronicleSecretsOptions::test_keys()),
+				(CHRONICLE_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
+				(BATCHER_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
 			],
 		)
 		.await
 		.unwrap();
 
-		let buf = async_stl_client::messages::Setting {
-			entries: vec![async_stl_client::messages::setting::Entry {
-				key: "chronicle.opa.policy_name".to_string(),
-				value: "allow_transactions".to_string(),
-			}],
-		}
-		.encode_to_vec();
-
-		let setting_id = (
-			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
-			buf,
-		);
-		let buf = async_stl_client::messages::Setting {
-			entries: vec![async_stl_client::messages::setting::Entry {
-				key: "chronicle.opa.entrypoint".to_string(),
-				value: "allow_transactions.allowed_users".to_string(),
-			}],
-		}
-		.encode_to_vec();
-
-		let setting_entrypoint = (
-			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
-			buf,
-		);
-
-		let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
-		let bin = std::fs::read(d).unwrap();
-
-		let meta = PolicyMeta {
-			id: "allow_transactions".to_string(),
-			hash: hex::encode(Sha256::digest(&bin)),
-			policy_address: policy_address("allow_transactions"),
-		};
-
-		let tp = EmbeddedChronicleTp::new_with_state(
-			vec![
-				setting_id,
-				setting_entrypoint,
-				(policy_address("allow_transactions"), bin),
-				(policy_meta_address("allow_transactions"), serde_json::to_vec(&meta).unwrap()),
-			]
-			.into_iter()
-			.collect(),
-		)
-		.unwrap();
-
-		let ledger = tp.ledger.clone();
-
+		let embed_substrate = embed_substrate().await;
 		let database = TemporaryDatabase::default();
 		let pool = database.connection_pool().unwrap();
+
 		let liveness_check_interval = None;
 
 		let dispatch = Api::new(
 			pool.clone(),
-			ledger,
+			embed_substrate,
 			SameUuid,
-			signing,
+			secrets,
 			vec![],
 			None,
 			liveness_check_interval,
@@ -221,7 +172,7 @@ mod test {
               r#"
           mutation {
               actedOnBehalfOf(
-                  responsible: { id: "http://btp.works/chronicle/ns#agent:testagent" },
+                  responsible: { id: "http://chronicle.works/chronicle/ns#agent:testagent" },
                   delegate: { id: "http://blockchaintp.com/chronicle/ns#agent:testdelegate" },
                   role: MANUFACTURER
                   ) {
@@ -677,7 +628,7 @@ mod test {
                         .unwrap()
                         .chars()
                         .count(),
-                        128
+                        32
                     );
                       "[txId]"
                   }),

@@ -6,7 +6,10 @@ use k256::{
 use rand::{rngs::StdRng, SeedableRng};
 use secret_vault::{Secret, SecretMetadata, SecretVaultRef, SecretVaultResult, SecretsSource};
 use secret_vault_value::SecretValue;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+	collections::{BTreeMap, HashMap},
+	sync::Arc,
+};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -14,22 +17,22 @@ use crate::SecretError;
 
 pub struct EmbeddedSecretManagerSource {
 	secrets: Arc<Mutex<HashMap<SecretVaultRef, Vec<u8>>>>,
-	deterministic: bool,
+	seeds: BTreeMap<String, [u8; 32]>,
 }
 
 impl EmbeddedSecretManagerSource {
 	pub fn new() -> Self {
-		Self { secrets: Arc::new(Mutex::new(HashMap::new())), deterministic: false }
+		Self { secrets: Arc::new(Mutex::new(HashMap::new())), seeds: BTreeMap::default() }
 	}
 
-	pub fn new_deterministic() -> Self {
-		Self { secrets: Arc::new(Mutex::new(HashMap::new())), deterministic: true }
+	pub fn new_seeded(seeds: BTreeMap<String, [u8; 32]>) -> Self {
+		Self { secrets: Arc::new(Mutex::new(HashMap::new())), seeds }
 	}
 }
 
-fn new_signing_key(deterministic: bool, index: usize) -> Result<Vec<u8>, SecretError> {
-	let secret = if deterministic {
-		SecretKey::random(StdRng::seed_from_u64(index as _))
+fn new_signing_key(name: &str, seeds: &BTreeMap<String, [u8; 32]>) -> Result<Vec<u8>, SecretError> {
+	let secret = if let Some(seed) = seeds.get(name) {
+		SecretKey::from_be_bytes(seed).map_err(|_| SecretError::BadSeed)?
 	} else {
 		SecretKey::random(StdRng::from_entropy())
 	};
@@ -55,9 +58,10 @@ impl SecretsSource for EmbeddedSecretManagerSource {
 
 		let mut result_map: HashMap<SecretVaultRef, Secret> = HashMap::new();
 		let mut secrets = self.secrets.lock().await;
-		for (index, secret_ref) in references.iter().enumerate() {
+		for secret_ref in references.iter() {
 			let secret = secrets.entry(secret_ref.clone()).or_insert_with(|| {
-				let secret = new_signing_key(self.deterministic, index).unwrap();
+				let secret =
+					new_signing_key(secret_ref.key.secret_name.as_ref(), &self.seeds).unwrap();
 				secret.to_vec()
 			});
 

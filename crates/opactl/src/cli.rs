@@ -25,7 +25,7 @@ fn wait_args(command: Command) -> Command {
 		Arg::new("wait")
 			.long("wait")
 			.num_args(0..=1)
-			.value_parser(clap::value_parser!(u64).range(0..))
+			.value_parser(clap::value_parser!(u32).range(0..))
 			.default_value("5")
 			.default_missing_value("5")
 			.help("Wait for the specified number of blocks to be committed before exiting"),
@@ -372,12 +372,12 @@ pub(crate) async fn configure_signing(
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Wait {
 	NoWait,
-	NumberOfBlocks(u64),
+	NumberOfBlocks(u32),
 }
 
 impl Wait {
 	pub(crate) fn from_matches(matches: &ArgMatches) -> Self {
-		match matches.get_one::<u64>("wait") {
+		match matches.get_one::<u32>("wait") {
 			Some(blocks) if *blocks > 0 => Wait::NumberOfBlocks(*blocks),
 			_ => Wait::NoWait,
 		}

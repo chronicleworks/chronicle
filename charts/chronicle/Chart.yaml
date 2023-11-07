@@ -27,6 +27,9 @@ dependencies:
   - name: standard-defs
     version: ~0.1.0
     repository: https://btp-charts-stable.s3.amazonaws.com/charts/
-  - name: sawtooth
-    version: ~0.2.0
-    repository: https://btp-charts-unstable.s3.amazonaws.com/charts/
+  - name: node
+    version: ~5.6.1
+    repository: https://paritytech.github.io/helm-charts/
+  - name: vault
+    version: ~0.27
+    repository: https://helm.releases.hashicorp.com

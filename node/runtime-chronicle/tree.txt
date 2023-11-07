@@ -1,0 +1,896 @@
+runtime-chronicle v4.0.0 (/Users/ryan/code/chronicle/node/runtime-chronicle)
+├── frame-executive v24.0.0
+│   ├── frame-support v24.0.0
+│   │   ├── aquamarine v0.3.2 (proc-macro)
+│   │   │   ├── include_dir v0.7.3
+│   │   │   │   └── include_dir_macros v0.7.3 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.69
+│   │   │   │       │   └── unicode-ident v1.0.12
+│   │   │   │       └── quote v1.0.33
+│   │   │   │           └── proc-macro2 v1.0.69 (*)
+│   │   │   ├── itertools v0.10.5
+│   │   │   │   └── either v1.9.0
+│   │   │   ├── proc-macro-error v1.0.4
+│   │   │   │   ├── proc-macro-error-attr v1.0.4 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   └── quote v1.0.33 (*)
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── version_check v0.9.4
+│   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v1.0.109
+│   │   │   │       ├── proc-macro2 v1.0.69 (*)
+│   │   │   │       ├── quote v1.0.33 (*)
+│   │   │   │       └── unicode-ident v1.0.12
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── version_check v0.9.4
+│   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   ├── quote v1.0.33 (*)
+│   │   │   └── syn v1.0.109 (*)
+│   │   ├── bitflags v1.3.2
+│   │   ├── docify v0.2.6
+│   │   │   └── docify_macros v0.2.6 (proc-macro)
+│   │   │       ├── common-path v1.0.0
+│   │   │       ├── derive-syn-parse v0.1.5 (proc-macro)
+│   │   │       │   ├── proc-macro2 v1.0.69 (*)
+│   │   │       │   ├── quote v1.0.33 (*)
+│   │   │       │   └── syn v1.0.109 (*)
+│   │   │       ├── once_cell v1.18.0
+│   │   │       ├── proc-macro2 v1.0.69 (*)
+│   │   │       ├── quote v1.0.33 (*)
+│   │   │       ├── regex v1.10.2
+│   │   │       │   ├── aho-corasick v1.1.2
+│   │   │       │   │   └── memchr v2.6.4
+│   │   │       │   ├── memchr v2.6.4
+│   │   │       │   ├── regex-automata v0.4.3
+│   │   │       │   │   ├── aho-corasick v1.1.2 (*)
+│   │   │       │   │   ├── memchr v2.6.4
+│   │   │       │   │   └── regex-syntax v0.8.2
+│   │   │       │   └── regex-syntax v0.8.2
+│   │   │       ├── syn v2.0.38
+│   │   │       │   ├── proc-macro2 v1.0.69 (*)
+│   │   │       │   ├── quote v1.0.33 (*)
+│   │   │       │   └── unicode-ident v1.0.12
+│   │   │       ├── termcolor v1.3.0
+│   │   │       ├── toml v0.7.8
+│   │   │       │   ├── serde v1.0.190
+│   │   │       │   │   └── serde_derive v1.0.190 (proc-macro)
+│   │   │       │   │       ├── proc-macro2 v1.0.69 (*)
+│   │   │       │   │       ├── quote v1.0.33 (*)
+│   │   │       │   │       └── syn v2.0.38 (*)
+│   │   │       │   ├── serde_spanned v0.6.4
+│   │   │       │   │   └── serde v1.0.190 (*)
+│   │   │       │   ├── toml_datetime v0.6.5
+│   │   │       │   │   └── serde v1.0.190 (*)
+│   │   │       │   └── toml_edit v0.19.15
+│   │   │       │       ├── indexmap v2.0.2
+│   │   │       │       │   ├── equivalent v1.0.1
+│   │   │       │       │   └── hashbrown v0.14.2
+│   │   │       │       ├── serde v1.0.190 (*)
+│   │   │       │       ├── serde_spanned v0.6.4 (*)
+│   │   │       │       ├── toml_datetime v0.6.5 (*)
+│   │   │       │       └── winnow v0.5.17
+│   │   │       └── walkdir v2.4.0
+│   │   │           └── same-file v1.0.6
+│   │   ├── environmental v1.1.4
+│   │   ├── frame-metadata v16.0.0
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── parity-scale-codec v3.6.5
+│   │   │   │   ├── arrayvec v0.7.4
+│   │   │   │   ├── byte-slice-cast v1.2.2
+│   │   │   │   ├── bytes v1.5.0
+│   │   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v1.0.109 (*)
+│   │   │   │   ├── parity-scale-codec-derive v3.6.5 (proc-macro)
+│   │   │   │   │   ├── proc-macro-crate v1.1.3
+│   │   │   │   │   │   ├── thiserror v1.0.50
+│   │   │   │   │   │   │   └── thiserror-impl v1.0.50 (proc-macro)
+│   │   │   │   │   │   │       ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   │   │       ├── quote v1.0.33 (*)
+│   │   │   │   │   │   │       └── syn v2.0.38 (*)
+│   │   │   │   │   │   └── toml v0.5.11
+│   │   │   │   │   │       └── serde v1.0.190 (*)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v1.0.109 (*)
+│   │   │   │   └── serde v1.0.190
+│   │   │   │       └── serde_derive v1.0.190 (proc-macro) (*)
+│   │   │   └── scale-info v2.10.0
+│   │   │       ├── cfg-if v1.0.0
+│   │   │       ├── derive_more v0.99.17 (proc-macro)
+│   │   │       │   ├── proc-macro2 v1.0.69 (*)
+│   │   │       │   ├── quote v1.0.33 (*)
+│   │   │       │   └── syn v1.0.109 (*)
+│   │   │       ├── parity-scale-codec v3.6.5 (*)
+│   │   │       ├── scale-info-derive v2.10.0 (proc-macro)
+│   │   │       │   ├── proc-macro-crate v1.1.3 (*)
+│   │   │       │   ├── proc-macro2 v1.0.69 (*)
+│   │   │       │   ├── quote v1.0.33 (*)
+│   │   │       │   └── syn v1.0.109 (*)
+│   │   │       └── serde v1.0.190 (*)
+│   │   ├── frame-support-procedural v19.0.0 (proc-macro)
+│   │   │   ├── Inflector v0.11.4
+│   │   │   │   ├── lazy_static v1.4.0
+│   │   │   │   └── regex v1.10.2 (*)
+│   │   │   ├── cfg-expr v0.15.5
+│   │   │   │   └── smallvec v1.11.1
+│   │   │   ├── derive-syn-parse v0.1.5 (proc-macro) (*)
+│   │   │   ├── expander v2.0.0
+│   │   │   │   ├── blake2 v0.10.6
+│   │   │   │   │   └── digest v0.10.7
+│   │   │   │   │       ├── block-buffer v0.10.4
+│   │   │   │   │       │   └── generic-array v0.14.7
+│   │   │   │   │       │       └── typenum v1.17.0
+│   │   │   │   │       │       [build-dependencies]
+│   │   │   │   │       │       └── version_check v0.9.4
+│   │   │   │   │       ├── crypto-common v0.1.6
+│   │   │   │   │       │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │       │   └── typenum v1.17.0
+│   │   │   │   │       └── subtle v2.4.1
+│   │   │   │   ├── fs-err v2.9.0
+│   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v2.0.38 (*)
+│   │   │   ├── frame-support-procedural-tools v8.0.0
+│   │   │   │   ├── frame-support-procedural-tools-derive v9.0.0 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   ├── proc-macro-crate v1.1.3 (*)
+│   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v2.0.38 (*)
+│   │   │   ├── itertools v0.10.5 (*)
+│   │   │   ├── macro_magic v0.4.2
+│   │   │   │   ├── macro_magic_core v0.4.2
+│   │   │   │   │   ├── const-random v0.1.16
+│   │   │   │   │   │   └── const-random-macro v0.1.16 (proc-macro)
+│   │   │   │   │   │       ├── getrandom v0.2.10
+│   │   │   │   │   │       │   ├── cfg-if v1.0.0
+│   │   │   │   │   │       │   └── libc v0.2.149
+│   │   │   │   │   │       ├── once_cell v1.18.0
+│   │   │   │   │   │       └── tiny-keccak v2.0.2
+│   │   │   │   │   │           └── crunchy v0.2.2
+│   │   │   │   │   ├── derive-syn-parse v0.1.5 (proc-macro) (*)
+│   │   │   │   │   ├── macro_magic_core_macros v0.4.3 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   ├── macro_magic_macros v0.4.2 (proc-macro)
+│   │   │   │   │   ├── macro_magic_core v0.4.2 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v2.0.38 (*)
+│   │   │   ├── proc-macro-warning v0.4.2
+│   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v2.0.38 (*)
+│   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   ├── quote v1.0.33 (*)
+│   │   │   └── syn v2.0.38 (*)
+│   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   ├── k256 v0.13.1
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── ecdsa v0.16.8
+│   │   │   │   ├── der v0.7.8
+│   │   │   │   │   ├── const-oid v0.9.5
+│   │   │   │   │   └── zeroize v1.6.0
+│   │   │   │   │       └── zeroize_derive v1.4.2 (proc-macro)
+│   │   │   │   │           ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │           ├── quote v1.0.33 (*)
+│   │   │   │   │           └── syn v2.0.38 (*)
+│   │   │   │   ├── digest v0.10.7
+│   │   │   │   │   ├── block-buffer v0.10.4
+│   │   │   │   │   │   └── generic-array v0.14.7
+│   │   │   │   │   │       ├── typenum v1.17.0
+│   │   │   │   │   │       └── zeroize v1.6.0 (*)
+│   │   │   │   │   │       [build-dependencies]
+│   │   │   │   │   │       └── version_check v0.9.4
+│   │   │   │   │   ├── const-oid v0.9.5
+│   │   │   │   │   ├── crypto-common v0.1.6
+│   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   └── typenum v1.17.0
+│   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   ├── elliptic-curve v0.13.6
+│   │   │   │   │   ├── base16ct v0.2.0
+│   │   │   │   │   ├── crypto-bigint v0.5.3
+│   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   ├── ff v0.13.0
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   ├── group v0.13.0
+│   │   │   │   │   │   ├── ff v0.13.0 (*)
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   ├── sec1 v0.7.3
+│   │   │   │   │   │   ├── base16ct v0.2.0
+│   │   │   │   │   │   ├── der v0.7.8 (*)
+│   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   ├── rfc6979 v0.4.0
+│   │   │   │   │   ├── hmac v0.12.1
+│   │   │   │   │   │   └── digest v0.10.7 (*)
+│   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   └── signature v2.1.0
+│   │   │   │       ├── digest v0.10.7 (*)
+│   │   │   │       └── rand_core v0.6.4
+│   │   │   ├── elliptic-curve v0.13.6 (*)
+│   │   │   └── sha2 v0.10.8
+│   │   │       ├── cfg-if v1.0.0
+│   │   │       └── digest v0.10.7 (*)
+│   │   ├── log v0.4.20
+│   │   ├── macro_magic v0.4.2
+│   │   │   └── macro_magic_macros v0.4.2 (proc-macro) (*)
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── paste v1.0.14 (proc-macro)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── serde v1.0.190 (*)
+│   │   ├── serde_json v1.0.107
+│   │   │   ├── itoa v1.0.9
+│   │   │   ├── ryu v1.0.15
+│   │   │   └── serde v1.0.190 (*)
+│   │   ├── smallvec v1.11.1
+│   │   ├── sp-api v22.0.0
+│   │   │   ├── log v0.4.20
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   ├── sp-api-proc-macro v11.0.0 (proc-macro)
+│   │   │   │   ├── Inflector v0.11.4 (*)
+│   │   │   │   ├── blake2 v0.10.6 (*)
+│   │   │   │   ├── expander v2.0.0 (*)
+│   │   │   │   ├── proc-macro-crate v1.1.3 (*)
+│   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   └── syn v2.0.38 (*)
+│   │   │   ├── sp-core v24.0.0
+│   │   │   │   ├── array-bytes v6.1.0
+│   │   │   │   ├── bitflags v1.3.2
+│   │   │   │   ├── blake2 v0.10.6
+│   │   │   │   │   └── digest v0.10.7 (*)
+│   │   │   │   ├── bounded-collections v0.1.9
+│   │   │   │   │   ├── log v0.4.20
+│   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   │   └── serde v1.0.190 (*)
+│   │   │   │   ├── bs58 v0.5.0
+│   │   │   │   ├── hash-db v0.16.0
+│   │   │   │   ├── hash256-std-hasher v0.15.2
+│   │   │   │   │   └── crunchy v0.2.2
+│   │   │   │   ├── impl-serde v0.4.0
+│   │   │   │   │   └── serde v1.0.190 (*)
+│   │   │   │   ├── log v0.4.20
+│   │   │   │   ├── merlin v2.0.1
+│   │   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   │   ├── keccak v0.1.4
+│   │   │   │   │   ├── rand_core v0.5.1
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   ├── paste v1.0.14 (proc-macro)
+│   │   │   │   ├── primitive-types v0.12.2
+│   │   │   │   │   ├── fixed-hash v0.8.0
+│   │   │   │   │   │   └── static_assertions v1.1.0
+│   │   │   │   │   ├── impl-codec v0.6.0
+│   │   │   │   │   │   └── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   ├── impl-serde v0.4.0 (*)
+│   │   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   │   └── uint v0.9.5
+│   │   │   │   │       ├── byteorder v1.5.0
+│   │   │   │   │       ├── crunchy v0.2.2
+│   │   │   │   │       ├── hex v0.4.3
+│   │   │   │   │       └── static_assertions v1.1.0
+│   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   ├── schnorrkel v0.9.1
+│   │   │   │   │   ├── arrayref v0.3.7
+│   │   │   │   │   ├── arrayvec v0.5.2
+│   │   │   │   │   ├── curve25519-dalek v2.1.3
+│   │   │   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   │   │   ├── digest v0.8.1
+│   │   │   │   │   │   │   └── generic-array v0.12.4
+│   │   │   │   │   │   │       └── typenum v1.17.0
+│   │   │   │   │   │   ├── rand_core v0.5.1
+│   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   │   ├── merlin v2.0.1 (*)
+│   │   │   │   │   ├── rand_core v0.5.1
+│   │   │   │   │   ├── sha2 v0.8.2
+│   │   │   │   │   │   ├── block-buffer v0.7.3
+│   │   │   │   │   │   │   ├── block-padding v0.1.5
+│   │   │   │   │   │   │   │   └── byte-tools v0.3.1
+│   │   │   │   │   │   │   ├── byte-tools v0.3.1
+│   │   │   │   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   │   │   │   └── generic-array v0.12.4 (*)
+│   │   │   │   │   │   ├── digest v0.8.1 (*)
+│   │   │   │   │   │   ├── fake-simd v0.1.2
+│   │   │   │   │   │   └── opaque-debug v0.2.3
+│   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   ├── secrecy v0.8.0
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   ├── serde v1.0.190 (*)
+│   │   │   │   ├── sp-core-hashing v12.0.0
+│   │   │   │   │   ├── blake2b_simd v1.0.2
+│   │   │   │   │   │   ├── arrayref v0.3.7
+│   │   │   │   │   │   ├── arrayvec v0.7.4
+│   │   │   │   │   │   └── constant_time_eq v0.3.0
+│   │   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   ├── sha2 v0.10.8 (*)
+│   │   │   │   │   ├── sha3 v0.10.8
+│   │   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   │   └── keccak v0.1.4
+│   │   │   │   │   └── twox-hash v1.6.3
+│   │   │   │   │       ├── cfg-if v1.0.0
+│   │   │   │   │       ├── digest v0.10.7 (*)
+│   │   │   │   │       └── static_assertions v1.1.0
+│   │   │   │   ├── sp-debug-derive v11.0.0 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   ├── sp-runtime-interface v20.0.0
+│   │   │   │   │   ├── bytes v1.5.0
+│   │   │   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   ├── primitive-types v0.12.2 (*)
+│   │   │   │   │   ├── sp-externalities v0.22.0
+│   │   │   │   │   │   ├── environmental v1.1.4
+│   │   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   │   │   └── sp-storage v16.0.0
+│   │   │   │   │   │       ├── impl-serde v0.4.0 (*)
+│   │   │   │   │   │       ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   │       ├── ref-cast v1.0.20
+│   │   │   │   │   │       │   └── ref-cast-impl v1.0.20 (proc-macro)
+│   │   │   │   │   │       │       ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   │       │       ├── quote v1.0.33 (*)
+│   │   │   │   │   │       │       └── syn v2.0.38 (*)
+│   │   │   │   │   │       ├── serde v1.0.190 (*)
+│   │   │   │   │   │       ├── sp-debug-derive v11.0.0 (proc-macro) (*)
+│   │   │   │   │   │       └── sp-std v11.0.0
+│   │   │   │   │   ├── sp-runtime-interface-proc-macro v14.0.0 (proc-macro)
+│   │   │   │   │   │   ├── Inflector v0.11.4 (*)
+│   │   │   │   │   │   ├── proc-macro-crate v1.1.3 (*)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   │   ├── sp-storage v16.0.0 (*)
+│   │   │   │   │   ├── sp-tracing v13.0.0
+│   │   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   │   │   ├── tracing v0.1.40
+│   │   │   │   │   │   │   ├── pin-project-lite v0.2.13
+│   │   │   │   │   │   │   ├── tracing-attributes v0.1.27 (proc-macro)
+│   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   │   │   │   └── syn v2.0.38 (*)
+│   │   │   │   │   │   │   └── tracing-core v0.1.32
+│   │   │   │   │   │   └── tracing-core v0.1.32
+│   │   │   │   │   ├── sp-wasm-interface v17.0.0
+│   │   │   │   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   │   └── sp-std v11.0.0
+│   │   │   │   │   └── static_assertions v1.1.0
+│   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   ├── sp-storage v16.0.0 (*)
+│   │   │   │   ├── ss58-registry v1.43.0
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   ├── Inflector v0.11.4 (*)
+│   │   │   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │   │   ├── quote v1.0.33 (*)
+│   │   │   │   │   ├── serde v1.0.190 (*)
+│   │   │   │   │   ├── serde_json v1.0.107
+│   │   │   │   │   │   ├── itoa v1.0.9
+│   │   │   │   │   │   ├── ryu v1.0.15
+│   │   │   │   │   │   └── serde v1.0.190 (*)
+│   │   │   │   │   └── unicode-xid v0.2.4
+│   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   ├── sp-metadata-ir v0.3.0
+│   │   │   │   ├── frame-metadata v16.0.0 (*)
+│   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   └── sp-std v11.0.0
+│   │   │   ├── sp-runtime v27.0.0
+│   │   │   │   ├── either v1.9.0
+│   │   │   │   ├── hash256-std-hasher v0.15.2 (*)
+│   │   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │   │   ├── log v0.4.20
+│   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   ├── paste v1.0.14 (proc-macro)
+│   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   ├── serde v1.0.190 (*)
+│   │   │   │   ├── sp-application-crypto v26.0.0
+│   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   │   ├── serde v1.0.190 (*)
+│   │   │   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   │   │   ├── sp-io v26.0.0
+│   │   │   │   │   │   ├── bytes v1.5.0
+│   │   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   │   │   │   ├── sp-externalities v0.22.0 (*)
+│   │   │   │   │   │   ├── sp-runtime-interface v20.0.0 (*)
+│   │   │   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   │   │   ├── sp-tracing v13.0.0 (*)
+│   │   │   │   │   │   ├── tracing v0.1.40 (*)
+│   │   │   │   │   │   └── tracing-core v0.1.32
+│   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   └── rustversion v1.0.14 (proc-macro)
+│   │   │   │   │   └── sp-std v11.0.0
+│   │   │   │   ├── sp-arithmetic v19.0.0
+│   │   │   │   │   ├── integer-sqrt v0.1.5
+│   │   │   │   │   │   └── num-traits v0.2.17
+│   │   │   │   │   │       [build-dependencies]
+│   │   │   │   │   │       └── autocfg v1.1.0
+│   │   │   │   │   ├── num-traits v0.2.17 (*)
+│   │   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   │   ├── serde v1.0.190 (*)
+│   │   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   │   └── static_assertions v1.1.0
+│   │   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   │   ├── sp-io v26.0.0 (*)
+│   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   └── sp-weights v23.0.0
+│   │   │   │       ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │       ├── scale-info v2.10.0 (*)
+│   │   │   │       ├── serde v1.0.190 (*)
+│   │   │   │       ├── smallvec v1.11.1
+│   │   │   │       ├── sp-arithmetic v19.0.0 (*)
+│   │   │   │       ├── sp-core v24.0.0 (*)
+│   │   │   │       ├── sp-debug-derive v11.0.0 (proc-macro) (*)
+│   │   │   │       └── sp-std v11.0.0
+│   │   │   ├── sp-std v11.0.0
+│   │   │   └── sp-version v25.0.0
+│   │   │       ├── impl-serde v0.4.0 (*)
+│   │   │       ├── parity-scale-codec v3.6.5 (*)
+│   │   │       ├── scale-info v2.10.0 (*)
+│   │   │       ├── serde v1.0.190 (*)
+│   │   │       ├── sp-core-hashing-proc-macro v12.0.0 (proc-macro)
+│   │   │       │   ├── quote v1.0.33 (*)
+│   │   │       │   ├── sp-core-hashing v12.0.0
+│   │   │       │   │   ├── blake2b_simd v1.0.2
+│   │   │       │   │   │   ├── arrayref v0.3.7
+│   │   │       │   │   │   ├── arrayvec v0.7.4
+│   │   │       │   │   │   └── constant_time_eq v0.3.0
+│   │   │       │   │   ├── byteorder v1.5.0
+│   │   │       │   │   ├── digest v0.10.7 (*)
+│   │   │       │   │   ├── sha2 v0.10.8
+│   │   │       │   │   │   ├── cfg-if v1.0.0
+│   │   │       │   │   │   ├── cpufeatures v0.2.11
+│   │   │       │   │   │   │   └── libc v0.2.149
+│   │   │       │   │   │   └── digest v0.10.7 (*)
+│   │   │       │   │   ├── sha3 v0.10.8
+│   │   │       │   │   │   ├── digest v0.10.7 (*)
+│   │   │       │   │   │   └── keccak v0.1.4
+│   │   │       │   │   │       └── cpufeatures v0.2.11 (*)
+│   │   │       │   │   └── twox-hash v1.6.3
+│   │   │       │   │       ├── cfg-if v1.0.0
+│   │   │       │   │       ├── digest v0.10.7 (*)
+│   │   │       │   │       └── static_assertions v1.1.0
+│   │   │       │   └── syn v2.0.38 (*)
+│   │   │       ├── sp-runtime v27.0.0 (*)
+│   │   │       ├── sp-std v11.0.0
+│   │   │       └── sp-version-proc-macro v11.0.0 (proc-macro)
+│   │   │           ├── parity-scale-codec v3.6.5
+│   │   │           │   ├── arrayvec v0.7.4
+│   │   │           │   ├── byte-slice-cast v1.2.2
+│   │   │           │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │           │   ├── parity-scale-codec-derive v3.6.5 (proc-macro) (*)
+│   │   │           │   └── serde v1.0.190 (*)
+│   │   │           ├── proc-macro2 v1.0.69 (*)
+│   │   │           ├── quote v1.0.33 (*)
+│   │   │           └── syn v2.0.38 (*)
+│   │   ├── sp-arithmetic v19.0.0 (*)
+│   │   ├── sp-core v24.0.0 (*)
+│   │   ├── sp-core-hashing-proc-macro v12.0.0 (proc-macro) (*)
+│   │   ├── sp-debug-derive v11.0.0 (proc-macro) (*)
+│   │   ├── sp-genesis-builder v0.3.0
+│   │   │   ├── serde_json v1.0.107 (*)
+│   │   │   ├── sp-api v22.0.0 (*)
+│   │   │   ├── sp-runtime v27.0.0 (*)
+│   │   │   └── sp-std v11.0.0
+│   │   ├── sp-inherents v22.0.0
+│   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   └── sp-std v11.0.0
+│   │   ├── sp-io v26.0.0 (*)
+│   │   ├── sp-metadata-ir v0.3.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   ├── sp-staking v22.0.0
+│   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   ├── serde v1.0.190 (*)
+│   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   ├── sp-runtime v27.0.0 (*)
+│   │   │   └── sp-std v11.0.0
+│   │   ├── sp-std v11.0.0
+│   │   ├── sp-tracing v13.0.0 (*)
+│   │   ├── sp-weights v23.0.0 (*)
+│   │   ├── static_assertions v1.1.0
+│   │   └── tt-call v1.0.9
+│   ├── frame-system v24.0.0
+│   │   ├── cfg-if v1.0.0
+│   │   ├── frame-support v24.0.0 (*)
+│   │   ├── log v0.4.20
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── serde v1.0.190 (*)
+│   │   ├── sp-core v24.0.0 (*)
+│   │   ├── sp-io v26.0.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   ├── sp-std v11.0.0
+│   │   ├── sp-version v25.0.0 (*)
+│   │   └── sp-weights v23.0.0 (*)
+│   ├── log v0.4.20
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-core v24.0.0 (*)
+│   ├── sp-io v26.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   ├── sp-std v11.0.0
+│   └── sp-tracing v13.0.0 (*)
+├── frame-support v24.0.0 (*)
+├── frame-system v24.0.0 (*)
+├── frame-system-rpc-runtime-api v22.0.0
+│   ├── parity-scale-codec v3.6.5 (*)
+│   └── sp-api v22.0.0 (*)
+├── pallet-aura v23.0.0
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── log v0.4.20
+│   ├── pallet-timestamp v23.0.0
+│   │   ├── docify v0.2.6 (*)
+│   │   ├── frame-support v24.0.0 (*)
+│   │   ├── frame-system v24.0.0 (*)
+│   │   ├── log v0.4.20
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── sp-inherents v22.0.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   ├── sp-std v11.0.0
+│   │   ├── sp-storage v16.0.0 (*)
+│   │   └── sp-timestamp v22.0.0
+│   │       ├── parity-scale-codec v3.6.5 (*)
+│   │       ├── sp-inherents v22.0.0 (*)
+│   │       ├── sp-runtime v27.0.0 (*)
+│   │       └── sp-std v11.0.0
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-application-crypto v26.0.0 (*)
+│   ├── sp-consensus-aura v0.28.0
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── sp-api v22.0.0 (*)
+│   │   ├── sp-application-crypto v26.0.0 (*)
+│   │   ├── sp-consensus-slots v0.28.0
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   ├── sp-std v11.0.0
+│   │   │   └── sp-timestamp v22.0.0 (*)
+│   │   ├── sp-inherents v22.0.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   ├── sp-std v11.0.0
+│   │   └── sp-timestamp v22.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-std v11.0.0
+├── pallet-balances v24.0.0
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── log v0.4.20
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-std v11.0.0
+├── pallet-chronicle v0.7.5 (/Users/ryan/code/chronicle/crates/pallet-chronicle)
+│   ├── common v0.7.5 (/Users/ryan/code/chronicle/crates/common)
+│   │   ├── anyhow v1.0.75
+│   │   ├── async-trait v0.1.74 (proc-macro)
+│   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   ├── quote v1.0.33 (*)
+│   │   │   └── syn v2.0.38 (*)
+│   │   ├── chrono v0.4.31
+│   │   │   ├── js-sys v0.3.64
+│   │   │   │   └── wasm-bindgen v0.2.87
+│   │   │   │       ├── cfg-if v1.0.0
+│   │   │   │       └── wasm-bindgen-macro v0.2.87 (proc-macro)
+│   │   │   │           ├── quote v1.0.33 (*)
+│   │   │   │           └── wasm-bindgen-macro-support v0.2.87
+│   │   │   │               ├── proc-macro2 v1.0.69 (*)
+│   │   │   │               ├── quote v1.0.33 (*)
+│   │   │   │               ├── syn v2.0.38 (*)
+│   │   │   │               ├── wasm-bindgen-backend v0.2.87
+│   │   │   │               │   ├── bumpalo v3.14.0
+│   │   │   │               │   ├── log v0.4.20
+│   │   │   │               │   ├── once_cell v1.18.0
+│   │   │   │               │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │               │   ├── quote v1.0.33 (*)
+│   │   │   │               │   ├── syn v2.0.38 (*)
+│   │   │   │               │   └── wasm-bindgen-shared v0.2.87
+│   │   │   │               └── wasm-bindgen-shared v0.2.87
+│   │   │   ├── num-traits v0.2.17 (*)
+│   │   │   ├── serde v1.0.190 (*)
+│   │   │   └── wasm-bindgen v0.2.87 (*)
+│   │   ├── futures v0.3.29
+│   │   │   ├── futures-channel v0.3.29
+│   │   │   │   ├── futures-core v0.3.29
+│   │   │   │   └── futures-sink v0.3.29
+│   │   │   ├── futures-core v0.3.29
+│   │   │   ├── futures-executor v0.3.29
+│   │   │   │   ├── futures-core v0.3.29
+│   │   │   │   ├── futures-task v0.3.29
+│   │   │   │   └── futures-util v0.3.29
+│   │   │   │       ├── futures-channel v0.3.29 (*)
+│   │   │   │       ├── futures-core v0.3.29
+│   │   │   │       ├── futures-io v0.3.29
+│   │   │   │       ├── futures-macro v0.3.29 (proc-macro)
+│   │   │   │       │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   │       │   ├── quote v1.0.33 (*)
+│   │   │   │       │   └── syn v2.0.38 (*)
+│   │   │   │       ├── futures-sink v0.3.29
+│   │   │   │       ├── futures-task v0.3.29
+│   │   │   │       ├── memchr v2.6.4
+│   │   │   │       ├── pin-project-lite v0.2.13
+│   │   │   │       ├── pin-utils v0.1.0
+│   │   │   │       └── slab v0.4.9
+│   │   │   │           [build-dependencies]
+│   │   │   │           └── autocfg v1.1.0
+│   │   │   ├── futures-io v0.3.29
+│   │   │   ├── futures-sink v0.3.29
+│   │   │   ├── futures-task v0.3.29
+│   │   │   └── futures-util v0.3.29 (*)
+│   │   ├── glob v0.3.1
+│   │   ├── hex v0.4.3
+│   │   ├── iref v2.2.3
+│   │   │   ├── pct-str v1.2.0
+│   │   │   │   └── utf8-decode v1.0.1
+│   │   │   └── smallvec v1.11.1
+│   │   ├── iref-enum v2.1.0 (proc-macro)
+│   │   │   ├── iref v2.2.3
+│   │   │   │   ├── pct-str v1.2.0
+│   │   │   │   │   └── utf8-decode v1.0.1
+│   │   │   │   └── smallvec v1.11.1
+│   │   │   ├── proc-macro2 v1.0.69 (*)
+│   │   │   ├── quote v1.0.33 (*)
+│   │   │   └── syn v1.0.109 (*)
+│   │   ├── k256 v0.11.6
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── ecdsa v0.14.8
+│   │   │   │   ├── der v0.6.1
+│   │   │   │   │   └── const-oid v0.9.5
+│   │   │   │   ├── elliptic-curve v0.12.3
+│   │   │   │   │   ├── base16ct v0.1.1
+│   │   │   │   │   ├── crypto-bigint v0.4.9
+│   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   │   ├── der v0.6.1 (*)
+│   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   ├── ff v0.12.1
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   ├── group v0.12.1
+│   │   │   │   │   │   ├── ff v0.12.1 (*)
+│   │   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   ├── pkcs8 v0.9.0
+│   │   │   │   │   │   ├── der v0.6.1 (*)
+│   │   │   │   │   │   └── spki v0.6.0
+│   │   │   │   │   │       └── der v0.6.1 (*)
+│   │   │   │   │   ├── rand_core v0.6.4
+│   │   │   │   │   ├── sec1 v0.3.0
+│   │   │   │   │   │   ├── base16ct v0.1.1
+│   │   │   │   │   │   ├── der v0.6.1 (*)
+│   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   ├── rfc6979 v0.3.1
+│   │   │   │   │   ├── crypto-bigint v0.4.9 (*)
+│   │   │   │   │   ├── hmac v0.12.1 (*)
+│   │   │   │   │   └── zeroize v1.6.0 (*)
+│   │   │   │   └── signature v1.6.4
+│   │   │   │       ├── digest v0.10.7 (*)
+│   │   │   │       └── rand_core v0.6.4
+│   │   │   ├── elliptic-curve v0.12.3 (*)
+│   │   │   └── sha2 v0.10.8 (*)
+│   │   ├── lazy_static v1.4.0
+│   │   ├── locspan v0.7.16
+│   │   ├── macro-attr-2018 v3.0.0
+│   │   ├── mime v0.3.17
+│   │   ├── newtype-derive-2018 v0.2.1
+│   │   │   └── generics v0.5.0
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── percent-encoding v2.3.0
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── serde v1.0.190 (*)
+│   │   ├── serde_derive v1.0.190 (proc-macro) (*)
+│   │   ├── serde_json v1.0.107 (*)
+│   │   ├── static-iref v2.0.0 (proc-macro)
+│   │   │   └── iref v2.2.3 (*)
+│   │   ├── thiserror v1.0.50
+│   │   │   └── thiserror-impl v1.0.50 (proc-macro) (*)
+│   │   ├── thiserror-no-std v2.0.2
+│   │   │   └── thiserror-impl-no-std v2.0.2 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.69 (*)
+│   │   │       ├── quote v1.0.33 (*)
+│   │   │       └── syn v1.0.109 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── url v2.4.1
+│   │   │   ├── form_urlencoded v1.2.0
+│   │   │   │   └── percent-encoding v2.3.0
+│   │   │   ├── idna v0.4.0
+│   │   │   │   ├── unicode-bidi v0.3.13
+│   │   │   │   └── unicode-normalization v0.1.22
+│   │   │   │       └── tinyvec v1.6.0
+│   │   │   │           └── tinyvec_macros v0.1.1
+│   │   │   └── percent-encoding v2.3.0
+│   │   └── uuid v1.5.0
+│   │       └── serde v1.0.190 (*)
+│   │   [build-dependencies]
+│   │   ├── glob v0.3.1
+│   │   ├── lazy_static v1.4.0
+│   │   └── serde_json v1.0.107 (*)
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── macro-attr-2018 v3.0.0
+│   ├── newtype-derive-2018 v0.2.1 (*)
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-std v11.0.0
+│   ├── tracing v0.1.40 (*)
+│   └── uuid v1.5.0 (*)
+├── pallet-grandpa v24.0.0
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── log v0.4.20
+│   ├── pallet-authorship v24.0.0
+│   │   ├── frame-support v24.0.0 (*)
+│   │   ├── frame-system v24.0.0 (*)
+│   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   └── sp-std v11.0.0
+│   ├── pallet-session v24.0.0
+│   │   ├── frame-support v24.0.0 (*)
+│   │   ├── frame-system v24.0.0 (*)
+│   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   ├── log v0.4.20
+│   │   ├── pallet-timestamp v23.0.0 (*)
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── sp-core v24.0.0 (*)
+│   │   ├── sp-io v26.0.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   ├── sp-session v23.0.0
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   ├── sp-api v22.0.0 (*)
+│   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   ├── sp-staking v22.0.0 (*)
+│   │   │   └── sp-std v11.0.0
+│   │   ├── sp-staking v22.0.0 (*)
+│   │   ├── sp-state-machine v0.31.0
+│   │   │   ├── hash-db v0.16.0
+│   │   │   ├── log v0.4.20
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   ├── smallvec v1.11.1
+│   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   ├── sp-externalities v0.22.0 (*)
+│   │   │   ├── sp-std v11.0.0
+│   │   │   ├── sp-trie v25.0.0
+│   │   │   │   ├── hash-db v0.16.0
+│   │   │   │   ├── memory-db v0.32.0
+│   │   │   │   │   └── hash-db v0.16.0
+│   │   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   │   ├── scale-info v2.10.0 (*)
+│   │   │   │   ├── sp-core v24.0.0 (*)
+│   │   │   │   ├── sp-std v11.0.0
+│   │   │   │   ├── trie-db v0.28.0
+│   │   │   │   │   ├── hash-db v0.16.0
+│   │   │   │   │   ├── hashbrown v0.13.2
+│   │   │   │   │   │   └── ahash v0.8.6
+│   │   │   │   │   │       ├── cfg-if v1.0.0
+│   │   │   │   │   │       ├── once_cell v1.18.0
+│   │   │   │   │   │       └── zerocopy v0.7.20
+│   │   │   │   │   │       [build-dependencies]
+│   │   │   │   │   │       └── version_check v0.9.4
+│   │   │   │   │   ├── log v0.4.20
+│   │   │   │   │   └── smallvec v1.11.1
+│   │   │   │   └── trie-root v0.18.0
+│   │   │   │       └── hash-db v0.16.0
+│   │   │   └── trie-db v0.28.0 (*)
+│   │   └── sp-std v11.0.0
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-application-crypto v26.0.0 (*)
+│   ├── sp-consensus-grandpa v9.0.0
+│   │   ├── finality-grandpa v0.16.2
+│   │   │   ├── either v1.9.0
+│   │   │   ├── futures v0.3.29 (*)
+│   │   │   ├── num-traits v0.2.17 (*)
+│   │   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   │   └── scale-info v2.10.0 (*)
+│   │   ├── log v0.4.20
+│   │   ├── parity-scale-codec v3.6.5 (*)
+│   │   ├── scale-info v2.10.0 (*)
+│   │   ├── serde v1.0.190 (*)
+│   │   ├── sp-api v22.0.0 (*)
+│   │   ├── sp-application-crypto v26.0.0 (*)
+│   │   ├── sp-core v24.0.0 (*)
+│   │   ├── sp-runtime v27.0.0 (*)
+│   │   └── sp-std v11.0.0
+│   ├── sp-core v24.0.0 (*)
+│   ├── sp-io v26.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   ├── sp-session v23.0.0 (*)
+│   ├── sp-staking v22.0.0 (*)
+│   └── sp-std v11.0.0
+├── pallet-sudo v24.0.0
+│   ├── docify v0.2.6 (*)
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-io v26.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-std v11.0.0
+├── pallet-timestamp v23.0.0 (*)
+├── pallet-transaction-payment v24.0.0
+│   ├── frame-support v24.0.0 (*)
+│   ├── frame-system v24.0.0 (*)
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── scale-info v2.10.0 (*)
+│   ├── sp-core v24.0.0 (*)
+│   ├── sp-io v26.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-std v11.0.0
+├── pallet-transaction-payment-rpc-runtime-api v24.0.0
+│   ├── pallet-transaction-payment v24.0.0 (*)
+│   ├── parity-scale-codec v3.6.5 (*)
+│   ├── sp-api v22.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-weights v23.0.0 (*)
+├── parity-scale-codec v3.6.5 (*)
+├── scale-info v2.10.0 (*)
+├── sp-api v22.0.0 (*)
+├── sp-block-builder v22.0.0
+│   ├── sp-api v22.0.0 (*)
+│   ├── sp-inherents v22.0.0 (*)
+│   ├── sp-runtime v27.0.0 (*)
+│   └── sp-std v11.0.0
+├── sp-consensus-aura v0.28.0 (*)
+├── sp-consensus-grandpa v9.0.0 (*)
+├── sp-core v24.0.0 (*)
+├── sp-inherents v22.0.0 (*)
+├── sp-offchain v22.0.0
+│   ├── sp-api v22.0.0 (*)
+│   ├── sp-core v24.0.0 (*)
+│   └── sp-runtime v27.0.0 (*)
+├── sp-runtime v27.0.0 (*)
+├── sp-session v23.0.0 (*)
+├── sp-std v11.0.0
+├── sp-transaction-pool v22.0.0
+│   ├── sp-api v22.0.0 (*)
+│   └── sp-runtime v27.0.0 (*)
+└── sp-version v25.0.0 (*)

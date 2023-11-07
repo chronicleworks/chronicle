@@ -1,53 +1,47 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 pub mod chronicle_graphql;
-pub mod inmem;
+pub mod commands;
 mod persistence;
 
-use async_stl_client::{
-	error::SawtoothCommunicationError,
-	ledger::{BlockId, BlockingLedgerWriter, FromBlock},
-};
-use chronicle_protocol::{
-	async_stl_client::ledger::{LedgerReader, LedgerWriter},
-	messages::ChronicleSubmitTransaction,
-	protocol::ChronicleOperationEvent,
-};
-use chronicle_signing::{ChronicleSigning, SecretError};
+use chronicle_signing::{ChronicleKnownKeyNamesSigner, ChronicleSigning, SecretError};
 use chrono::{DateTime, Utc};
-
-use diesel::{r2d2::ConnectionManager, PgConnection};
-use diesel_migrations::MigrationHarness;
-use futures::{select, FutureExt, StreamExt};
 
 use common::{
 	attributes::Attributes,
-	commands::*,
-	identity::{AuthId, IdentityError},
-	ledger::{Commit, SubmissionError, SubmissionStage, SubscriptionError},
+	identity::{AuthId, IdentityError, SignedIdentity},
+	ledger::{Commit, SubmissionError, SubmissionStage},
+	opa::PolicyAddress,
 	prov::{
+		json_ld::ToJson,
 		operations::{
 			ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
 			CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
 			SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
 			WasInformedBy,
 		},
-		to_json_ld::ToJson,
-		ActivityId, AgentId, ChronicleIri, ChronicleTransaction, ChronicleTransactionId,
-		Contradiction, EntityId, ExternalId, ExternalIdPart, NamespaceId, ProcessorError,
-		ProvModel, Role, UuidPart, SYSTEM_ID, SYSTEM_UUID,
+		ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
+		ExternalId, ExternalIdPart, NamespaceId, ProcessorError, ProvModel, Role, UuidPart,
+		SYSTEM_ID, SYSTEM_UUID,
 	},
 };
+use diesel::{r2d2::ConnectionManager, PgConnection};
+use diesel_migrations::MigrationHarness;
+use futures::{select, FutureExt, StreamExt};
 
 use metrics::histogram;
 use metrics_exporter_prometheus::PrometheusBuilder;
 pub use persistence::StoreError;
 use persistence::{Store, MIGRATIONS};
+use protocol_substrate::SubxtClientError;
+use protocol_substrate_chronicle::{
+	protocol::{BlockId, FromBlock, LedgerReader, LedgerWriter},
+	ChronicleEvent, ChronicleTransaction,
+};
 use r2d2::Pool;
 use std::{
 	convert::Infallible,
 	marker::PhantomData,
 	net::AddrParseError,
-	sync::Arc,
 	time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -56,12 +50,13 @@ use tokio::{
 	task::JoinError,
 };
 
+use commands::*;
+pub mod import;
+pub use persistence::{database, ConnectionOptions};
 use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
-pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
-
 #[derive(Error, Debug)]
 pub enum ApiError {
 	#[error("Storage: {0:?}")]
@@ -75,9 +70,6 @@ pub enum ApiError {
 
 	#[error("JSON-LD processing: {0}")]
 	JsonLD(String),
-
-	#[error("Ledger error: {0}")]
-	Ledger(#[from] SubmissionError),
 
 	#[error("Signing: {0}")]
 	Signing(#[from] SecretError),
@@ -106,14 +98,8 @@ pub enum ApiError {
 	#[error("Blocking thread pool: {0}")]
 	Join(#[from] JoinError),
 
-	#[error("State update subscription: {0}")]
-	Subscription(#[from] SubscriptionError),
-
 	#[error("No appropriate activity to end")]
 	NotCurrentActivity,
-
-	#[error("Contradiction: {0}")]
-	Contradiction(#[from] Contradiction),
 
 	#[error("Processor: {0}")]
 	ProcessorError(#[from] ProcessorError),
@@ -121,11 +107,20 @@ pub enum ApiError {
 	#[error("Identity: {0}")]
 	IdentityError(#[from] IdentityError),
 
-	#[error("Sawtooth communication error: {0}")]
-	SawtoothCommunicationError(#[from] SawtoothCommunicationError),
-
 	#[error("Authentication endpoint error: {0}")]
 	AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
+
+	#[error("Substrate : {0}")]
+	ClientError(#[from] SubxtClientError),
+
+	#[error("Submission : {0}")]
+	Submission(#[from] SubmissionError),
+
+	#[error("Contradiction: {0}")]
+	Contradiction(Contradiction),
+
+	#[error("Embedded substrate: {0}")]
+	EmbeddedSubstrate(anyhow::Error),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -135,10 +130,16 @@ impl From<Infallible> for ApiError {
 	}
 }
 
+impl From<Contradiction> for ApiError {
+	fn from(x: Contradiction) -> Self {
+		Self::Contradiction(x)
+	}
+}
+
 impl UFE for ApiError {}
 
 type LedgerSendWithReply =
-	(ChronicleSubmitTransaction, Sender<Result<ChronicleTransactionId, SubmissionError>>);
+	(ChronicleTransaction, Sender<Result<ChronicleTransactionId, SubmissionError>>);
 
 type ApiSendWithReply = ((ApiCommand, AuthId), Sender<Result<ApiResponse, ApiError>>);
 
@@ -150,25 +151,27 @@ pub trait UuidGen {
 
 pub trait ChronicleSigned {
 	/// Get the user identity's [`SignedIdentity`]
-	pub fn signed_identity<S: ChronicleKnownKeyNamesSigner>(
+	fn signed_identity<S: ChronicleKnownKeyNamesSigner>(
 		&self,
 		store: &S,
 	) -> Result<SignedIdentity, IdentityError>;
 }
 
-impl ChronicleSigned for Identity {
-	pub fn signed_identity<S: ChronicleKnownKeyNamesSigner>(
+impl ChronicleSigned for AuthId {
+	fn signed_identity<S: ChronicleKnownKeyNamesSigner>(
 		&self,
 		store: &S,
 	) -> Result<SignedIdentity, IdentityError> {
-		let buf = serde_json::to_string(self)?.as_bytes().to_vec();
+		let signable = self.to_string();
+		let signature = futures::executor::block_on(store.chronicle_sign(signable.as_bytes()))
+			.map_err(|e| IdentityError::Signing(e.into()))?;
+		let public_key = futures::executor::block_on(store.chronicle_verifying())
+			.map_err(|e| IdentityError::Signing(e.into()))?;
 
-		futures::executor::block_on(async move {
-			SignedIdentity::new(
-				self,
-				store.chronicle_sign(&buf).await?,
-				store.chronicle_verifying().await?,
-			)
+		Ok(SignedIdentity {
+			identity: signable,
+			signature: signature.into(),
+			verifying_key: Some(public_key.to_bytes().to_vec()),
 		})
 	}
 }
@@ -176,19 +179,17 @@ impl ChronicleSigned for Identity {
 #[derive(Clone)]
 pub struct Api<
 	U: UuidGen + Send + Sync + Clone,
-	W: LedgerWriter<Transaction = ChronicleSubmitTransaction, Error = SawtoothCommunicationError>
+	W: LedgerWriter<Transaction = ChronicleTransaction, Error = SubxtClientError>
 		+ Clone
 		+ Send
 		+ Sync
 		+ 'static,
 > {
-	_reply_tx: Sender<ApiSendWithReply>,
 	submit_tx: tokio::sync::broadcast::Sender<SubmissionStage>,
 	signing: ChronicleSigning,
-	ledger_writer: Arc<BlockingLedgerWriter<W>>,
+	ledger_writer: W,
 	store: persistence::Store,
 	uuid_source: PhantomData<U>,
-	policy_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -283,12 +284,12 @@ fn install_prometheus_metrics_exporter() {
 impl<U, LEDGER> Api<U, LEDGER>
 where
 	U: UuidGen + Send + Sync + Clone + core::fmt::Debug + 'static,
-	LEDGER: LedgerWriter<Transaction = ChronicleSubmitTransaction, Error = SawtoothCommunicationError>
+	LEDGER: LedgerWriter<Transaction = ChronicleTransaction, Error = SubxtClientError>
+		+ LedgerReader<Event = ChronicleEvent, Error = SubxtClientError>
 		+ Clone
 		+ Send
 		+ Sync
-		+ 'static
-		+ LedgerReader<Event = ChronicleOperationEvent, Error = SawtoothCommunicationError>,
+		+ 'static,
 {
 	#[instrument(skip(ledger))]
 	pub async fn new(
@@ -297,7 +298,7 @@ where
 		uuidgen: U,
 		signing: ChronicleSigning,
 		namespace_bindings: Vec<NamespaceId>,
-		policy_name: Option<String>,
+		policy_address: Option<PolicyAddress>,
 		liveness_check_interval: Option<u64>,
 	) -> Result<ApiDispatch, ApiError> {
 		let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
@@ -335,21 +336,17 @@ where
 
 		tokio::task::spawn(async move {
 			let mut api = Api::<U, LEDGER> {
-				_reply_tx: commit_tx.clone(),
 				submit_tx: commit_notify_tx.clone(),
 				signing,
-				ledger_writer: Arc::new(BlockingLedgerWriter::new(ledger)),
+				ledger_writer: ledger,
 				store: store.clone(),
 				uuid_source: PhantomData,
-				policy_name,
 			};
 
 			loop {
 				let state_updates = reuse_reader.clone();
 
-				let state_updates = state_updates
-					.state_updates("chronicle/prov-update", start_from_block, None)
-					.await;
+				let state_updates = state_updates.state_updates(start_from_block, None).await;
 
 				if let Err(e) = state_updates {
 					error!(subscribe_to_events = ?e);
@@ -370,27 +367,27 @@ where
 								  }
 								  // Ledger contradicted or error, so nothing to
 								  // apply, but forward notification
-								  Some((ChronicleOperationEvent(Err(e), id),tx,_block_id,_position, _span)) => {
+								  Some((ChronicleEvent::Contradicted{contradiction,identity,..},tx,_block_id,_position, _span)) => {
 									commit_notify_tx.send(SubmissionStage::not_committed(
-									  ChronicleTransactionId::from(tx.as_str()),e.clone(), id
+									  tx,contradiction, identity
 									)).ok();
 								  },
 								  // Successfully committed to ledger, so apply
 								  // to db and broadcast notification to
 								  // subscription subscribers
-								  Some((ChronicleOperationEvent(Ok(ref commit), id,),tx,block_id,_position,_span )) => {
+								  Some((ChronicleEvent::Committed{ref diff, ref identity, ..},tx,block_id,_position,_span )) => {
 
 										debug!(committed = ?tx);
-										debug!(delta = %serde_json::to_string_pretty(&commit.to_json().compact().await.unwrap()).unwrap());
+										debug!(delta = %serde_json::to_string_pretty(&diff.to_json().compact().await.unwrap()).unwrap());
 
-										api.sync( commit.clone().into(), &block_id,ChronicleTransactionId::from(tx.as_str()))
-											.instrument(info_span!("Incoming confirmation", offset = ?block_id, tx_id = %tx))
+										api.sync( diff.clone().into(), &block_id,tx )
+											.instrument(info_span!("Incoming confirmation", offset = ?block_id, tx = %tx))
 											.await
 											.map_err(|e| {
 												error!(?e, "Api sync to confirmed commit");
 											}).map(|_| commit_notify_tx.send(SubmissionStage::committed(Commit::new(
-											   ChronicleTransactionId::from(tx.as_str()),block_id, Box::new(commit.clone())
-											), id )).ok())
+											   tx,block_id.to_string(), Box::new(diff.clone())
+											), identity.clone() )).ok())
 											.ok();
 								  },
 								}
@@ -450,12 +447,11 @@ where
 								};
 
 								match stage {
-									SubmissionStage::Submitted(Ok(id)) => {
+									SubmissionStage::Submitted(Ok(id)) =>
 										if id == tx_id {
 											debug!("Depth charge operation submitted: {id}");
 											continue;
-										}
-									},
+										},
 									SubmissionStage::Submitted(Err(err)) => {
 										if err.tx_id() == &tx_id {
 											error!("Depth charge transaction rejected by Chronicle: {} {}",
@@ -510,30 +506,26 @@ where
 	/// This is a measure to keep the api interface stable once this is introduced
 	fn submit_blocking(
 		&mut self,
-		tx: &ChronicleTransaction,
+		tx: ChronicleTransaction,
 	) -> Result<ChronicleTransactionId, ApiError> {
-		let res = self.ledger_writer.submit(&ChronicleSubmitTransaction {
-			tx: tx.clone(),
-			signer: self.signing.clone(),
-			policy_name: self.policy_name.clone(),
-		});
+		let (submission, _id) = futures::executor::block_on(self.ledger_writer.pre_submit(tx))?;
 
+		let res =
+			futures::executor::block_on(self.ledger_writer.do_submit(
+				protocol_substrate_chronicle::protocol::WriteConsistency::Weak,
+				submission,
+			));
 		match res {
 			Ok(tx_id) => {
-				let tx_id = ChronicleTransactionId::from(tx_id.as_str());
 				self.submit_tx.send(SubmissionStage::submitted(&tx_id)).ok();
 				Ok(tx_id)
 			},
-			Err((Some(tx_id), e)) => {
+			Err((e, id)) => {
 				// We need the cloneable SubmissionError wrapper here
-				let submission_error = SubmissionError::communication(
-					&ChronicleTransactionId::from(tx_id.as_str()),
-					e,
-				);
+				let submission_error = SubmissionError::communication(&id, e.into());
 				self.submit_tx.send(SubmissionStage::submitted_error(&submission_error)).ok();
 				Err(submission_error.into())
 			},
-			Err((None, e)) => Err(e.into()),
 		}
 	}
 
@@ -546,8 +538,10 @@ where
 		to_apply: Vec<ChronicleOperation>,
 	) -> Result<ApiResponse, ApiError> {
 		let identity = identity.signed_identity(&self.signing)?;
-		let model = ProvModel::from_tx(&to_apply)?;
-		let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+		let model = ProvModel::from_tx(&to_apply).map_err(ApiError::Contradiction)?;
+		let tx_id = self.submit_blocking(futures::executor::block_on(
+			ChronicleTransaction::new(&self.signing, identity, to_apply),
+		)?)?;
 
 		Ok(ApiResponse::submission(id, model, tx_id))
 	}
@@ -568,112 +562,90 @@ where
 		let mut transactions = Vec::<ChronicleOperation>::with_capacity(to_apply.len());
 		for op in to_apply {
 			let mut applied_model = match op {
-				ChronicleOperation::CreateNamespace(CreateNamespace { external_id, .. }) => {
-					let (namespace, _) = self.ensure_namespace(connection, external_id)?;
+				ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
+					let (namespace, _) =
+						self.ensure_namespace(connection, id.external_id_part())?;
 					model.namespace_context(&namespace);
 					model
 				},
-				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref external_id }) => {
-					model.namespace_context(namespace);
+				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref external_id }) =>
 					self.store.apply_prov_model_for_agent_id(
 						connection,
 						model,
 						&AgentId::from_external_id(external_id),
 						namespace.external_id_part(),
-					)?
-				},
+					)?,
 				ChronicleOperation::ActivityExists(ActivityExists {
 					ref namespace,
 					ref external_id,
-				}) => {
-					model.namespace_context(namespace);
-
-					self.store.apply_prov_model_for_activity_id(
-						connection,
-						model,
-						&ActivityId::from_external_id(external_id),
-						namespace.external_id_part(),
-					)?
-				},
+				}) => self.store.apply_prov_model_for_activity_id(
+					connection,
+					model,
+					&ActivityId::from_external_id(external_id),
+					namespace.external_id_part(),
+				)?,
 				ChronicleOperation::EntityExists(EntityExists {
 					ref namespace,
 					ref external_id,
-				}) => {
-					model.namespace_context(namespace);
-					self.store.apply_prov_model_for_entity_id(
-						connection,
-						model,
-						&EntityId::from_external_id(external_id),
-						namespace.external_id_part(),
-					)?
-				},
+				}) => self.store.apply_prov_model_for_entity_id(
+					connection,
+					model,
+					&EntityId::from_external_id(external_id),
+					namespace.external_id_part(),
+				)?,
 				ChronicleOperation::ActivityUses(ActivityUses {
 					ref namespace,
 					ref id,
 					ref activity,
-				}) => {
-					model.namespace_context(namespace);
-					self.store.prov_model_for_usage(
-						connection,
-						model,
-						id,
-						activity,
-						namespace.external_id_part(),
-					)?
-				},
+				}) => self.store.prov_model_for_usage(
+					connection,
+					model,
+					id,
+					activity,
+					namespace.external_id_part(),
+				)?,
 				ChronicleOperation::SetAttributes(ref o) => match o {
-					SetAttributes::Activity { namespace, id, .. } => {
-						model.namespace_context(namespace);
+					SetAttributes::Activity { namespace, id, .. } =>
 						self.store.apply_prov_model_for_activity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
-					SetAttributes::Agent { namespace, id, .. } => {
-						model.namespace_context(namespace);
+						)?,
+					SetAttributes::Agent { namespace, id, .. } =>
 						self.store.apply_prov_model_for_agent_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
-					SetAttributes::Entity { namespace, id, .. } => {
-						model.namespace_context(namespace);
+						)?,
+					SetAttributes::Entity { namespace, id, .. } =>
 						self.store.apply_prov_model_for_entity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
+						)?,
 				},
-				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
-					model.namespace_context(namespace);
+				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) =>
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
-				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
-					model.namespace_context(namespace);
+					)?,
+				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) =>
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
+					)?,
 				ChronicleOperation::WasInformedBy(WasInformedBy {
 					namespace,
 					activity,
 					informing_activity,
 				}) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
@@ -694,7 +666,6 @@ where
 					namespace,
 					..
 				}) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_agent_id(
 						connection,
 						model,
@@ -724,7 +695,6 @@ where
 					agent_id,
 					..
 				}) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
@@ -740,7 +710,6 @@ where
 					)?
 				},
 				ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
@@ -762,7 +731,6 @@ where
 					activity_id,
 					..
 				}) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_entity_id(
 						connection,
 						model,
@@ -794,7 +762,6 @@ where
 					agent_id,
 					..
 				}) => {
-					model.namespace_context(namespace);
 					let model = self.store.apply_prov_model_for_entity_id(
 						connection,
 						model,
@@ -866,14 +833,7 @@ where
 
 			let uuid = U::uuid();
 			let id: NamespaceId = NamespaceId::from_external_id(external_id, uuid);
-			Ok((
-				id.clone(),
-				vec![ChronicleOperation::CreateNamespace(CreateNamespace::new(
-					id,
-					external_id,
-					uuid,
-				))],
-			))
+			Ok((id.clone(), vec![ChronicleOperation::CreateNamespace(CreateNamespace::new(id))]))
 		} else {
 			Ok((ns?.0, vec![]))
 		}
@@ -1188,9 +1148,13 @@ where
 				ChronicleOperation::StartActivity(StartActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: Utc::now(),
+					time: Utc::now().into(),
 				}),
-				ChronicleOperation::EndActivity(EndActivity { namespace, id, time: Utc::now() }),
+				ChronicleOperation::EndActivity(EndActivity {
+					namespace,
+					id,
+					time: Utc::now().into(),
+				}),
 			];
 			api.submit_depth_charge(identity, to_apply)
 		})
@@ -1203,29 +1167,27 @@ where
 		to_apply: Vec<ChronicleOperation>,
 	) -> Result<ApiResponse, ApiError> {
 		let identity = identity.signed_identity(&self.signing)?;
-		let tx_id = self.submit_blocking(&ChronicleTransaction::new(to_apply, identity))?;
+		let tx_id = self.submit_blocking(futures::executor::block_on(
+			ChronicleTransaction::new(&self.signing, identity, to_apply),
+		)?)?;
 		Ok(ApiResponse::depth_charge_submission(tx_id))
 	}
 
 	#[instrument(skip(self))]
 	async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
 		match command {
-			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) => {
-				self.depth_charge(namespace, identity).await
-			},
-			(ApiCommand::Import(ImportCommand { namespace, operations }), identity) => {
-				self.submit_import_operations(identity, namespace, operations).await
-			},
-			(ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) => {
-				self.create_namespace(&external_id, identity).await
-			},
+			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) =>
+				self.depth_charge(namespace, identity).await,
+			(ApiCommand::Import(ImportCommand { namespace, operations }), identity) =>
+				self.submit_import_operations(identity, namespace, operations).await,
+			(ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) =>
+				self.create_namespace(&external_id, identity).await,
 			(
 				ApiCommand::Agent(AgentCommand::Create { external_id, namespace, attributes }),
 				identity,
 			) => self.create_agent(external_id, namespace, attributes, identity).await,
-			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) => {
-				self.use_agent_in_cli_context(id, namespace).await
-			},
+			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) =>
+				self.use_agent_in_cli_context(id, namespace).await,
 			(
 				ApiCommand::Agent(AgentCommand::Delegate {
 					id,
@@ -1256,9 +1218,8 @@ where
 				ApiCommand::Activity(ActivityCommand::End { id, namespace, time, agent }),
 				identity,
 			) => self.end_activity(id, namespace, time, agent, identity).await,
-			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) => {
-				self.activity_use(id, namespace, activity, identity).await
-			},
+			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) =>
+				self.activity_use(id, namespace, activity, identity).await,
 			(
 				ApiCommand::Activity(ActivityCommand::WasInformedBy {
 					id,
@@ -1297,10 +1258,9 @@ where
 					derivation,
 				}),
 				identity,
-			) => {
+			) =>
 				self.entity_derive(id, namespace, activity, used_entity, derivation, identity)
-					.await
-			},
+					.await,
 			(ApiCommand::Query(query), _identity) => self.query(query).await,
 		}
 	}
@@ -1491,16 +1451,16 @@ where
 		let mut api = self.clone();
 		let identity = identity.signed_identity(&self.signing)?;
 		let model = ProvModel::from_tx(&operations)?;
+		let signer = self.signing.clone();
 		tokio::task::spawn_blocking(move || {
 			// Check here to ensure that import operations result in data changes
 			let mut connection = api.store.connection()?;
 			connection.build_transaction().run(|connection| {
 				if let Some(operations_to_apply) = api.check_for_effects(connection, &operations)? {
 					info!("Submitting import operations to ledger");
-					let tx_id = api.submit_blocking(&ChronicleTransaction::new(
-						operations_to_apply,
-						identity,
-					))?;
+					let tx_id = api.submit_blocking(futures::executor::block_on(
+						ChronicleTransaction::new(&signer, identity, operations_to_apply),
+					)?)?;
 					Ok(ApiResponse::import_submitted(model, tx_id))
 				} else {
 					info!("Import will not result in any data changes");
@@ -1563,13 +1523,13 @@ where
 				to_apply.push(ChronicleOperation::StartActivity(StartActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now),
+					time: time.unwrap_or_else(Utc::now).into(),
 				}));
 
 				to_apply.push(ChronicleOperation::EndActivity(EndActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now),
+					time: time.unwrap_or_else(Utc::now).into(),
 				}));
 
 				if let Some(agent_id) = agent_id {
@@ -1623,7 +1583,7 @@ where
 				to_apply.push(ChronicleOperation::StartActivity(StartActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now),
+					time: time.unwrap_or_else(Utc::now).into(),
 				}));
 
 				if let Some(agent_id) = agent_id {
@@ -1677,7 +1637,7 @@ where
 				to_apply.push(ChronicleOperation::EndActivity(EndActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now),
+					time: time.unwrap_or_else(Utc::now).into(),
 				}));
 
 				if let Some(agent_id) = agent_id {
@@ -1715,1653 +1675,5 @@ where
 			Ok(ApiResponse::Unit)
 		})
 		.await?
-	}
-}
-
-#[cfg(test)]
-mod test {
-
-	use crate::{inmem::EmbeddedChronicleTp, Api, ApiDispatch, ApiError, UuidGen};
-
-	use chronicle_signing::{
-		chronicle_secret_names, ChronicleSecretsOptions, ChronicleSigning, BATCHER_NAMESPACE,
-		CHRONICLE_NAMESPACE,
-	};
-	use chrono::{TimeZone, Utc};
-	use common::{
-		attributes::{Attribute, Attributes},
-		commands::{
-			ActivityCommand, AgentCommand, ApiCommand, ApiResponse, EntityCommand, ImportCommand,
-			NamespaceCommand,
-		},
-		database::TemporaryDatabase,
-		identity::AuthId,
-		k256::sha2::{Digest, Sha256},
-		prov::{
-			operations::{ChronicleOperation, DerivationType},
-			to_json_ld::ToJson,
-			ActivityId, AgentId, ChronicleTransactionId, DomaintypeId, EntityId, NamespaceId,
-			ProvModel,
-		},
-	};
-	use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
-	use protobuf::Message;
-	use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
-
-	use uuid::Uuid;
-
-	struct TestDispatch<'a> {
-		api: ApiDispatch,
-		_db: TemporaryDatabase<'a>, // share lifetime
-		_tp: EmbeddedChronicleTp,
-	}
-
-	impl<'a> TestDispatch<'a> {
-		pub async fn dispatch(
-			&mut self,
-			command: ApiCommand,
-			identity: AuthId,
-		) -> Result<Option<(Box<ProvModel>, ChronicleTransactionId)>, ApiError> {
-			// We can sort of get final on chain state here by using a map of subject to model
-			match self.api.dispatch(command, identity).await? {
-				ApiResponse::Submission { .. } | ApiResponse::ImportSubmitted { .. } => {
-					// Recv until we get a commit notification
-					loop {
-						let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
-						match commit {
-							common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-							common::ledger::SubmissionStage::Committed(commit, _id) => {
-								return Ok(Some((commit.delta, commit.tx_id)))
-							},
-							common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
-							common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
-								panic!("{tx:?}")
-							},
-						}
-					}
-				},
-				ApiResponse::AlreadyRecorded { subject: _, prov } => {
-					Ok(Some((prov, ChronicleTransactionId::from("null"))))
-				},
-				_ => Ok(None),
-			}
-		}
-	}
-
-	#[derive(Debug, Clone)]
-	struct SameUuid;
-
-	impl UuidGen for SameUuid {
-		fn uuid() -> Uuid {
-			Uuid::parse_str("5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea").unwrap()
-		}
-	}
-
-	fn embed_chronicle_tp() -> EmbeddedChronicleTp {
-		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-		let mut buf = vec![];
-		Setting {
-			entries: vec![Setting_Entry {
-				key: "chronicle.opa.policy_name".to_string(),
-				value: "allow_transactions".to_string(),
-				..Default::default()
-			}]
-			.into(),
-			..Default::default()
-		}
-		.write_to_vec(&mut buf)
-		.unwrap();
-		let setting_id = (
-			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.policy_name"),
-			buf,
-		);
-		let mut buf = vec![];
-		Setting {
-			entries: vec![Setting_Entry {
-				key: "chronicle.opa.entrypoint".to_string(),
-				value: "allow_transactions.allowed_users".to_string(),
-				..Default::default()
-			}]
-			.into(),
-			..Default::default()
-		}
-		.write_to_vec(&mut buf)
-		.unwrap();
-
-		let setting_entrypoint = (
-			chronicle_protocol::settings::sawtooth_settings_address("chronicle.opa.entrypoint"),
-			buf,
-		);
-
-		let d = env!("CARGO_MANIFEST_DIR").to_owned() + "/../../policies/bundle.tar.gz";
-		let bin = std::fs::read(d).unwrap();
-
-		let meta = PolicyMeta {
-			id: "allow_transactions".to_string(),
-			hash: hex::encode(Sha256::digest(&bin)),
-			policy_address: policy_address("allow_transactions"),
-		};
-
-		EmbeddedChronicleTp::new_with_state(
-			vec![
-				setting_id,
-				setting_entrypoint,
-				(policy_address("allow_transactions"), bin),
-				(policy_meta_address("allow_transactions"), serde_json::to_vec(&meta).unwrap()),
-			]
-			.into_iter()
-			.collect(),
-		)
-		.unwrap()
-	}
-
-	async fn test_api<'a>() -> TestDispatch<'a> {
-		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
-
-		let secrets = ChronicleSigning::new(
-			chronicle_secret_names(),
-			vec![
-				(CHRONICLE_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
-				(BATCHER_NAMESPACE.to_string(), ChronicleSecretsOptions::generate_in_memory()),
-			],
-		)
-		.await
-		.unwrap();
-		let embed_tp = embed_chronicle_tp();
-		let database = TemporaryDatabase::default();
-		let pool = database.connection_pool().unwrap();
-
-		let liveness_check_interval = None;
-
-		let dispatch = Api::new(
-			pool,
-			embed_tp.ledger.clone(),
-			SameUuid,
-			secrets,
-			vec![],
-			Some("allow_transactions".into()),
-			liveness_check_interval,
-		)
-		.await
-		.unwrap();
-
-		TestDispatch {
-			api: dispatch,
-			_db: database, // share the lifetime
-			_tp: embed_tp,
-		}
-	}
-
-	// Creates a mock file containing JSON-LD of the ChronicleOperations
-	// that would be created by the given command, although not in any particular order.
-	fn test_create_agent_operations_import() -> assert_fs::NamedTempFile {
-		let file = assert_fs::NamedTempFile::new("import.json").unwrap();
-		assert_fs::prelude::FileWriteStr::write_str(
-			&file,
-			r#"
-        [
-            {
-                "@id": "_:n1",
-                "@type": [
-                "http://btp.works/chronicleoperations/ns#SetAttributes"
-                ],
-                "http://btp.works/chronicleoperations/ns#agentName": [
-                {
-                    "@value": "testagent"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#attributes": [
-                {
-                    "@type": "@json",
-                    "@value": {}
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#domaintypeId": [
-                {
-                    "@value": "type"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceName": [
-                {
-                    "@value": "testns"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
-                {
-                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
-                }
-                ]
-            },
-            {
-                "@id": "_:n1",
-                "@type": [
-                "http://btp.works/chronicleoperations/ns#CreateNamespace"
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceName": [
-                {
-                    "@value": "testns"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
-                {
-                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
-                }
-                ]
-            },
-            {
-                "@id": "_:n1",
-                "@type": [
-                "http://btp.works/chronicleoperations/ns#AgentExists"
-                ],
-                "http://btp.works/chronicleoperations/ns#agentName": [
-                {
-                    "@value": "testagent"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceName": [
-                {
-                    "@value": "testns"
-                }
-                ],
-                "http://btp.works/chronicleoperations/ns#namespaceUuid": [
-                {
-                    "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
-                }
-                ]
-            }
-        ]
-         "#,
-		)
-		.unwrap();
-		file
-	}
-
-	#[tokio::test]
-	async fn test_import_operations() {
-		let mut api = test_api().await;
-
-		let file = test_create_agent_operations_import();
-
-		let contents = std::fs::read_to_string(file.path()).unwrap();
-
-		let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents).unwrap();
-
-		let mut operations = Vec::with_capacity(json_array.len());
-		for value in json_array.into_iter() {
-			let op = ChronicleOperation::from_json(&value)
-				.await
-				.expect("Failed to parse imported JSON-LD to ChronicleOperation");
-			operations.push(op);
-		}
-
-		let namespace = NamespaceId::from_external_id(
-			"testns",
-			Uuid::parse_str("6803790d-5891-4dfa-b773-41827d2c630b").unwrap(),
-		);
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::Import(ImportCommand { namespace: namespace.clone(), operations: operations.clone() } ), identity.clone())
-            .await
-            .unwrap()
-            .unwrap()
-            .0
-            .to_json()
-            .compact_stable_order()
-            .await
-            .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:type"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:6803790d-5891-4dfa-b773-41827d2c630b",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:6803790d-5891-4dfa-b773-41827d2c630b",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		// Check that the operations that do not result in data changes are not submitted
-		insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::Import(ImportCommand { namespace, operations } ), identity)
-            .await
-            .unwrap()
-            .unwrap()
-            .1, @r###""null""###);
-	}
-
-	#[tokio::test]
-	async fn create_namespace() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                external_id: "testns".into(),
-            }), identity)
-            .await
-            .unwrap()
-            .unwrap()
-            .0
-            .to_json()
-            .compact_stable_order()
-            .await
-            .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-          "@type": "chronicle:Namespace",
-          "externalId": "testns"
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn create_agent() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-            }), identity)
-            .await
-            .unwrap()
-            .unwrap()
-            .0
-            .to_json()
-            .compact_stable_order()
-            .await
-            .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn create_system_activity() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
-            namespace: common::prov::SYSTEM_ID.into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:chronicle%2Dsystem:00000000-0000-0000-0000-000000000001",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:chronicle%2Dsystem:00000000-0000-0000-0000-000000000001",
-              "@type": "chronicle:Namespace",
-              "externalId": "chronicle-system"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn create_activity() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn start_activity() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		api.dispatch(
-			ApiCommand::Agent(AgentCommand::UseInContext {
-				id: AgentId::from_external_id("testagent"),
-				namespace: "testns".into(),
-			}),
-			identity.clone(),
-		)
-		.await
-		.unwrap();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "startTime": "2014-07-08T09:10:11+00:00",
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn contradict_attributes() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		let res = api
-			.dispatch(
-				ApiCommand::Agent(AgentCommand::Create {
-					external_id: "testagent".into(),
-					namespace: "testns".into(),
-					attributes: Attributes {
-						typ: Some(DomaintypeId::from_external_id("test")),
-						attributes: [(
-							"test".to_owned(),
-							Attribute {
-								typ: "test".to_owned(),
-								value: serde_json::Value::String("test2".to_owned()),
-							},
-						)]
-						.into_iter()
-						.collect(),
-					},
-				}),
-				identity,
-			)
-			.await;
-
-		insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: String("test2") } Attribute { typ: "test", value: String("test") } }"###);
-	}
-
-	#[tokio::test]
-	async fn contradict_start_time() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		api.dispatch(
-			ApiCommand::Agent(AgentCommand::UseInContext {
-				id: AgentId::from_external_id("testagent"),
-				namespace: "testns".into(),
-			}),
-			identity.clone(),
-		)
-		.await
-		.unwrap();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "startTime": "2014-07-08T09:10:11+00:00",
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		// Should contradict
-		let res = api
-			.dispatch(
-				ApiCommand::Activity(ActivityCommand::Start {
-					id: ActivityId::from_external_id("testactivity"),
-					namespace: "testns".into(),
-					time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
-					agent: None,
-				}),
-				identity,
-			)
-			.await;
-
-		insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08 09:10:11 UTC 2018-07-08 09:10:11 UTC }");
-	}
-
-	#[tokio::test]
-	async fn contradict_end_time() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		api.dispatch(
-			ApiCommand::Agent(AgentCommand::UseInContext {
-				id: AgentId::from_external_id("testagent"),
-				namespace: "testns".into(),
-			}),
-			identity.clone(),
-		)
-		.await
-		.unwrap();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "endTime": "2018-07-08T09:10:11+00:00",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		// Should contradict
-		let res = api
-			.dispatch(
-				ApiCommand::Activity(ActivityCommand::End {
-					id: ActivityId::from_external_id("testactivity"),
-					namespace: "testns".into(),
-					time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
-					agent: None,
-				}),
-				identity,
-			)
-			.await;
-
-		insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08 09:10:11 UTC 2022-07-08 09:10:11 UTC }");
-	}
-
-	#[tokio::test]
-	async fn end_activity() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		api.dispatch(
-			ApiCommand::Agent(AgentCommand::UseInContext {
-				id: AgentId::from_external_id("testagent"),
-				namespace: "testns".into(),
-			}),
-			identity.clone(),
-		)
-		.await
-		.unwrap();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "startTime": "2014-07-08T09:10:11+00:00",
-              "value": {},
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: None,
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": "prov:Activity",
-              "endTime": "2014-07-08T09:10:11+00:00",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "startTime": "2014-07-08T09:10:11+00:00",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn activity_use() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:agent:testagent",
-              "@type": [
-                "prov:Agent",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		api.dispatch(
-			ApiCommand::Agent(AgentCommand::UseInContext {
-				id: AgentId::from_external_id("testagent"),
-				namespace: "testns".into(),
-			}),
-			identity.clone(),
-		)
-		.await
-		.unwrap();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
-            id: EntityId::from_external_id("testentity"),
-            namespace: "testns".into(),
-            activity: ActivityId::from_external_id("testactivity"),
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "used": [
-                "chronicle:entity:testentity"
-              ],
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:entity:testentity",
-              "@type": "prov:Entity",
-              "externalId": "testentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::End {
-            id: ActivityId::from_external_id("testactivity"),
-            namespace: "testns".into(),
-            time: Some(Utc.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap()),
-            agent: Some(AgentId::from_external_id("testagent")),
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "endTime": "2014-07-08T09:10:11+00:00",
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:qualifiedAssociation": {
-                "@id": "chronicle:association:testagent:testactivity:role="
-              },
-              "used": [
-                "chronicle:entity:testentity"
-              ],
-              "value": {
-                "test": "test"
-              },
-              "wasAssociatedWith": [
-                "chronicle:agent:testagent"
-              ]
-            },
-            {
-              "@id": "chronicle:association:testagent:testactivity:role=",
-              "@type": "prov:Association",
-              "agent": "chronicle:agent:testagent",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "prov:hadActivity": {
-                "@id": "chronicle:activity:testactivity"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn activity_generate() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
-            namespace: "testns".into(),
-            attributes: Attributes {
-                typ: Some(DomaintypeId::from_external_id("test")),
-                attributes: [(
-                    "test".to_owned(),
-                    Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test".to_owned()),
-                    },
-                )]
-                .into_iter()
-                .collect(),
-            },
-        }), identity.clone())
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:activity:testactivity",
-              "@type": [
-                "prov:Activity",
-                "chronicle:domaintype:test"
-              ],
-              "externalId": "testactivity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {
-                "test": "test"
-              }
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
-            id: EntityId::from_external_id("testentity"),
-            namespace: "testns".into(),
-            activity: ActivityId::from_external_id("testactivity"),
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:entity:testentity",
-              "@type": "prov:Entity",
-              "externalId": "testentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {},
-              "wasGeneratedBy": [
-                "chronicle:activity:testactivity"
-              ]
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn derive_entity_abstract() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_external_id("testgeneratedentity"),
-            namespace: "testns".into(),
-            activity: None,
-            used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: DerivationType::None,
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:entity:testgeneratedentity",
-              "@type": "prov:Entity",
-              "externalId": "testgeneratedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {},
-              "wasDerivedFrom": [
-                "chronicle:entity:testusedentity"
-              ]
-            },
-            {
-              "@id": "chronicle:entity:testusedentity",
-              "@type": "prov:Entity",
-              "externalId": "testusedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn derive_entity_primary_source() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_external_id("testgeneratedentity"),
-            namespace: "testns".into(),
-            activity: None,
-            derivation: DerivationType::PrimarySource,
-            used_entity: EntityId::from_external_id("testusedentity"),
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:entity:testgeneratedentity",
-              "@type": "prov:Entity",
-              "externalId": "testgeneratedentity",
-              "hadPrimarySource": [
-                "chronicle:entity:testusedentity"
-              ],
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:entity:testusedentity",
-              "@type": "prov:Entity",
-              "externalId": "testusedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn derive_entity_revision() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_external_id("testgeneratedentity"),
-            namespace: "testns".into(),
-            activity: None,
-            used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: DerivationType::Revision,
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:entity:testgeneratedentity",
-              "@type": "prov:Entity",
-              "externalId": "testgeneratedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {},
-              "wasRevisionOf": [
-                "chronicle:entity:testusedentity"
-              ]
-            },
-            {
-              "@id": "chronicle:entity:testusedentity",
-              "@type": "prov:Entity",
-              "externalId": "testusedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
-	}
-
-	#[tokio::test]
-	async fn derive_entity_quotation() {
-		let mut api = test_api().await;
-
-		let identity = AuthId::chronicle();
-
-		insta::assert_json_snapshot!(
-        api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
-            id: EntityId::from_external_id("testgeneratedentity"),
-            namespace: "testns".into(),
-            activity: None,
-            used_entity: EntityId::from_external_id("testusedentity"),
-            derivation: DerivationType::Quotation,
-        }), identity)
-        .await
-        .unwrap()
-        .unwrap()
-        .0
-        .to_json()
-        .compact_stable_order()
-        .await
-        .unwrap(), @r###"
-        {
-          "@context": "https://btp.works/chr/1.0/c.jsonld",
-          "@graph": [
-            {
-              "@id": "chronicle:entity:testgeneratedentity",
-              "@type": "prov:Entity",
-              "externalId": "testgeneratedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {},
-              "wasQuotedFrom": [
-                "chronicle:entity:testusedentity"
-              ]
-            },
-            {
-              "@id": "chronicle:entity:testusedentity",
-              "@type": "prov:Entity",
-              "externalId": "testusedentity",
-              "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "value": {}
-            },
-            {
-              "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-              "@type": "chronicle:Namespace",
-              "externalId": "testns"
-            }
-          ]
-        }
-        "###);
 	}
 }

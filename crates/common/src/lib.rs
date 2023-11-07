@@ -7,6 +7,7 @@ pub mod attributes;
 pub mod context;
 pub mod identity;
 pub mod ledger;
+pub mod opa;
 pub mod prov;
 
 pub use k256;

@@ -70,6 +70,7 @@ impl AttributeDef {
 }
 
 /// A external_id formatted for CLI use - kebab-case, singular, lowercase
+
 pub trait CliName {
 	fn as_cli_name(&self) -> String;
 }
@@ -364,7 +365,7 @@ impl<'a> From<AgentBuilder<'a>> for AgentDef {
 pub struct EntityBuilder<'a>(&'a ChronicleDomainDef, EntityDef);
 
 impl<'a> EntityBuilder<'a> {
-	pub(crate) fn new(
+	pub fn new(
 		domain: &'a ChronicleDomainDef,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -372,7 +373,7 @@ impl<'a> EntityBuilder<'a> {
 		Self(domain, EntityDef::new(external_id, doc, vec![]))
 	}
 
-	pub(crate) fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
+	pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
 		let attr = self
 			.0
 			.attribute(typ.as_ref())
@@ -391,7 +392,7 @@ impl<'a> From<EntityBuilder<'a>> for EntityDef {
 pub struct ActivityBuilder<'a>(&'a ChronicleDomainDef, ActivityDef);
 
 impl<'a> ActivityBuilder<'a> {
-	pub(crate) fn new(
+	pub fn new(
 		domain: &'a ChronicleDomainDef,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -399,7 +400,7 @@ impl<'a> ActivityBuilder<'a> {
 		Self(domain, ActivityDef::new(external_id, doc, vec![]))
 	}
 
-	pub(crate) fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
+	pub fn with_attribute(mut self, typ: impl AsRef<str>) -> Result<Self, ModelError> {
 		let attr = self
 			.0
 			.attribute(typ.as_ref())
@@ -418,11 +419,11 @@ impl<'a> From<ActivityBuilder<'a>> for ActivityDef {
 pub struct Builder(ChronicleDomainDef);
 
 impl Builder {
-	pub(crate) fn new(name: impl AsRef<str>) -> Self {
+	pub fn new(name: impl AsRef<str>) -> Self {
 		Builder(ChronicleDomainDef { name: name.as_ref().to_string(), ..Default::default() })
 	}
 
-	pub(crate) fn with_attribute_type(
+	pub fn with_attribute_type(
 		mut self,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -437,7 +438,7 @@ impl Builder {
 		Ok(self)
 	}
 
-	pub(crate) fn with_agent(
+	pub fn with_agent(
 		mut self,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -449,7 +450,7 @@ impl Builder {
 		Ok(self)
 	}
 
-	pub(crate) fn with_entity(
+	pub fn with_entity(
 		mut self,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -461,7 +462,7 @@ impl Builder {
 		Ok(self)
 	}
 
-	pub(crate) fn with_activity(
+	pub fn with_activity(
 		mut self,
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
@@ -474,7 +475,7 @@ impl Builder {
 		Ok(self)
 	}
 
-	pub(crate) fn with_role(mut self, external_id: impl AsRef<str>) -> Result<Self, ModelError> {
+	pub fn with_role(mut self, external_id: impl AsRef<str>) -> Result<Self, ModelError> {
 		self.0.roles.push(RoleDef::new(external_id));
 
 		Ok(self)
@@ -611,7 +612,7 @@ impl From<&ChronicleDomainDef> for DomainFileInput {
 }
 
 impl ChronicleDomainDef {
-	pub(crate) fn build(external_id: &str) -> Builder {
+	pub fn build(external_id: &str) -> Builder {
 		Builder::new(external_id)
 	}
 

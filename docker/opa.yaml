@@ -4,15 +4,6 @@ networks:
   default:
     name: chronicle-${ISOLATION_ID}
 services:
-  settings-tp:
-    image: blockchaintp/sawtooth-settings-tp:BTP2.1.0
-    depends_on:
-      - validator
-    entrypoint: settings-tp -v --connect tcp://validator:4004
-    volumes: &rngVolumes
-      - /dev/urandom:/dev/random
-      - /dev/urandom:/dev/urandom
-
   validator:
     image: blockchaintp/sawtooth-validator:BTP2.1.0
     expose:
@@ -43,24 +34,6 @@ services:
           --bind consensus:tcp://eth0:5050 --bind network:tcp://eth0:8800
     volumes: *rngVolumes
 
-  devmode-engine:
-    image: blockchaintp/sawtooth-devmode-engine-rust:BTP2.1.0
-    depends_on:
-      - validator
-    entrypoint: devmode-engine-rust -C tcp://validator:5050
-    volumes: *rngVolumes
-
-  rest-api:
-    image: blockchaintp/sawtooth-rest-api:BTP2.1.0
-    expose:
-      - 8008
-    ports:
-      - "8008:8008"
-    depends_on:
-      - validator
-    entrypoint: |
-      sawtooth-rest-api --connect tcp://validator:4004 --bind rest-api:8008
-    volumes: *rngVolumes
 
   opa-tp:
     environment: &rustenv

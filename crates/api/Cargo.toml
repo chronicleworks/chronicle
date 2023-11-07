@@ -6,6 +6,7 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = { workspace = true }
 async-graphql = { workspace = true, features = [
   "opentelemetry",
   "chrono",
@@ -14,23 +15,25 @@ async-graphql = { workspace = true, features = [
   "uuid",
 ] }
 async-graphql-poem = { workspace = true }
-async-stl-client = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 cached = { workspace = true }
 cfg-if = { workspace = true }
-chronicle-protocol = { path = "../chronicle-protocol" }
 chronicle-signing = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true }
-common = { path = "../common" }
+common = { path = "../common", features = [
+  "json-ld",
+  "diesel-bindings",
+  "graphql-bindings",
+  "std",
+] }
 custom_error = { workspace = true }
 derivative = { workspace = true }
 diesel = { workspace = true }
 diesel_migrations = { workspace = true }
 futures = { workspace = true }
-glob = { workspace = true }
 hex = { workspace = true }
 iref = { workspace = true }
 json-ld = { workspace = true }
@@ -42,20 +45,18 @@ opa = { workspace = true }
 opentelemetry = { workspace = true }
 parking_lot = { workspace = true }
 poem = { workspace = true }
-portpicker = { workspace = true }
-prost = { workspace = true }
-protobuf = { workspace = true }
+protocol-substrate = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa = { path = "../protocol-substrate-opa" }
 r2d2 = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
 reqwest = { workspace = true }
-sawtooth-sdk = { workspace = true }
-sawtooth_tp = { path = "../sawtooth-tp" }
+rust-embed = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tmq = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
@@ -64,17 +65,13 @@ user-error = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-assert_fs          = { workspace = true }
-chronicle-protocol = { path = "../chronicle-protocol" }
-insta              = { workspace = true, features = ["json", "yaml"] }
-opa-tp-protocol    = { path = "../opa-tp-protocol" }
-tempfile           = { workspace = true }
+assert_fs = { workspace = true }
+insta     = { workspace = true, features = ["json", "yaml"] }
+tempfile  = { workspace = true }
 
 [build-dependencies]
 
 [features]
-devmode = ["inmem"]
+devmode = []
 
-# Use an in-memory stub ledger
-inmem  = []
 strict = []

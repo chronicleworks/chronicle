@@ -13,31 +13,22 @@ use diesel::{
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::alloc::string::String;
 
-use parity_scale_codec::{Decode, Encode, Error, Input};
-use scale_info::{build::Fields, Path, Type, TypeInfo};
-use uuid::Uuid;
-
 use crate::attributes::Attributes;
 
 use super::{
 	ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, ExternalId,
-	NamespaceId, Role, UuidWrapper,
+	NamespaceId, Role,
 };
 
-#[derive(
-	Debug,
-	Copy,
-	Clone,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	Eq,
-	Hash,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
+#[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
 )]
 #[cfg_attr(feature = "diesel-bindings", derive(AsExpression, SqlType, QueryId))]
 #[cfg_attr(feature = "diesel-bindings", diesel(sql_type = Integer))]
@@ -112,20 +103,36 @@ impl DerivationType {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct CreateNamespace {
 	pub id: NamespaceId,
-	pub external_id: ExternalId,
-	pub uuid: UuidWrapper,
 }
 
 impl CreateNamespace {
-	pub fn new(id: NamespaceId, external_id: impl AsRef<str>, uuid: Uuid) -> Self {
-		Self { id, external_id: external_id.as_ref().into(), uuid: uuid.into() }
+	pub fn new(id: NamespaceId) -> Self {
+		Self { id }
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct AgentExists {
 	pub namespace: NamespaceId,
 	pub external_id: ExternalId,
@@ -137,7 +144,16 @@ impl AgentExists {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActsOnBehalfOf {
 	pub id: DelegationId,
 	pub role: Option<Role>,
@@ -170,8 +186,16 @@ impl ActsOnBehalfOf {
 		}
 	}
 }
-
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityExists {
 	pub namespace: NamespaceId,
 	pub external_id: ExternalId,
@@ -183,6 +207,10 @@ pub struct TimeWrapper(pub DateTime<Utc>);
 impl TimeWrapper {
 	pub fn to_rfc3339(&self) -> String {
 		self.0.to_rfc3339()
+	}
+
+	pub fn naive_utc(&self) -> NaiveDateTime {
+		self.0.naive_utc()
 	}
 }
 
@@ -198,7 +226,22 @@ impl From<DateTime<Utc>> for TimeWrapper {
 	}
 }
 
-impl Encode for TimeWrapper {
+#[cfg(feature = "parity-encoding")]
+impl scale_encode::EncodeAsType for TimeWrapper {
+	fn encode_as_type_to(
+		&self,
+		type_id: u32,
+		types: &scale_info::PortableRegistry,
+		out: &mut scale_encode::Vec<u8>,
+	) -> Result<(), scale_encode::Error> {
+		let timestamp = self.0.timestamp();
+		let subsec_nanos = self.0.timestamp_subsec_nanos();
+		(timestamp, subsec_nanos).encode_as_type_to(type_id, types, out)
+	}
+}
+
+#[cfg(feature = "parity-encoding")]
+impl parity_scale_codec::Encode for TimeWrapper {
 	fn encode_to<T: ?Sized + parity_scale_codec::Output>(&self, dest: &mut T) {
 		let timestamp = self.0.timestamp();
 		let subsec_nanos = self.0.timestamp_subsec_nanos();
@@ -206,8 +249,11 @@ impl Encode for TimeWrapper {
 	}
 }
 
-impl Decode for TimeWrapper {
-	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+#[cfg(feature = "parity-encoding")]
+impl parity_scale_codec::Decode for TimeWrapper {
+	fn decode<I: parity_scale_codec::Input>(
+		input: &mut I,
+	) -> Result<Self, parity_scale_codec::Error> {
 		let (timestamp, subsec_nanos) = <(i64, u32)>::decode(input)?;
 
 		let datetime = Utc.from_utc_datetime(
@@ -219,53 +265,110 @@ impl Decode for TimeWrapper {
 	}
 }
 
-impl TypeInfo for TimeWrapper {
+#[cfg(feature = "parity-encoding")]
+impl scale_info::TypeInfo for TimeWrapper {
 	type Identity = Self;
 
-	fn type_info() -> Type {
-		Type::builder().path(Path::new("TimeWrapper", module_path!())).composite(
-			Fields::unnamed()
-				.field(|f| f.ty::<i64>().type_name("Timestamp"))
-				.field(|f| f.ty::<u32>().type_name("SubsecNanos")),
-		)
+	fn type_info() -> scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("TimeWrapper", module_path!()))
+			.composite(
+				scale_info::build::Fields::unnamed()
+					.field(|f| f.ty::<i64>().type_name("Timestamp"))
+					.field(|f| f.ty::<u32>().type_name("SubsecNanos")),
+			)
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct StartActivity {
 	pub namespace: NamespaceId,
 	pub id: ActivityId,
 	pub time: TimeWrapper,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EndActivity {
 	pub namespace: NamespaceId,
 	pub id: ActivityId,
 	pub time: TimeWrapper,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityUses {
 	pub namespace: NamespaceId,
 	pub id: EntityId,
 	pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityExists {
 	pub namespace: NamespaceId,
 	pub external_id: ExternalId,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasGeneratedBy {
 	pub namespace: NamespaceId,
 	pub id: EntityId,
 	pub activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityDerive {
 	pub namespace: NamespaceId,
 	pub id: EntityId,
@@ -274,7 +377,16 @@ pub struct EntityDerive {
 	pub typ: DerivationType,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasAssociatedWith {
 	pub id: AssociationId,
 	pub role: Option<Role>,
@@ -300,7 +412,16 @@ impl WasAssociatedWith {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasAttributedTo {
 	pub id: AttributionId,
 	pub role: Option<Role>,
@@ -326,21 +447,62 @@ impl WasAttributedTo {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct WasInformedBy {
 	pub namespace: NamespaceId,
 	pub activity: ActivityId,
 	pub informing_activity: ActivityId,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum SetAttributes {
 	Entity { namespace: NamespaceId, id: EntityId, attributes: Attributes },
 	Agent { namespace: NamespaceId, id: AgentId, attributes: Attributes },
 	Activity { namespace: NamespaceId, id: ActivityId, attributes: Attributes },
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Debug, Clone)]
+impl SetAttributes {
+	pub fn agent(namespace: NamespaceId, id: AgentId, attributes: Attributes) -> Self {
+		SetAttributes::Agent { namespace, id, attributes }
+	}
+
+	pub fn entity(namespace: NamespaceId, id: EntityId, attributes: Attributes) -> Self {
+		SetAttributes::Entity { namespace, id, attributes }
+	}
+
+	pub fn activity(namespace: NamespaceId, id: ActivityId, attributes: Attributes) -> Self {
+		SetAttributes::Activity { namespace, id, attributes }
+	}
+}
+
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ChronicleOperation {
 	CreateNamespace(CreateNamespace),
 	AgentExists(AgentExists),

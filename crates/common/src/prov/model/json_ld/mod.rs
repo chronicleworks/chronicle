@@ -32,6 +32,8 @@ pub enum CompactionError {
 	#[error("Compacted document not a JSON object: {document}")]
 	NoObject { document: Value },
 }
+
+#[derive(Debug)]
 pub struct ExpandedJson(pub serde_json::Value);
 
 fn construct_context_definition<M>(
@@ -145,7 +147,7 @@ impl ExpandedJson {
 		if let Value::Object(mut map) = json {
 			map.insert(
 				"@context".to_string(),
-				Value::String("https://btp.works/chr/1.0/c.jsonld".to_string()),
+				Value::String("http://chronicle.works/chr/1.0/c.jsonld".to_string()),
 			);
 			Ok(CompactedJson(Value::Object(map)))
 		} else {
@@ -154,6 +156,7 @@ impl ExpandedJson {
 	}
 
 	// Sort @graph by json value, as they are unstable and we need deterministic output
+	#[tracing::instrument(skip(self), ret)]
 	pub async fn compact(self) -> Result<Value, CompactionError> {
 		let mut v: serde_json::Value =
 			serde_json::from_str(&self.compact_unordered().await?.0.to_string())?;

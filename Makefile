@@ -6,8 +6,7 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 export CARGO_HOME=.cargo_cached
 
-
-IMAGES := chronicle chronicle-tp chronicle-builder opa-tp opactl id-provider chronicle-helm-api-test
+IMAGES := chronicle node-chronicle chronicle-builder opactl id-provider chronicle-helm-api-test
 ARCHS := amd64 arm64
 COMPOSE ?= docker-compose
 HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
@@ -25,15 +24,15 @@ analyze: analyze_fossa
 publish: gh-create-draft-release
 	mkdir -p target/arm64
 	mkdir -p target/amd64
-	container_id=$$(docker create chronicle-tp-amd64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/amd64/;  \
+	container_id=$$(docker create node-chronicle-amd64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/node-chronicle `pwd`/target/amd64/;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-amd64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/amd64/; \
 		docker rm $$container_id;
 ifeq ($(RELEASABLE), yes)
-	container_id=$$(docker create chronicle-tp-arm64:${ISOLATION_ID}); \
-		docker cp $$container_id:/usr/local/bin/chronicle_sawtooth_tp `pwd`/target/arm64;  \
+	container_id=$$(docker create node-chronicle-arm64:${ISOLATION_ID}); \
+		docker cp $$container_id:/usr/local/bin/node-chronicle `pwd`/target/arm64;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-arm64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/chronicle `pwd`/target/arm64; \
@@ -85,22 +84,22 @@ tested-$(ISOLATION_ID): test-prep-$(ISOLATION_ID)
 	docker info
 	container_id=$$(docker run -d \
 		tested-artifacts:${ISOLATION_ID} sleep 1d); \
-		&& docker exec --env DOCKER_HOST=${DOCKER_HOST} --env CARGO_HOME=.cargo_cached --env RUST_LOG=debug,cranelift=off,wasmtime=off $$container_id cargo test  --locked --release \
-		&& docker rm -f $$container_id
+		docker exec --env DOCKER_HOST=${DOCKER_HOST} --env CARGO_HOME=.cargo_cached --env RUST_LOG=debug,cranelift=off,wasmtime=off $$container_id cargo test --features=std,json-ld,graphql-bindings,diesel-bindings,parity-encoding  --locked --release; \
+		docker rm -f $$container_id
 
 	rm -rf .artifacts
 	mkdir -p .artifacts
 
 	container_id=$$(docker create tested-artifacts:${ISOLATION_ID}); \
-		docker cp $$container_id:/artifacts `pwd`/.artifacts/ \
-		&& docker rm $$container_id
+		docker cp $$container_id:/artifacts `pwd`/.artifacts/; \
+		docker rm $$container_id
 
 .PHONY: test-e2e
 test: test-e2e
 define arch-contexts =
 .PHONY: ensure-context
 ensure-context: $(MARKERS)/binfmt
-	docker context create tls-environment || true 
+	docker context create tls-environment || true
 	docker buildx create --name ctx-$(ISOLATION_ID)-$(1) \
 		--config buildkit.toml \
 		--driver docker-container \
@@ -115,7 +114,6 @@ clean-$(1)-ensure-context:
 
 endef
 $(foreach arch,$(ARCHS),$(eval $(call arch-contexts,$(arch))))
-
 
 define multi-arch-docker =
 
@@ -191,6 +189,7 @@ endif
 
 OPA_VERSION=v0.49.2
 OPA_DOWNLOAD_URL=https://openpolicyagent.org/downloads/$(OPA_VERSION)/opa_$(OS)_$(ARCH)$(OPA_SUFFIX)
+
 
 build/opa:
 	curl -sSL -o build/opa $(OPA_DOWNLOAD_URL)

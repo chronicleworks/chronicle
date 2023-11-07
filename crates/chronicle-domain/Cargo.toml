@@ -20,9 +20,8 @@ chronicle = { path = "../chronicle" }
 chronicle = { path = "../chronicle" }
 
 [features]
-strict = []
-# Use an in memory stub ledger
-inmem = ["chronicle/inmem"]
+devmode = ["chronicle/devmode"]
+strict  = []
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -2,7 +2,7 @@
 
 Chronicle is an API toolkit that can be customized to your provenance domain and
 easily deployed to Kubernetes along with a distributed ledger using
-[Sextant](https://btp.works/sextant).
+[Sextant](http://chronicle.works/sextant).
 
 ## Chronicle and Hyperledger Sawtooth
 

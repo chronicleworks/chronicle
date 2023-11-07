@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG RUST_VERSION=1.70
+ARG RUST_VERSION=1.76
 ARG CARGO_HOME=.cargo_cached
 FROM --platform=${BUILDPLATFORM} rust:${RUST_VERSION} as hostbase
 ENV PKG_CONFIG_ALLOW_CROSS=1
@@ -25,16 +25,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   apt-get update \
   && apt-get install -y --no-install-recommends \
   build-essential \
+  clang \
   cmake \
+  protobuf-compiler \
   g++-x86-64-linux-gnu \
   g++-aarch64-linux-gnu \
   libpq5 \
   libpq-dev \
-  lsb-release \
-  protobuf-compiler
+  lsb-release
 
 RUN rustup target add aarch64-unknown-linux-gnu \
-  && rustup target add x86_64-unknown-linux-gnu
+  && rustup target add x86_64-unknown-linux-gnu \
+  && rustup target add wasm32-unknown-unknown
 
 WORKDIR /app
 RUN useradd -m tester \
@@ -45,6 +47,7 @@ COPY Cargo.lock /app
 COPY .VERSION /app
 COPY Cargo.toml /app
 COPY crates /app/crates
+COPY node /app/node
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
 COPY docker/chronicle-test/wait-for-it /app/scripts/wait-for-it
@@ -69,7 +72,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 USER root
 RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-    --mount=type=cache,target=./target,sharing=locked \
+  --mount=type=cache,target=./target,sharing=locked \
   mkdir -p /artifacts/${TARGETARCH} \
   && chown -R tester \
   .cargo_cached/registry \
@@ -80,7 +83,7 @@ RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
 # so we get the build script dependencies compiled and cached
 USER tester
 RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-    --mount=type=cache,target=./target,sharing=locked \
+  --mount=type=cache,target=./target,sharing=locked \
   if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]; then \
   if [ "${BUILDPLATFORM}" = "linux/arm64" ]; then \
   export INITIAL_BUILD_TARGET=aarch64-unknown-linux-gnu; \
@@ -103,17 +106,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   liblzma-dev \
   libpq-dev \
   libssl-dev \
-  libzmq3-dev \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
   liblzma-dev:${TARGETARCH} \
   libpq-dev:${TARGETARCH} \
-  libssl-dev:${TARGETARCH} \
-  libzmq3-dev:${TARGETARCH} ; \
+  libssl-dev:${TARGETARCH}; \
   fi
 
 RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-    --mount=type=cache,target=./target,sharing=locked \
+  --mount=type=cache,target=./target,sharing=locked \
   mkdir -p /artifacts/${TARGETARCH} \
   && chown -R tester \
   .cargo_cached/registry
@@ -123,7 +124,7 @@ RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
 # first build, otherwise it is the second
 USER tester
 RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-    --mount=type=cache,target=./target,sharing=locked \
+  --mount=type=cache,target=./target,sharing=locked \
   mkdir -p /artifacts/${TARGETARCH} \
   && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then \
   export CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu; \
@@ -134,7 +135,7 @@ RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
   exit 1; \
   fi \
   && CARGO_HOME=.cargo_cached /usr/local/cargo/bin/cargo build --locked --release --target ${CARGO_BUILD_TARGET} ${BUILD_ARGS} \
-  && for i in chronicle chronicle_sawtooth_tp chronicle-domain-lint opactl opa-tp oauth-token gq-ws; \
+  && for i in chronicle node-chronicle chronicle-domain-lint opactl oauth-token gq-ws; \
   do mv -f target/${CARGO_BUILD_TARGET}/release/$i /artifacts/${TARGETARCH}; \
   done
 
@@ -188,6 +189,7 @@ COPY .cargo /app/.cargo
 COPY Cargo.lock /app
 COPY Cargo.toml /app
 COPY crates /app/crates
+COPY node /app/node
 COPY domain_docs /app/domain_docs
 COPY policies /app/policies
 COPY docker/chronicle-test/wait-for-it /app/scripts/wait-for-it
@@ -233,25 +235,13 @@ RUN chmod 755 /usr/local/bin/chronicle \
 USER chronicle
 
 # Copy tp to image
-FROM final-base AS chronicle-tp
+FROM final-base AS node-chronicle
 ARG TARGETARCH
 
-COPY --from=artifacts /artifacts/${TARGETARCH}/chronicle_sawtooth_tp /usr/local/bin
-RUN chmod 755 /usr/local/bin/chronicle_sawtooth_tp \
-  && chown root:bin /usr/local/bin/chronicle_sawtooth_tp
+COPY --from=artifacts /artifacts/${TARGETARCH}/node-chronicle /usr/local/bin
+RUN chmod 755 /usr/local/bin/node-chronicle \
+  && chown root:bin /usr/local/bin/node-chronicle
 
-USER chronicle
-
-# Copy opa-tp to image
-FROM final-base AS opa-tp
-ARG TARGETARCH
-
-COPY --from=artifacts /artifacts/${TARGETARCH}/opa-tp /usr/local/bin/opa-tp
-COPY --from=chronicle-builder /app/scripts/wait-for-it /usr/local/bin/wait-for-it
-RUN chmod 755 /usr/local/bin/opa-tp \
-  && chown root:bin /usr/local/bin/opa-tp
-RUN chmod 755 /usr/local/bin/wait-for-it \
-  && chown root:bin /usr/local/bin/wait-for-it
 
 USER chronicle
 

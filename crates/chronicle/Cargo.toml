@@ -7,61 +7,72 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-Inflector           = { workspace = true }
-api                 = { path = "../api" }
-async-graphql       = { workspace = true }
-async-stl-client    = { workspace = true }
-cfg-if              = { workspace = true }
-chronicle-protocol  = { path = "../chronicle-protocol" }
-chronicle-signing   = { workspace = true }
+Inflector = { workspace = true }
+api = { path = "../api" }
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+cfg-if = { workspace = true }
+chronicle-signing = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
-chrono              = { workspace = true, features = ["serde"] }
-clap                = { workspace = true, features = ["derive", "env"] }
-clap_complete       = { workspace = true }
-colored_json        = { workspace = true }
-common              = { path = "../common" }
-const_format        = { workspace = true }
-diesel              = { workspace = true }
-dotenvy             = { workspace = true }
-futures             = { workspace = true }
-genco               = { workspace = true }
-hex                 = { workspace = true }
-iref                = { workspace = true }
-is-terminal         = { workspace = true }
-jsonschema          = { workspace = true }
-opa                 = { workspace = true }
-opentelemetry       = { workspace = true }
-percent-encoding    = { workspace = true }
-question            = { workspace = true }
-rand                = { workspace = true }
-rand_core           = { workspace = true }
-serde               = { workspace = true }
-serde_derive        = { workspace = true }
-serde_json          = { workspace = true }
-serde_yaml          = { workspace = true }
-shellexpand         = { workspace = true }
-thiserror           = { workspace = true }
-tokio               = { workspace = true }
-toml                = { workspace = true }
-tracing             = { workspace = true }
-tracing-log         = { workspace = true }
-url                 = { workspace = true, features = ["serde"] }
-user-error          = { workspace = true }
-uuid                = { workspace = true }
-valico              = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive", "env"] }
+clap_complete = { workspace = true }
+colored_json = { workspace = true }
+common = { path = "../common", features = [
+  "json-ld",
+  "std",
+  "parity-encoding",
+  "graphql-bindings",
+] }
+const_format = { workspace = true }
+diesel = { workspace = true }
+dotenvy = { workspace = true }
+embedded-substrate = { path = "../embedded-substrate", optional = true }
+futures = { workspace = true }
+genco = { workspace = true }
+hex = { workspace = true }
+iri-string = { version = "^0.7", default-features = false, features = [
+  "alloc",
+] }
+is-terminal = { workspace = true }
+jsonschema = { workspace = true }
+opa = { workspace = true }
+opentelemetry = { workspace = true }
+percent-encoding = { workspace = true }
+protocol-substrate = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa = { path = "../protocol-substrate-opa" }
+question = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+shellexpand = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-log = { workspace = true }
+url = { workspace = true, features = ["serde"] }
+user-error = { workspace = true }
+uuid = { workspace = true }
+valico = { workspace = true }
 
 [features]
-devmode = ["inmem"]
-# Use an in-memory stub ledger
-inmem  = []
-strict = []
+devmode = ["dep:embedded-substrate"]
+strict  = []
 
 [build-dependencies]
 
 [dev-dependencies]
-assert_fs          = { workspace = true }
-chronicle-protocol = { path = "../chronicle-protocol" }
-insta              = { workspace = true, features = ["yaml"] }
-opa-tp-protocol    = { path = "../opa-tp-protocol" }
-sawtooth-sdk       = { workspace = true }
-tempfile           = { workspace = true }
+assert_fs                    = { workspace = true }
+embedded-substrate           = { path = "../embedded-substrate" }
+insta                        = { workspace = true, features = ["yaml"] }
+mockito                      = { version = "*" }
+protocol-abstract            = { path = "../protocol-abstract" }
+protocol-substrate           = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa       = { path = "../protocol-substrate-opa" }
+tempfile                     = { workspace = true }

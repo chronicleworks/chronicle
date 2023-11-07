@@ -8,3 +8,10 @@ cc 54352f4617a8a9dc6e7245f00997951acf7fe586343b4df2f9017646986c6032 # shrinks to
 cc 4d0f03be43b6ac7535aa8dfa4b54d3df14bc60d02618610db8be478461bd22d6 # shrinks to external_id = ""
 cc ce0ee1c3cb4ad51fdcca08fced2935b09ae1465d3b31656b1888919272c94edc # shrinks to external_id = ""
 cc f21937747825283f812465c2949364d49277dc67a7e4a51542062d884b4374e0 # shrinks to external_id = ""
+cc 396c407c163f5d75e6e56ebc9acfc1bce6e7351c4c65e50190996de69ee0f76f # shrinks to agent_id = "", activity_id = "", role = Some("{")
+cc a00d8a6b041293d2c7f36fcc5d37b32b08ee21e95161c8979ce2cecdcf7b7729 # shrinks to agent_id = "", entity_id = "", role = Some("¡")
+cc 7c98e27a1781bf4ea036d462709b2bcd46ce764bf5f3a4ab4ba929a20adf6404 # shrinks to external_id = ">"
+cc 31564fc0a820b648d20187cba4506f63148dee8dca3665f6750002462c48a90a # shrinks to external_id = "|"
+cc 924a3389183411573530f292893d9f452ad9b4d7625c053a0d29b439906aba7d # shrinks to external_id = "|"
+cc ab11df2abf5233ce1f4533040cd06217f1ef04944e6195e8e71da5778a3e4f12 # shrinks to external_id = "|"
+cc 8d8191bde8997aed31a9ffe0bc5624d8dfb884700ea38c5c95b4d64c369d997a # shrinks to external_id = ">"

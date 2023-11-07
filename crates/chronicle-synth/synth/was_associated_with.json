@@ -4,10 +4,10 @@
     "@type": {
         "type": "array",
         "length": 1,
-        "content": "http://btp.works/chronicleoperations/ns#WasAssociatedWith"
+        "content": "http://chronicle.works/chronicleoperations/ns#WasAssociatedWith"
     },
-    "http://btp.works/chronicleoperations/ns#activityName": "@activity_name",
-    "http://btp.works/chronicleoperations/ns#agentName": "@agent_name",
-    "http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-    "http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+    "http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
+    "http://chronicle.works/chronicleoperations/ns#agentName": "@agent_name",
+    "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+    "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
 }

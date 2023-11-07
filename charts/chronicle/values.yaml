@@ -100,37 +100,6 @@ ingress:
 ## @md | `logLevel` | log level for Chronicle | info |
 logLevel: info
 
-opa:
-  ## @md | `opa.enabled` | if true set up a full OPA enabled setup | true |
-  enabled: false
-  opaInit:
-    ## @md | `opa.init.image` | the image to use for the chronicle-init container | blockchaintp/chronicle-opa-init |
-    image:
-      ## @md | `image.pullPolicy` | the image pull policy to use | IfNotPresent |
-      pullPolicy: IfNotPresent
-      ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
-      repository: blockchaintp/opactl-amd64
-      ## @md | `image.tag`| the tag of the image to use | latest |
-      tag: BTP2.1.0-0.7.4
-  policy:
-    entrypoint: allow_transactions.allowed_users
-    id: allow_transactions
-    url: file:///app/policies/bundle.tar.gz
-  tp:
-    image:
-      ## @md | `image.repository` | the repository of the image | blockchaintp/chronicle |
-      repository: blockchaintp/opa-tp-amd64
-      ## @md | `image.tag`| the tag of the image to use | latest |
-      tag: BTP2.1.0-0.7.4
-      ## @md | `image.pullPolicy` | the image pull policy to use | IfNotPresent |
-      pullPolicy: IfNotPresent
-    ## @md | `opa.tp.resources` | resources | map | nil |
-    resources:
-    ## @md | `opa.tp.extraVolumes` | extra volumes declarations for the opa-tp deployment | list | nil
-    extraVolumes:
-    ## @md | `opa.tp.extraVolumeMounts` | extra volume mounts for opa-tp deployment | list | nil
-    extraVolumeMounts:
-
 ## @md | `port` | the port on which the chronicle service listens | 9982 |
 port: 9982
 
@@ -213,42 +182,17 @@ postgres:
 ## @md | `resources` | resources | map | nil |
 resources:
 
-sawset:
-  image:
-    ## @md | `sawset.image.pullPolicy` | the image pull policy | IfNotPresent |
-    pullPolicy: IfNotPresent
-    ## @md | `sawset.image.repository` | the image repository | blockchaintp/sawtooth-validator |
-    repository: blockchaintp/sawtooth-validator
-    ## @md | `sawset.image.tag` | the image tag | latest |
-    tag: BTP2.1.0
-
-tp:
-  ## @md | `tp.args` | a string of arguments to pass to the tp container| nil |
-  args:
-  image:
-    ## @md | `tp.image.pullPolicy` | the image pull policy | IfNotPresent |
-    pullPolicy: IfNotPresent
-    ## @md | `tp.image.repository` | the image repository | blockchaintp/chronicle-tp |
-    repository: blockchaintp/chronicle-tp-amd64
-    ## @md | `tp.image.tag` | the image tag | latest |
-    tag: BTP2.1.0-0.7.4
-  ## @md | `tp.extraVolumes` | extra volumes declarations for the chronicle-tp deployment | list | nil
-  extraVolumes:
-  ## @md | `tp.extraVolumeMounts` | extra volume mounts for chronicle-tp deployment | list | nil
-  extraVolumeMounts:
-  ## @md | `tp.resources` | resources | map | nil |
-  resources:
-  ## @md | `tp.maxUnavailable` | maximum unavailable nodes during a rolling upgrade |
-  maxUnavailable: 1
-  ## @md | `tp.minReadySeconds` | minimum time before node becomes available |
-  minReadySeconds: 0
-  logLevel: info
-
 volumes: {}
 
 ## @md | `sawtooth` | sawtooth options may be configured | see [Sawtooth](../sawtooth/README.md) |
-sawtooth:
-  sawtooth:
-    consensus: 400
-    statefulset:
-      enabled: true
+node:
+  image:
+    ## @md | `test.api.image.pullPolicy` | the image pull policy | IfNotPresent |
+    pullPolicy: IfNotPresent
+    ## @md | `test.api.image.repository` | the image repository | blockchaintp/chronicle-helm-api-test |
+    repository: blockchaintp/chronicle-node-amd64
+    ## @md | `test.api.image.tag` | the image tag | latest |
+    tag: BTP2.1.0-0.8.0
+  node:
+    chain: "chronicle"
+    command: "node-chronicle"

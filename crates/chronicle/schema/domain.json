@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://btp.works/schema/chronicle-1.json",
+    "$id": "http://chronicle.works/schema/chronicle-1.json",
     "title": "Chronicle Domain",
     "description": "a domain for Chronicle's blockchain-backed provenance",
     "type": "object",
@@ -21,7 +21,12 @@
                         "type": {
                             "description": "the type of the attribute's value",
                             "type": "string",
-                            "enum": ["String", "Bool", "Int", "JSON"]
+                            "enum": [
+                                "String",
+                                "Bool",
+                                "Int",
+                                "JSON"
+                            ]
                         },
                         "doc": {
                             "description": "optional documentation about an attribute",
@@ -29,7 +34,9 @@
                             "minLength": 1
                         }
                     },
-                    "required": ["type"],
+                    "required": [
+                        "type"
+                    ],
                     "additionalProperties": false
                 }
             },
@@ -58,7 +65,9 @@
                             "minLength": 1
                         }
                     },
-                    "required": ["attributes"],
+                    "required": [
+                        "attributes"
+                    ],
                     "additionalProperties": false
                 }
             },
@@ -87,7 +96,9 @@
                             "minLength": 1
                         }
                     },
-                    "required": ["attributes"],
+                    "required": [
+                        "attributes"
+                    ],
                     "additionalProperties": false
                 }
             },
@@ -116,7 +127,9 @@
                             "minLength": 1
                         }
                     },
-                    "required": ["attributes"],
+                    "required": [
+                        "attributes"
+                    ],
                     "additionalProperties": false
                 }
             },
@@ -138,6 +151,13 @@
             "uniqueItems": true
         }
     },
-    "required": ["name", "attributes", "agents", "entities", "activities", "roles"],
+    "required": [
+        "name",
+        "attributes",
+        "agents",
+        "entities",
+        "activities",
+        "roles"
+    ],
     "additionalProperties": false
 }

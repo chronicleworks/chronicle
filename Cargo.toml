@@ -8,59 +8,59 @@ members = [
   "crates/chronicle-domain",
   "crates/chronicle-domain-lint",
   "crates/chronicle-domain-test",
-  "crates/chronicle-protocol",
+  "crates/chronicle-test-infrastructure",
   "crates/chronicle-synth",
   "crates/chronicle-signing",
   "crates/chronicle-telemetry",
   "crates/gq-subscribe",
   "crates/id-provider",
-  "crates/opa-tp",
-  "crates/opa-tp-protocol",
-  "crates/opactl",
-  "crates/sawtooth-tp",
   "crates/pallet-chronicle",
+  "crates/pallet-opa",
+  "crates/opactl",
   "node/runtime-chronicle",
   "node/node-chronicle",
+  "crates/embedded-substrate",
+  "crates/runtime-api-chronicle",
+  "crates/protocol-abstract",
+  "crates/protocol-substrate",
+  "crates/protocol-substrate-chronicle",
+  "crates/protocol-substrate-opa",
+  "crates/chronicle-test-infrastructure",
 ]
 
 [workspace.dependencies]
 Inflector = "0.11.4"
-anyhow = "1.0.6"
+anyhow = { version = "^1", features = ["backtrace"] }
 assert_fs = "1.0"
-async-graphql = "5.0.9"
-async-graphql-poem = "5.0.9"
-async-stl-client = { git = "https://github.com/btpworks/async-stl-sdk" }
-async-stream = "0.3.3"
-async-trait = "0.1.61"
+async-graphql = "^7"
+async-graphql-poem = "^7"
+async-stream = "^0.3.3"
+async-trait = "^0.1.61"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 base64 = "0.21"
 bytes = "1.3.0"
 cached = "0.42"
-frame-support = "24.0.0"
-frame-system = "24.0.0"
-frame-benchmarking  = "24.0.0"
 cfg-if = "1.0.0"
 chronicle-signing = { path = "crates/chronicle-signing" }
-chrono = "0.4.26"
+chrono = "^0.4.26"
 clap = { version = "3.2.25", features = ["derive"] } # opactl: version = "4.1.1"
 clap_complete = "3.2.3"
 clap_generate = "3.0.3"
 collecting-hashmap = { version = "0.2" }
-colored_json = "3.0.1"
+colored_json = "^3"
 console-subscriber = "0.1"
 const_format = "0.2"
 criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
-crossbeam = "0.8.1"
+crossbeam = "^0.8"
 custom_error = "1.9.2"
 derivative = "2.2.0"
-diesel = { version = "2.0.0-rc.0", features = [
-  "postgres",
-  "uuid",
-  "chrono",
-  "r2d2",
-] }
-diesel_migrations = { version = "2.0.0-rc.0", features = ["postgres"] }
+diesel = { version = "2.1", features = ["postgres", "uuid", "chrono", "r2d2"] }
+diesel-async = { version = "0.4" }
+diesel_migrations = { version = "2.1", features = ["postgres"] }
 dotenvy = "0.15"
+frame-benchmarking = "24.0.0"
+frame-support = "24.0.0"
+frame-system = "24.0.0"
 futures = "0.3.21"
 genco = "0.16.1"
 glob = "0.3.0"
@@ -80,6 +80,7 @@ k256 = { version = "0.11.3", features = [
   "ecdsa",
   "pkcs8",
   "sha256",
+  "keccak256",
   "std",
   "pem",
   "serde",
@@ -87,21 +88,17 @@ k256 = { version = "0.11.3", features = [
 lazy_static = "1.4.0"
 locspan = "0.7"
 lru = "0.11"
+macro-attr-2018 = "3.0.0"
 maplit = "1.0.2"
 metrics = "0.21.0"
 metrics-exporter-prometheus = "0.12.1"
 mime = "0.3"
+mobc = "0.8"
 mockito = "1.1"
+newtype-derive-2018 = "0.2.1"
 oauth2 = "4.4"
-opa = { git = "https://github.com/tamasfe/opa-rs", rev = "3cf7fea" }
-openssl = { version = "0.10" }
-openssl-sys = { version = "0.10", features = ["vendored"] }
-opentelemetry = { version = "0.19.0", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "0.18.0", features = [
-  "rt-tokio",
-  "reqwest_collector_client",
-  "collector_client",
-] }
+opa = { git = "https://github.com/chronicleworks/opa-rs", rev = "9fa2fbce" }
+opentelemetry = { version = "^0.21" }
 owo-colors = "3.5.0"
 parking_lot = "0.12.0"
 percent-encoding = "2.1.0"
@@ -109,38 +106,32 @@ pin-project = "1.0.12"
 pin-project-lite = "0.2"
 pinvec = "0.1.0"
 pkcs8 = { version = "0.10", features = ["std", "alloc"] }
-poem = { version = "1.3.58", features = ["opentelemetry", "websocket"] }
-portpicker = "0.1.1"
-pow_of_2 = "0.1.2"
-proptest = "1.0.0"
-prost = "0.10" # common, sawtooth-protocol, sawtooth-tp: version = "0.10.0"
-prost-build = "0.10.0"
-prost-types = "0.11.2"
-protobuf = "2.27.1"
+poem = { version = "^2", features = ["opentelemetry", "websocket"] }
+portpicker = "0.1"
+pow_of_2 = "0.1"
+proptest = "1"
 question = "0.2.2"
 r2d2 = "0.8.9"
-rand = { version = "0.8.5", features = ["getrandom"] }
-rand_core = "0.6.3"
+rand = { version = "0.8", features = ["getrandom"] }
+rand_core = "0.6"
 rdf-types = "0.14"
-reqwest = "0.11.20"
+reqwest = "0.11"
 rust-embed = { version = "6.6.0", features = [
   "debug-embed",
   "include-exclude",
 ] }
-sawtooth-sdk = { git = "https://github.com/hyperledger/sawtooth-sdk-rust", rev = "5a300de" }
 secret-vault = { version = "1.8", features = [] }
 secret-vault-value = "0.3"
-serde = "1.0.152"
-serde_derive = "1.0.152"
-serde_json = "1.0.93"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
 serde_yaml = "0.9.14"
 shellexpand = "3.0.0"
-macro-attr-2018 = "3.0.0"
-newtype-derive-2018 = "0.2.1"
 temp-dir = "0.1.11"
 tempfile = "3.4.0"
-thiserror = "1.0"
-tmq = "0.3"
+testcontainers = "0.14"
+thiserror = "^1"
+tightness = "0.1"
 tokio = { version = "1.27", features = [
   "time",
   "macros",
@@ -149,21 +140,19 @@ tokio = { version = "1.27", features = [
 ] }
 tokio-stream = { version = "0.1.11", features = ["sync"] }
 toml = "0.7.3"
-tracing = "0.1.37"
-tracing-elastic-apm = "3.2.3"
-tracing-log = "0.1.3"
-tracing-opentelemetry = "0.19"
-tracing-subscriber = { version = "0.3.15", features = [
+tracing = "^0.1.35"
+tracing-elastic-apm = "^3.2.3"
+tracing-log = "^0.1.3"
+tracing-opentelemetry = "^0.22"
+tracing-subscriber = { version = "^0.3.15", features = [
   "default",
   "registry",
   "env-filter",
   "json",
 ] }
 tungstenite = "0.20.1"
-url = "2.3.1"
-user-error = "1.2.8"
-uuid = "1.2.2"
+url = "2"
+user-error = "1"
+uuid = "1"
 valico = "3.6.0"
-vaultrs = "*"
-zmq = { version = "0.9", features = ["vendored"] }
-testcontainers = "0.14"
+vaultrs = "0.7"

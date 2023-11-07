@@ -8,8 +8,8 @@ lazy_static! {
 		"provext": "https://openprovenance.org/ns/provext#",
 		"xsd": "http://www.w3.org/2001/XMLSchema#",
 		"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-		"chronicle":"http://btp.works/chronicle/ns#",
-		"chronicle_op":"http://btp.works/chronicleoperations/ns#",
+		"chronicle":"http://chronicle.works/chronicle/ns#",
+		"chronicle_op":"http://chronicle.works/chronicleoperations/ns#",
 		"entity": {
 			"@id": "prov:entity",
 			"@type": "@id"
@@ -111,7 +111,7 @@ lazy_static! {
 			 "@id": "prov:endedAtTime",
 		},
 		"value": {
-			"@id": "chronicle:value",
+			"@id": "chronicle:Value",
 			"@type" : "@json",
 		},
 	});

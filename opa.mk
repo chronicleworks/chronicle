@@ -22,13 +22,13 @@ analyze: analyze_fossa
 publish: gh-create-draft-release
 	mkdir -p target/arm64
 	mkdir -p target/amd64
-	container_id=$$(docker create chronicle-tp-amd64:${ISOLATION_ID}); \
+	container_id=$$(docker create node-chronicle-amd64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/opa-tp `pwd`/target/amd64/;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-amd64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/opctl `pwd`/target/amd64/; \
 		docker rm $$container_id;
-	container_id=$$(docker create chronicle-tp-arm64:${ISOLATION_ID}); \
+	container_id=$$(docker create node-chronicle-arm64:${ISOLATION_ID}); \
 		docker cp $$container_id:/usr/local/bin/opa-tp `pwd`/target/arm64;  \
 		docker rm $$container_id;
 	container_id=$$(docker create chronicle-arm64:${ISOLATION_ID}); \

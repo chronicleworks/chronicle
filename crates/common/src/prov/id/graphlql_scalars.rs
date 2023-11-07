@@ -1,5 +1,4 @@
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
-use iref::Iri;
 
 use super::{ActivityId, AgentId, ChronicleJSON, DomaintypeId, EntityId};
 

@@ -224,10 +224,10 @@ fn set_attributes(type_name_lower: &str) -> Collection {
 		"@type": {
 			"type": "array",
 			"length": 1,
-			"content": "http://btp.works/chronicleoperations/ns#SetAttributes"
+			"content": "http://chronicle.works/chronicleoperations/ns#SetAttributes"
 		},
-		"http://btp.works/chronicleoperations/ns#activityName": "@activity_name",
-		"http://btp.works/chronicleoperations/ns#attributes": {
+		"http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
+		"http://chronicle.works/chronicleoperations/ns#attributes": {
 			"type": "array",
 			"length": 1,
 			"content": {
@@ -239,7 +239,7 @@ fn set_attributes(type_name_lower: &str) -> Collection {
 				"@value": type_collection
 			}
 		},
-		"http://btp.works/chronicleoperations/ns#domaintypeId": {
+		"http://chronicle.works/chronicleoperations/ns#domaintypeId": {
 			"type": "array",
 			"length": 1,
 			"content": {
@@ -247,8 +247,8 @@ fn set_attributes(type_name_lower: &str) -> Collection {
 				"@value": type_domain_type
 			}
 		},
-		"http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-		"http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+		"http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+		"http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
 	});
 
 	let name = format!("set_{}_attributes", type_name_lower);

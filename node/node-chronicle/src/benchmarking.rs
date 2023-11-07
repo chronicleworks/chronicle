@@ -4,7 +4,7 @@
 
 use crate::service::FullClient;
 
-use runtime::{AccountId, Balance, BalancesCall, SystemCall};
+use runtime::{AccountId, Balance, SystemCall};
 use runtime_chronicle as runtime;
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
@@ -68,30 +68,6 @@ impl TransferKeepAliveBuilder {
 	}
 }
 
-impl frame_benchmarking_cli::ExtrinsicBuilder for TransferKeepAliveBuilder {
-	fn pallet(&self) -> &str {
-		"balances"
-	}
-
-	fn extrinsic(&self) -> &str {
-		"transfer_keep_alive"
-	}
-
-	fn build(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
-		let acc = Sr25519Keyring::Bob.pair();
-		let extrinsic: OpaqueExtrinsic = create_benchmark_extrinsic(
-			self.client.as_ref(),
-			acc,
-			BalancesCall::transfer_keep_alive { dest: self.dest.clone().into(), value: self.value }
-				.into(),
-			nonce,
-		)
-		.into();
-
-		Ok(extrinsic)
-	}
-}
-
 /// Create a transaction using the given `call`.
 ///
 /// Note: Should only be used for benchmarking.
@@ -118,9 +94,8 @@ pub fn create_benchmark_extrinsic(
 			period,
 			best_block.saturated_into(),
 		)),
-		frame_system::CheckNonce::<runtime::Runtime>::from(nonce),
+		runtime_chronicle::no_nonce_fees::CheckNonce::<runtime::Runtime>::from(nonce),
 		frame_system::CheckWeight::<runtime::Runtime>::new(),
-		pallet_transaction_payment::ChargeTransactionPayment::<runtime::Runtime>::from(0),
 	);
 
 	let raw_payload = runtime::SignedPayload::from_raw(
@@ -132,7 +107,6 @@ pub fn create_benchmark_extrinsic(
 			runtime::VERSION.transaction_version,
 			genesis_hash,
 			best_hash,
-			(),
 			(),
 			(),
 		),

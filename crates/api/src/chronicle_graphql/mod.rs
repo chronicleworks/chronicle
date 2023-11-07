@@ -12,9 +12,9 @@ use chrono::NaiveDateTime;
 use common::{
 	identity::{AuthId, IdentityError, JwtClaims, OpaData, SignedIdentity},
 	ledger::{SubmissionError, SubmissionStage},
-	opa::{ExecutorContext, OpaExecutorError},
+	opa::std::{ExecutorContext, OpaExecutorError},
 	prov::{
-		to_json_ld::ToJson, ChronicleIri, ChronicleTransactionId, ExternalId, ExternalIdPart,
+		json_ld::ToJson, ChronicleIri, ChronicleTransactionId, ExternalId, ExternalIdPart,
 		ProvModel,
 	},
 };
@@ -292,10 +292,7 @@ impl From<SignedIdentity> for CommitIdentity {
 		CommitIdentity {
 			identity: identity.identity,
 			signature: identity.signature.map(|x| hex::encode(&*x)).unwrap_or_default(),
-			verifying_key: identity
-				.verifying_key
-				.map(|x| hex::encode(x.to_bytes()))
-				.unwrap_or_default(),
+			verifying_key: identity.verifying_key.map(hex::encode).unwrap_or_default(),
 		}
 	}
 }
@@ -810,8 +807,8 @@ impl IriEndpoint {
 								.body("failed to compact JSON response"))
 						},
 					},
-					Err(StoreError::Db(diesel::result::Error::NotFound))
-					| Err(StoreError::RecordNotFound) => {
+					Err(StoreError::Db(diesel::result::Error::NotFound)) |
+					Err(StoreError::RecordNotFound) => {
 						tracing::debug!("not found: {prov_type} {} in {ns}", id.external_id_part());
 						Ok(poem::Response::builder()
 							.status(StatusCode::NOT_FOUND)
@@ -875,9 +872,8 @@ impl IriEndpoint {
 
 		match ChronicleIri::from_str(&ns_iri.iri) {
 			Ok(iri) => Ok(Ok((ns_iri.ns.into(), iri))),
-			Err(error) => {
-				Ok(Err(Response::builder().status(StatusCode::NOT_FOUND).body(error.to_string())))
-			},
+			Err(error) =>
+				Ok(Err(Response::builder().status(StatusCode::NOT_FOUND).body(error.to_string()))),
 		}
 	}
 
@@ -888,24 +884,21 @@ impl IriEndpoint {
 		claims: Option<&JwtClaims>,
 	) -> poem::Result<poem::Response> {
 		match self.parse_ns_iri_from_uri_path(req).await? {
-			Ok((ns, ChronicleIri::Activity(id))) => {
+			Ok((ns, ChronicleIri::Activity(id))) =>
 				self.response_for_query(claims, "activity", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_activity_id(&mut conn, id, ns)
 				})
-				.await
-			},
-			Ok((ns, ChronicleIri::Agent(id))) => {
+				.await,
+			Ok((ns, ChronicleIri::Agent(id))) =>
 				self.response_for_query(claims, "agent", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_agent_id(&mut conn, id, ns)
 				})
-				.await
-			},
-			Ok((ns, ChronicleIri::Entity(id))) => {
+				.await,
+			Ok((ns, ChronicleIri::Entity(id))) =>
 				self.response_for_query(claims, "entity", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_entity_id(&mut conn, id, ns)
 				})
-				.await
-			},
+				.await,
 			Ok(_) => Ok(poem::Response::builder()
 				.status(StatusCode::NOT_FOUND)
 				.body("may query only: activity, agent, entity")),

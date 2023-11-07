@@ -3,7 +3,7 @@
 /// Re-export types required for runtime
 pub use common::prov::*;
 
-use common::ledger::LedgerAddress;
+use common::ledger::ChronicleAddress;
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://docs.substrate.io/reference/frame-pallets/>
@@ -15,19 +15,29 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+//#[cfg(feature = "runtime-benchmarks")]
+//mod benchmarking;
 pub mod weights;
-pub use common::prov::*;
+
+pub mod chronicle_core {
+	pub use common::{ledger::*, prov::*};
+}
 pub use weights::*;
+
+// A configuration type for opa settings, serializable to JSON etc
+#[derive(frame_support::Serialize, frame_support::Deserialize)]
+pub struct OpaConfiguration {
+	pub policy_name: scale_info::prelude::string::String,
+	pub entrypoint: scale_info::prelude::string::String,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use common::ledger::OperationSubmission;
+	use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 	use frame_system::pallet_prelude::*;
-	use sp_std::collections::btree_set::BTreeSet;
-	use sp_std::vec::Vec;
+	use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -40,26 +50,56 @@ pub mod pallet {
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
 
-		type OperationList: Parameter
-			+ Into<Vec<common::prov::operations::ChronicleOperation>>
-			+ From<Vec<common::prov::operations::ChronicleOperation>>
-			+ parity_scale_codec::Codec;
+		type OperationSubmission: Parameter + Into<OperationSubmission> + parity_scale_codec::Codec;
 	}
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
+
+	/// Genesis configuration, whether or not we need to enforce OPA policies
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub opa_settings: Option<OpaConfiguration>,
+		pub _phantom: PhantomData<T>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { opa_settings: None, _phantom: PhantomData }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			tracing::info!("Chronicle: Building genesis configuration.");
+			if let Some(ref settings) = self.opa_settings {
+				OpaSettings::<T>::put(Some(common::opa::OpaSettings {
+					policy_address: common::opa::PolicyAddress::from(sp_core_hashing::blake2_128(
+						settings.policy_name.as_bytes(),
+					)),
+					policy_name: settings.policy_name.clone(),
+					entrypoint: settings.entrypoint.clone(),
+				}));
+				tracing::debug!("Chronicle: OPA settings are set.");
+			} else {
+				OpaSettings::<T>::put(None::<common::opa::OpaSettings>);
+			}
+		}
+	}
+
 	#[pallet::storage]
 	#[pallet::getter(fn prov)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Provenance<T> = StorageMap<_, Twox128, LedgerAddress, common::prov::ProvModel>;
+	pub type Provenance<T> = StorageMap<_, Twox128, ChronicleAddress, common::prov::ProvModel>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn get_opa_settings)]
+	pub type OpaSettings<T> = StorageValue<_, Option<common::opa::OpaSettings>>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Applied(common::prov::ProvModel),
-		Contradiction(common::prov::Contradiction),
+		Applied(common::prov::ProvModel, common::identity::SignedIdentity, [u8; 16]),
+		Contradiction(common::prov::Contradiction, common::identity::SignedIdentity, [u8; 16]),
 	}
 
 	// Errors inform users that something went wrong.
@@ -89,7 +129,6 @@ pub mod pallet {
 			match error {
 				common::prov::ProcessorError::Address => Error::Address,
 				common::prov::ProcessorError::Contradiction { .. } => Error::Contradiction,
-				common::prov::ProcessorError::Expansion { .. } => Error::Expansion,
 				common::prov::ProcessorError::Identity(_) => Error::Identity,
 				common::prov::ProcessorError::NotAChronicleIri { .. } => Error::NotAChronicleIri,
 				common::prov::ProcessorError::MissingId { .. } => Error::MissingId,
@@ -102,7 +141,7 @@ pub mod pallet {
 				common::prov::ProcessorError::Time(_) => Error::Time,
 				common::prov::ProcessorError::Tokio => Error::Tokio,
 				common::prov::ProcessorError::Utf8(_) => Error::Utf8,
-				_ => unreachable!(), //TODO: NOT THIS
+				_ => unreachable!(),
 			}
 		}
 	}
@@ -112,20 +151,25 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		// Apply a vector of chronicle operations, yielding an event that indicates state change or
+		// contradiction
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::apply())]
-		pub fn apply(origin: OriginFor<T>, operations: T::OperationList) -> DispatchResult {
+		#[pallet::weight({
+			let weight = T::WeightInfo::apply();
+			let dispatch_class = DispatchClass::Normal;
+			let pays_fee = Pays::No;
+			(weight, dispatch_class, pays_fee)
+		})]
+		pub fn apply(origin: OriginFor<T>, operations: T::OperationSubmission) -> DispatchResult {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
+
+			let sub = operations.into();
 
 			// Get operations and load their dependencies
-			let ops: Vec<common::prov::operations::ChronicleOperation> = operations.into();
-
-			let deps = ops.iter().flat_map(|tx| tx.dependencies()).collect::<BTreeSet<_>>();
+			let deps = sub.items.iter().flat_map(|tx| tx.dependencies()).collect::<BTreeSet<_>>();
 
 			let initial_input_models: Vec<_> = deps
 				.into_iter()
@@ -138,15 +182,20 @@ pub mod pallet {
 
 			let mut model = common::prov::ProvModel::default();
 
-			for op in ops {
+			for op in sub.items.iter() {
 				let res = op.process(model, state.input());
 				match res {
-					// A contradiction raises an event, not an error and shortcuts processing - contradiction attempts are useful provenance
-					// and should not be a purely operational concern
+					// A contradiction raises an event, not an error and shortcuts processing -
+					// contradiction attempts are useful provenance and should not be a purely
+					// operational concern
 					Err(common::prov::ProcessorError::Contradiction(source)) => {
 						tracing::info!(contradiction = %source);
 
-						Self::deposit_event(Event::<T>::Contradiction(source));
+						Self::deposit_event(Event::<T>::Contradiction(
+							source,
+							(*sub.identity).clone(),
+							sub.correlation_id,
+						));
 
 						return Ok(());
 					},
@@ -177,7 +226,7 @@ pub mod pallet {
 			}
 
 			// Emit an event.
-			Self::deposit_event(Event::Applied(delta));
+			Self::deposit_event(Event::Applied(delta, (*sub.identity).clone(), sub.correlation_id));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}

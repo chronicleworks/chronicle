@@ -1,6 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr, time::Duration};
-
-use async_stl_client::ledger::{BlockId, BlockIdError};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
 
 use chrono::{TimeZone, Utc};
 use common::{
@@ -8,8 +6,8 @@ use common::{
 	prov::{
 		operations::DerivationType, Activity, ActivityId, Agent, AgentId, Association, Attribution,
 		ChronicleTransactionId, ChronicleTransactionIdError, Delegation, Derivation, DomaintypeId,
-		Entity, EntityId, ExternalId, ExternalIdPart, Generation, Identity, IdentityId, Namespace,
-		NamespaceId, ProvModel, PublicKeyPart, Role, Usage,
+		Entity, EntityId, ExternalId, ExternalIdPart, Generation, Namespace, NamespaceId,
+		ProvModel, Role, Usage,
 	},
 };
 use derivative::*;
@@ -20,9 +18,11 @@ use diesel::{
 	PgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use protocol_substrate_chronicle::protocol::{BlockId, BlockIdError};
 use thiserror::Error;
 use tracing::{debug, instrument, warn};
 use uuid::Uuid;
+pub mod database;
 
 mod query;
 pub(crate) mod schema;
@@ -50,8 +50,8 @@ pub enum StoreError {
 	)]
 	InvalidDerivationTypeRecord(i32),
 
-	#[error("Could not find namespace")]
-	InvalidNamespace,
+	#[error("Could not find namespace {0}")]
+	InvalidNamespace(NamespaceId),
 
 	#[error("Unreadable Attribute: {0}")]
 	Json(#[from] serde_json::Error),
@@ -117,10 +117,10 @@ impl Store {
 		&self,
 		connection: &mut PgConnection,
 		external_id: &ExternalId,
-		namespaceid: &NamespaceId,
+		namespace_id: &NamespaceId,
 	) -> Result<query::Activity, StoreError> {
 		let (_namespaceid, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+			self.namespace_by_external_id(connection, namespace_id.external_id_part())?;
 		use schema::activity::dsl;
 
 		Ok(schema::activity::table
@@ -149,10 +149,10 @@ impl Store {
 		&self,
 		connection: &mut PgConnection,
 		external_id: &ExternalId,
-		namespaceid: &NamespaceId,
+		namespace_id: &NamespaceId,
 	) -> Result<query::Agent, StoreError> {
 		let (_namespaceid, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+			self.namespace_by_external_id(connection, namespace_id.external_id_part())?;
 		use schema::agent::dsl;
 
 		Ok(schema::agent::table
@@ -167,27 +167,20 @@ impl Store {
 		&self,
 		connection: &mut PgConnection,
 		Activity {
-            ref external_id,
-            namespaceid,
-            started,
-            ended,
-            domaintypeid,
-            attributes,
-            ..
-        }: &Activity,
-		ns: &BTreeMap<NamespaceId, Namespace>,
+			ref external_id, namespace_id, started, ended, domaintype_id, attributes, ..
+		}: &Activity,
+		ns: &BTreeMap<NamespaceId, Arc<Namespace>>,
 	) -> Result<(), StoreError> {
 		use schema::activity as dsl;
-		let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 		let (_, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+			self.namespace_by_external_id(connection, namespace_id.external_id_part())?;
 
 		let existing = self
-			.activity_by_activity_external_id_and_namespace(connection, external_id, namespaceid)
+			.activity_by_activity_external_id_and_namespace(connection, external_id, namespace_id)
 			.ok();
 
 		let resolved_domain_type =
-			domaintypeid.as_ref().map(|x| x.external_id_part().clone()).or_else(|| {
+			domaintype_id.as_ref().map(|x| x.external_id_part().clone()).or_else(|| {
 				existing.as_ref().and_then(|x| x.domaintype.as_ref().map(ExternalId::from))
 			});
 
@@ -204,7 +197,7 @@ impl Store {
 				dsl::namespace_id.eq(nsid),
 				dsl::started.eq(started.map(|t| t.naive_utc())),
 				dsl::ended.eq(ended.map(|t| t.naive_utc())),
-				dsl::domaintype.eq(domaintypeid.as_ref().map(|x| x.external_id_part())),
+				dsl::domaintype.eq(domaintype_id.as_ref().map(|x| x.external_id_part())),
 			))
 			.on_conflict((dsl::external_id, dsl::namespace_id))
 			.do_update()
@@ -218,7 +211,7 @@ impl Store {
 		let query::Activity { id, .. } = self.activity_by_activity_external_id_and_namespace(
 			connection,
 			external_id,
-			namespaceid,
+			namespace_id,
 		)?;
 
 		diesel::insert_into(schema::activity_attribute::table)
@@ -246,10 +239,9 @@ impl Store {
 		&self,
 		connection: &mut PgConnection,
 		Agent { ref external_id, namespaceid, domaintypeid, attributes, .. }: &Agent,
-		ns: &BTreeMap<NamespaceId, Namespace>,
+		ns: &BTreeMap<NamespaceId, Arc<Namespace>>,
 	) -> Result<(), StoreError> {
 		use schema::agent::dsl;
-		let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 		let (_, nsid) =
 			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
 
@@ -298,16 +290,15 @@ impl Store {
 	fn apply_entity(
 		&self,
 		connection: &mut PgConnection,
-		Entity { namespaceid, id, external_id, domaintypeid, attributes }: &Entity,
-		ns: &BTreeMap<NamespaceId, Namespace>,
+		Entity { namespace_id, id, external_id, domaintypeid, attributes }: &Entity,
+		ns: &BTreeMap<NamespaceId, Arc<Namespace>>,
 	) -> Result<(), StoreError> {
 		use schema::entity::dsl;
-		let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
 		let (_, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
+			self.namespace_by_external_id(connection, namespace_id.external_id_part())?;
 
 		let existing = self
-			.entity_by_entity_external_id_and_namespace(connection, external_id, namespaceid)
+			.entity_by_entity_external_id_and_namespace(connection, external_id, namespace_id)
 			.ok();
 
 		let resolved_domain_type =
@@ -327,7 +318,7 @@ impl Store {
 			.execute(connection)?;
 
 		let query::Entity { id, .. } =
-			self.entity_by_entity_external_id_and_namespace(connection, external_id, namespaceid)?;
+			self.entity_by_entity_external_id_and_namespace(connection, external_id, namespace_id)?;
 
 		diesel::insert_into(schema::entity_attribute::table)
 			.values(
@@ -340,73 +331,6 @@ impl Store {
 					})
 					.collect::<Vec<_>>(),
 			)
-			.on_conflict_do_nothing()
-			.execute(connection)?;
-
-		Ok(())
-	}
-
-	#[instrument(level = "trace", skip(self, connection), ret(Debug))]
-	fn apply_has_identity(
-		&self,
-		connection: &mut PgConnection,
-		model: &ProvModel,
-		namespaceid: &NamespaceId,
-		agent: &AgentId,
-		identity: &IdentityId,
-	) -> Result<(), StoreError> {
-		let (_, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-		let identity = self.identity_by(connection, namespaceid, identity)?;
-		use schema::agent::dsl;
-
-		diesel::update(schema::agent::table)
-			.filter(dsl::external_id.eq(agent.external_id_part()).and(dsl::namespace_id.eq(nsid)))
-			.set(dsl::identity_id.eq(identity.id))
-			.execute(connection)?;
-
-		Ok(())
-	}
-
-	#[instrument(level = "trace", skip(self, connection), ret(Debug))]
-	fn apply_had_identity(
-		&self,
-		connection: &mut PgConnection,
-		model: &ProvModel,
-		namespaceid: &NamespaceId,
-		agent: &AgentId,
-		identity: &IdentityId,
-	) -> Result<(), StoreError> {
-		let identity = self.identity_by(connection, namespaceid, identity)?;
-		let agent = self.agent_by_agent_external_id_and_namespace(
-			connection,
-			agent.external_id_part(),
-			namespaceid,
-		)?;
-		use schema::hadidentity::dsl;
-
-		diesel::insert_into(schema::hadidentity::table)
-			.values((dsl::agent_id.eq(agent.id), dsl::identity_id.eq(identity.id)))
-			.on_conflict_do_nothing()
-			.execute(connection)?;
-
-		Ok(())
-	}
-
-	#[instrument(level = "trace", skip(self, connection), ret(Debug))]
-	fn apply_identity(
-		&self,
-		connection: &mut PgConnection,
-		Identity { id, namespaceid, public_key, .. }: &Identity,
-		ns: &BTreeMap<NamespaceId, Namespace>,
-	) -> Result<(), StoreError> {
-		use schema::identity::dsl;
-		let _namespace = ns.get(namespaceid).ok_or(StoreError::InvalidNamespace {})?;
-		let (_, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-
-		diesel::insert_into(schema::identity::table)
-			.values((dsl::namespace_id.eq(nsid), dsl::public_key.eq(public_key)))
 			.on_conflict_do_nothing()
 			.execute(connection)?;
 
@@ -429,19 +353,6 @@ impl Store {
 		}
 		for (_, entity) in model.entities.iter() {
 			self.apply_entity(connection, entity, &model.namespaces)?
-		}
-		for (_, identity) in model.identities.iter() {
-			self.apply_identity(connection, identity, &model.namespaces)?
-		}
-
-		for ((namespaceid, agent_id), (_, identity_id)) in model.has_identity.iter() {
-			self.apply_has_identity(connection, model, namespaceid, agent_id, identity_id)?;
-		}
-
-		for ((namespaceid, agent_id), identity_id) in model.had_identity.iter() {
-			for (_, identity_id) in identity_id {
-				self.apply_had_identity(connection, model, namespaceid, agent_id, identity_id)?;
-			}
 		}
 
 		for ((namespaceid, _), association) in model.association.iter() {
@@ -502,7 +413,7 @@ impl Store {
 	) -> Result<(), StoreError> {
 		use schema::namespace::dsl;
 		diesel::insert_into(schema::namespace::table)
-			.values((dsl::external_id.eq(external_id), dsl::uuid.eq(uuid.to_string())))
+			.values((dsl::external_id.eq(external_id), dsl::uuid.eq(hex::encode(uuid))))
 			.on_conflict_do_nothing()
 			.execute(connection)?;
 
@@ -800,7 +711,7 @@ impl Store {
 				.map_err(StoreError::from)?;
 
 			if let Some(block_id) = block_id_and_tx.0 {
-				Ok(Some(BlockId::try_from(block_id)?))
+				Ok(Some(BlockId::try_from(&*block_id)?))
 			} else {
 				Ok(None)
 			}
@@ -823,23 +734,6 @@ impl Store {
 			.ok_or(StoreError::RecordNotFound {})?;
 
 		Ok((NamespaceId::from_external_id(ns.1, Uuid::from_str(&ns.2)?), ns.0))
-	}
-
-	#[instrument(skip(connection))]
-	pub(crate) fn identity_by(
-		&self,
-		connection: &mut PgConnection,
-		namespaceid: &NamespaceId,
-		identity: &IdentityId,
-	) -> Result<query::Identity, StoreError> {
-		use self::schema::identity::dsl;
-		let (_, nsid) =
-			self.namespace_by_external_id(connection, namespaceid.external_id_part())?;
-		let public_key = identity.public_key_part();
-
-		Ok(dsl::identity
-			.filter(dsl::public_key.eq(public_key).and(dsl::namespace_id.eq(nsid)))
-			.first::<query::Identity>(connection)?)
 	}
 
 	#[instrument]
@@ -876,7 +770,8 @@ impl Store {
 						})
 					})
 					.collect::<Result<BTreeMap<_, _>, _>>()?,
-			},
+			}
+			.into(),
 		);
 
 		for (responsible, activity, role) in schema::delegation::table
@@ -938,11 +833,11 @@ impl Store {
 			(namespaceid.clone(), id.clone()),
 			Activity {
 				id: id.clone(),
-				namespaceid: namespaceid.clone(),
+				namespace_id: namespaceid.clone(),
 				external_id: activity.external_id.into(),
-				started: activity.started.map(|x| Utc.from_utc_datetime(&x)),
-				ended: activity.ended.map(|x| Utc.from_utc_datetime(&x)),
-				domaintypeid: activity.domaintype.map(DomaintypeId::from_external_id),
+				started: activity.started.map(|x| Utc.from_utc_datetime(&x).into()),
+				ended: activity.ended.map(|x| Utc.from_utc_datetime(&x).into()),
+				domaintype_id: activity.domaintype.map(DomaintypeId::from_external_id),
 				attributes: attributes
 					.into_iter()
 					.map(|attr| {
@@ -951,7 +846,8 @@ impl Store {
 						})
 					})
 					.collect::<Result<BTreeMap<_, _>, _>>()?,
-			},
+			}
+			.into(),
 		);
 
 		for generation in schema::generation::table
@@ -1055,7 +951,7 @@ impl Store {
 			(namespace_id.clone(), entity_id.clone()),
 			Entity {
 				id: entity_id.clone(),
-				namespaceid: namespace_id.clone(),
+				namespace_id: namespace_id.clone(),
 				external_id: external_id.into(),
 				domaintypeid: domaintype.map(DomaintypeId::from_external_id),
 				attributes: attributes
@@ -1066,7 +962,8 @@ impl Store {
 						})
 					})
 					.collect::<Result<BTreeMap<_, _>, _>>()?,
-			},
+			}
+			.into(),
 		);
 
 		for (activity_id, activity_external_id, used_entity_id, typ) in schema::derivation::table

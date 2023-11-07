@@ -247,7 +247,7 @@ submit notification like:
   "error": null,
   "txId": "12d3236ae1b227391725d2d9315b7ca53747217c5d..",
   "delta":  {
-      "@context": "https://btp.works/chr/1.0/c.jsonld",
+      "@context": "http://chronicle.works/chr/1.0/c.jsonld",
       "@graph": [
         {
           "@id": "chronicle:activity:publication1",
@@ -925,30 +925,30 @@ operations to your JSON-LD file:
     {
         "@id": "_:n1",
         "@type": [
-        "http://btp.works/chronicleoperations/ns#SetAttributes"
+        "http://chronicle.works/chronicleoperations/ns#SetAttributes"
         ],
-        "http://btp.works/chronicleoperations/ns#agentName": [
+        "http://chronicle.works/chronicleoperations/ns#agentName": [
         {
             "@value": "testagent"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#attributes": [
+        "http://chronicle.works/chronicleoperations/ns#attributes": [
         {
             "@type": "@json",
             "@value": {}
         }
         ],
-        "http://btp.works/chronicleoperations/ns#domaintypeId": [
+        "http://chronicle.works/chronicleoperations/ns#domaintypeId": [
         {
             "@value": "type"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceName": [
         {
             "@value": "testns"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceUuid": [
         {
             "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
         }
@@ -957,14 +957,14 @@ operations to your JSON-LD file:
     {
         "@id": "_:n1",
         "@type": [
-        "http://btp.works/chronicleoperations/ns#CreateNamespace"
+        "http://chronicle.works/chronicleoperations/ns#CreateNamespace"
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceName": [
         {
             "@value": "testns"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceUuid": [
         {
             "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
         }
@@ -973,19 +973,19 @@ operations to your JSON-LD file:
     {
         "@id": "_:n1",
         "@type": [
-        "http://btp.works/chronicleoperations/ns#AgentExists"
+        "http://chronicle.works/chronicleoperations/ns#AgentExists"
         ],
-        "http://btp.works/chronicleoperations/ns#agentName": [
+        "http://chronicle.works/chronicleoperations/ns#agentName": [
         {
             "@value": "testagent"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceName": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceName": [
         {
             "@value": "testns"
         }
         ],
-        "http://btp.works/chronicleoperations/ns#namespaceUuid": [
+        "http://chronicle.works/chronicleoperations/ns#namespaceUuid": [
         {
             "@value": "6803790d-5891-4dfa-b773-41827d2c630b"
         }
@@ -1001,12 +1001,12 @@ imported.
 
 The `namespace-id` argument is a string that specifies the name of the namespace
 to which the data will be imported. This value should match the value of the
-`http://btp.works/chronicleoperations/ns#namespaceName` property in the JSON-LD
+`http://chronicle.works/chronicleoperations/ns#namespaceName` property in the JSON-LD
 file.
 
 The `namespace-uuid` argument is a string that specifies the UUID of the
 namespace to which the data will be imported. This value should match the value
-of the `http://btp.works/chronicleoperations/ns#namespaceUuid` property in the
+of the `http://chronicle.works/chronicleoperations/ns#namespaceUuid` property in the
 JSON-LD file. Data in the file not matching the specified namespace is ignored.
 
 Once you have provided the `namespace-id` and `namespace-uuid` arguments, you

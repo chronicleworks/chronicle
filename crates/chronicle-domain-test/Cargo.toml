@@ -22,16 +22,19 @@ uuid                = { workspace = true }
 chronicle = { path = "../chronicle" }
 
 [features]
-devmode = ["inmem"]
-strict  = []
+strict = []
 # Use an in-memory stub ledger
-inmem = ["chronicle/inmem"]
+devmode = ["chronicle/devmode"]
 
 [dev-dependencies]
-async-stl-client   = { workspace = true }
-chronicle-protocol = { path = "../chronicle-protocol" }
-futures            = { workspace = true }
-hex                = { workspace = true }
-insta              = { workspace = true, features = ["json"] }
-opa-tp-protocol    = { path = "../opa-tp-protocol" }
-tempfile           = { workspace = true }
+chronicle-test-infrastructure = { path = "../chronicle-test-infrastructure" }
+common                        = { path = "../common", features = ["std"] }
+embedded-substrate            = { path = "../embedded-substrate" }
+futures                       = { workspace = true }
+hex                           = { workspace = true }
+insta                         = { workspace = true, features = ["json"] }
+protocol-substrate            = { path = "../protocol-substrate" }
+protocol-substrate-chronicle  = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa        = { path = "../protocol-substrate-opa" }
+tempfile                      = { workspace = true }
+tokio                         = { workspace = true }

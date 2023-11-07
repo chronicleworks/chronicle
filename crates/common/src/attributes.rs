@@ -1,13 +1,15 @@
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 
+#[cfg(feature = "parity-encoding")]
+use parity_scale_codec::Encode;
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::{alloc::collections::BTreeMap, alloc::string::String};
+#[cfg(feature = "parity-encoding")]
+use scale_encode::error::Kind;
 #[cfg(not(feature = "std"))]
 use scale_info::{prelude::borrow::ToOwned, prelude::string::ToString, prelude::*};
 
-use parity_scale_codec::{Decode, Encode};
-use scale_info::{build::Fields, Path, Type, TypeInfo};
 use serde_json::Value;
 
 use crate::prov::DomaintypeId;
@@ -27,7 +29,37 @@ impl core::fmt::Display for SerdeWrapper {
 	}
 }
 
-impl Encode for SerdeWrapper {
+impl From<Value> for SerdeWrapper {
+	fn from(value: Value) -> Self {
+		SerdeWrapper(value)
+	}
+}
+
+#[cfg(feature = "parity-encoding")]
+impl scale_encode::EncodeAsType for SerdeWrapper {
+	fn encode_as_type_to(
+		&self,
+		type_id: u32,
+		_types: &scale_info::PortableRegistry,
+		out: &mut scale_encode::Vec<u8>,
+	) -> Result<(), scale_encode::Error> {
+		let json_string = match serde_json::to_string(&self.0) {
+			Ok(json_string) => json_string,
+			Err(e) => {
+				tracing::error!("Failed to serialize Value to JSON string: {}", e);
+				return Err(scale_encode::Error::new(scale_encode::error::ErrorKind::WrongShape {
+					actual: Kind::Str,
+					expected: type_id,
+				}));
+			},
+		};
+		json_string.encode_to(out);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "parity-encoding")]
+impl parity_scale_codec::Encode for SerdeWrapper {
 	fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
 		let json_string =
 			serde_json::to_string(&self.0).expect("Failed to serialize Value to JSON string");
@@ -35,19 +67,8 @@ impl Encode for SerdeWrapper {
 	}
 }
 
-impl From<Value> for SerdeWrapper {
-	fn from(value: Value) -> Self {
-		SerdeWrapper(value)
-	}
-}
-
-impl From<SerdeWrapper> for Value {
-	fn from(wrapper: SerdeWrapper) -> Self {
-		wrapper.0
-	}
-}
-
-impl Decode for SerdeWrapper {
+#[cfg(feature = "parity-encoding")]
+impl parity_scale_codec::Decode for SerdeWrapper {
 	fn decode<I: parity_scale_codec::Input>(
 		input: &mut I,
 	) -> Result<Self, parity_scale_codec::Error> {
@@ -59,16 +80,33 @@ impl Decode for SerdeWrapper {
 	}
 }
 
-impl TypeInfo for SerdeWrapper {
+#[cfg(feature = "parity-encoding")]
+impl scale_info::TypeInfo for SerdeWrapper {
 	type Identity = Self;
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("SerdeWrapper", module_path!()))
-			.composite(Fields::unnamed().field(|f| f.ty::<String>().type_name("Json")))
+
+	fn type_info() -> scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("SerdeWrapper", module_path!()))
+			.composite(scale_info::build::Fields::unnamed().field(|f| f.ty::<String>()))
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialEq, Eq)]
+impl From<SerdeWrapper> for Value {
+	fn from(wrapper: SerdeWrapper) -> Self {
+		wrapper.0
+	}
+}
+
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+		scale_encode::EncodeAsType
+	)
+)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attribute {
 	pub typ: String,
 	pub value: SerdeWrapper,
@@ -93,21 +131,54 @@ impl Attribute {
 	pub fn get_value(&self) -> &Value {
 		&self.value.0
 	}
+
 	pub fn new(typ: impl AsRef<str>, value: Value) -> Self {
 		Self { typ: typ.as_ref().to_owned(), value: value.into() }
 	}
 }
 
-#[derive(
-	Debug, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo, PartialEq, Eq, Default,
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_encode::EncodeAsType,
+		scale_info::TypeInfo,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode,
+	)
 )]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Attributes {
-	pub typ: Option<DomaintypeId>,
-	pub attributes: BTreeMap<String, Attribute>,
+	typ: Option<DomaintypeId>,
+	items: Vec<(String, Attribute)>,
 }
 
 impl Attributes {
+	pub fn new(typ: Option<DomaintypeId>, items: Vec<(String, Attribute)>) -> Self {
+		Self { typ, items: items.into_iter().collect::<BTreeMap<_, _>>().into_iter().collect() }
+	}
+
+	pub fn new_from_btree(typ: Option<DomaintypeId>, items: BTreeMap<String, Attribute>) -> Self {
+		Self { typ, items: items.into_iter().collect() }
+	}
+
+	#[tracing::instrument(skip(self))]
+	pub fn get_values(&self) -> Vec<&Attribute> {
+		self.items.iter().map(|(_, attribute)| attribute).collect()
+	}
+
 	pub fn type_only(typ: Option<DomaintypeId>) -> Self {
-		Self { typ, attributes: BTreeMap::new() }
+		Self { typ, items: Vec::new() }
+	}
+
+	pub fn get_typ(&self) -> &Option<DomaintypeId> {
+		&self.typ
+	}
+
+	pub fn get_items(&self) -> &[(String, Attribute)] {
+		&self.items
+	}
+
+	pub fn add_item(&mut self, key: String, value: Attribute) {
+		self.items.push((key, value));
 	}
 }

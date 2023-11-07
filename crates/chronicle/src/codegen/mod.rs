@@ -766,10 +766,10 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
 	#[allow(clippy::from_over_into)]
 	impl From<ProvAgentAttributes> for #abstract_attributes {
 		fn from(attributes: ProvAgentAttributes) -> Self {
-			Self {
-				typ: attributes.typ.map(#domain_type_id::from_external_id),
-				..Default::default()
-			}
+			Self::new(
+				attributes.typ.map(#domain_type_id::from_external_id),
+				vec![]
+			)
 		}
 	}
 
@@ -782,10 +782,10 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
 	#[allow(clippy::from_over_into)]
 	impl From<ProvEntityAttributes> for #abstract_attributes {
 		fn from(attributes: ProvEntityAttributes) -> Self {
-			Self {
-				typ: attributes.typ.map(#domain_type_id::from_external_id),
-				..Default::default()
-			}
+			Self::new(
+				attributes.typ.map(#domain_type_id::from_external_id),
+				vec![]
+			)
 		}
 	}
 	#[derive(#input_object, Clone)]
@@ -797,10 +797,10 @@ fn gen_abstract_prov_attributes() -> rust::Tokens {
 	#[allow(clippy::from_over_into)]
 	impl From<ProvActivityAttributes> for #abstract_attributes {
 		fn from(attributes: ProvActivityAttributes) -> Self {
-			Self {
-				typ: attributes.typ.map(#domain_type_id::from_external_id),
-				..Default::default()
-			}
+			Self::new(
+				attributes.typ.map(#domain_type_id::from_external_id),
+				vec![]
+			)
 		}
 	}
 	}
@@ -816,7 +816,7 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 	let serde_value = &rust::import("chronicle::serde_json", "Value");
 
 	if attributes.is_empty() {
-		return quote! {}
+		return quote! {};
 	}
 
 	quote! {
@@ -840,16 +840,16 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 		#[allow(clippy::useless_conversion)]
 		impl From<#(typ.attributes_type_name_preserve_inflection())> for #abstract_attributes{
 			fn from(attributes: #(typ.attributes_type_name_preserve_inflection())) -> Self {
-				#abstract_attributes {
-					typ: Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
-					attributes: vec![
+				#abstract_attributes::new(
+					Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
+					vec![
 					#(for attribute in attributes =>
 						(#_(#(&attribute.preserve_inflection())).to_owned() ,
 							#abstract_attribute::new(#_(#(&attribute.preserve_inflection())),
 							#serde_value::from(attributes.#(&attribute.as_property())))),
 					)
-					].into_iter().collect(),
-				}
+					]
+				)
 			}
 		}
 	}
@@ -1612,6 +1612,8 @@ fn gen_graphql_type(domain: &ChronicleDomainDef) -> rust::Tokens {
 
 	#[#tokio::main]
 	pub async fn main() {
+
+
 		let model = #chronicledomaindef::from_input_string(#_(#(&domain.to_json_string().unwrap()))).unwrap();
 
 		#bootstrap(model, #chronicle_graphql::new(Query, Mutation)).await

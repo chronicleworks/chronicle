@@ -1,4 +1,5 @@
 use core::pin::Pin;
+use std::{path::PathBuf, sync::Arc};
 #[cfg(feature = "std")]
 use std::{path::PathBuf, sync::Arc};
 
@@ -7,7 +8,7 @@ use futures::AsyncRead;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
+use common::{
 	attributes::Attributes,
 	prov::{
 		operations::{ChronicleOperation, DerivationType},
@@ -15,13 +16,6 @@ use crate::{
 		NamespaceId, ProvModel, Role,
 	},
 };
-
-#[cfg(not(feature = "std"))]
-use parity_scale_codec::{
-	alloc::boxed::Box, alloc::string::String, alloc::sync::Arc, alloc::vec::Vec,
-};
-#[cfg(not(feature = "std"))]
-use scale_info::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
@@ -47,7 +41,6 @@ pub enum AgentCommand {
 		role: Option<Role>,
 	},
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityCommand {
 	Create {
@@ -156,8 +149,7 @@ impl ActivityCommand {
 #[derive(Clone)]
 pub enum PathOrFile {
 	Path(PathBuf),
-	File(Arc<Pin<Box<dyn AsyncRead + Sync + Send>>>), /* Non serialisable variant, used in
-	                                                   * process */
+	File(Arc<Pin<Box<dyn AsyncRead + Sync + Send>>>),
 }
 
 impl core::fmt::Debug for PathOrFile {

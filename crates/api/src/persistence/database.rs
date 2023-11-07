@@ -1,42 +1,7 @@
-use diesel::{r2d2::ConnectionManager, Connection, PgConnection};
-use lazy_static::lazy_static;
+use diesel::{r2d2::ConnectionManager, PgConnection};
+
 use r2d2::Pool;
 use std::{fmt::Display, time::Duration};
-use testcontainers::{clients::Cli, images::postgres::Postgres, Container};
-
-lazy_static! {
-	static ref CLIENT: Cli = Cli::default();
-}
-
-pub struct TemporaryDatabase<'a> {
-	db_uris: Vec<String>,
-	_container: Container<'a, Postgres>,
-}
-
-impl<'a> TemporaryDatabase<'a> {
-	pub fn connection_pool(&self) -> Result<Pool<ConnectionManager<PgConnection>>, r2d2::Error> {
-		let db_uri = self
-			.db_uris
-			.iter()
-			.find(|db_uri| PgConnection::establish(db_uri).is_ok())
-			.expect("cannot establish connection");
-		Pool::builder().build(ConnectionManager::<PgConnection>::new(db_uri))
-	}
-}
-
-impl<'a> Default for TemporaryDatabase<'a> {
-	fn default() -> Self {
-		let container = CLIENT.run(Postgres::default());
-		const PORT: u16 = 5432;
-		Self {
-			db_uris: vec![
-				format!("postgresql://postgres@127.0.0.1:{}/", container.get_host_port_ipv4(PORT)),
-				format!("postgresql://postgres@{}:{}/", container.get_bridge_ip_address(), PORT),
-			],
-			_container: container,
-		}
-	}
-}
 
 #[async_trait::async_trait]
 pub trait DatabaseConnector<X, E> {

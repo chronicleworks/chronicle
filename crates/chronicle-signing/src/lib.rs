@@ -10,6 +10,7 @@ use secret_vault::{
 	SecretNamespace, SecretVaultBuilder, SecretVaultRef, SecretVaultView,
 };
 use std::{
+	collections::BTreeMap,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -42,15 +43,19 @@ pub enum SecretError {
 		#[from]
 		source: SecretVaultError,
 	},
+
+	#[error("Bad BIP39 seed")]
+	BadSeed,
 }
 
 pub enum ChronicleSecretsOptions {
 	// Connect to hashicorp vault for secrets
 	Vault(vault_secret_manager_source::VaultSecretManagerSourceOptions),
-	// Generate secrets in memory on demand
+	// Generate secrets from entropy in memory on demand
 	Embedded,
-	//Deterministically generate secrets for testing
-	Test,
+
+	//Seed secrets with name using a map of secret name to BIP39 seed phrase
+	Seeded(BTreeMap<String, [u8; 32]>),
 	//Filesystem based keys
 	Filesystem(PathBuf),
 }
@@ -81,9 +86,9 @@ impl ChronicleSecretsOptions {
 		ChronicleSecretsOptions::Embedded
 	}
 
-	// Generate deterministic secrets in memory on demand
-	pub fn test_keys() -> ChronicleSecretsOptions {
-		ChronicleSecretsOptions::Test
+	// Use supplied seeds, or fall back to entropy
+	pub fn seeded(seeds: BTreeMap<String, [u8; 32]>) -> ChronicleSecretsOptions {
+		ChronicleSecretsOptions::Seeded(seeds)
 	}
 }
 
@@ -121,8 +126,11 @@ impl ChronicleSigning {
 					multi_source =
 						multi_source.add_source(&SecretNamespace::new(namespace), source);
 				},
-				(namespace, ChronicleSecretsOptions::Test) => {
-					let source = embedded_secret_manager_source::EmbeddedSecretManagerSource::new_deterministic();
+				(namespace, ChronicleSecretsOptions::Seeded(seeds)) => {
+					let source =
+						embedded_secret_manager_source::EmbeddedSecretManagerSource::new_seeded(
+							seeds,
+						);
 					multi_source =
 						multi_source.add_source(&SecretNamespace::new(namespace), source);
 				},
@@ -182,6 +190,30 @@ pub trait WithSecret {
 		secret_namespace: &str,
 		secret_name: &str,
 	) -> Result<VerifyingKey, SecretError>;
+}
+
+#[async_trait::async_trait]
+pub trait OwnedSecret {
+	async fn copy_signing_key(
+		&self,
+		secret_namespace: &str,
+		secret_name: &str,
+	) -> Result<SigningKey, SecretError>;
+}
+
+#[async_trait::async_trait]
+impl<T: WithSecret + ?Sized + Send + Sync> OwnedSecret for T {
+	async fn copy_signing_key(
+		&self,
+		secret_namespace: &str,
+		secret_name: &str,
+	) -> Result<SigningKey, SecretError> {
+		let secret =
+			WithSecret::with_signing_key(self, secret_namespace, secret_name, |secret| secret)
+				.await?;
+
+		Ok(secret)
+	}
 }
 
 #[async_trait::async_trait]

@@ -4,10 +4,10 @@
     "@type": {
         "type": "array",
         "length": 1,
-        "content": "http://btp.works/chronicleoperations/ns#EntityDerive"
+        "content": "http://chronicle.works/chronicleoperations/ns#EntityDerive"
     },
-    "http://btp.works/chronicleoperations/ns#entityName": "@entity_name",
-    "http://btp.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-    "http://btp.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
-    "http://btp.works/chronicleoperations/ns#usedEntityName": "@second_entity_name"
+    "http://chronicle.works/chronicleoperations/ns#entityName": "@entity_name",
+    "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+    "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
+    "http://chronicle.works/chronicleoperations/ns#usedEntityName": "@second_entity_name"
 }

@@ -1,5 +1,5 @@
-use scale_info::TypeInfo;
 use tracing::instrument;
+use uuid::Uuid;
 
 use crate::{
 	identity::SignedIdentity,
@@ -10,7 +10,7 @@ use crate::{
 			WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
 		},
 		ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
-		NamespaceId, ParseIriError, ProcessorError, ProvModel,
+		NamespaceId, ProcessorError, ProvModel,
 	},
 };
 
@@ -19,14 +19,15 @@ use core::str::FromStr;
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::{
 	alloc::boxed::Box, alloc::collections::btree_map::Entry, alloc::collections::BTreeMap,
-	alloc::collections::BTreeSet, alloc::string::String, alloc::sync::Arc, alloc::vec::Vec,
+	alloc::collections::BTreeSet, alloc::string::String, alloc::sync::Arc, alloc::vec::Vec, Decode,
+	Encode,
 };
 #[cfg(not(feature = "std"))]
 use scale_info::prelude::*;
 #[cfg(feature = "std")]
 use std::{
 	boxed::Box, collections::btree_map::Entry, collections::BTreeMap, collections::BTreeSet,
-	str::FromStr, sync::Arc,
+	sync::Arc,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,9 @@ pub enum SubmissionError {
 	Processor { source: Arc<ProcessorError>, tx_id: ChronicleTransactionId },
 	Contradiction { source: Contradiction, tx_id: ChronicleTransactionId },
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for SubmissionError {}
 
 impl SubmissionError {
 	pub fn tx_id(&self) -> &ChronicleTransactionId {
@@ -46,15 +50,15 @@ impl SubmissionError {
 	}
 
 	pub fn processor(tx_id: &ChronicleTransactionId, source: ProcessorError) -> SubmissionError {
-		SubmissionError::Processor { source: Arc::new(source), tx_id: tx_id.clone() }
+		SubmissionError::Processor { source: Arc::new(source), tx_id: *tx_id }
 	}
 
 	pub fn contradiction(tx_id: &ChronicleTransactionId, source: Contradiction) -> SubmissionError {
-		SubmissionError::Contradiction { source, tx_id: tx_id.clone() }
+		SubmissionError::Contradiction { source, tx_id: *tx_id }
 	}
 
 	pub fn communication(tx_id: &ChronicleTransactionId, source: anyhow::Error) -> SubmissionError {
-		SubmissionError::Communication { source: Arc::new(source), tx_id: tx_id.clone() }
+		SubmissionError::Communication { source: Arc::new(source), tx_id: *tx_id }
 	}
 }
 
@@ -78,6 +82,36 @@ impl core::fmt::Display for SubmissionError {
 			Self::Processor { source, .. } => write!(f, "Processor error {source} "),
 			Self::Contradiction { source, .. } => write!(f, "Contradiction: {source}"),
 		}
+	}
+}
+
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(
+		scale_info::TypeInfo,
+		scale_encode::EncodeAsType,
+		parity_scale_codec::Encode,
+		parity_scale_codec::Decode
+	)
+)]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct OperationSubmission {
+	pub correlation_id: [u8; 16],
+	pub items: Arc<Vec<ChronicleOperation>>,
+	pub identity: Arc<SignedIdentity>,
+}
+
+impl OperationSubmission {
+	pub fn new(uuid: Uuid, identity: SignedIdentity, operations: Vec<ChronicleOperation>) -> Self {
+		OperationSubmission {
+			correlation_id: uuid.into_bytes(),
+			identity: identity.into(),
+			items: operations.into(),
+		}
+	}
+
+	pub fn new_anonymous(uuid: Uuid, operations: Vec<ChronicleOperation>) -> Self {
+		Self::new(uuid, SignedIdentity::new_no_identity(), operations)
 	}
 }
 
@@ -111,7 +145,7 @@ impl SubmissionStage {
 	}
 
 	pub fn submitted(r: &ChronicleTransactionId) -> Self {
-		SubmissionStage::Submitted(Ok(r.clone()))
+		SubmissionStage::Submitted(Ok(*r))
 	}
 
 	pub fn committed(commit: Commit, identity: SignedIdentity) -> Self {
@@ -138,30 +172,25 @@ impl SubmissionStage {
 	}
 }
 
-#[derive(
-	parity_scale_codec::Encode,
-	parity_scale_codec::Decode,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Clone,
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+#[cfg_attr(
+	feature = "parity-encoding",
+	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
 )]
-pub struct LedgerAddress {
+pub struct ChronicleAddress {
 	// Namespaces do not have a namespace
 	namespace: Option<NamespaceId>,
 	resource: ChronicleIri,
 }
 
-impl parity_scale_codec::MaxEncodedLen for LedgerAddress {
+#[cfg(feature = "parity-encoding")]
+impl parity_scale_codec::MaxEncodedLen for ChronicleAddress {
 	fn max_encoded_len() -> usize {
 		2048usize
 	}
 }
 
-impl core::fmt::Display for LedgerAddress {
+impl core::fmt::Display for ChronicleAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		if let Some(namespace) = &self.namespace {
 			write!(f, "{}:{}", namespace, self.resource)
@@ -175,7 +204,7 @@ pub trait NameSpacePart {
 	fn namespace_part(&self) -> Option<NamespaceId>;
 }
 
-impl NameSpacePart for LedgerAddress {
+impl NameSpacePart for ChronicleAddress {
 	fn namespace_part(&self) -> Option<NamespaceId> {
 		self.namespace.clone()
 	}
@@ -185,24 +214,13 @@ pub trait ResourcePart {
 	fn resource_part(&self) -> ChronicleIri;
 }
 
-impl ResourcePart for LedgerAddress {
+impl ResourcePart for ChronicleAddress {
 	fn resource_part(&self) -> ChronicleIri {
 		self.resource.clone()
 	}
 }
 
-impl LedgerAddress {
-	fn from_ld(ns: Option<&str>, resource: &str) -> Result<Self, ParseIriError> {
-		Ok(Self {
-			namespace: if let Some(ns) = ns {
-				Some(ChronicleIri::from_str(ns)?.namespace()?)
-			} else {
-				None
-			},
-			resource: ChronicleIri::from_str(resource)?,
-		})
-	}
-
+impl ChronicleAddress {
 	fn namespace(ns: &NamespaceId) -> Self {
 		Self { namespace: None, resource: ns.clone().into() }
 	}
@@ -344,16 +362,16 @@ impl StateInput {
 
 #[derive(Debug)]
 pub struct StateOutput {
-	pub address: LedgerAddress,
+	pub address: ChronicleAddress,
 	pub data: ProvModel,
 }
 
 impl StateOutput {
-	pub fn new(address: LedgerAddress, data: ProvModel) -> Self {
+	pub fn new(address: ChronicleAddress, data: ProvModel) -> Self {
 		Self { address, data }
 	}
 
-	pub fn address(&self) -> &LedgerAddress {
+	pub fn address(&self) -> &ChronicleAddress {
 		&self.address
 	}
 
@@ -379,7 +397,7 @@ impl Version {
 
 /// Hold a cache of `LedgerWriter::submit` input and output address data
 pub struct OperationState {
-	state: BTreeMap<LedgerAddress, Version>,
+	state: BTreeMap<ChronicleAddress, Version>,
 }
 
 impl Default for OperationState {
@@ -396,10 +414,11 @@ impl OperationState {
 	pub fn update_state_from_output(&mut self, output: impl Iterator<Item = StateOutput>) {
 		self.update_state(output.map(|output| (output.address, Some(output.data))))
 	}
+
 	/// Load input values into `OperationState`
 	pub fn update_state(
 		&mut self,
-		input: impl Iterator<Item = (LedgerAddress, Option<ProvModel>)>,
+		input: impl Iterator<Item = (ChronicleAddress, Option<ProvModel>)>,
 	) {
 		input.for_each(|(address, value)| {
 			let entry = self.state.entry(address);
@@ -438,7 +457,7 @@ impl OperationState {
 	}
 
 	/// Return the input data held in `OperationState` for `addresses` as a vector of `StateInput`s
-	pub fn opa_context(&self, addresses: BTreeSet<LedgerAddress>) -> Vec<StateInput> {
+	pub fn opa_context(&self, addresses: BTreeSet<ChronicleAddress>) -> Vec<StateInput> {
 		self.state
 			.iter()
 			.filter(|(addr, _data)| addresses.iter().any(|a| &a == addr))
@@ -451,23 +470,26 @@ impl OperationState {
 impl ChronicleOperation {
 	/// Compute dependencies for a chronicle operation, input and output addresses are always
 	/// symmetric
-	pub fn dependencies(&self) -> Vec<LedgerAddress> {
+	pub fn dependencies(&self) -> Vec<ChronicleAddress> {
 		match self {
 			ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
-				vec![LedgerAddress::namespace(id)]
+				vec![ChronicleAddress::namespace(id)]
 			},
 			ChronicleOperation::AgentExists(AgentExists { namespace, external_id, .. }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, AgentId::from_external_id(external_id)),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(
+						namespace,
+						AgentId::from_external_id(external_id),
+					),
 				]
 			},
 			ChronicleOperation::ActivityExists(ActivityExists {
 				namespace, external_id, ..
 			}) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(
 						namespace,
 						ActivityId::from_external_id(external_id),
 					),
@@ -475,8 +497,8 @@ impl ChronicleOperation {
 			},
 			ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::WasAssociatedWith(WasAssociatedWith {
@@ -486,10 +508,10 @@ impl ChronicleOperation {
 				agent_id,
 				..
 			}) => vec![
-				LedgerAddress::namespace(namespace),
-				LedgerAddress::in_namespace(namespace, id.clone()),
-				LedgerAddress::in_namespace(namespace, activity_id.clone()),
-				LedgerAddress::in_namespace(namespace, agent_id.clone()),
+				ChronicleAddress::namespace(namespace),
+				ChronicleAddress::in_namespace(namespace, id.clone()),
+				ChronicleAddress::in_namespace(namespace, activity_id.clone()),
+				ChronicleAddress::in_namespace(namespace, agent_id.clone()),
 			],
 			ChronicleOperation::WasAttributedTo(WasAttributedTo {
 				id,
@@ -498,34 +520,37 @@ impl ChronicleOperation {
 				agent_id,
 				..
 			}) => vec![
-				LedgerAddress::namespace(namespace),
-				LedgerAddress::in_namespace(namespace, id.clone()),
-				LedgerAddress::in_namespace(namespace, entity_id.clone()),
-				LedgerAddress::in_namespace(namespace, agent_id.clone()),
+				ChronicleAddress::namespace(namespace),
+				ChronicleAddress::in_namespace(namespace, id.clone()),
+				ChronicleAddress::in_namespace(namespace, entity_id.clone()),
+				ChronicleAddress::in_namespace(namespace, agent_id.clone()),
 			],
 			ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, activity.clone()),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, activity.clone()),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::EntityExists(EntityExists { namespace, external_id }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, EntityId::from_external_id(external_id)),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(
+						namespace,
+						EntityId::from_external_id(external_id),
+					),
 				]
 			},
 			ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }) => vec![
-				LedgerAddress::namespace(namespace),
-				LedgerAddress::in_namespace(namespace, activity.clone()),
-				LedgerAddress::in_namespace(namespace, id.clone()),
+				ChronicleAddress::namespace(namespace),
+				ChronicleAddress::in_namespace(namespace, activity.clone()),
+				ChronicleAddress::in_namespace(namespace, id.clone()),
 			],
 			ChronicleOperation::WasInformedBy(WasInformedBy {
 				namespace,
@@ -533,9 +558,9 @@ impl ChronicleOperation {
 				informing_activity,
 			}) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, activity.clone()),
-					LedgerAddress::in_namespace(namespace, informing_activity.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, activity.clone()),
+					ChronicleAddress::in_namespace(namespace, informing_activity.clone()),
 				]
 			},
 			ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf {
@@ -546,13 +571,13 @@ impl ChronicleOperation {
 				responsible_id,
 				..
 			}) => vec![
-				Some(LedgerAddress::namespace(namespace)),
-				activity_id
-					.as_ref()
-					.map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
-				Some(LedgerAddress::in_namespace(namespace, delegate_id.clone())),
-				Some(LedgerAddress::in_namespace(namespace, responsible_id.clone())),
-				Some(LedgerAddress::in_namespace(namespace, id.clone())),
+				Some(ChronicleAddress::namespace(namespace)),
+				activity_id.as_ref().map(|activity_id| {
+					ChronicleAddress::in_namespace(namespace, activity_id.clone())
+				}),
+				Some(ChronicleAddress::in_namespace(namespace, delegate_id.clone())),
+				Some(ChronicleAddress::in_namespace(namespace, responsible_id.clone())),
+				Some(ChronicleAddress::in_namespace(namespace, id.clone())),
 			]
 			.into_iter()
 			.flatten()
@@ -564,34 +589,34 @@ impl ChronicleOperation {
 				activity_id,
 				..
 			}) => vec![
-				Some(LedgerAddress::namespace(namespace)),
-				activity_id
-					.as_ref()
-					.map(|activity_id| LedgerAddress::in_namespace(namespace, activity_id.clone())),
-				Some(LedgerAddress::in_namespace(namespace, used_id.clone())),
-				Some(LedgerAddress::in_namespace(namespace, id.clone())),
+				Some(ChronicleAddress::namespace(namespace)),
+				activity_id.as_ref().map(|activity_id| {
+					ChronicleAddress::in_namespace(namespace, activity_id.clone())
+				}),
+				Some(ChronicleAddress::in_namespace(namespace, used_id.clone())),
+				Some(ChronicleAddress::in_namespace(namespace, id.clone())),
 			]
 			.into_iter()
 			.flatten()
 			.collect(),
 			ChronicleOperation::SetAttributes(SetAttributes::Agent { id, namespace, .. }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::SetAttributes(SetAttributes::Entity { id, namespace, .. }) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::SetAttributes(SetAttributes::Activity {
 				id, namespace, ..
 			}) => {
 				vec![
-					LedgerAddress::namespace(namespace),
-					LedgerAddress::in_namespace(namespace, id.clone()),
+					ChronicleAddress::namespace(namespace),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 		}
@@ -615,7 +640,7 @@ impl ChronicleOperation {
 				.to_snapshot()
 				.into_iter()
 				.map(|((namespace, resource), prov)| {
-					StateOutput::new(LedgerAddress { namespace, resource }, prov)
+					StateOutput::new(ChronicleAddress { namespace, resource }, prov)
 				})
 				.collect::<Vec<_>>(),
 			model,
