@@ -1,10 +1,16 @@
-site_name: chronicle
-site_author: BTP
+---
+site_name: Chronicle
+site_author: Chronicle Team
+docs_dir: docs
 theme:
   name: material
   palette:
-    scheme: default
-copyright: Copyright &copy; 2022-23 Blockchain Technology Partners
+    scheme: Chronicle
+  logo: assets/logos/logo.png
+  favicon: assets/logos/favicon.png
+  features:
+    - content.code.copy
+copyright: Copyright &copy; 2023 The Chronicle Authors | Documentation distributed under CC BY 4.0
 strict: false
 markdown_extensions:
   - pymdownx.highlight:
@@ -41,7 +47,7 @@ nav:
       - Health Checks and Testing: health-checks-and-testing.md
       - Helm Testing: helm_testing.md
   - Installing:
-      - Installing with Sextant: sextant.md
+      - Installing with SUSE Rancher: rancher.md
       - Security settings via Helm: helm-jwks-opa.md
       - Helm scenarios enumerated: helm-scenarios.md
       - Other Helm Options: helm-options.md
