@@ -23,7 +23,7 @@ provenance information for a range of applications or use cases such as the
 traceability of artwork, critical infrastructure, food items, medical devices,
 precious metals, or real estate, just to mention a few.
 
-Chronicle is powered by our blockchain platform Sextant, to facilitate its
+Chronicle can be easily deployed with SUSE Rancher, to facilitate its
 deployment and ongoing management, as well as its integration with enterprise
 systems. Our flexible deployment options include multi-cloud, on-premise, and
 hybrid environments, leveraging the industry-leading container orchestration

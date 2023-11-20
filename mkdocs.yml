@@ -47,7 +47,7 @@ nav:
       - Health Checks and Testing: health-checks-and-testing.md
       - Helm Testing: helm_testing.md
   - Installing:
-      - Installing with Sextant: sextant.md
+      - Installing with SUSE Rancher: rancher.md
       - Security settings via Helm: helm-jwks-opa.md
       - Helm scenarios enumerated: helm-scenarios.md
       - Other Helm Options: helm-options.md
@@ -60,5 +60,3 @@ nav:
       - Authorization checking: oidc-opa-flow.md
       - Importing data: importing.md
   - Upgrading: upgrading.md
-  - Cookbooks:
-      - SUSE Rancher: rancher.md
