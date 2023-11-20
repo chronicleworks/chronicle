@@ -41,7 +41,7 @@ pub async fn activity_timeline<'a>(
 
     // Default from and to to the maximum possible time range
     let from = from.or_else(|| {
-        Some(DateTime::<Utc>::from_utc(
+        Some(DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDateTime::new(
                 NaiveDate::from_ymd_opt(1582, 10, 16).unwrap(),
                 NaiveTime::from_hms_opt(0, 0, 0).unwrap(),

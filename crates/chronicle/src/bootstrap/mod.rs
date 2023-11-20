@@ -172,6 +172,7 @@ where
     Ok(())
 }
 
+#[cfg(not(feature = "inmem"))]
 fn namespace_bindings(options: &ArgMatches) -> Vec<NamespaceId> {
     options
         .values_of("namespace-bindings")

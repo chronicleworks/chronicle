@@ -1007,8 +1007,12 @@ impl Store {
                 id: id.clone(),
                 namespaceid: namespaceid.clone(),
                 external_id: activity.external_id.into(),
-                started: activity.started.map(|x| DateTime::from_utc(x, Utc)),
-                ended: activity.ended.map(|x| DateTime::from_utc(x, Utc)),
+                started: activity
+                    .started
+                    .map(|x| DateTime::from_naive_utc_and_offset(x, Utc)),
+                ended: activity
+                    .ended
+                    .map(|x| DateTime::from_naive_utc_and_offset(x, Utc)),
                 domaintypeid: activity.domaintype.map(DomaintypeId::from_external_id),
                 attributes: attributes
                     .into_iter()
@@ -1048,7 +1052,6 @@ impl Store {
             .select(schema::entity::external_id)
             .load::<String>(connection)?
         {
-            let used = used;
             model.used(namespaceid.clone(), &id, &EntityId::from_external_id(used));
         }
 
@@ -1061,7 +1064,6 @@ impl Store {
             .select(schema::activity::external_id)
             .load::<String>(connection)?
         {
-            let wasinformedby = wasinformedby;
             model.was_informed_by(
                 namespaceid.clone(),
                 &id,
@@ -1442,7 +1444,6 @@ impl Store {
                     .select(schema::entity::external_id)
                     .load::<String>(connection)?
                 {
-                    let used = used;
                     model.used(
                         namespace.clone(),
                         activity_id,
