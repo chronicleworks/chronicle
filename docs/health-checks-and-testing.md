@@ -2,7 +2,7 @@
 
 ## Helm Testing
 
-See [Helm Testing](./helm_testing.md).
+See [Helm Testing](./helm-testing.md).
 
 ## Liveness Health Check
 
