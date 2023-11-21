@@ -42,16 +42,21 @@ nav:
       - Recording provenance: recording_provenance.md
       - Querying provenance: querying_provenance.md
       - Untyped Chronicle: untyped_chronicle.md
+      - Namespaces: namespaces.md
   - Testing:
       - Building your domain: building.md
       - Health Checks and Testing: health-checks-and-testing.md
-      - Helm Testing: helm_testing.md
+      - Helm Testing: helm-testing.md
   - Installing:
-      - Installing with SUSE Rancher: rancher.md
-      - Security settings via Helm: helm-jwks-opa.md
-      - Helm scenarios enumerated: helm-scenarios.md
-      - Other Helm Options: helm-options.md
-      - External PostgreSQL: external-postgres.md
+      - Rancher by SUSE Cookbook: rancher.md
+      - Configuring Helm:
+          - Security settings: helm-jwks-opa.md
+          - Security scenarios: helm-scenarios.md
+          - Misc Options: helm-options.md
+          - External PostgreSQL: external-postgres.md
+      - Configuring Sawtooth:
+          - Resetting Chronicle: resetting.md
+          - Connecting to Chronicle: connecting.md
   - Operating:
       - CLI: cli.md
       - Configuration options: config.md
@@ -60,3 +65,6 @@ nav:
       - Authorization checking: oidc-opa-flow.md
       - Importing data: importing.md
   - Upgrading: upgrading.md
+  - Legacy Links:
+      - Docs: chronicle.md
+      - Cookbook: cookbooks/chronicle/rancher.md

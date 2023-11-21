@@ -1,4 +1,4 @@
-# Chronicle
+# Chronicle Overview
 
 Chronicle records provenance information of any physical or digital asset on a
 distributed ledger to ensure that it is tamper-proof; and is available with
