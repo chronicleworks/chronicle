@@ -20,7 +20,7 @@ pub const LONG_VERSION: &str = const_format::formatcp!(
 async fn main() {
     let matches = Command::new("chronicle-sawtooth-tp")
         .version(LONG_VERSION)
-        .author("Blockchain Technology Partners")
+        .author("Paravela Limited")
         .about("Write and query provenance data to distributed ledgers")
         .arg(
             Arg::new("connect")
