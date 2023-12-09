@@ -7,7 +7,7 @@ description: |
   provenance information on a distributed ledger - about any asset,
   in any domain, and across multiple parties.
 type: application
-home: https://docs.btp.works/chronicle
+home: https://docs.chronicle.works
 icon: https://chronicle-resources.s3.amazonaws.com/icons/chronicle-transparent-bg-dark.png
 
 keywords:
@@ -17,7 +17,7 @@ keywords:
 # This is the chart version. This version number should be incremented each
 # time you make changes to the chart and its templates, including the app
 # version.
-version: 0.1.24
+version: 0.1.25
 
 # This is the version number of Chronicle being deployed. This version
 # number should be incremented each time you make changes to Chronicle.
