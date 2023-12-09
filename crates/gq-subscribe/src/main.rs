@@ -7,7 +7,7 @@ use tungstenite::{client::IntoClientRequest, connect, Message};
 
 fn main() -> Result<(), anyhow::Error> {
     let args = Command::new("gq-ws")
-        .author("Blockchain Technology Partners")
+        .author("Paravela Limited")
         .about("Perform GraphQL subscription to a websocket")
         .arg(
             Arg::new("request")

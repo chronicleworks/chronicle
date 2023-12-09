@@ -816,7 +816,7 @@ impl SubCommand for CliModel {
     fn as_cmd(&self) -> Command {
         let mut app = Command::new("chronicle")
             .version(LONG_VERSION)
-            .author("Blockchain Technology Partners")
+            .author("Paravela Limited")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
                 Arg::new("instrument")

@@ -20,7 +20,7 @@ pub const LONG_VERSION: &str = const_format::formatcp!(
 async fn main() {
     let matches = Command::new("opa-tp")
         .version(LONG_VERSION)
-        .author("Blockchain Technology Partners")
+        .author("Paravela Limited")
         .about("PKI and OPA rule storage")
         .arg(
             Arg::new("connect")

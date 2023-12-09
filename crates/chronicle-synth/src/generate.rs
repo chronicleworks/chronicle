@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 #[structopt(
     name = "chronicle-domain-synth",
     about = "Generate Chronicle Synth schema for your domain",
-    author = "Blockchain Technology Partners"
+    author = "Paravela Limited"
 )]
 struct Cli {
     #[structopt(

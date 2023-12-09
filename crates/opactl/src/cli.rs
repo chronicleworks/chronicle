@@ -226,7 +226,7 @@ pub fn cli() -> Command {
     info!(opa_version = LONG_VERSION);
     Command::new("opactl")
         .version(LONG_VERSION)
-        .author("Blockchain Technology Partners")
+        .author("Paravela Limited")
         .about("A command line tool for interacting with the OPA transaction processor")
         .arg(
             Arg::new("keystore-path")
