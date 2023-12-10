@@ -6,7 +6,7 @@ questions:
   required: false
   type: string
   label: Chronicle docker repository
-  description: The Chronicle docker repository to use. This may be domain specific, see https://docs.btp.works/chronicle
+  description: The Chronicle docker repository to use. This may be domain specific, see https://docs.chronicle.works
   group: "Chronicle Settings"
 - variable: image.tag
   default: ""
