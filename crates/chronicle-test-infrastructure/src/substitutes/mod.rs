@@ -17,8 +17,10 @@ use chronicle_signing::{
 	CHRONICLE_NAMESPACE,
 };
 
-use diesel::{r2d2::ConnectionManager, Connection, PgConnection};
-use r2d2::Pool;
+use diesel::{
+	r2d2::{ConnectionManager, Pool},
+	Connection, PgConnection,
+};
 use testcontainers::{images::postgres::Postgres, Container};
 
 use lazy_static::lazy_static;
@@ -67,8 +69,20 @@ impl<'a> Default for TemporaryDatabase<'a> {
 
 pub struct TestDispatch<'a> {
 	api: ApiDispatch,
-	_db: TemporaryDatabase<'a>,
+	db: TemporaryDatabase<'a>,
 	_substrate: Stubstrate,
+}
+
+impl<'a> TestDispatch<'a> {
+	/// Returns a reference to the ApiDispatch.
+	pub fn api_dispatch(&self) -> &ApiDispatch {
+		&self.api
+	}
+
+	/// Returns a reference to the TemporaryDatabase.
+	pub fn temporary_database(&self) -> &TemporaryDatabase<'a> {
+		&self.db
+	}
 }
 
 impl<'a> TestDispatch<'a> {
@@ -85,8 +99,9 @@ impl<'a> TestDispatch<'a> {
 					let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
 					match commit {
 						common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-						common::ledger::SubmissionStage::Committed(commit, _id) =>
-							return Ok(Some((commit.delta, commit.tx_id))),
+						common::ledger::SubmissionStage::Committed(commit, _id) => {
+							return Ok(Some((commit.delta, commit.tx_id)))
+						},
 						common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
 						common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
 							panic!("{tx:?}")
@@ -94,8 +109,9 @@ impl<'a> TestDispatch<'a> {
 					}
 				}
 			},
-			ApiResponse::AlreadyRecorded { subject: _, prov } =>
-				Ok(Some((prov, ChronicleTransactionId::default()))),
+			ApiResponse::AlreadyRecorded { subject: _, prov } => {
+				Ok(Some((prov, ChronicleTransactionId::default())))
+			},
 			_ => Ok(None),
 		}
 	}
@@ -147,7 +163,7 @@ pub async fn test_api<'a>() -> TestDispatch<'a> {
 
 	TestDispatch {
 		api: dispatch,
-		_db: database, // share the lifetime
+		db: database, // share the lifetime
 		_substrate: embed_substrate,
 	}
 }

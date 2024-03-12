@@ -15,8 +15,12 @@ jobs:
     steps:
       - checkout
       - run:
+          shell: /bin/zsh
           name: Build release, test e2e
-          command: ISOLATION_ID=${CIRCLE_SHA1} gmake test
+          command: |
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+            . "$HOME/.cargo/env"
+            ISOLATION_ID=${CIRCLE_SHA1} gmake test
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows

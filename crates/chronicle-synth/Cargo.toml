@@ -13,7 +13,6 @@ name = "chronicle-synth"
 path = "src/generate.rs"
 
 [dependencies]
-chronicle  = { path = "../chronicle" }
 clap       = { workspace = true }
 maplit     = { workspace = true }
 owo-colors = { workspace = true }
@@ -21,6 +20,11 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 thiserror  = { workspace = true }
+
+#local dependencies
+
+chronicle = { path = "../chronicle" }
+common    = { path = "../common", features = ["std"] }
 
 [dev-dependencies]
 assert_fs = { workspace = true }

@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 pub mod linter;
-pub mod model;
 use std::{io::Write, path::Path};
 
 use genco::prelude::*;
 
-pub use model::{AttributesTypeName, Builder, CliName, PrimitiveType, Property, TypeName};
+pub use common::domain::{AttributesTypeName, Builder, CliName, PrimitiveType, Property, TypeName};
 
-pub use self::model::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
+pub use common::domain::{ActivityDef, AgentDef, AttributeDef, ChronicleDomainDef, EntityDef};
 
 fn agent_union_type_name() -> String {
 	"Agent".to_owned()
@@ -308,9 +307,9 @@ fn gen_activity_union(activities: &[ActivityDef]) -> rust::Tokens {
 
 fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 	let abstract_activity =
-		&rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
+		&rust::import("chronicle::persistence::queryable", "Activity").qualified();
 	let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "activity").qualified();
-	let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
+	let namespace = &rust::import("chronicle::persistence::queryable", "Namespace").qualified();
 	let activity_id = &rust::import("chronicle::common::prov", "ActivityId").qualified();
 	let async_graphql_error_extensions =
 		&rust::import("chronicle::async_graphql", "ErrorExtensions").qualified();
@@ -463,9 +462,9 @@ fn gen_activity_definition(activity: &ActivityDef) -> rust::Tokens {
 }
 
 fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
-	let abstract_entity = &rust::import("chronicle::api::chronicle_graphql", "Entity").qualified();
+	let abstract_entity = &rust::import("chronicle::persistence::queryable", "Entity").qualified();
 	let entity_impl = &rust::import("chronicle::api::chronicle_graphql", "entity").qualified();
-	let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
+	let namespace = &rust::import("chronicle::persistence::queryable", "Namespace").qualified();
 	let entity_id = &rust::import("chronicle::common::prov", "EntityId").qualified();
 
 	let object = rust::import("chronicle::async_graphql", "Object").qualified();
@@ -630,10 +629,9 @@ fn gen_entity_definition(entity: &EntityDef) -> rust::Tokens {
 }
 
 fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
-	let abstract_agent = &rust::import("chronicle::api::chronicle_graphql", "Agent").qualified();
+	let abstract_agent = &rust::import("chronicle::persistence::queryable", "Agent").qualified();
 	let agent_impl = &rust::import("chronicle::api::chronicle_graphql", "agent").qualified();
-	let namespace = &rust::import("chronicle::api::chronicle_graphql", "Namespace").qualified();
-	let identity = &rust::import("chronicle::api::chronicle_graphql", "Identity").qualified();
+	let namespace = &rust::import("chronicle::persistence::queryable", "Namespace").qualified();
 	let agent_union_type = &agent_union_type_name();
 	let object = rust::import("chronicle::async_graphql", "Object").qualified();
 	let async_result = &rust::import("chronicle::async_graphql", "Result").qualified();
@@ -648,7 +646,6 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
 	let attribution_doc = include_str!("../../../../domain_docs/attribution.md");
 	let external_id_doc = include_str!("../../../../domain_docs/external_id.md");
 	let id_doc = include_str!("../../../../domain_docs/id.md");
-	let identity_doc = include_str!("../../../../domain_docs/identity.md");
 	let namespace_doc = include_str!("../../../../domain_docs/namespace.md");
 	let type_doc = include_str!("../../../../domain_docs/type.md");
 
@@ -677,11 +674,6 @@ fn gen_agent_definition(agent: &AgentDef) -> rust::Tokens {
 		#[doc = #_(#namespace_doc)]
 		async fn namespace<'a>(&self, ctx: &#context<'a>) -> #async_result<#namespace> {
 			#agent_impl::namespace(self.0.namespace_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
-		}
-
-		#[doc = #_(#identity_doc)]
-		async fn identity<'a>(&self, ctx: &#context<'a>) -> #async_result<Option<#identity>> {
-			#agent_impl::identity(self.0.identity_id, ctx).await.map_err(|e| #async_graphql_error_extensions::extend(&e))
 		}
 
 		#[doc = #_(#acted_on_behalf_of_doc)]
@@ -856,10 +848,10 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 }
 
 fn gen_mappers(domain: &ChronicleDomainDef) -> rust::Tokens {
-	let agent_impl = &rust::import("chronicle::api::chronicle_graphql", "Agent").qualified();
+	let agent_impl = &rust::import("chronicle::persistence::queryable", "Agent").qualified();
 	let role = &rust::import("chronicle::common::prov", "Role").qualified();
-	let entity_impl = &rust::import("chronicle::api::chronicle_graphql", "Entity").qualified();
-	let activity_impl = &rust::import("chronicle::api::chronicle_graphql", "Activity").qualified();
+	let entity_impl = &rust::import("chronicle::persistence::queryable", "Entity").qualified();
+	let activity_impl = &rust::import("chronicle::persistence::queryable", "Activity").qualified();
 
 	quote! {
 	#[allow(clippy::match_single_binding)]

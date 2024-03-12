@@ -135,12 +135,12 @@ impl CreateNamespace {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct AgentExists {
 	pub namespace: NamespaceId,
-	pub external_id: ExternalId,
+	pub id: AgentId,
 }
 
 impl AgentExists {
-	pub fn new(namespace: NamespaceId, external_id: impl AsRef<str>) -> Self {
-		Self { namespace, external_id: external_id.as_ref().into() }
+	pub fn new(namespace: NamespaceId, id: AgentId) -> Self {
+		Self { namespace, id }
 	}
 }
 
@@ -165,24 +165,24 @@ pub struct ActsOnBehalfOf {
 
 impl ActsOnBehalfOf {
 	pub fn new(
-		namespace: &NamespaceId,
-		responsible_id: &AgentId,
-		delegate_id: &AgentId,
-		activity_id: Option<&ActivityId>,
+		namespace: NamespaceId,
+		responsible_id: AgentId,
+		delegate_id: AgentId,
+		activity_id: Option<ActivityId>,
 		role: Option<Role>,
 	) -> Self {
 		Self {
-			namespace: namespace.clone(),
+			namespace,
 			id: DelegationId::from_component_ids(
-				delegate_id,
-				responsible_id,
-				activity_id,
+				&delegate_id,
+				&responsible_id,
+				activity_id.as_ref(),
 				role.as_ref(),
 			),
 			role,
-			activity_id: activity_id.cloned(),
-			responsible_id: responsible_id.clone(),
-			delegate_id: delegate_id.clone(),
+			activity_id,
+			responsible_id,
+			delegate_id,
 		}
 	}
 }
@@ -198,7 +198,13 @@ impl ActsOnBehalfOf {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ActivityExists {
 	pub namespace: NamespaceId,
-	pub external_id: ExternalId,
+	pub id: ActivityId,
+}
+
+impl ActivityExists {
+	pub fn new(namespace: NamespaceId, id: ActivityId) -> Self {
+		Self { namespace, id }
+	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -256,10 +262,8 @@ impl parity_scale_codec::Decode for TimeWrapper {
 	) -> Result<Self, parity_scale_codec::Error> {
 		let (timestamp, subsec_nanos) = <(i64, u32)>::decode(input)?;
 
-		let datetime = Utc.from_utc_datetime(
-			&NaiveDateTime::from_timestamp_opt(timestamp, subsec_nanos)
-				.ok_or("Invalid timestamp")?,
-		);
+		let datetime =
+			Utc.timestamp_opt(timestamp, subsec_nanos).single().ok_or("Invalid timestamp")?;
 
 		Ok(Self(datetime))
 	}
@@ -296,6 +300,12 @@ pub struct StartActivity {
 	pub time: TimeWrapper,
 }
 
+impl StartActivity {
+	pub fn new(namespace: NamespaceId, id: ActivityId, time: DateTime<Utc>) -> Self {
+		Self { namespace, id, time: TimeWrapper(time) }
+	}
+}
+
 #[cfg_attr(
 	feature = "parity-encoding",
 	derive(
@@ -310,6 +320,12 @@ pub struct EndActivity {
 	pub namespace: NamespaceId,
 	pub id: ActivityId,
 	pub time: TimeWrapper,
+}
+
+impl EndActivity {
+	pub fn new(namespace: NamespaceId, id: ActivityId, time: DateTime<Utc>) -> Self {
+		Self { namespace, id, time: TimeWrapper(time) }
+	}
 }
 
 #[cfg_attr(
@@ -328,6 +344,19 @@ pub struct ActivityUses {
 	pub activity: ActivityId,
 }
 
+impl ActivityUses {
+	/// Creates a new `ActivityUses` instance.
+	///
+	/// # Arguments
+	///
+	/// * `namespace` - The namespace identifier for the activity.
+	/// * `id` - The unique identifier for the entity being used.
+	/// * `activity` - The unique identifier for the activity using the entity.
+	pub fn new(namespace: NamespaceId, id: EntityId, activity: ActivityId) -> Self {
+		Self { namespace, id, activity }
+	}
+}
+
 #[cfg_attr(
 	feature = "parity-encoding",
 	derive(
@@ -340,7 +369,20 @@ pub struct ActivityUses {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct EntityExists {
 	pub namespace: NamespaceId,
-	pub external_id: ExternalId,
+	pub id: EntityId,
+}
+
+impl EntityExists {
+	/// Creates a new `EntityExists` instance.
+	///
+	/// # Arguments
+	///
+	/// * `namespace` - The namespace identifier for the entity.
+	/// * `id` - The identifier for the entity.
+	#[tracing::instrument(skip(namespace, id), fields(namespace = %namespace, entity_id = %id))]
+	pub fn new(namespace: NamespaceId, id: EntityId) -> Self {
+		Self { namespace, id }
+	}
 }
 
 #[cfg_attr(
@@ -359,6 +401,25 @@ pub struct WasGeneratedBy {
 	pub activity: ActivityId,
 }
 
+impl WasGeneratedBy {
+	/// Creates a new `WasGeneratedBy` instance.
+	///
+	/// # Arguments
+	///
+	/// * `namespace` - The namespace identifier for the entity.
+	/// * `id` - The unique identifier for the entity.
+	/// * `activity` - The identifier for the activity that generated the entity.
+	pub fn new(namespace: NamespaceId, id: EntityId, activity: ActivityId) -> Self {
+		tracing::debug!(
+			"Creating WasGeneratedBy with namespace: {:?}, id: {:?}, activity: {:?}",
+			namespace,
+			id,
+			activity
+		);
+		Self { namespace, id, activity }
+	}
+}
+
 #[cfg_attr(
 	feature = "parity-encoding",
 	derive(
@@ -375,6 +436,27 @@ pub struct EntityDerive {
 	pub used_id: EntityId,
 	pub activity_id: Option<ActivityId>,
 	pub typ: DerivationType,
+}
+
+impl EntityDerive {
+	/// Creates a new `EntityDerive` instance.
+	///
+	/// # Arguments
+	///
+	/// * `namespace` - The namespace identifier for the entity.
+	/// * `id` - The unique identifier for the entity.
+	/// * `used_id` - The identifier for the entity that was used.
+	/// * `activity_id` - The identifier for the activity that derived the entity, if any.
+	/// * `typ` - The type of derivation.
+	pub fn new(
+		namespace: NamespaceId,
+		id: EntityId,
+		used_id: EntityId,
+		activity_id: Option<ActivityId>,
+		typ: DerivationType,
+	) -> Self {
+		Self { namespace, id, used_id, activity_id, typ }
+	}
 }
 
 #[cfg_attr(
@@ -397,17 +479,17 @@ pub struct WasAssociatedWith {
 
 impl WasAssociatedWith {
 	pub fn new(
-		namespace: &NamespaceId,
-		activity_id: &ActivityId,
-		agent_id: &AgentId,
+		namespace: NamespaceId,
+		activity_id: ActivityId,
+		agent_id: AgentId,
 		role: Option<Role>,
 	) -> Self {
 		Self {
-			id: AssociationId::from_component_ids(agent_id, activity_id, role.as_ref()),
+			id: AssociationId::from_component_ids(&agent_id, &activity_id, role.as_ref()),
 			role,
-			namespace: namespace.clone(),
-			activity_id: activity_id.clone(),
-			agent_id: agent_id.clone(),
+			namespace,
+			activity_id,
+			agent_id,
 		}
 	}
 }
@@ -431,18 +513,19 @@ pub struct WasAttributedTo {
 }
 
 impl WasAttributedTo {
+	#[tracing::instrument(skip(namespace, role))]
 	pub fn new(
-		namespace: &NamespaceId,
-		entity_id: &EntityId,
-		agent_id: &AgentId,
+		namespace: NamespaceId,
+		entity_id: EntityId,
+		agent_id: AgentId,
 		role: Option<Role>,
 	) -> Self {
 		Self {
-			id: AttributionId::from_component_ids(agent_id, entity_id, role.as_ref()),
+			id: AttributionId::from_component_ids(&agent_id, &entity_id, role.as_ref()),
 			role,
-			namespace: namespace.clone(),
-			entity_id: entity_id.clone(),
-			agent_id: agent_id.clone(),
+			namespace,
+			entity_id,
+			agent_id,
 		}
 	}
 }
@@ -461,6 +544,23 @@ pub struct WasInformedBy {
 	pub namespace: NamespaceId,
 	pub activity: ActivityId,
 	pub informing_activity: ActivityId,
+}
+
+impl WasInformedBy {
+	/// Creates a new `WasInformedBy` instance.
+	///
+	/// # Arguments
+	///
+	/// * `namespace` - The namespace identifier for the activity.
+	/// * `activity` - The ActivityId for the activity that was informed.
+	/// * `informing_activity` - The ActivityId for the informing activity.
+	pub fn new(
+		namespace: NamespaceId,
+		activity: ActivityId,
+		informing_activity: ActivityId,
+	) -> Self {
+		Self { namespace, activity, informing_activity }
+	}
 }
 
 #[cfg_attr(
@@ -521,6 +621,131 @@ pub enum ChronicleOperation {
 }
 
 impl ChronicleOperation {
+	#[tracing::instrument]
+	#[tracing::instrument]
+	pub fn create_namespace(id: NamespaceId) -> Self {
+		ChronicleOperation::CreateNamespace(CreateNamespace::new(id))
+	}
+
+	#[tracing::instrument]
+	pub fn agent_exists(namespace: NamespaceId, id: AgentId) -> Self {
+		ChronicleOperation::AgentExists(AgentExists::new(namespace, id))
+	}
+
+	#[tracing::instrument]
+	pub fn agent_acts_on_behalf_of(
+		namespace: NamespaceId,
+		responsible_id: AgentId,
+		delegate_id: AgentId,
+		activity_id: Option<ActivityId>,
+		role: Option<Role>,
+	) -> Self {
+		ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
+			namespace,
+			responsible_id,
+			delegate_id,
+			activity_id,
+			role,
+		))
+	}
+
+	#[tracing::instrument]
+	pub fn activity_exists(namespace: NamespaceId, id: ActivityId) -> Self {
+		ChronicleOperation::ActivityExists(ActivityExists::new(namespace, id))
+	}
+
+	#[tracing::instrument]
+	pub fn start_activity(
+		namespace: NamespaceId,
+		id: ActivityId,
+		start_time: DateTime<Utc>,
+	) -> Self {
+		ChronicleOperation::StartActivity(StartActivity::new(namespace, id, start_time))
+	}
+
+	#[tracing::instrument]
+	pub fn end_activity(namespace: NamespaceId, id: ActivityId, end_time: DateTime<Utc>) -> Self {
+		ChronicleOperation::EndActivity(EndActivity::new(namespace, id, end_time))
+	}
+
+	#[tracing::instrument]
+	pub fn activity_uses(
+		namespace: NamespaceId,
+		activity_id: ActivityId,
+		entity_id: EntityId,
+	) -> Self {
+		ChronicleOperation::ActivityUses(ActivityUses::new(namespace, entity_id, activity_id))
+	}
+
+	#[tracing::instrument]
+	pub fn entity_exists(namespace: NamespaceId, id: EntityId) -> Self {
+		ChronicleOperation::EntityExists(EntityExists::new(namespace, id))
+	}
+
+	#[tracing::instrument]
+	pub fn was_generated_by(
+		namespace: NamespaceId,
+		entity_id: EntityId,
+		activity_id: ActivityId,
+	) -> Self {
+		ChronicleOperation::WasGeneratedBy(WasGeneratedBy::new(namespace, entity_id, activity_id))
+	}
+
+	pub fn entity_derive(
+		namespace: NamespaceId,
+		source_id: EntityId,
+		target_id: EntityId,
+		activity_id: Option<ActivityId>,
+		derivation_type: DerivationType,
+	) -> Self {
+		ChronicleOperation::EntityDerive(EntityDerive::new(
+			namespace,
+			source_id,
+			target_id,
+			activity_id,
+			derivation_type,
+		))
+	}
+
+	pub fn set_attributes(set_attributes: SetAttributes) -> Self {
+		ChronicleOperation::SetAttributes(set_attributes)
+	}
+
+	#[tracing::instrument]
+	pub fn was_associated_with(
+		namespace: NamespaceId,
+		activity_id: ActivityId,
+		agent_id: AgentId,
+		role: Option<Role>,
+	) -> Self {
+		ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
+			namespace,
+			activity_id,
+			agent_id,
+			role,
+		))
+	}
+
+	pub fn was_attributed_to(
+		namespace: NamespaceId,
+		entity_id: EntityId,
+		agent_id: AgentId,
+		role: Option<Role>,
+	) -> Self {
+		ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
+			namespace, entity_id, agent_id, role,
+		))
+	}
+
+	#[tracing::instrument]
+	pub fn was_informed_by(
+		namespace: NamespaceId,
+		informed: ActivityId,
+		informant: ActivityId,
+	) -> Self {
+		ChronicleOperation::WasInformedBy(WasInformedBy::new(namespace, informed, informant))
+	}
+
 	/// Returns a reference to the `NamespaceId` of the `ChronicleOperation`
 	pub fn namespace(&self) -> &NamespaceId {
 		match self {

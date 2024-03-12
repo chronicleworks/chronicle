@@ -59,18 +59,16 @@ where
 	type KeyUpdate = (common::opa::codec::KeysV1, ChronicleTransactionId);
 	match (event.pallet_name(), event.variant_name(), event.field_bytes()) {
 		("Opa", "PolicyUpdate", mut event_bytes) => match PolicyUpdate::decode(&mut event_bytes) {
-			Ok((meta, correlation_id)) => {
-				Ok(Some(OpaEvent::new_policy_update(meta.try_into()?, correlation_id)))
-			},
+			Ok((meta, correlation_id)) =>
+				Ok(Some(OpaEvent::new_policy_update(meta.try_into()?, correlation_id))),
 			Err(e) => {
 				tracing::error!("Failed to decode ProvModel: {}", e);
 				Err(e.into())
 			},
 		},
 		("Chronicle", "KeyUpdate", mut event_bytes) => match KeyUpdate::decode(&mut event_bytes) {
-			Ok((keys, correlation_id)) => {
-				Ok(OpaEvent::new_key_update(keys.try_into()?, correlation_id).into())
-			},
+			Ok((keys, correlation_id)) =>
+				Ok(OpaEvent::new_key_update(keys.try_into()?, correlation_id).into()),
 			Err(e) => {
 				tracing::error!("Failed to decode Contradiction: {}", e);
 				Err(e.into())

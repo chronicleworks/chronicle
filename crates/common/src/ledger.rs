@@ -475,24 +475,16 @@ impl ChronicleOperation {
 			ChronicleOperation::CreateNamespace(CreateNamespace { id, .. }) => {
 				vec![ChronicleAddress::namespace(id)]
 			},
-			ChronicleOperation::AgentExists(AgentExists { namespace, external_id, .. }) => {
+			ChronicleOperation::AgentExists(AgentExists { namespace, id, .. }) => {
 				vec![
 					ChronicleAddress::namespace(namespace),
-					ChronicleAddress::in_namespace(
-						namespace,
-						AgentId::from_external_id(external_id),
-					),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
-			ChronicleOperation::ActivityExists(ActivityExists {
-				namespace, external_id, ..
-			}) => {
+			ChronicleOperation::ActivityExists(ActivityExists { namespace, id, .. }) => {
 				vec![
 					ChronicleAddress::namespace(namespace),
-					ChronicleAddress::in_namespace(
-						namespace,
-						ActivityId::from_external_id(external_id),
-					),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
@@ -538,13 +530,10 @@ impl ChronicleOperation {
 					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
-			ChronicleOperation::EntityExists(EntityExists { namespace, external_id }) => {
+			ChronicleOperation::EntityExists(EntityExists { namespace, id }) => {
 				vec![
 					ChronicleAddress::namespace(namespace),
-					ChronicleAddress::in_namespace(
-						namespace,
-						EntityId::from_external_id(external_id),
-					),
+					ChronicleAddress::in_namespace(namespace, id.clone()),
 				]
 			},
 			ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }) => vec![

@@ -13,13 +13,25 @@ pub enum ModelError {
 	AttributeNotDefined { attr: String },
 
 	#[error("Model file not readable: {0}")]
-	ModelFileNotReadable(#[from] std::io::Error),
+	ModelFileNotReadable(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 
 	#[error("Model file invalid JSON: {0}")]
-	ModelFileInvalidJson(#[from] serde_json::Error),
+	ModelFileInvalidJson(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("Model file invalid YAML: {0}")]
-	ModelFileInvalidYaml(#[from] serde_yaml::Error),
+	ModelFileInvalidYaml(
+		#[from]
+		#[source]
+		serde_yaml::Error,
+	),
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -33,8 +45,8 @@ pub enum PrimitiveType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributeDef {
 	typ: String,
-	pub(crate) doc: Option<String>,
-	pub(crate) primitive_type: PrimitiveType,
+	pub doc: Option<String>,
+	pub primitive_type: PrimitiveType,
 }
 
 impl TypeName for AttributeDef {
@@ -60,11 +72,11 @@ impl AttributeDef {
 		}
 	}
 
-	pub(crate) fn as_property(&self) -> String {
+	pub fn as_property(&self) -> String {
 		to_snake_case(&format!("{}Attribute", self.typ))
 	}
 
-	pub(crate) fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
+	pub fn from_attribute_file_input(external_id: String, attr: AttributeFileInput) -> Self {
 		AttributeDef { typ: external_id, doc: attr.doc, primitive_type: attr.typ }
 	}
 }
@@ -128,12 +140,12 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentDef {
-	pub(crate) external_id: String,
-	pub(crate) doc: Option<String>,
-	pub(crate) attributes: Vec<AttributeDef>,
+	pub external_id: String,
+	pub doc: Option<String>,
+	pub attributes: Vec<AttributeDef>,
 }
 
-impl TypeName for &AgentDef {
+impl TypeName for AgentDef {
 	fn as_type_name(&self) -> String {
 		type_name_for_kind("Agent", &self.external_id)
 	}
@@ -179,12 +191,12 @@ impl AgentDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityDef {
-	pub(crate) external_id: String,
-	pub(crate) doc: Option<String>,
-	pub(crate) attributes: Vec<AttributeDef>,
+	pub external_id: String,
+	pub doc: Option<String>,
+	pub attributes: Vec<AttributeDef>,
 }
 
-impl TypeName for &EntityDef {
+impl TypeName for EntityDef {
 	fn as_type_name(&self) -> String {
 		type_name_for_kind("Entity", &self.external_id)
 	}
@@ -195,7 +207,7 @@ impl TypeName for &EntityDef {
 }
 
 impl EntityDef {
-	pub(crate) fn new(
+	pub fn new(
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
 		attributes: Vec<AttributeDef>,
@@ -203,7 +215,7 @@ impl EntityDef {
 		Self { external_id: external_id.as_ref().to_string(), doc, attributes }
 	}
 
-	pub(crate) fn from_input<'a>(
+	pub fn from_input<'a>(
 		external_id: String,
 		doc: Option<String>,
 		attributes: &BTreeMap<String, AttributeFileInput>,
@@ -230,12 +242,12 @@ impl EntityDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityDef {
-	pub(crate) external_id: String,
-	pub(crate) doc: Option<String>,
-	pub(crate) attributes: Vec<AttributeDef>,
+	pub external_id: String,
+	pub doc: Option<String>,
+	pub attributes: Vec<AttributeDef>,
 }
 
-impl TypeName for &ActivityDef {
+impl TypeName for ActivityDef {
 	fn as_type_name(&self) -> String {
 		type_name_for_kind("Activity", &self.external_id)
 	}
@@ -246,7 +258,7 @@ impl TypeName for &ActivityDef {
 }
 
 impl ActivityDef {
-	pub(crate) fn new(
+	pub fn new(
 		external_id: impl AsRef<str>,
 		doc: Option<String>,
 		attributes: Vec<AttributeDef>,
@@ -254,7 +266,7 @@ impl ActivityDef {
 		Self { external_id: external_id.as_ref().to_string(), doc, attributes }
 	}
 
-	pub(crate) fn from_input<'a>(
+	pub fn from_input<'a>(
 		external_id: String,
 		doc: Option<String>,
 		attributes: &BTreeMap<String, AttributeFileInput>,
@@ -281,7 +293,7 @@ impl ActivityDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleDef {
-	pub(crate) external_id: String,
+	pub external_id: String,
 }
 
 impl RoleDef {
@@ -327,12 +339,12 @@ fn preserve_inflection_for_kind(kind: &str, id: &str) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChronicleDomainDef {
 	name: String,
-	pub(crate) attributes: Vec<AttributeDef>,
-	pub(crate) agents: Vec<AgentDef>,
-	pub(crate) entities: Vec<EntityDef>,
-	pub(crate) activities: Vec<ActivityDef>,
-	pub(crate) roles_doc: Option<String>,
-	pub(crate) roles: Vec<RoleDef>,
+	pub attributes: Vec<AttributeDef>,
+	pub agents: Vec<AgentDef>,
+	pub entities: Vec<EntityDef>,
+	pub activities: Vec<ActivityDef>,
+	pub roles_doc: Option<String>,
+	pub roles: Vec<RoleDef>,
 }
 
 pub struct AgentBuilder<'a>(&'a ChronicleDomainDef, AgentDef);
@@ -505,8 +517,8 @@ pub struct AttributeRef(pub String);
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ResourceDef {
-	pub(crate) doc: Option<String>,
-	pub(crate) attributes: Vec<AttributeRef>,
+	pub doc: Option<String>,
+	pub attributes: Vec<AttributeRef>,
 }
 
 impl From<&AgentDef> for ResourceDef {
@@ -550,17 +562,17 @@ impl From<&ActivityDef> for ResourceDef {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct DomainFileInput {
-	pub(crate) name: String,
-	pub(crate) attributes: BTreeMap<String, AttributeFileInput>,
-	pub(crate) agents: BTreeMap<String, ResourceDef>,
-	pub(crate) entities: BTreeMap<String, ResourceDef>,
-	pub(crate) activities: BTreeMap<String, ResourceDef>,
-	pub(crate) roles_doc: Option<String>,
-	pub(crate) roles: Vec<String>,
+	pub name: String,
+	pub attributes: BTreeMap<String, AttributeFileInput>,
+	pub agents: BTreeMap<String, ResourceDef>,
+	pub entities: BTreeMap<String, ResourceDef>,
+	pub activities: BTreeMap<String, ResourceDef>,
+	pub roles_doc: Option<String>,
+	pub roles: Vec<String>,
 }
 
 impl DomainFileInput {
-	pub(crate) fn new(name: impl AsRef<str>) -> Self {
+	pub fn new(name: impl AsRef<str>) -> Self {
 		DomainFileInput { name: name.as_ref().to_string(), ..Default::default() }
 	}
 }
@@ -690,7 +702,7 @@ impl ChronicleDomainDef {
 		Ok(builder.build())
 	}
 
-	pub(crate) fn to_json_string(&self) -> Result<String, ModelError> {
+	pub fn to_json_string(&self) -> Result<String, ModelError> {
 		let input: DomainFileInput = self.into();
 		let json = serde_json::to_string(&input)?;
 		Ok(json)

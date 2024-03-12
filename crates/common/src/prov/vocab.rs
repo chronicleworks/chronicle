@@ -262,7 +262,7 @@ mod chronicle {
 	use iri_string::types::UriString;
 	#[cfg(not(feature = "std"))]
 	use parity_scale_codec::alloc::string::String;
-	use percent_encoding::NON_ALPHANUMERIC;
+
 	#[cfg(not(feature = "std"))]
 	use scale_info::prelude::{borrow::ToOwned, string::ToString, *};
 	use uuid::Uuid;
@@ -326,7 +326,8 @@ mod chronicle {
 		pub const LONG_PREFIX: &'static str = "http://chronicle.works/chronicle/ns#";
 		pub const PREFIX: &'static str = "chronicle";
 
-		/// Encodes the given external ID using percent-encoding to ensure it is a valid Chronicle CURIE
+		/// Encodes the given external ID using percent-encoding to ensure it is a valid Chronicle
+		/// CURIE
 		fn encode_external_id(external_id: &ExternalId) -> String {
 			percent_encoding::utf8_percent_encode(external_id.as_str(), &ENCODE_SET).to_string()
 		}
@@ -394,7 +395,8 @@ mod chronicle {
 			.try_into()
 		}
 
-		/// Constructs a delegation IRI using given delegate and responsible agent IDs, and optional activity and role.
+		/// Constructs a delegation IRI using given delegate and responsible agent IDs, and optional
+		/// activity and role.
 		#[tracing::instrument(
 			name = "delegation_iri_creation",
 			skip(delegate, responsible, activity, role)

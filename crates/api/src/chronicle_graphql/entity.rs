@@ -1,5 +1,8 @@
-use super::{Activity, Agent, Entity, Namespace, Store};
 use async_graphql::Context;
+use chronicle_persistence::{
+	queryable::{Activity, Agent, Entity, Namespace},
+	Store,
+};
 use common::prov::{operations::DerivationType, Role};
 use diesel::prelude::*;
 
@@ -8,14 +11,14 @@ async fn typed_derivation<'a>(
 	ctx: &Context<'a>,
 	typ: DerivationType,
 ) -> async_graphql::Result<Vec<Entity>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		derivation::{self, dsl},
 		entity as entitydsl,
 	};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = derivation::table
 		.filter(dsl::generated_entity_id.eq(id).and(dsl::typ.eq(typ)))
@@ -30,11 +33,11 @@ pub async fn namespace<'a>(
 	namespace_id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
-	use crate::persistence::schema::namespace::{self, dsl};
+	use chronicle_persistence::schema::namespace::{self, dsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(namespace::table
 		.filter(dsl::id.eq(namespace_id))
@@ -47,10 +50,10 @@ pub async fn was_attributed_to<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
-	use crate::persistence::schema::{agent, attribution};
+	use chronicle_persistence::schema::{agent, attribution};
 
 	let store = ctx.data_unchecked::<Store>();
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = attribution::table
 		.filter(attribution::dsl::entity_id.eq(id))
@@ -72,15 +75,15 @@ pub async fn was_generated_by<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Activity>> {
-	use crate::persistence::schema::generation::{self, dsl};
+	use chronicle_persistence::schema::generation::{self, dsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = generation::table
 		.filter(dsl::generated_entity_id.eq(id))
-		.inner_join(crate::persistence::schema::activity::table)
+		.inner_join(chronicle_persistence::schema::activity::table)
 		.select(Activity::as_select())
 		.load::<Activity>(&mut connection)?;
 
@@ -91,14 +94,14 @@ pub async fn was_derived_from<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Entity>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		derivation::{self, dsl},
 		entity as entitydsl,
 	};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = derivation::table
 		.filter(dsl::generated_entity_id.eq(id))
@@ -128,11 +131,11 @@ pub async fn load_attribute<'a>(
 	external_id: &str,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
-	use crate::persistence::schema::entity_attribute;
+	use chronicle_persistence::schema::entity_attribute;
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(entity_attribute::table
 		.filter(

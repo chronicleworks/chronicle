@@ -3,10 +3,10 @@ pub mod opa;
 use api::{
 	chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
 	commands::ApiResponse,
-	database::{get_connection_with_retry, DatabaseConnector},
 	Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
-use async_graphql::{async_trait, ObjectType};
+use async_graphql::ObjectType;
+use chronicle_persistence::database::{get_connection_with_retry, DatabaseConnector};
 use common::{
 	opa::{
 		std::{load_bytes_from_stdin, load_bytes_from_url},
@@ -527,8 +527,6 @@ where
 
 		Ok((ApiResponse::Unit, ret_api))
 	} else if let Some(matches) = matches.subcommand_matches("import") {
-		let namespace = get_namespace(matches);
-
 		let data = if let Some(url) = matches.value_of("url") {
 			let data = load_bytes_from_url(url).await?;
 			info!("Loaded import data from {:?}", url);
@@ -557,18 +555,14 @@ where
 			let op = ChronicleOperation::from_json(&value)
 				.await
 				.expect("Failed to parse imported JSON-LD to ChronicleOperation");
-			// Only import operations for the specified namespace
-			if op.namespace() == &namespace {
-				operations.push(op);
-			}
+			operations.push(op);
 		}
 
 		info!("Loading import data complete");
 
 		let identity = AuthId::chronicle();
-		info!("Importing data as root to Chronicle namespace: {namespace}");
 
-		let response = api.handle_import_command(identity, namespace, operations).await?;
+		let response = api.handle_import_command(identity, operations).await?;
 
 		Ok((response, ret_api))
 	} else if let Some(cmd) = cli.matches(&matches)? {
@@ -664,6 +658,9 @@ where
                     .to_colored_json_auto()
                     .unwrap()
             );
+        }
+		(ApiResponse::AlreadyRecordedAll, _api) => {
+			println!("Import will not result in any data changes");
         }
         (ApiResponse::ImportSubmitted { prov, tx_id }, api) => {
             let mut tx_notifications = api.notify_commit.subscribe();

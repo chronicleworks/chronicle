@@ -44,21 +44,14 @@ type ExtrinsicResult<C> =
 
 impl<C, EC, T> SubstrateClient<C, EC, T>
 where
-	// Constraint for the client configuration
 	C: subxt::Config<
-		Hash = subxt::utils::H256, /* Specifies the hash type used by the blockchain - polkadot
-		                            * default */
-		Address = MultiAddress<AccountId32, ()>, /* Specifies the address format as polkadot
-		                                          * defaults */
-		Signature = MultiSignature, // Specifies the signature format - polkadot default
+		Hash = subxt::utils::H256,
+		Address = MultiAddress<AccountId32, ()>,
+		Signature = MultiSignature,
 	>,
-	// Ensures that the extrinsic parameters can be defaulted
 	<C::ExtrinsicParams as ExtrinsicParams<C>>::OtherParams: Default,
-	// LedgerTransaction trait bound with Send and Sync for multi-threaded usage
 	T: LedgerTransaction + Send + Sync,
-	// Ensures that the payload of the transaction can be encoded as fields
 	<T as protocol_abstract::LedgerTransaction>::Payload: subxt::ext::scale_encode::EncodeAsFields,
-	// LedgerEventCodec trait bound with Send and Sync for multi-threaded usage
 	EC: LedgerEventCodec + Send + Sync,
 {
 	pub async fn connect(url: impl AsRef<str>) -> Result<Self, SubxtClientError> {
@@ -130,19 +123,35 @@ where
 #[derive(Debug, thiserror::Error)]
 pub enum SubxtClientError {
 	#[error("Subxt error: {0}")]
-	SubxtError(#[from] subxt::Error),
+	SubxtError(
+		#[from]
+		#[source]
+		subxt::Error,
+	),
 
 	#[error("Invalid block")]
 	InvalidBlock,
 
 	#[error("Codec: {0}")]
-	Codec(#[from] subxt::ext::codec::Error),
+	Codec(
+		#[from]
+		#[source]
+		subxt::ext::codec::Error,
+	),
 
 	#[error("Decode: {0}")]
-	Decode(#[from] subxt::error::DecodeError),
+	Decode(
+		#[from]
+		#[source]
+		subxt::error::DecodeError,
+	),
 
 	#[error("Serde: {0}")]
-	Serde(#[from] subxt::ext::scale_value::serde::SerializerError),
+	Serde(
+		#[from]
+		#[source]
+		subxt::ext::scale_value::serde::SerializerError,
+	),
 }
 
 impl From<Infallible> for SubxtClientError {

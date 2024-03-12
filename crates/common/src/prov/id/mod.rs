@@ -739,6 +739,14 @@ impl UuidPart for NamespaceId {
 	}
 }
 
+impl TryFrom<&'_ str> for NamespaceId {
+	type Error = ParseIriError;
+
+	fn try_from(value: &str) -> Result<Self, Self::Error> {
+		ProbableChronicleCURIE::from_string(value.to_owned())?.try_into()
+	}
+}
+
 impl TryFrom<String> for NamespaceId {
 	type Error = ParseIriError;
 

@@ -18,29 +18,47 @@ use diesel::{
 	PgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-use protocol_substrate_chronicle::protocol::{BlockId, BlockIdError};
+use protocol_substrate_chronicle::protocol::BlockId;
 use thiserror::Error;
 use tracing::{debug, instrument, warn};
 use uuid::Uuid;
 pub mod database;
 
-mod query;
-pub(crate) mod schema;
+pub mod cursor;
+pub mod query;
+pub mod queryable;
+pub mod schema;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[derive(Error, Debug)]
 pub enum StoreError {
 	#[error("Database operation failed: {0}")]
-	Db(#[from] diesel::result::Error),
+	Db(
+		#[from]
+		#[source]
+		diesel::result::Error,
+	),
 
 	#[error("Database connection failed (maybe check PGPASSWORD): {0}")]
-	DbConnection(#[from] diesel::ConnectionError),
+	DbConnection(
+		#[from]
+		#[source]
+		diesel::ConnectionError,
+	),
 
 	#[error("Database migration failed: {0}")]
-	DbMigration(#[from] Box<dyn std::error::Error + Send + Sync>),
+	DbMigration(
+		#[from]
+		#[source]
+		Box<dyn std::error::Error + Send + Sync>,
+	),
 
 	#[error("Connection pool error: {0}")]
-	DbPool(#[from] r2d2::Error),
+	DbPool(
+		#[from]
+		#[source]
+		r2d2::Error,
+	),
 
 	#[error("Infallible")]
 	Infallible(#[from] std::convert::Infallible),
@@ -54,19 +72,35 @@ pub enum StoreError {
 	InvalidNamespace(NamespaceId),
 
 	#[error("Unreadable Attribute: {0}")]
-	Json(#[from] serde_json::Error),
+	Json(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("Parse blockid: {0}")]
-	ParseBlockId(#[from] BlockIdError),
+	ParseBlockId(
+		#[from]
+		#[source]
+		protocol_substrate_chronicle::protocol::BlockIdError,
+	),
 
 	#[error("Invalid transaction ID: {0}")]
-	TransactionId(#[from] ChronicleTransactionIdError),
+	TransactionId(
+		#[from]
+		#[source]
+		ChronicleTransactionIdError,
+	),
 
 	#[error("Could not locate record in store")]
 	RecordNotFound,
 
 	#[error("Invalid UUID: {0}")]
-	Uuid(#[from] uuid::Error),
+	Uuid(
+		#[from]
+		#[source]
+		uuid::Error,
+	),
 }
 
 #[derive(Debug)]
@@ -74,13 +108,6 @@ pub struct ConnectionOptions {
 	pub enable_wal: bool,
 	pub enable_foreign_keys: bool,
 	pub busy_timeout: Option<Duration>,
-}
-
-#[instrument]
-fn sleeper(attempts: i32) -> bool {
-	warn!(attempts, "SQLITE_BUSY, retrying");
-	std::thread::sleep(std::time::Duration::from_millis(250));
-	true
 }
 
 #[derive(Derivative)]
@@ -92,11 +119,7 @@ pub struct Store {
 
 impl Store {
 	#[instrument(name = "Bind namespace", skip(self))]
-	pub(crate) fn namespace_binding(
-		&self,
-		external_id: &str,
-		uuid: Uuid,
-	) -> Result<(), StoreError> {
+	pub fn namespace_binding(&self, external_id: &str, uuid: Uuid) -> Result<(), StoreError> {
 		use schema::namespace::dsl;
 
 		let uuid = uuid.to_string();
@@ -145,7 +168,7 @@ impl Store {
 	}
 
 	/// Fetch the agent record for the IRI
-	pub(crate) fn agent_by_agent_external_id_and_namespace(
+	pub fn agent_by_agent_external_id_and_namespace(
 		&self,
 		connection: &mut PgConnection,
 		external_id: &ExternalId,
@@ -420,7 +443,7 @@ impl Store {
 		Ok(())
 	}
 
-	pub(crate) fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
+	pub fn apply_prov(&self, prov: &ProvModel) -> Result<(), StoreError> {
 		self.connection()?
 			.build_transaction()
 			.run(|connection| self.apply_model(connection, prov))?;
@@ -682,14 +705,14 @@ impl Store {
 		Ok(())
 	}
 
-	pub(crate) fn connection(
+	pub fn connection(
 		&self,
 	) -> Result<PooledConnection<ConnectionManager<PgConnection>>, StoreError> {
-		Ok(self.pool.get()?)
+		self.pool.get().map_err(StoreError::DbPool)
 	}
 
 	#[instrument(skip(connection))]
-	pub(crate) fn get_current_agent(
+	pub fn get_current_agent(
 		&self,
 		connection: &mut PgConnection,
 	) -> Result<query::Agent, StoreError> {
@@ -701,7 +724,7 @@ impl Store {
 
 	/// Get the last fully synchronized offset
 	#[instrument]
-	pub(crate) fn get_last_block_id(&self) -> Result<Option<BlockId>, StoreError> {
+	pub fn get_last_block_id(&self) -> Result<Option<BlockId>, StoreError> {
 		use schema::ledgersync::dsl;
 		self.connection()?.build_transaction().run(|connection| {
 			let block_id_and_tx = schema::ledgersync::table
@@ -719,7 +742,7 @@ impl Store {
 	}
 
 	#[instrument(skip(connection))]
-	pub(crate) fn namespace_by_external_id(
+	pub fn namespace_by_external_id(
 		&self,
 		connection: &mut PgConnection,
 		namespace: &ExternalId,
@@ -737,11 +760,11 @@ impl Store {
 	}
 
 	#[instrument]
-	pub(crate) fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Result<Self, StoreError> {
+	pub fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Result<Self, StoreError> {
 		Ok(Store { pool })
 	}
 
-	pub(crate) fn prov_model_for_agent(
+	pub fn prov_model_for_agent(
 		&self,
 		agent: query::Agent,
 		namespaceid: &NamespaceId,
@@ -815,7 +838,7 @@ impl Store {
 		Ok(())
 	}
 
-	pub(crate) fn prov_model_for_activity(
+	pub fn prov_model_for_activity(
 		&self,
 		activity: query::Activity,
 		namespaceid: &NamespaceId,
@@ -909,7 +932,7 @@ impl Store {
 		Ok(())
 	}
 
-	pub(crate) fn prov_model_for_entity(
+	pub fn prov_model_for_entity(
 		&self,
 		entity: query::Entity,
 		namespace_id: &NamespaceId,
@@ -1005,7 +1028,7 @@ impl Store {
 	}
 
 	#[instrument(skip(connection))]
-	pub(crate) fn prov_model_for_namespace(
+	pub fn prov_model_for_namespace(
 		&self,
 		connection: &mut PgConnection,
 		namespace: &NamespaceId,
@@ -1043,7 +1066,7 @@ impl Store {
 
 	/// Set the last fully synchronized offset
 	#[instrument]
-	pub(crate) fn set_last_block_id(
+	pub fn set_last_block_id(
 		&self,
 		block_id: &BlockId,
 		tx_id: ChronicleTransactionId,
@@ -1066,7 +1089,7 @@ impl Store {
 	}
 
 	#[instrument(skip(connection))]
-	pub(crate) fn use_agent(
+	pub fn use_agent(
 		&self,
 		connection: &mut PgConnection,
 		external_id: &ExternalId,
@@ -1218,7 +1241,7 @@ impl Store {
 		Ok(model)
 	}
 
-	pub(crate) fn prov_model_for_usage(
+	pub fn prov_model_for_usage(
 		&self,
 		connection: &mut PgConnection,
 		mut model: ProvModel,

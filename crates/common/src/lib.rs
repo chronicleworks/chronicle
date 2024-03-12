@@ -5,6 +5,8 @@ extern crate serde_derive;
 
 pub mod attributes;
 pub mod context;
+#[cfg(feature = "std")]
+pub mod domain;
 pub mod identity;
 pub mod ledger;
 pub mod opa;

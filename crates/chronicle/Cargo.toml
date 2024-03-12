@@ -8,26 +8,17 @@ version = "0.7.5"
 
 [dependencies]
 Inflector = { workspace = true }
-api = { path = "../api" }
 async-graphql = { workspace = true }
 async-trait = { workspace = true }
 cfg-if = { workspace = true }
 chronicle-signing = { workspace = true }
-chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
 colored_json = { workspace = true }
-common = { path = "../common", features = [
-  "json-ld",
-  "std",
-  "parity-encoding",
-  "graphql-bindings",
-] }
 const_format = { workspace = true }
 diesel = { workspace = true }
 dotenvy = { workspace = true }
-embedded-substrate = { path = "../embedded-substrate", optional = true }
 futures = { workspace = true }
 genco = { workspace = true }
 hex = { workspace = true }
@@ -39,9 +30,6 @@ jsonschema = { workspace = true }
 opa = { workspace = true }
 opentelemetry = { workspace = true }
 percent-encoding = { workspace = true }
-protocol-substrate = { path = "../protocol-substrate" }
-protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
-protocol-substrate-opa = { path = "../protocol-substrate-opa" }
 question = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
@@ -59,6 +47,22 @@ url = { workspace = true, features = ["serde"] }
 user-error = { workspace = true }
 uuid = { workspace = true }
 valico = { workspace = true }
+
+#Local dependencies
+api = { path = "../api" }
+chronicle-arrow = { path = "../chronicle-arrow" }
+chronicle-persistence = { path = "../chronicle-persistence" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
+common = { path = "../common", features = [
+  "json-ld",
+  "std",
+  "parity-encoding",
+  "graphql-bindings",
+] }
+embedded-substrate = { path = "../embedded-substrate", optional = true }
+protocol-substrate = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa = { path = "../protocol-substrate-opa" }
 
 [features]
 devmode = ["dep:embedded-substrate"]

@@ -57,17 +57,33 @@ pub enum ProcessorError {
 	#[error("Invalid address")]
 	Address,
 	#[error("Json Ld Error {0}")]
-	Compaction(#[from] json_ld::CompactionError),
+	Compaction(
+		#[from]
+		#[source]
+		json_ld::CompactionError,
+	),
 	#[error("Contradiction {0}")]
 	Contradiction(Contradiction),
 	#[error("Json Ld Error {inner}")]
 	Expansion { inner: String },
 	#[error("IdentityError {0}")]
-	Identity(#[from] IdentityError),
+	Identity(
+		#[from]
+		#[source]
+		IdentityError,
+	),
 	#[error("Invalid IRI {0}")]
-	IRef(#[from] iref::Error),
+	IRef(
+		#[from]
+		#[source]
+		iref::Error,
+	),
 	#[error("Not a Chronicle IRI {0}")]
-	NotAChronicleIri(#[from] id::ParseIriError),
+	NotAChronicleIri(
+		#[from]
+		#[source]
+		id::ParseIriError,
+	),
 	#[error("Missing @id {object:?}")]
 	MissingId { object: serde_json::Value },
 	#[error("Missing property {iri}:{object:?}")]
@@ -76,18 +92,42 @@ pub enum ProcessorError {
 	NotANode(serde_json::Value),
 	#[error("Chronicle value is not a JSON object")]
 	NotAnObject,
+
+	#[error("Missing activity")]
+	MissingActivity,
 	#[error("OpaExecutorError: {0}")]
-	OpaExecutor(#[from] anyhow::Error),
+	OpaExecutor(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 	#[error("Malformed JSON {0}")]
-	SerdeJson(#[from] serde_json::Error),
-	#[error("Unparsable date/time {0}")]
-	SubmissionFormat(#[from] PayloadError),
+	SerdeJson(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
+
+	#[error("Submission {0}")]
+	SubmissionFormat(
+		#[from]
+		#[source]
+		PayloadError,
+	),
 	#[error("Submission body format: {0}")]
-	Time(#[from] chrono::ParseError),
+	Time(
+		#[from]
+		#[source]
+		chrono::ParseError,
+	),
 	#[error("Tokio Error")]
 	Tokio,
 	#[error("State is not valid utf8 {0}")]
-	Utf8(#[from] core::str::Utf8Error),
+	Utf8(
+		#[from]
+		#[source]
+		core::str::Utf8Error,
+	),
 }
 
 #[cfg(not(feature = "json-ld"))]
@@ -98,9 +138,17 @@ pub enum ProcessorError {
 	#[error("Contradiction {0}")]
 	Contradiction(Contradiction),
 	#[error("IdentityError {0}")]
-	Identity(#[from] IdentityError),
+	Identity(
+		#[from]
+		#[source]
+		IdentityError,
+	),
 	#[error("Not a Chronicle IRI {0}")]
-	NotAChronicleIri(#[from] id::ParseIriError),
+	NotAChronicleIri(
+		#[from]
+		#[source]
+		id::ParseIriError,
+	),
 	#[error("Missing @id {object:?}")]
 	MissingId { object: serde_json::Value },
 	#[error("Missing property {iri}:{object:?}")]
@@ -110,17 +158,37 @@ pub enum ProcessorError {
 	#[error("Chronicle value is not a JSON object")]
 	NotAnObject,
 	#[error("OpaExecutorError: {0}")]
-	OpaExecutor(#[from] anyhow::Error),
+	OpaExecutor(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 	#[error("Malformed JSON {0}")]
-	SerdeJson(#[from] serde_json::Error),
+	SerdeJson(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 	#[error("Unparsable date/time {0}")]
-	SubmissionFormat(#[from] PayloadError),
+	SubmissionFormat(
+		#[from]
+		#[source]
+		PayloadError,
+	),
 	#[error("Submission body format: {0}")]
-	Time(#[from] chrono::ParseError),
+	Time(
+		#[from]
+		#[source]
+		chrono::ParseError,
+	),
 	#[error("Tokio Error")]
 	Tokio,
 	#[error("State is not valid utf8 {0}")]
-	Utf8(#[from] core::str::Utf8Error),
+	Utf8(
+		#[from]
+		#[source]
+		core::str::Utf8Error,
+	),
 }
 
 #[derive(Error, Debug)]
@@ -238,7 +306,7 @@ impl Agent {
 			namespaceid,
 			external_id,
 			domaintypeid: attributes.get_typ().clone(),
-			attributes: attributes.get_items().into_iter().cloned().collect(),
+			attributes: attributes.get_items().iter().cloned().collect(),
 		}
 	}
 
@@ -279,7 +347,7 @@ impl Activity {
 			started,
 			ended,
 			domaintype_id: attributes.get_typ().clone(),
-			attributes: attributes.get_items().into_iter().cloned().collect(),
+			attributes: attributes.get_items().iter().cloned().collect(),
 		}
 	}
 
@@ -318,7 +386,7 @@ impl Entity {
 			namespace_id: namespaceid,
 			external_id,
 			domaintypeid: attributes.get_typ().clone(),
-			attributes: attributes.get_items().into_iter().cloned().collect(),
+			attributes: attributes.get_items().iter().cloned().collect(),
 		}
 	}
 
@@ -847,8 +915,8 @@ impl ProvModel {
 				self.namespace_context(&id);
 				Ok(())
 			},
-			ChronicleOperation::AgentExists(AgentExists { namespace, external_id, .. }) => {
-				self.agent_context(&namespace, &AgentId::from_external_id(&external_id));
+			ChronicleOperation::AgentExists(AgentExists { namespace, id, .. }) => {
+				self.agent_context(&namespace, &id);
 
 				Ok(())
 			},
@@ -877,10 +945,8 @@ impl ProvModel {
 
 				Ok(())
 			},
-			ChronicleOperation::ActivityExists(ActivityExists {
-				namespace, external_id, ..
-			}) => {
-				self.activity_context(&namespace, &ActivityId::from_external_id(&external_id));
+			ChronicleOperation::ActivityExists(ActivityExists { namespace, id, .. }) => {
+				self.activity_context(&namespace, &id);
 
 				Ok(())
 			},
@@ -988,8 +1054,8 @@ impl ProvModel {
 
 				Ok(())
 			},
-			ChronicleOperation::EntityExists(EntityExists { namespace, external_id, .. }) => {
-				self.entity_context(&namespace, &EntityId::from_external_id(&external_id));
+			ChronicleOperation::EntityExists(EntityExists { namespace, id, .. }) => {
+				self.entity_context(&namespace, &id);
 				Ok(())
 			},
 			ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }) => {
@@ -1052,7 +1118,7 @@ impl ProvModel {
 
 				self.modify_entity(&namespace, &id, move |entity| {
 					entity.domaintypeid = attributes.get_typ().clone();
-					entity.attributes = attributes.get_items().into_iter().cloned().collect();
+					entity.attributes = attributes.get_items().iter().cloned().collect();
 				});
 
 				Ok(())
@@ -1079,7 +1145,7 @@ impl ProvModel {
 
 				self.modify_activity(&namespace, &id, move |activity| {
 					activity.domaintype_id = attributes.get_typ().clone();
-					activity.attributes = attributes.get_items().into_iter().cloned().collect();
+					activity.attributes = attributes.get_items().iter().cloned().collect();
 				});
 
 				Ok(())
@@ -1104,7 +1170,7 @@ impl ProvModel {
 
 				self.modify_agent(&namespace, &id, move |agent| {
 					agent.domaintypeid = attributes.get_typ().clone();
-					agent.attributes = attributes.get_items().into_iter().cloned().collect();
+					agent.attributes = attributes.get_items().iter().cloned().collect();
 				});
 
 				Ok(())

@@ -10,9 +10,17 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum TransactionError {
 	#[error("Secret error: {0}")]
-	SecretError(#[from] SecretError),
+	SecretError(
+		#[from]
+		#[source]
+		SecretError,
+	),
 	#[error("Secret string error: {0}")]
-	SecretStringError(#[from] SecretStringError),
+	SecretStringError(
+		#[from]
+		#[source]
+		SecretStringError,
+	),
 }
 
 #[derive(Clone)]

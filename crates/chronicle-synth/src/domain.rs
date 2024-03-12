@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
-use chronicle::codegen::model::PrimitiveType;
+use common::domain::PrimitiveType;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -49,7 +49,7 @@ impl TypesAttributesRoles {
 				Ok(domain)
 			}
 		}
-
+		#[allow(non_local_definitions)]
 		impl From<ChronicleDomain> for TypesAttributesRoles {
 			fn from(value: ChronicleDomain) -> Self {
 				let mut attribute_types = BTreeMap::new();

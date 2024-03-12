@@ -156,37 +156,6 @@ impl SubstrateStateReader for Stubstrate {
 			pallet_name,
 			entry_name
 		);
-		let result = self.rt.lock().unwrap().execute_with(|| {
-			let key = address.encode();
-			match pallet_name {
-				"OpaModule" => match entry_name {
-					"PolicyStore" => {
-						if let Some(value) = pallet_opa::PolicyStore::<Test>::get(key) {
-							tracing::info!("Successfully retrieved policy state entry");
-							return Ok(Some(scale_value::serde::to_value(value)));
-						} else {
-							tracing::warn!("No policy state entry found for the given key");
-							return Ok(None);
-						}
-					},
-					"KeyStore" => {
-						if let Some(value) = pallet_opa::KeyStore::<Test>::get(key) {
-							tracing::info!("Successfully retrieved key state entry");
-							return Ok(Some(scale_value::serde::to_value(value)));
-						} else {
-							tracing::warn!("No key state entry found for the given key");
-							return Ok(None);
-						}
-					},
-					_ => {
-						panic!("Unknown entry name: {}", entry_name);
-					},
-				},
-				_ => {
-					panic!("Unknown pallet name: {}", pallet_name);
-				},
-			}
-		});
-		result
+		unimplemented!()
 	}
 }

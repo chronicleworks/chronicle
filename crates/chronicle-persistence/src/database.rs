@@ -1,6 +1,6 @@
 use diesel::{r2d2::ConnectionManager, PgConnection};
 
-use r2d2::Pool;
+use diesel::r2d2::Pool;
 use std::{fmt::Display, time::Duration};
 
 #[async_trait::async_trait]

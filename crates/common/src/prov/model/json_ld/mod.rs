@@ -25,6 +25,7 @@ pub enum CompactionError {
 	#[error("Serde conversion: {source}")]
 	Serde {
 		#[from]
+		#[source]
 		source: serde_json::Error,
 	},
 	#[error("Expanded document invalid: {message}")]

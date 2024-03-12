@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, convert::Infallible};
+use std::convert::Infallible;
 
 use api::{
 	commands::{ActivityCommand, AgentCommand, ApiCommand, EntityCommand},
@@ -39,64 +39,129 @@ pub enum CliError {
 	InvalidArgument { arg: String, expected: String, got: String },
 
 	#[error("Bad argument: {0}")]
-	ArgumentParsing(#[from] clap::Error),
+	ArgumentParsing(
+		#[from]
+		#[source]
+		clap::Error,
+	),
 
 	#[error("Invalid IRI: {0}")]
-	InvalidIri(#[from] iri_string::validate::Error),
+	InvalidIri(
+		#[from]
+		#[source]
+		iri_string::validate::Error,
+	),
 
 	#[error("Invalid Chronicle IRI: {0}")]
-	InvalidChronicleIri(#[from] ParseIriError),
+	InvalidChronicleIri(
+		#[from]
+		#[source]
+		ParseIriError,
+	),
 
 	#[error("Invalid JSON: {0}")]
-	InvalidJson(#[from] serde_json::Error),
+	InvalidJson(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("Invalid URI: {0}")]
-	InvalidUri(#[from] url::ParseError),
+	InvalidUri(
+		#[from]
+		#[source]
+		url::ParseError,
+	),
 
 	#[error("Invalid timestamp: {0}")]
-	InvalidTimestamp(#[from] chrono::ParseError),
+	InvalidTimestamp(
+		#[from]
+		#[source]
+		chrono::ParseError,
+	),
 
 	#[error("Invalid coercion: {arg}")]
 	InvalidCoercion { arg: String },
 
 	#[error("API failure: {0}")]
-	ApiError(#[from] ApiError),
+	ApiError(
+		#[from]
+		#[source]
+		ApiError,
+	),
 
 	#[error("Secrets : {0}")]
-	Secrets(#[from] SecretError),
+	Secrets(
+		#[from]
+		#[source]
+		SecretError,
+	),
 
 	#[error("IO error: {0}")]
-	InputOutput(#[from] std::io::Error),
+	InputOutput(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 
 	#[error("Invalid configuration file: {0}")]
-	ConfigInvalid(#[from] toml::de::Error),
+	ConfigInvalid(
+		#[from]
+		#[source]
+		toml::de::Error,
+	),
 
 	#[error("Invalid path: {path}")]
 	InvalidPath { path: String },
 
 	#[error("Invalid JSON-LD: {0}")]
-	Ld(#[from] CompactionError),
+	Ld(
+		#[from]
+		#[source]
+		CompactionError,
+	),
 
 	#[error("Failure in commit notification stream: {0}")]
-	CommitNoticiationStream(#[from] RecvError),
+	CommitNoticiationStream(
+		#[from]
+		#[source]
+		RecvError,
+	),
 
 	#[error("Policy loader error: {0}")]
-	OpaPolicyLoader(#[from] PolicyLoaderError),
+	OpaPolicyLoader(
+		#[from]
+		#[source]
+		PolicyLoaderError,
+	),
 
 	#[error("OPA executor error: {0}")]
-	OpaExecutor(#[from] OpaExecutorError),
+	OpaExecutor(
+		#[from]
+		#[source]
+		OpaExecutorError,
+	),
 
 	#[error("Sawtooth communication error: {source}")]
 	SubstrateError {
 		#[from]
+		#[source]
 		source: SubxtClientError,
 	},
 
 	#[error("UTF-8 error: {0}")]
-	Utf8Error(#[from] std::str::Utf8Error),
+	Utf8Error(
+		#[from]
+		#[source]
+		std::str::Utf8Error,
+	),
 
 	#[error("Url conversion: {0}")]
-	FromUrlError(#[from] FromUrlError),
+	FromUrlError(
+		#[from]
+		#[source]
+		FromUrlError,
+	),
 
 	#[error("No on chain settings, but they are required by Chronicle")]
 	NoOnChainSettings,
@@ -356,7 +421,7 @@ impl SubCommand for AgentCliModel {
 	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
 		if let Some(matches) = matches.subcommand_matches("define") {
 			return Ok(Some(ApiCommand::Agent(AgentCommand::Create {
-				external_id: name_from::<AgentId>(matches, "external_id", "id")?,
+				id: name_from::<AgentId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.agent.external_id, &self.attributes)?,
 			})));
@@ -568,7 +633,7 @@ impl SubCommand for ActivityCliModel {
 	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
 		if let Some(matches) = matches.subcommand_matches("define") {
 			return Ok(Some(ApiCommand::Activity(ActivityCommand::Create {
-				external_id: name_from::<ActivityId>(matches, "external_id", "id")?,
+				id: name_from::<ActivityId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.activity.external_id, &self.attributes)?,
 			})));
@@ -724,7 +789,7 @@ impl SubCommand for EntityCliModel {
 	fn matches(&self, matches: &ArgMatches) -> Result<Option<ApiCommand>, CliError> {
 		if let Some(matches) = matches.subcommand_matches("define") {
 			return Ok(Some(ApiCommand::Entity(EntityCommand::Create {
-				external_id: name_from::<EntityId>(matches, "external_id", "id")?,
+				id: name_from::<EntityId>(matches, "external_id", "id")?,
 				namespace: namespace_from(matches)?,
 				attributes: attributes_from(matches, &self.entity.external_id, &self.attributes)?,
 			})));
@@ -875,6 +940,15 @@ impl SubCommand for CliModel {
                 Command::new("serve-api")
                     .alias("serve-graphql")
                     .about("Start an API server")
+ 					.arg(
+                        Arg::new("arrow-interface")
+                            .long("arrow-interface")
+                            .takes_value(true)
+                            .min_values(1)
+                            .default_values(&["localhost:9983"])
+                            .env("ARROW_LISTEN_SOCKET")
+                            .help("The arrow flight address"),
+                    )
                     .arg(
                         Arg::new("interface")
                             .long("interface")

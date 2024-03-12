@@ -12,7 +12,11 @@ use tracing::{instrument, warn};
 #[derive(Debug, Error)]
 pub enum BlockIdError {
 	#[error("Parse {0}")]
-	Parse(#[from] anyhow::Error),
+	Parse(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BlockId {

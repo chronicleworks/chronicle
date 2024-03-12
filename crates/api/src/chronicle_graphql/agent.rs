@@ -1,7 +1,8 @@
-use crate::chronicle_graphql::Entity;
-
-use super::{Agent, Identity, Namespace, Store};
 use async_graphql::Context;
+use chronicle_persistence::{
+	queryable::{Agent, Entity, Namespace},
+	Store,
+};
 use common::prov::Role;
 use diesel::prelude::*;
 
@@ -9,47 +10,28 @@ pub async fn namespace<'a>(
 	namespace_id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
-	use crate::persistence::schema::namespace::{self, dsl};
+	use chronicle_persistence::schema::namespace::{self, dsl};
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(namespace::table
 		.filter(dsl::id.eq(namespace_id))
 		.first::<Namespace>(&mut connection)?)
 }
 
-pub async fn identity<'a>(
-	identity_id: Option<i32>,
-	ctx: &Context<'a>,
-) -> async_graphql::Result<Option<Identity>> {
-	use crate::persistence::schema::identity::{self, dsl};
-	let store = ctx.data_unchecked::<Store>();
-
-	let mut connection = store.pool.get()?;
-
-	if let Some(identity_id) = identity_id {
-		Ok(identity::table
-			.filter(dsl::id.eq(identity_id))
-			.first::<Identity>(&mut connection)
-			.optional()?)
-	} else {
-		Ok(None)
-	}
-}
-
 pub async fn acted_on_behalf_of<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		agent as agentdsl,
 		delegation::{self, dsl},
 	};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(delegation::table
 		.filter(dsl::delegate_id.eq(id))
@@ -68,14 +50,14 @@ pub async fn attribution<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<(Entity, Option<Role>)>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		attribution::{self, dsl},
 		entity as entity_dsl,
 	};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(attribution::table
 		.filter(dsl::agent_id.eq(id))
@@ -93,11 +75,11 @@ pub async fn load_attribute<'a>(
 	external_id: &str,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
-	use crate::persistence::schema::agent_attribute;
+	use chronicle_persistence::schema::agent_attribute;
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(agent_attribute::table
 		.filter(agent_attribute::agent_id.eq(id).and(agent_attribute::typename.eq(external_id)))

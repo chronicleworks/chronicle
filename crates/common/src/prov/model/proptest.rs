@@ -74,19 +74,20 @@ prop_compose! {
 
 prop_compose! {
 	fn create_agent() (external_id in external_id(),namespace in namespace()) -> AgentExists {
-		let _id = AgentId::from_external_id(&external_id);
+		let id = AgentId::from_external_id(&external_id);
 		AgentExists {
 			namespace,
-			external_id,
+			id,
 		}
 	}
 }
 
 prop_compose! {
 	fn create_activity() (external_id in external_id(),namespace in namespace()) -> ActivityExists {
+		let id = ActivityId::from_external_id(&external_id);
 		ActivityExists {
 			namespace,
-			external_id,
+			id,
 		}
 	}
 }
@@ -136,9 +137,10 @@ prop_compose! {
 
 prop_compose! {
 	fn create_entity() (external_id in external_id(),namespace in namespace()) -> EntityExists {
+		let id = EntityId::from_external_id(&external_id);
 		EntityExists {
 			namespace,
-			external_id,
+			id,
 		}
 	}
 }
@@ -379,11 +381,11 @@ proptest! {
 					prop_assert_eq!(&ns.id, id);
 				},
 				ChronicleOperation::AgentExists(
-					AgentExists { namespace, external_id}) => {
-					let agent = &prov.agents.get(&(namespace.to_owned(),AgentId::from_external_id(external_id)));
+					AgentExists { namespace, id}) => {
+					let agent = &prov.agents.get(&(namespace.to_owned(),id.clone()));
 					prop_assert!(agent.is_some());
 					let agent = agent.unwrap();
-					prop_assert_eq!(&agent.external_id, external_id);
+					prop_assert_eq!(&agent.external_id, id.external_id_part());
 					prop_assert_eq!(&agent.namespaceid, namespace);
 				},
 				ChronicleOperation::AgentActsOnBehalfOf(
@@ -416,11 +418,11 @@ proptest! {
 
 				}
 				ChronicleOperation::ActivityExists(
-					ActivityExists { namespace,  external_id }) => {
-					let activity = &prov.activities.get(&(namespace.clone(),ActivityId::from_external_id(external_id)));
+					ActivityExists { namespace,  id }) => {
+					let activity = &prov.activities.get(&(namespace.clone(),id.clone()));
 					prop_assert!(activity.is_some());
 					let activity = activity.unwrap();
-					prop_assert_eq!(&activity.external_id, external_id);
+					prop_assert_eq!(&activity.external_id, id.external_id_part());
 					prop_assert_eq!(&activity.namespace_id, namespace);
 				},
 				ChronicleOperation::StartActivity(
@@ -492,11 +494,11 @@ proptest! {
 					prop_assert!(has_usage);
 				},
 				ChronicleOperation::EntityExists(
-					EntityExists { namespace, external_id}) => {
-					let entity = &prov.entities.get(&(namespace.to_owned(),EntityId::from_external_id(external_id)));
+					EntityExists { namespace, id}) => {
+					let entity = &prov.entities.get(&(namespace.to_owned(),id.clone()));
 					prop_assert!(entity.is_some());
 					let entity = entity.unwrap();
-					prop_assert_eq!(&entity.external_id, external_id);
+					prop_assert_eq!(&entity.external_id, id.external_id_part());
 					prop_assert_eq!(&entity.namespace_id, namespace);
 				},
 				ChronicleOperation::WasGeneratedBy(WasGeneratedBy{namespace, id, activity}) => {

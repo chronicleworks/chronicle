@@ -14,6 +14,7 @@ pub enum SecretError {
 	#[error("Vault {source}")]
 	SecretVault {
 		#[from]
+		#[source]
 		source: anyhow::Error,
 	},
 }

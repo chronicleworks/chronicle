@@ -680,12 +680,8 @@ impl ChronicleOperation {
 				Ok(ChronicleOperation::CreateNamespace(CreateNamespace { id: namespace }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::AgentExists)) {
 				let namespace = o.namespace();
-				let agent = o.agent();
-				let external_id = agent.external_id_part();
-				Ok(ChronicleOperation::AgentExists(AgentExists {
-					namespace,
-					external_id: external_id.into(),
-				}))
+				let agent_id = o.agent();
+				Ok(ChronicleOperation::AgentExists(AgentExists { namespace, id: agent_id }))
 			} else if o
 				.has_type(&id_from_iri_string(vocab::ChronicleOperation::AgentActsOnBehalfOf))
 			{
@@ -695,50 +691,66 @@ impl ChronicleOperation {
 				let activity_id = o.optional_activity();
 
 				Ok(ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
-					&namespace,
-					&responsible_id,
-					&delegate_id,
-					activity_id.as_ref(),
+					namespace,
+					responsible_id,
+					delegate_id,
+					activity_id,
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::ActivityExists)) {
 				let namespace = o.namespace();
-				let activity_id = o.optional_activity().unwrap();
-				let external_id = activity_id.external_id_part().to_owned();
-				Ok(ChronicleOperation::ActivityExists(ActivityExists { namespace, external_id }))
+				if let Some(activity_id) = o.optional_activity() {
+					Ok(ChronicleOperation::ActivityExists(ActivityExists {
+						namespace,
+						id: activity_id,
+					}))
+				} else {
+					Err(ProcessorError::MissingActivity)
+				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::StartActivity)) {
 				let namespace = o.namespace();
-				let id = o.optional_activity().unwrap();
-				let time: DateTime<Utc> = o.start_time().parse().unwrap();
-				Ok(ChronicleOperation::StartActivity(StartActivity {
-					namespace,
-					id,
-					time: time.into(),
-				}))
+				if let Some(id) = o.optional_activity() {
+					match o.start_time().parse::<DateTime<Utc>>() {
+						Ok(time) => Ok(ChronicleOperation::start_activity(namespace, id, time)),
+						Err(e) => Err(ProcessorError::Time(e)),
+					}
+				} else {
+					Err(ProcessorError::MissingActivity)
+				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EndActivity)) {
 				let namespace = o.namespace();
-				let id = o.optional_activity().unwrap();
-				let time: DateTime<Utc> = o.end_time().parse().unwrap();
-				Ok(ChronicleOperation::EndActivity(EndActivity {
-					namespace,
-					id,
-					time: time.into(),
-				}))
+				if let Some(id) = o.optional_activity() {
+					match o.start_time().parse::<DateTime<Utc>>() {
+						Ok(time) => Ok(ChronicleOperation::end_activity(namespace, id, time)),
+						Err(e) => Err(ProcessorError::Time(e)),
+					}
+				} else {
+					Err(ProcessorError::MissingActivity)
+				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::ActivityUses)) {
 				let namespace = o.namespace();
 				let id = o.entity();
-				let activity = o.optional_activity().unwrap();
-				Ok(ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }))
+				if let Some(activity) = o.optional_activity() {
+					Ok(ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }))
+				} else {
+					Err(ProcessorError::MissingActivity)
+				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EntityExists)) {
 				let namespace = o.namespace();
-				let entity = o.entity();
-				let id = entity.external_id_part().into();
-				Ok(ChronicleOperation::EntityExists(EntityExists { namespace, external_id: id }))
+				let entity_id = o.entity();
+				Ok(ChronicleOperation::EntityExists(EntityExists { namespace, id: entity_id }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasGeneratedBy)) {
 				let namespace = o.namespace();
 				let id = o.entity();
-				let activity = o.optional_activity().unwrap();
-				Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }))
+				if let Some(activity) = o.optional_activity() {
+					Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
+						namespace,
+						id,
+						activity,
+					}))
+				} else {
+					Err(ProcessorError::MissingActivity)
+				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EntityDerive)) {
 				let namespace = o.namespace();
 				let id = o.entity();
@@ -780,16 +792,16 @@ impl ChronicleOperation {
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasAssociatedWith))
 			{
 				Ok(ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-					&o.namespace(),
-					&o.activity(),
-					&o.agent(),
+					o.namespace(),
+					o.activity(),
+					o.agent(),
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasAttributedTo)) {
 				Ok(ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
-					&o.namespace(),
-					&o.entity(),
-					&o.agent(),
+					o.namespace(),
+					o.entity(),
+					o.agent(),
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasInformedBy)) {

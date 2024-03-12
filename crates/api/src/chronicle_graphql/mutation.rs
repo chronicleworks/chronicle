@@ -16,10 +16,12 @@ async fn transaction_context<'a>(
 	_ctx: &Context<'a>,
 ) -> async_graphql::Result<Submission> {
 	match res {
-		ApiResponse::Submission { subject, tx_id, .. } =>
-			Ok(Submission::from_submission(&subject, &tx_id)),
-		ApiResponse::AlreadyRecorded { subject, .. } =>
-			Ok(Submission::from_already_recorded(&subject)),
+		ApiResponse::Submission { subject, tx_id, .. } => {
+			Ok(Submission::from_submission(&subject, &tx_id))
+		},
+		ApiResponse::AlreadyRecorded { subject, .. } => {
+			Ok(Submission::from_already_recorded(&subject))
+		},
 		_ => unreachable!(),
 	}
 }
@@ -68,7 +70,7 @@ pub async fn agent<'a>(
 	let res = api
 		.dispatch(
 			ApiCommand::Agent(AgentCommand::Create {
-				external_id: external_id.into(),
+				id: external_id.into(),
 				namespace: namespace.into(),
 				attributes,
 			}),
@@ -94,7 +96,7 @@ pub async fn activity<'a>(
 	let res = api
 		.dispatch(
 			ApiCommand::Activity(ActivityCommand::Create {
-				external_id: external_id.into(),
+				id: external_id.into(),
 				namespace: namespace.into(),
 				attributes,
 			}),
@@ -120,7 +122,7 @@ pub async fn entity<'a>(
 	let res = api
 		.dispatch(
 			ApiCommand::Entity(EntityCommand::Create {
-				external_id: external_id.into(),
+				id: external_id.into(),
 				namespace: namespace.into(),
 				attributes,
 			}),

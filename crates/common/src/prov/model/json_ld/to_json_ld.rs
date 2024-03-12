@@ -434,7 +434,7 @@ impl ToJson for ChronicleOperation {
 
 				o
 			},
-			ChronicleOperation::AgentExists(AgentExists { namespace, external_id }) => {
+			ChronicleOperation::AgentExists(AgentExists { namespace, id }) => {
 				let mut o = Value::new_operation(vocab::ChronicleOperation::AgentExists);
 
 				o.has_value(
@@ -448,7 +448,7 @@ impl ToJson for ChronicleOperation {
 				);
 
 				o.has_value(
-					OperationValue::string(external_id),
+					OperationValue::string(id.external_id_part()),
 					vocab::ChronicleOperation::AgentName,
 				);
 
@@ -497,7 +497,7 @@ impl ToJson for ChronicleOperation {
 
 				o
 			},
-			ChronicleOperation::ActivityExists(ActivityExists { namespace, external_id }) => {
+			ChronicleOperation::ActivityExists(ActivityExists { namespace, id }) => {
 				let mut o = Value::new_operation(vocab::ChronicleOperation::ActivityExists);
 
 				o.has_value(
@@ -511,7 +511,7 @@ impl ToJson for ChronicleOperation {
 				);
 
 				o.has_value(
-					OperationValue::string(external_id),
+					OperationValue::string(id.external_id_part()),
 					vocab::ChronicleOperation::ActivityName,
 				);
 
@@ -592,7 +592,7 @@ impl ToJson for ChronicleOperation {
 
 				o
 			},
-			ChronicleOperation::EntityExists(EntityExists { namespace, external_id }) => {
+			ChronicleOperation::EntityExists(EntityExists { namespace, id }) => {
 				let mut o = Value::new_operation(vocab::ChronicleOperation::EntityExists);
 
 				o.has_value(
@@ -606,7 +606,7 @@ impl ToJson for ChronicleOperation {
 				);
 
 				o.has_value(
-					OperationValue::string(external_id),
+					OperationValue::string(id.external_id_part()),
 					vocab::ChronicleOperation::EntityName,
 				);
 

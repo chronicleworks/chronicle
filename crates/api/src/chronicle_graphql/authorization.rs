@@ -15,21 +15,25 @@ pub enum Error {
 	#[error("Base64 decoding failure: {0}", source)]
 	Base64 {
 		#[from]
+		#[source]
 		source: base64::DecodeError,
 	},
 	#[error("JSON decoding failure: {0}", source)]
 	Json {
 		#[from]
+		#[source]
 		source: serde_json::Error,
 	},
 	#[error("JWT validation failure: {0}", source)]
 	Jwks {
 		#[from]
+		#[source]
 		source: jwtk::Error,
 	},
 	#[error("web access failure: {0}", source)]
 	Reqwest {
 		#[from]
+		#[source]
 		source: reqwest::Error,
 	},
 	#[error("formatting error: {0}", message)]
@@ -76,7 +80,7 @@ impl TokenChecker {
 			// should respond with JSON web key set
 			if !status.is_success() {
 				tracing::warn!("{uri:?} returns {status}");
-				return Err(Error::UnexpectedResponse { server: format!("{uri:?}"), status })
+				return Err(Error::UnexpectedResponse { server: format!("{uri:?}"), status });
 			}
 		}
 		if let Some(uri) = &self.userinfo_uri {
@@ -84,7 +88,7 @@ impl TokenChecker {
 			// should require an authorization token
 			if !status.is_client_error() || status == StatusCode::NOT_FOUND {
 				tracing::warn!("{uri:?} without authorization token returns {status}");
-				return Err(Error::UnexpectedResponse { server: format!("{uri:?}"), status })
+				return Err(Error::UnexpectedResponse { server: format!("{uri:?}"), status });
 			}
 		}
 		Ok(())
@@ -98,7 +102,7 @@ impl TokenChecker {
 		if let Some(verifier) = &self.verifier {
 			verifier.verify::<Map<String, Value>>(token).await?;
 		} else {
-			return Err(Error::Format { message: "no JWKS endpoint configured".to_string() })
+			return Err(Error::Format { message: "no JWKS endpoint configured".to_string() });
 		}
 
 		// JWT is composed of three base64-encoded components
@@ -107,7 +111,7 @@ impl TokenChecker {
 			.map(|component| BASE64_ENGINE.decode(component))
 			.collect::<Result<Vec<Vec<u8>>, base64::DecodeError>>()?;
 		if components.len() != 3 {
-			return Err(Error::Format { message: format!("JWT has unexpected format: {token}") })
+			return Err(Error::Format { message: format!("JWT has unexpected format: {token}") });
 		};
 
 		if let Value::Object(claims) = serde_json::from_slice(components[1].as_slice())? {
@@ -133,7 +137,7 @@ impl TokenChecker {
 					},
 					_ => (),
 				}
-				return Err(Error::Jwks { source }) // abort on JWKS verifier failure
+				return Err(Error::Jwks { source }); // abort on JWKS verifier failure
 			},
 			Err(err) => error = Some(err), // could tolerate error from what may be opaque token
 		};

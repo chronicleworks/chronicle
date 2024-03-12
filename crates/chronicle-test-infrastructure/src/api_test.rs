@@ -188,7 +188,7 @@ async fn create_namespace() {
 
 	insta::assert_json_snapshot!(api
             .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
-                external_id: "testns".into(),
+                id: "testns".into(),
             }), identity)
             .await
             .unwrap()
@@ -214,7 +214,7 @@ async fn create_agent() {
 	let identity = AuthId::chronicle();
 
 	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -269,7 +269,7 @@ async fn create_system_activity() {
 	let identity = AuthId::chronicle();
 
 	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
+            id: "testactivity".into(),
             namespace: common::prov::SYSTEM_ID.into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -315,7 +315,7 @@ async fn create_activity() {
 	let identity = AuthId::chronicle();
 
 	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
+            id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -371,7 +371,7 @@ async fn start_activity() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -482,7 +482,7 @@ async fn contradict_attributes() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -532,7 +532,7 @@ async fn contradict_attributes() {
 	let res = api
 		.dispatch(
 			ApiCommand::Agent(AgentCommand::Create {
-				external_id: "testagent".into(),
+				id: "testagent".into(),
 				namespace: "testns".into(),
 				attributes: Attributes::new(
 					Some(DomaintypeId::from_external_id("test")),
@@ -562,7 +562,7 @@ async fn contradict_start_time() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -688,7 +688,7 @@ async fn contradict_end_time() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -814,7 +814,7 @@ async fn end_activity() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -972,7 +972,7 @@ async fn activity_use() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
-            external_id: "testagent".into(),
+            id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -1031,7 +1031,7 @@ async fn activity_use() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
+            id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
@@ -1174,7 +1174,7 @@ async fn activity_generate() {
 
 	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
-            external_id: "testactivity".into(),
+            id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),

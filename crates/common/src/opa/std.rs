@@ -35,13 +35,21 @@ pub fn key_address(id: impl AsRef<str>) -> KeyAddress {
 #[derive(Error, Debug)]
 pub enum FromUrlError {
 	#[error("HTTP error while attempting to read from URL: {0}")]
-	HTTP(#[from] reqwest::Error),
+	HTTP(
+		#[from]
+		#[source]
+		reqwest::Error,
+	),
 
 	#[error("Invalid URL scheme: {0}")]
 	InvalidUrlScheme(String),
 
 	#[error("IO error while attempting to read from URL: {0}")]
-	IO(#[from] std::io::Error),
+	IO(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 }
 
 pub enum PathOrUrl {
@@ -89,13 +97,25 @@ pub enum OpaExecutorError {
 	AccessDenied,
 
 	#[error("Identity error: {0}")]
-	IdentityError(#[from] IdentityError),
+	IdentityError(
+		#[from]
+		#[source]
+		IdentityError,
+	),
 
 	#[error("Error loading OPA policy: {0}")]
-	PolicyLoaderError(#[from] PolicyLoaderError),
+	PolicyLoaderError(
+		#[from]
+		#[source]
+		PolicyLoaderError,
+	),
 
 	#[error("Error evaluating OPA policy: {0}")]
-	OpaEvaluationError(#[from] anyhow::Error),
+	OpaEvaluationError(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 }
 
 #[async_trait::async_trait]
@@ -163,13 +183,25 @@ pub enum PolicyLoaderError {
 	MissingPolicy(String),
 
 	#[error("OPA bundle I/O error: {0}")]
-	OpaBundleError(#[from] opa::bundle::Error),
+	OpaBundleError(
+		#[from]
+		#[source]
+		opa::bundle::Error,
+	),
 
 	#[error("Error loading OPA policy: {0}")]
-	Substrate(#[from] anyhow::Error),
+	Substrate(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 
 	#[error("Error loading from URL: {0}")]
-	FromUrl(#[from] FromUrlError),
+	FromUrl(
+		#[from]
+		#[source]
+		FromUrlError,
+	),
 }
 
 #[async_trait::async_trait]

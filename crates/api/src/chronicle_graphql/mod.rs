@@ -1,14 +1,14 @@
 use async_graphql::{
 	extensions::OpenTelemetry,
 	http::{playground_source, GraphQLPlaygroundConfig, ALL_WEBSOCKET_PROTOCOLS},
-	scalar, Context, Enum, Error, ErrorExtensions, Object, ObjectType, Schema, ServerError,
-	SimpleObject, Subscription, SubscriptionType,
+	scalar, Context, Enum, Error, ErrorExtensions, ObjectType, Schema, ServerError, SimpleObject,
+	Subscription, SubscriptionType,
 };
 use async_graphql_poem::{
 	GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLProtocol, GraphQLSubscription,
 	GraphQLWebSocket,
 };
-use chrono::NaiveDateTime;
+
 use common::{
 	identity::{AuthId, IdentityError, JwtClaims, OpaData, SignedIdentity},
 	ledger::{SubmissionError, SubmissionStage},
@@ -21,7 +21,7 @@ use common::{
 use derivative::*;
 use diesel::{
 	prelude::*,
-	r2d2::{ConnectionManager, Pool},
+	r2d2::{ConnectionManager, Pool, PooledConnection},
 	PgConnection, Queryable,
 };
 use futures::Stream;
@@ -37,7 +37,6 @@ use poem::{
 	},
 	Endpoint, IntoResponse, Route, Server,
 };
-use r2d2::PooledConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -59,86 +58,12 @@ use crate::{ApiDispatch, ApiError, StoreError};
 pub mod activity;
 pub mod agent;
 mod authorization;
-mod cursor_query;
+mod cursor_project;
 pub mod entity;
 pub mod mutation;
 pub mod query;
 
 pub type AuthorizationError = authorization::Error;
-
-#[derive(Default, Queryable, Selectable, SimpleObject)]
-#[diesel(table_name = crate::persistence::schema::agent)]
-pub struct Agent {
-	pub id: i32,
-	pub external_id: String,
-	pub namespace_id: i32,
-	pub domaintype: Option<String>,
-	pub current: i32,
-	pub identity_id: Option<i32>,
-}
-
-#[derive(Default, Queryable, Selectable)]
-#[diesel(table_name = crate::persistence::schema::identity)]
-pub struct Identity {
-	pub id: i32,
-	pub namespace_id: i32,
-	pub public_key: String,
-}
-
-#[Object]
-/// # `chronicle:Identity`
-///
-/// Represents a cryptographic identity for an agent, supporting a single current
-/// signing identity via `chronicle:hasIdentity` and historical identities via
-/// `chronicle:hadIdentity`.
-impl Identity {
-	async fn public_key(&self) -> &str {
-		&self.public_key
-	}
-}
-
-#[derive(Default, Queryable, Selectable, SimpleObject)]
-#[diesel(table_name = crate::persistence::schema::activity)]
-pub struct Activity {
-	pub id: i32,
-	pub external_id: String,
-	pub namespace_id: i32,
-	pub domaintype: Option<String>,
-	pub started: Option<NaiveDateTime>,
-	pub ended: Option<NaiveDateTime>,
-}
-
-#[derive(Queryable, Selectable, SimpleObject)]
-#[diesel(table_name = crate::persistence::schema::entity)]
-pub struct Entity {
-	pub id: i32,
-	pub external_id: String,
-	pub namespace_id: i32,
-	pub domaintype: Option<String>,
-}
-
-#[derive(Default, Queryable)]
-pub struct Namespace {
-	_id: i32,
-	uuid: String,
-	external_id: String,
-}
-
-#[Object]
-/// # `chronicle:Namespace`
-///
-/// An IRI containing an external id and uuid part, used for disambiguation.
-/// In order to work on the same namespace discrete Chronicle instances must share
-/// the uuid part.
-impl Namespace {
-	async fn external_id(&self) -> &str {
-		&self.external_id
-	}
-
-	async fn uuid(&self) -> &str {
-		&self.uuid
-	}
-}
 
 #[derive(Queryable, SimpleObject)]
 /// # `Submission`
@@ -199,19 +124,39 @@ pub enum TimelineOrder {
 #[derive(Error, Debug)]
 pub enum GraphQlError {
 	#[error("Database operation failed: {0}")]
-	Db(#[from] diesel::result::Error),
+	Db(
+		#[from]
+		#[source]
+		diesel::result::Error,
+	),
 
 	#[error("Connection pool error: {0}")]
-	R2d2(#[from] r2d2::Error),
+	R2d2(
+		#[from]
+		#[source]
+		diesel::r2d2::Error,
+	),
 
 	#[error("Database connection failed: {0}")]
-	DbConnection(#[from] diesel::ConnectionError),
+	DbConnection(
+		#[from]
+		#[source]
+		diesel::ConnectionError,
+	),
 
 	#[error("API: {0}")]
-	Api(#[from] crate::ApiError),
+	Api(
+		#[from]
+		#[source]
+		crate::ApiError,
+	),
 
 	#[error("I/O: {0}")]
-	Io(#[from] std::io::Error),
+	Io(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 }
 
 impl GraphQlError {
@@ -755,7 +700,7 @@ where
 
 struct IriEndpoint {
 	secconf: Option<EndpointSecurityConfiguration>,
-	store: super::persistence::Store,
+	store: chronicle_persistence::Store,
 	opa_executor: ExecutorContext,
 	claim_parser: Option<AuthFromJwt>,
 }
@@ -1077,7 +1022,7 @@ where
 
 		let iri_endpoint = |secconf| IriEndpoint {
 			secconf,
-			store: super::persistence::Store::new(pool.clone()).unwrap(),
+			store: chronicle_persistence::Store::new(pool.clone()).unwrap(),
 			opa_executor: sec.opa.clone(),
 			claim_parser: claim_parser.clone(),
 		};

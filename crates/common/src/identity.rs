@@ -28,10 +28,18 @@ pub enum IdentityError {
 	JwtClaims,
 
 	#[error("Signer : {0}")]
-	Signing(#[from] anyhow::Error),
+	Signing(
+		#[from]
+		#[source]
+		anyhow::Error,
+	),
 
 	#[error("Malformed JSON: {0}")]
-	SerdeJson(#[from] serde_json::Error),
+	SerdeJson(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("Serialization error: {0}")]
 	SerdeJsonSerialize(String),

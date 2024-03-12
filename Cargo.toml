@@ -12,6 +12,8 @@ members = [
   "crates/chronicle-synth",
   "crates/chronicle-signing",
   "crates/chronicle-telemetry",
+  "crates/chronicle-persistence",
+  "crates/chronicle-arrow",
   "crates/gq-subscribe",
   "crates/id-provider",
   "crates/pallet-chronicle",
@@ -26,11 +28,17 @@ members = [
   "crates/protocol-substrate-chronicle",
   "crates/protocol-substrate-opa",
   "crates/chronicle-test-infrastructure",
+  "crates/chronicle-arrow",
+  "crates/chronicle-persistence",
 ]
 
 [workspace.dependencies]
 Inflector = "0.11.4"
 anyhow = { version = "^1", features = ["backtrace"] }
+arrow-array = { versipn = "^0.50" }
+arrow-flight = { versipn = "^0.50" }
+arrow-ipc = { versipn = "^0.50" }
+arrow-schema = { versipn = "^0.50" }
 assert_fs = "1.0"
 async-graphql = "^7"
 async-graphql-poem = "^7"
@@ -107,11 +115,11 @@ pin-project-lite = "0.2"
 pinvec = "0.1.0"
 pkcs8 = { version = "0.10", features = ["std", "alloc"] }
 poem = { version = "^2", features = ["opentelemetry", "websocket"] }
+poem-grpc = { version = "^0.3" }
 portpicker = "0.1"
 pow_of_2 = "0.1"
 proptest = "1"
 question = "0.2.2"
-r2d2 = "0.8.9"
 rand = { version = "0.8", features = ["getrandom"] }
 rand_core = "0.6"
 rdf-types = "0.14"

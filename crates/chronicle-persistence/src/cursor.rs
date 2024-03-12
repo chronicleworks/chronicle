@@ -1,9 +1,10 @@
-use async_graphql::{
-	connection::{Edge, EmptyFields},
-	OutputType,
+use diesel::{
+	pg::Pg,
+	prelude::*,
+	query_builder::*,
+	r2d2::{ConnectionManager, PooledConnection},
+	sql_types::BigInt,
 };
-use diesel::{pg::Pg, prelude::*, query_builder::*, r2d2::ConnectionManager, sql_types::BigInt};
-use r2d2::PooledConnection;
 
 type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 
@@ -12,8 +13,8 @@ const DEFAULT_PAGE_SIZE: i32 = 10;
 #[derive(QueryId)]
 pub struct CursorPosition<T> {
 	query: T,
-	pub(crate) start: i64,
-	pub(crate) limit: i64,
+	pub start: i64,
+	pub limit: i64,
 }
 pub trait Cursorize: Sized {
 	fn cursor(
@@ -23,33 +24,6 @@ pub trait Cursorize: Sized {
 		first: Option<usize>,
 		last: Option<usize>,
 	) -> CursorPosition<Self>;
-}
-
-pub fn project_to_nodes<T, I>(
-	rx: I,
-	start: i64,
-	limit: i64,
-) -> async_graphql::connection::Connection<i32, T, EmptyFields, EmptyFields>
-where
-	T: OutputType,
-	I: IntoIterator<Item = (T, i64)>,
-{
-	let rx = Vec::from_iter(rx);
-	let mut gql = async_graphql::connection::Connection::new(
-		rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
-		rx.first().map(|(_, total)| start + limit < *total).unwrap_or(false),
-	);
-
-	gql.edges.append(
-		&mut rx
-			.into_iter()
-			.enumerate()
-			.map(|(pos, (agent, _count))| {
-				Edge::with_additional_fields((pos as i32) + (start as i32), agent, EmptyFields)
-			})
-			.collect(),
-	);
-	gql
 }
 
 impl<T> Cursorize for T {

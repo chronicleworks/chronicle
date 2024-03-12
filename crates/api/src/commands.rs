@@ -19,13 +19,13 @@ use common::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceCommand {
-	Create { external_id: ExternalId },
+	Create { id: ExternalId },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentCommand {
 	Create {
-		external_id: ExternalId,
+		id: ExternalId,
 		namespace: ExternalId,
 		attributes: Attributes,
 	},
@@ -44,7 +44,7 @@ pub enum AgentCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityCommand {
 	Create {
-		external_id: ExternalId,
+		id: ExternalId,
 		namespace: ExternalId,
 		attributes: Attributes,
 	},
@@ -96,7 +96,7 @@ impl ActivityCommand {
 		attributes: Attributes,
 	) -> Self {
 		Self::Create {
-			external_id: external_id.as_ref().into(),
+			id: external_id.as_ref().into(),
 			namespace: namespace.as_ref().into(),
 			attributes,
 		}
@@ -190,7 +190,7 @@ impl<'de> Deserialize<'de> for PathOrFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityCommand {
 	Create {
-		external_id: ExternalId,
+		id: ExternalId,
 		namespace: ExternalId,
 		attributes: Attributes,
 	},
@@ -216,7 +216,7 @@ impl EntityCommand {
 		attributes: Attributes,
 	) -> Self {
 		Self::Create {
-			external_id: external_id.as_ref().into(),
+			id: external_id.as_ref().into(),
 			namespace: namespace.as_ref().into(),
 			attributes,
 		}
@@ -245,7 +245,6 @@ pub struct DepthChargeCommand {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportCommand {
-	pub namespace: NamespaceId,
 	pub operations: Vec<ChronicleOperation>,
 }
 
@@ -266,6 +265,8 @@ pub enum ApiResponse {
 	Unit,
 	/// The operation will not result in any data changes
 	AlreadyRecorded { subject: ChronicleIri, prov: Box<ProvModel> },
+	/// The aggregate operation will not result in any data changes
+	AlreadyRecordedAll,
 	/// The api has validated the command and submitted a transaction to a ledger
 	Submission { subject: ChronicleIri, prov: Box<ProvModel>, tx_id: ChronicleTransactionId },
 	/// The api has successfully executed the query

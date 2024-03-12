@@ -6,11 +6,12 @@ use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
-use super::{
-	cursor_query::{project_to_nodes, Cursorize},
-	Activity, Agent, Entity, GraphQlError, Store, TimelineOrder,
+use super::{cursor_project::project_to_nodes, GraphQlError, Store, TimelineOrder};
+use chronicle_persistence::{
+	cursor::Cursorize,
+	queryable::{Activity, Agent, Entity},
+	schema::generation,
 };
-use crate::persistence::schema::generation;
 use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
 
 #[allow(clippy::too_many_arguments)]
@@ -29,7 +30,7 @@ pub async fn activity_timeline<'a>(
 	first: Option<i32>,
 	last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		activity, agent, association, delegation, entity, namespace::dsl as nsdsl, usage,
 		wasinformedby,
 	};
@@ -136,7 +137,7 @@ pub async fn entities_by_type<'a>(
 	first: Option<i32>,
 	last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Entity, EmptyFields, EmptyFields>> {
-	use crate::persistence::schema::{entity, namespace::dsl as nsdsl};
+	use chronicle_persistence::schema::{entity, namespace::dsl as nsdsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
@@ -177,7 +178,7 @@ pub async fn activities_by_type<'a>(
 	first: Option<i32>,
 	last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
-	use crate::persistence::schema::{activity, namespace::dsl as nsdsl};
+	use chronicle_persistence::schema::{activity, namespace::dsl as nsdsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
@@ -217,7 +218,7 @@ pub async fn agents_by_type<'a>(
 	first: Option<i32>,
 	last: Option<i32>,
 ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
-	use crate::persistence::schema::{agent, namespace::dsl as nsdsl};
+	use chronicle_persistence::schema::{agent, namespace::dsl as nsdsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
@@ -253,7 +254,7 @@ pub async fn agent_by_id<'a>(
 	id: AgentId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Option<Agent>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		agent::{self, dsl},
 		namespace::dsl as nsdsl,
 	};
@@ -276,7 +277,7 @@ pub async fn activity_by_id<'a>(
 	id: ActivityId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Option<Activity>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		activity::{self, dsl},
 		namespace::dsl as nsdsl,
 	};
@@ -299,7 +300,7 @@ pub async fn entity_by_id<'a>(
 	id: EntityId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Option<Entity>> {
-	use crate::persistence::schema::{
+	use chronicle_persistence::schema::{
 		entity::{self, dsl},
 		namespace::dsl as nsdsl,
 	};

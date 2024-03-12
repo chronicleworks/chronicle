@@ -44,13 +44,25 @@ pub enum OpaCtlError {
 	Cancelled(oneshot::Canceled),
 
 	#[error("Communication error: {0}")]
-	Communication(#[from] SubxtClientError),
+	Communication(
+		#[from]
+		#[source]
+		SubxtClientError,
+	),
 
 	#[error("IO error: {0}")]
-	IO(#[from] std::io::Error),
+	IO(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 
 	#[error("Json error: {0}")]
-	Json(#[from] serde_json::Error),
+	Json(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("Pkcs8 error")]
 	Pkcs8,
@@ -62,13 +74,25 @@ pub enum OpaCtlError {
 	TransactionNotFound(ChronicleTransactionId),
 
 	#[error("Error loading from URL: {0}")]
-	Url(#[from] FromUrlError),
+	Url(
+		#[from]
+		#[source]
+		FromUrlError,
+	),
 
 	#[error("Utf8 error: {0}")]
-	Utf8(#[from] std::str::Utf8Error),
+	Utf8(
+		#[from]
+		#[source]
+		std::str::Utf8Error,
+	),
 
 	#[error("Signing: {0}")]
-	Signing(#[from] SecretError),
+	Signing(
+		#[from]
+		#[source]
+		SecretError,
+	),
 
 	#[error("Missing Argument")]
 	MissingArgument(String),
@@ -77,7 +101,11 @@ pub enum OpaCtlError {
 	NotFound,
 
 	#[error("Could not build transaction {0}")]
-	InvalidTransaction(#[from] TransactionError),
+	InvalidTransaction(
+		#[from]
+		#[source]
+		TransactionError,
+	),
 }
 
 impl From<Infallible> for OpaCtlError {

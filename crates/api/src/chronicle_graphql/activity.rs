@@ -1,5 +1,8 @@
-use super::{Activity, Agent, Entity, Namespace, Store};
 use async_graphql::Context;
+use chronicle_persistence::{
+	queryable::{Activity, Agent, Entity, Namespace},
+	Store,
+};
 use common::prov::Role;
 use diesel::prelude::*;
 use std::collections::HashMap;
@@ -8,10 +11,10 @@ pub async fn namespace<'a>(
 	namespaceid: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
-	use crate::persistence::schema::namespace::{self, dsl};
+	use chronicle_persistence::schema::namespace::{self, dsl};
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(namespace::table
 		.filter(dsl::id.eq(namespaceid))
@@ -22,7 +25,7 @@ pub async fn was_associated_with<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<(Agent, Option<Role>, Option<Agent>, Option<Role>)>> {
-	use crate::persistence::schema::{agent, association, delegation};
+	use chronicle_persistence::schema::{agent, association, delegation};
 
 	#[derive(Queryable)]
 	struct DelegationAgents {
@@ -32,7 +35,7 @@ pub async fn was_associated_with<'a>(
 	}
 
 	let store = ctx.data_unchecked::<Store>();
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let delegation_entries = delegation::table
 		.filter(delegation::dsl::activity_id.eq(id))
@@ -62,8 +65,8 @@ pub async fn was_associated_with<'a>(
 
 	let res = association::table
 		.filter(association::dsl::activity_id.eq(id))
-		.inner_join(crate::persistence::schema::agent::table)
-		.order(crate::persistence::schema::agent::external_id)
+		.inner_join(chronicle_persistence::schema::agent::table)
+		.order(chronicle_persistence::schema::agent::external_id)
 		.select((Agent::as_select(), association::role))
 		.load::<(Agent, Role)>(&mut connection)?
 		.into_iter()
@@ -89,16 +92,16 @@ pub async fn was_associated_with<'a>(
 }
 
 pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-	use crate::persistence::schema::usage::{self, dsl};
+	use chronicle_persistence::schema::usage::{self, dsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = usage::table
 		.filter(dsl::activity_id.eq(id))
-		.inner_join(crate::persistence::schema::entity::table)
-		.order(crate::persistence::schema::entity::external_id)
+		.inner_join(chronicle_persistence::schema::entity::table)
+		.order(chronicle_persistence::schema::entity::external_id)
 		.select(Entity::as_select())
 		.load::<Entity>(&mut connection)?;
 
@@ -109,35 +112,34 @@ pub async fn was_informed_by<'a>(
 	id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Vec<Activity>> {
-	use crate::persistence::schema::wasinformedby::{self, dsl};
+	use chronicle_persistence::schema::wasinformedby::{self, dsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
-	let res =
-		wasinformedby::table
-			.filter(dsl::activity_id.eq(id))
-			.inner_join(crate::persistence::schema::activity::table.on(
-				wasinformedby::informing_activity_id.eq(crate::persistence::schema::activity::id),
-			))
-			.order(crate::persistence::schema::activity::external_id)
-			.select(Activity::as_select())
-			.load::<Activity>(&mut connection)?;
+	let res = wasinformedby::table
+		.filter(dsl::activity_id.eq(id))
+		.inner_join(chronicle_persistence::schema::activity::table.on(
+			wasinformedby::informing_activity_id.eq(chronicle_persistence::schema::activity::id),
+		))
+		.order(chronicle_persistence::schema::activity::external_id)
+		.select(Activity::as_select())
+		.load::<Activity>(&mut connection)?;
 
 	Ok(res)
 }
 
 pub async fn generated<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
-	use crate::persistence::schema::generation::{self, dsl};
+	use chronicle_persistence::schema::generation::{self, dsl};
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	let res = generation::table
 		.filter(dsl::activity_id.eq(id))
-		.inner_join(crate::persistence::schema::entity::table)
+		.inner_join(chronicle_persistence::schema::entity::table)
 		.select(Entity::as_select())
 		.load::<Entity>(&mut connection)?;
 
@@ -149,11 +151,11 @@ pub async fn load_attribute<'a>(
 	external_id: &str,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Option<serde_json::Value>> {
-	use crate::persistence::schema::activity_attribute;
+	use chronicle_persistence::schema::activity_attribute;
 
 	let store = ctx.data_unchecked::<Store>();
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(activity_attribute::table
 		.filter(

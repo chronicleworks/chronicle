@@ -4,6 +4,7 @@ pub mod codegen;
 /// Re-export dependencies for generated code
 pub use api;
 pub use async_graphql;
+pub use chronicle_persistence as persistence;
 pub use chrono;
 pub use common;
 pub use serde_json;

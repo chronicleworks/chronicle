@@ -1,4 +1,4 @@
-use crate::codegen::model;
+use common::domain::{DomainFileInput, ResourceDef};
 use jsonschema::{error::ValidationErrorKind, JSONSchema};
 use std::{collections::HashSet, path::Path, process::exit};
 
@@ -70,7 +70,7 @@ fn check_yaml_valid(json_validator: &JSONSchema, yaml_data: &str) {
 	check_json_valid(json_validator, &json_data);
 }
 
-fn read_json_domain(data: &str) -> model::DomainFileInput {
+fn read_json_domain(data: &str) -> DomainFileInput {
 	match serde_json::from_str(data) {
 		Ok(domain) => domain,
 		Err(error) => {
@@ -80,7 +80,7 @@ fn read_json_domain(data: &str) -> model::DomainFileInput {
 	}
 }
 
-fn read_yaml_domain(data: &str) -> model::DomainFileInput {
+fn read_yaml_domain(data: &str) -> DomainFileInput {
 	match serde_yaml::from_str(data) {
 		Ok(domain) => domain,
 		Err(error) => {
@@ -93,7 +93,7 @@ fn read_yaml_domain(data: &str) -> model::DomainFileInput {
 fn check_domain_attributes(
 	element: &str,
 	attributes: &HashSet<String>,
-	named_resources: Vec<(&String, &model::ResourceDef)>,
+	named_resources: Vec<(&String, &ResourceDef)>,
 ) {
 	let mut is_error = false;
 	for (name, resource) in named_resources {
@@ -109,7 +109,7 @@ fn check_domain_attributes(
 	}
 }
 
-fn check_domain(domain: model::DomainFileInput) {
+fn check_domain(domain: DomainFileInput) {
 	let attributes = domain.attributes.keys().map(std::clone::Clone::clone).collect();
 	check_domain_attributes("agent", &attributes, domain.agents.iter().collect());
 	check_domain_attributes("entity", &attributes, domain.entities.iter().collect());

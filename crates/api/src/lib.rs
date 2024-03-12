@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 pub mod chronicle_graphql;
 pub mod commands;
-mod persistence;
 
 use chronicle_signing::{ChronicleKnownKeyNamesSigner, ChronicleSigning, SecretError};
 use chrono::{DateTime, Utc};
@@ -28,16 +27,16 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
 use futures::{select, FutureExt, StreamExt};
 
+pub use chronicle_persistence::StoreError;
+use chronicle_persistence::{Store, MIGRATIONS};
+use diesel::r2d2::Pool;
 use metrics::histogram;
 use metrics_exporter_prometheus::PrometheusBuilder;
-pub use persistence::StoreError;
-use persistence::{Store, MIGRATIONS};
 use protocol_substrate::SubxtClientError;
 use protocol_substrate_chronicle::{
 	protocol::{BlockId, FromBlock, LedgerReader, LedgerWriter},
 	ChronicleEvent, ChronicleTransaction,
 };
-use r2d2::Pool;
 use std::{
 	convert::Infallible,
 	marker::PhantomData,
@@ -52,7 +51,6 @@ use tokio::{
 
 use commands::*;
 pub mod import;
-pub use persistence::{database, ConnectionOptions};
 use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 use user_error::UFE;
@@ -60,19 +58,35 @@ use uuid::Uuid;
 #[derive(Error, Debug)]
 pub enum ApiError {
 	#[error("Storage: {0:?}")]
-	Store(#[from] persistence::StoreError),
+	Store(
+		#[from]
+		#[source]
+		chronicle_persistence::StoreError,
+	),
 
 	#[error("Transaction failed: {0}")]
-	Transaction(#[from] diesel::result::Error),
+	Transaction(
+		#[from]
+		#[source]
+		diesel::result::Error,
+	),
 
 	#[error("Invalid IRI: {0}")]
-	Iri(#[from] iref::Error),
+	Iri(
+		#[from]
+		#[source]
+		iref::Error,
+	),
 
 	#[error("JSON-LD processing: {0}")]
 	JsonLD(String),
 
 	#[error("Signing: {0}")]
-	Signing(#[from] SecretError),
+	Signing(
+		#[from]
+		#[source]
+		SecretError,
+	),
 
 	#[error("No agent is currently in use, please call agent use or supply an agent in your call")]
 	NoCurrentAgent,
@@ -81,40 +95,84 @@ pub enum ApiError {
 	ApiShutdownRx,
 
 	#[error("Api shut down before send: {0}")]
-	ApiShutdownTx(#[from] SendError<ApiSendWithReply>),
+	ApiShutdownTx(
+		#[from]
+		#[source]
+		SendError<ApiSendWithReply>,
+	),
 
 	#[error("Ledger shut down before send: {0}")]
-	LedgerShutdownTx(#[from] SendError<LedgerSendWithReply>),
+	LedgerShutdownTx(
+		#[from]
+		#[source]
+		SendError<LedgerSendWithReply>,
+	),
 
 	#[error("Invalid socket address: {0}")]
-	AddressParse(#[from] AddrParseError),
+	AddressParse(
+		#[from]
+		#[source]
+		AddrParseError,
+	),
 
 	#[error("Connection pool: {0}")]
-	ConnectionPool(#[from] r2d2::Error),
+	ConnectionPool(
+		#[from]
+		#[source]
+		r2d2::Error,
+	),
 
 	#[error("IO error: {0}")]
-	InputOutput(#[from] std::io::Error),
+	InputOutput(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 
 	#[error("Blocking thread pool: {0}")]
-	Join(#[from] JoinError),
+	Join(
+		#[from]
+		#[source]
+		JoinError,
+	),
 
 	#[error("No appropriate activity to end")]
 	NotCurrentActivity,
 
 	#[error("Processor: {0}")]
-	ProcessorError(#[from] ProcessorError),
+	ProcessorError(
+		#[from]
+		#[source]
+		ProcessorError,
+	),
 
 	#[error("Identity: {0}")]
-	IdentityError(#[from] IdentityError),
+	IdentityError(
+		#[from]
+		#[source]
+		IdentityError,
+	),
 
 	#[error("Authentication endpoint error: {0}")]
-	AuthenticationEndpoint(#[from] chronicle_graphql::AuthorizationError),
+	AuthenticationEndpoint(
+		#[from]
+		#[source]
+		chronicle_graphql::AuthorizationError,
+	),
 
 	#[error("Substrate : {0}")]
-	ClientError(#[from] SubxtClientError),
+	ClientError(
+		#[from]
+		#[source]
+		SubxtClientError,
+	),
 
 	#[error("Submission : {0}")]
-	Submission(#[from] SubmissionError),
+	Submission(
+		#[from]
+		#[source]
+		SubmissionError,
+	),
 
 	#[error("Contradiction: {0}")]
 	Contradiction(Contradiction),
@@ -188,7 +246,7 @@ pub struct Api<
 	submit_tx: tokio::sync::broadcast::Sender<SubmissionStage>,
 	signing: ChronicleSigning,
 	ledger_writer: W,
-	store: persistence::Store,
+	store: chronicle_persistence::Store,
 	uuid_source: PhantomData<U>,
 }
 
@@ -223,20 +281,18 @@ impl ApiDispatch {
 	pub async fn handle_import_command(
 		&self,
 		identity: AuthId,
-		namespace: NamespaceId,
 		operations: Vec<ChronicleOperation>,
 	) -> Result<ApiResponse, ApiError> {
-		self.import_operations(identity, namespace, operations).await
+		self.import_operations(identity, operations).await
 	}
 
 	#[instrument]
 	async fn import_operations(
 		&self,
 		identity: AuthId,
-		namespace: NamespaceId,
 		operations: Vec<ChronicleOperation>,
 	) -> Result<ApiResponse, ApiError> {
-		self.dispatch(ApiCommand::Import(ImportCommand { namespace, operations }), identity.clone())
+		self.dispatch(ApiCommand::Import(ImportCommand { operations }), identity.clone())
 			.await
 	}
 
@@ -447,11 +503,12 @@ where
 								};
 
 								match stage {
-									SubmissionStage::Submitted(Ok(id)) =>
+									SubmissionStage::Submitted(Ok(id)) => {
 										if id == tx_id {
 											debug!("Depth charge operation submitted: {id}");
 											continue;
-										},
+										}
+									},
 									SubmissionStage::Submitted(Err(err)) => {
 										if err.tx_id() == &tx_id {
 											error!("Depth charge transaction rejected by Chronicle: {} {}",
@@ -568,31 +625,30 @@ where
 					model.namespace_context(&namespace);
 					model
 				},
-				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref external_id }) =>
+				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref id }) => {
 					self.store.apply_prov_model_for_agent_id(
 						connection,
 						model,
-						&AgentId::from_external_id(external_id),
+						id,
 						namespace.external_id_part(),
-					)?,
-				ChronicleOperation::ActivityExists(ActivityExists {
-					ref namespace,
-					ref external_id,
-				}) => self.store.apply_prov_model_for_activity_id(
-					connection,
-					model,
-					&ActivityId::from_external_id(external_id),
-					namespace.external_id_part(),
-				)?,
-				ChronicleOperation::EntityExists(EntityExists {
-					ref namespace,
-					ref external_id,
-				}) => self.store.apply_prov_model_for_entity_id(
-					connection,
-					model,
-					&EntityId::from_external_id(external_id),
-					namespace.external_id_part(),
-				)?,
+					)?
+				},
+				ChronicleOperation::ActivityExists(ActivityExists { ref namespace, ref id }) => {
+					self.store.apply_prov_model_for_activity_id(
+						connection,
+						model,
+						id,
+						namespace.external_id_part(),
+					)?
+				},
+				ChronicleOperation::EntityExists(EntityExists { ref namespace, ref id }) => {
+					self.store.apply_prov_model_for_entity_id(
+						connection,
+						model,
+						id,
+						namespace.external_id_part(),
+					)?
+				},
 				ChronicleOperation::ActivityUses(ActivityUses {
 					ref namespace,
 					ref id,
@@ -605,42 +661,47 @@ where
 					namespace.external_id_part(),
 				)?,
 				ChronicleOperation::SetAttributes(ref o) => match o {
-					SetAttributes::Activity { namespace, id, .. } =>
+					SetAttributes::Activity { namespace, id, .. } => {
 						self.store.apply_prov_model_for_activity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?,
-					SetAttributes::Agent { namespace, id, .. } =>
+						)?
+					},
+					SetAttributes::Agent { namespace, id, .. } => {
 						self.store.apply_prov_model_for_agent_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?,
-					SetAttributes::Entity { namespace, id, .. } =>
+						)?
+					},
+					SetAttributes::Entity { namespace, id, .. } => {
 						self.store.apply_prov_model_for_entity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?,
+						)?
+					},
 				},
-				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) =>
+				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?,
-				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) =>
+					)?
+				},
+				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?,
+					)?
+				},
 				ChronicleOperation::WasInformedBy(WasInformedBy {
 					namespace,
 					activity,
@@ -824,18 +885,21 @@ where
 	fn ensure_namespace(
 		&mut self,
 		connection: &mut PgConnection,
-		external_id: &ExternalId,
+		id: &ExternalId,
 	) -> Result<(NamespaceId, Vec<ChronicleOperation>), ApiError> {
-		let ns = self.store.namespace_by_external_id(connection, external_id);
-
-		if ns.is_err() {
-			debug!(?ns, "Namespace does not exist, creating");
-
-			let uuid = U::uuid();
-			let id: NamespaceId = NamespaceId::from_external_id(external_id, uuid);
-			Ok((id.clone(), vec![ChronicleOperation::CreateNamespace(CreateNamespace::new(id))]))
-		} else {
-			Ok((ns?.0, vec![]))
+		match self.store.namespace_by_external_id(connection, id) {
+			Ok((namespace_id, _)) => {
+				trace!(%id, "Namespace already exists.");
+				Ok((namespace_id, vec![]))
+			},
+			Err(e) => {
+				debug!(error = %e, %id, "Namespace does not exist, creating.");
+				let uuid = Uuid::new_v4();
+				let namespace_id = NamespaceId::from_external_id(id, uuid);
+				let create_namespace_op =
+					ChronicleOperation::CreateNamespace(CreateNamespace::new(namespace_id.clone()));
+				Ok((namespace_id, vec![create_namespace_op]))
+			},
 		}
 	}
 
@@ -974,10 +1038,11 @@ where
 	///
 	/// We use our local store to see if the agent already exists, disambiguating the URI if so
 	#[instrument(skip(self))]
+	#[instrument(skip(self))]
 	async fn create_entity(
 		&self,
-		external_id: ExternalId,
-		namespace: ExternalId,
+		id: EntityId,
+		namespace_id: ExternalId,
 		attributes: Attributes,
 		identity: AuthId,
 	) -> Result<ApiResponse, ApiError> {
@@ -986,21 +1051,19 @@ where
 			let mut connection = api.store.connection()?;
 
 			connection.build_transaction().run(|connection| {
-				let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+				let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace_id)?;
 
 				let applying_new_namespace = !to_apply.is_empty();
 
-				let id = EntityId::from_external_id(&external_id);
-
 				let create = ChronicleOperation::EntityExists(EntityExists {
 					namespace: namespace.clone(),
-					external_id: external_id.clone(),
+					id: id.clone(),
 				});
 
 				to_apply.push(create);
 
 				let set_type = ChronicleOperation::SetAttributes(SetAttributes::Entity {
-					id: EntityId::from_external_id(&external_id),
+					id: id.clone(),
 					namespace,
 					attributes,
 				});
@@ -1025,8 +1088,8 @@ where
 	#[instrument(skip(self))]
 	async fn create_activity(
 		&self,
-		external_id: ExternalId,
-		namespace: ExternalId,
+		activity_id: ExternalId,
+		namespace_id: ExternalId,
 		attributes: Attributes,
 		identity: AuthId,
 	) -> Result<ApiResponse, ApiError> {
@@ -1035,20 +1098,19 @@ where
 			let mut connection = api.store.connection()?;
 
 			connection.build_transaction().run(|connection| {
-				let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace)?;
+				let (namespace, mut to_apply) = api.ensure_namespace(connection, &namespace_id)?;
 
 				let applying_new_namespace = !to_apply.is_empty();
 
 				let create = ChronicleOperation::ActivityExists(ActivityExists {
 					namespace: namespace.clone(),
-					external_id: external_id.clone(),
+					id: ActivityId::from_external_id(&activity_id),
 				});
 
 				to_apply.push(create);
 
-				let id = ActivityId::from_external_id(&external_id);
 				let set_type = ChronicleOperation::SetAttributes(SetAttributes::Activity {
-					id: id.clone(),
+					id: ActivityId::from_external_id(&activity_id),
 					namespace,
 					attributes,
 				});
@@ -1057,7 +1119,7 @@ where
 
 				api.apply_effects_and_submit(
 					connection,
-					id,
+					ActivityId::from_external_id(&activity_id),
 					identity,
 					to_apply,
 					applying_new_namespace,
@@ -1073,7 +1135,7 @@ where
 	#[instrument(skip(self))]
 	async fn create_agent(
 		&self,
-		external_id: ExternalId,
+		agent_id: ExternalId,
 		namespace: ExternalId,
 		attributes: Attributes,
 		identity: AuthId,
@@ -1088,13 +1150,13 @@ where
 				let applying_new_namespace = !to_apply.is_empty();
 
 				let create = ChronicleOperation::AgentExists(AgentExists {
-					external_id: external_id.to_owned(),
+					id: AgentId::from_external_id(&agent_id),
 					namespace: namespace.clone(),
 				});
 
 				to_apply.push(create);
 
-				let id = AgentId::from_external_id(&external_id);
+				let id = AgentId::from_external_id(&agent_id);
 				let set_type = ChronicleOperation::SetAttributes(SetAttributes::Agent {
 					id: id.clone(),
 					namespace,
@@ -1119,15 +1181,15 @@ where
 	/// not already exist in local storage
 	async fn create_namespace(
 		&self,
-		external_id: &ExternalId,
+		name: &ExternalId,
 		identity: AuthId,
 	) -> Result<ApiResponse, ApiError> {
 		let mut api = self.clone();
-		let external_id = external_id.to_owned();
+		let name = name.to_owned();
 		tokio::task::spawn_blocking(move || {
 			let mut connection = api.store.connection()?;
 			connection.build_transaction().run(|connection| {
-				let (namespace, to_apply) = api.ensure_namespace(connection, &external_id)?;
+				let (namespace, to_apply) = api.ensure_namespace(connection, &name)?;
 
 				api.submit(namespace, identity, to_apply)
 			})
@@ -1176,18 +1238,21 @@ where
 	#[instrument(skip(self))]
 	async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
 		match command {
-			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) =>
-				self.depth_charge(namespace, identity).await,
-			(ApiCommand::Import(ImportCommand { namespace, operations }), identity) =>
-				self.submit_import_operations(identity, namespace, operations).await,
-			(ApiCommand::NameSpace(NamespaceCommand::Create { external_id }), identity) =>
-				self.create_namespace(&external_id, identity).await,
-			(
-				ApiCommand::Agent(AgentCommand::Create { external_id, namespace, attributes }),
-				identity,
-			) => self.create_agent(external_id, namespace, attributes, identity).await,
-			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) =>
-				self.use_agent_in_cli_context(id, namespace).await,
+			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) => {
+				self.depth_charge(namespace, identity).await
+			},
+			(ApiCommand::Import(ImportCommand { operations }), identity) => {
+				self.submit_import_operations(identity, operations).await
+			},
+			(ApiCommand::NameSpace(NamespaceCommand::Create { id }), identity) => {
+				self.create_namespace(&id, identity).await
+			},
+			(ApiCommand::Agent(AgentCommand::Create { id, namespace, attributes }), identity) => {
+				self.create_agent(id, namespace, attributes, identity).await
+			},
+			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) => {
+				self.use_agent_in_cli_context(id, namespace).await
+			},
 			(
 				ApiCommand::Agent(AgentCommand::Delegate {
 					id,
@@ -1199,13 +1264,9 @@ where
 				identity,
 			) => self.delegate(namespace, id, delegate, activity, role, identity).await,
 			(
-				ApiCommand::Activity(ActivityCommand::Create {
-					external_id,
-					namespace,
-					attributes,
-				}),
+				ApiCommand::Activity(ActivityCommand::Create { id, namespace, attributes }),
 				identity,
-			) => self.create_activity(external_id, namespace, attributes, identity).await,
+			) => self.create_activity(id, namespace, attributes, identity).await,
 			(
 				ApiCommand::Activity(ActivityCommand::Instant { id, namespace, time, agent }),
 				identity,
@@ -1218,8 +1279,9 @@ where
 				ApiCommand::Activity(ActivityCommand::End { id, namespace, time, agent }),
 				identity,
 			) => self.end_activity(id, namespace, time, agent, identity).await,
-			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) =>
-				self.activity_use(id, namespace, activity, identity).await,
+			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) => {
+				self.activity_use(id, namespace, activity, identity).await
+			},
 			(
 				ApiCommand::Activity(ActivityCommand::WasInformedBy {
 					id,
@@ -1241,10 +1303,10 @@ where
 				ApiCommand::Entity(EntityCommand::Attribute { id, namespace, responsible, role }),
 				identity,
 			) => self.attribute(namespace, responsible, id, role, identity).await,
-			(
-				ApiCommand::Entity(EntityCommand::Create { external_id, namespace, attributes }),
-				identity,
-			) => self.create_entity(external_id, namespace, attributes, identity).await,
+			(ApiCommand::Entity(EntityCommand::Create { id, namespace, attributes }), identity) => {
+				self.create_entity(EntityId::from_external_id(&id), namespace, attributes, identity)
+					.await
+			},
 			(
 				ApiCommand::Activity(ActivityCommand::Generate { id, namespace, activity }),
 				identity,
@@ -1258,9 +1320,10 @@ where
 					derivation,
 				}),
 				identity,
-			) =>
+			) => {
 				self.entity_derive(id, namespace, activity, used_entity, derivation, identity)
-					.await,
+					.await
+			},
 			(ApiCommand::Query(query), _identity) => self.query(query).await,
 		}
 	}
@@ -1285,13 +1348,13 @@ where
 
 				let applying_new_namespace = !to_apply.is_empty();
 
-				let tx = ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
-					&namespace,
-					&responsible_id,
-					&delegate_id,
-					activity_id.as_ref(),
+				let tx = ChronicleOperation::agent_acts_on_behalf_of(
+					namespace,
+					responsible_id.clone(),
+					delegate_id,
+					activity_id,
 					role,
-				));
+				);
 
 				to_apply.push(tx);
 
@@ -1326,12 +1389,12 @@ where
 
 				let applying_new_namespace = !to_apply.is_empty();
 
-				let tx = ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-					&namespace,
-					&activity_id,
-					&responsible_id,
+				let tx = ChronicleOperation::was_associated_with(
+					namespace,
+					activity_id,
+					responsible_id.clone(),
 					role,
-				));
+				);
 
 				to_apply.push(tx);
 
@@ -1366,12 +1429,12 @@ where
 
 				let applying_new_namespace = !to_apply.is_empty();
 
-				let tx = ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
-					&namespace,
-					&entity_id,
-					&responsible_id,
+				let tx = ChronicleOperation::was_attributed_to(
+					namespace,
+					entity_id,
+					responsible_id.clone(),
 					role,
-				));
+				);
 
 				to_apply.push(tx);
 
@@ -1445,7 +1508,6 @@ where
 	async fn submit_import_operations(
 		&self,
 		identity: AuthId,
-		namespace: NamespaceId,
 		operations: Vec<ChronicleOperation>,
 	) -> Result<ApiResponse, ApiError> {
 		let mut api = self.clone();
@@ -1464,8 +1526,7 @@ where
 					Ok(ApiResponse::import_submitted(model, tx_id))
 				} else {
 					info!("Import will not result in any data changes");
-					let model = ProvModel::from_tx(&operations)?;
-					Ok(ApiResponse::already_recorded(namespace, model))
+					Ok(ApiResponse::AlreadyRecordedAll)
 				}
 			})
 		})
@@ -1520,22 +1581,27 @@ where
 					}
 				};
 
+				let now = Utc::now();
+
 				to_apply.push(ChronicleOperation::StartActivity(StartActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now).into(),
+					time: time.unwrap_or(now).into(),
 				}));
 
 				to_apply.push(ChronicleOperation::EndActivity(EndActivity {
 					namespace: namespace.clone(),
 					id: id.clone(),
-					time: time.unwrap_or_else(Utc::now).into(),
+					time: time.unwrap_or(now).into(),
 				}));
 
 				if let Some(agent_id) = agent_id {
-					to_apply.push(ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-						&namespace, &id, &agent_id, None,
-					)));
+					to_apply.push(ChronicleOperation::was_associated_with(
+						namespace,
+						id.clone(),
+						agent_id,
+						None,
+					));
 				}
 
 				api.apply_effects_and_submit(
@@ -1587,9 +1653,12 @@ where
 				}));
 
 				if let Some(agent_id) = agent_id {
-					to_apply.push(ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-						&namespace, &id, &agent_id, None,
-					)));
+					to_apply.push(ChronicleOperation::was_associated_with(
+						namespace,
+						id.clone(),
+						agent_id,
+						None,
+					));
 				}
 
 				api.apply_effects_and_submit(
@@ -1641,9 +1710,12 @@ where
 				}));
 
 				if let Some(agent_id) = agent_id {
-					to_apply.push(ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-						&namespace, &id, &agent_id, None,
-					)));
+					to_apply.push(ChronicleOperation::was_associated_with(
+						namespace,
+						id.clone(),
+						agent_id,
+						None,
+					));
 				}
 
 				api.apply_effects_and_submit(

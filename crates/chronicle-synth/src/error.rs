@@ -3,14 +3,30 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ChronicleSynthError {
 	#[error("Chronicle domain parsing error: {0}")]
-	ModelError(#[from] chronicle::codegen::model::ModelError),
+	ModelError(
+		#[from]
+		#[source]
+		common::domain::ModelError,
+	),
 
 	#[error("Invalid JSON: {0}")]
-	JsonError(#[from] serde_json::Error),
+	JsonError(
+		#[from]
+		#[source]
+		serde_json::Error,
+	),
 
 	#[error("I/O error: {0}")]
-	IO(#[from] std::io::Error),
+	IO(
+		#[from]
+		#[source]
+		std::io::Error,
+	),
 
 	#[error("YAML parsing error: {0}")]
-	YamlError(#[from] serde_yaml::Error),
+	YamlError(
+		#[from]
+		#[source]
+		serde_yaml::Error,
+	),
 }

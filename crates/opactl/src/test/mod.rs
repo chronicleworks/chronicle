@@ -11,8 +11,6 @@ use k256::{
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 
-use serde_json::{self, Value};
-
 use std::io::Write;
 use tempfile::{NamedTempFile, TempDir};
 
@@ -129,16 +127,15 @@ async fn rotate_root() {
             ".**.key" => "[pem]",
             ".**.correlation_id" => "[correlation_id]"
         }, @r###"
-        ---
-        - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
-          - current:
-              key: "[pem]"
-              version: 1
-            expired:
-              key: "[pem]"
-              version: 0
-            id: root
-        "###);
+ ---
+ - id: root
+   current:
+     key: "[pem]"
+     version: 1
+   expired:
+     key: "[pem]"
+     version: 0
+ "###);
 }
 
 #[tokio::test]
@@ -183,20 +180,18 @@ async fn register_and_rotate_key() {
             ".**.key" => "[pem]",
             ".**.correlation_id" => "[correlation_id]"
         }, @r###"
-        ---
-        - - 7ed19313e8ece6c4f5551b9bd1090797ad25c6d85f7b523b2214d4fe448372279aa95c
-          - current:
-              key: "[pem]"
-              version: 0
-            expired: ~
-            id: root
-        - - 7ed19336d8b5677c39a7b872910f948944dd84ba014846c81fcd53fe1fd5289b9dfd1c
-          - current:
-              key: "[pem]"
-              version: 0
-            expired: ~
-            id: test
-        "###);
+ ---
+ - id: test
+   current:
+     key: "[pem]"
+     version: 0
+   expired: ~
+ - id: root
+   current:
+     key: "[pem]"
+     version: 0
+   expired: ~
+ "###);
 
 	let new_key_2 = key_from_seed(1);
 
@@ -285,7 +280,8 @@ async fn set_and_update_policy() {
  ---
  WaitedAndFound:
    PolicyUpdate:
-     - id: test
+     policy:
+       id: test
        hash:
          - 112
          - 37
@@ -320,22 +316,7 @@ async fn set_and_update_policy() {
          - 122
          - 58
          - 230
-     - - 126
-       - 73
-       - 89
-       - 163
-       - 235
-       - 197
-       - 73
-       - 130
-       - 154
-       - 213
-       - 245
-       - 47
-       - 249
-       - 40
-       - 118
-       - 225
+     correlation_id: "[correlation_id]"
  "###);
 
 	insta::assert_yaml_snapshot!(opa_tp.stored_policy(), {

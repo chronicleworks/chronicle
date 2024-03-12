@@ -113,16 +113,14 @@ impl LedgerWriter for Stubstrate {
 
 			let opa_event = match ev {
 				RuntimeEvent::ChronicleModule(event) => match event {
-					Event::<Test>::Applied(diff, identity, correlation_id) => {
-						Some(ChronicleEvent::Committed { diff, identity, correlation_id })
-					},
-					Event::<Test>::Contradiction(contradiction, identity, correlation_id) => {
+					Event::<Test>::Applied(diff, identity, correlation_id) =>
+						Some(ChronicleEvent::Committed { diff, identity, correlation_id }),
+					Event::<Test>::Contradiction(contradiction, identity, correlation_id) =>
 						Some(ChronicleEvent::Contradicted {
 							contradiction,
 							identity,
 							correlation_id,
-						})
-					},
+						}),
 					_ => None,
 				},
 				_ => None,
