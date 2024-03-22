@@ -58,3 +58,19 @@
 | `postgres.persistence.size` | postgres PVC volume size | string | "40Gi" |
 | `postgres.resources` | resources | map | nil |
 | `resources` | resources | map | nil |
+| `livenessProbe.enabled` | if true, enables the liveness probe | false |
+| `livenessProbe.initialDelaySeconds` | delay before liveness probe is initiated | 30 |
+| `livenessProbe.periodSeconds` | how often to perform the probe | 10 |
+| `livenessProbe.timeoutSeconds` | when the probe times out | 1 |
+| `livenessProbe.failureThreshold` | how many times to retry the probe before giving up | 3 |
+| `livenessProbe.successThreshold` | how many times the probe must report success to be considered successful after having failed | 1 |
+| `livenessProbe.namespaceName` | the namespace name for the liveness probe | "default" |
+| `livenessProbe.namespaceUuid` | the namespace UUID for the liveness probe | "fd717fd6-70f1-44c1-81de-287d5e101089" |
+| `startupProbe.enabled` | if true, enables the startup probe | false |
+| `startupProbe.initialDelaySeconds` | delay before startup probe is initiated | 10 |
+| `startupProbe.periodSeconds` | how often to perform the probe | 10 |
+| `startupProbe.timeoutSeconds` | when the probe times out | 1 |
+| `startupProbe.failureThreshold` | how many times to retry the probe before giving up | 3 |
+| `startupProbe.successThreshold` | how many times the probe must report success to be considered successful after having failed | 1 |
+| `startupProbe.namespaceName` | the namespace name for the startup probe | "default" |
+| `startupProbe.namespaceUuid` | the namespace UUID for the startup probe | "fd717fd6-70f1-44c1-81de-287d5e101089" |
