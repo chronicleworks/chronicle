@@ -1,10 +1,7 @@
-#[cfg(feature = "std")]
-use std::collections::BTreeMap;
-
 #[cfg(feature = "parity-encoding")]
 use parity_scale_codec::Encode;
 #[cfg(not(feature = "std"))]
-use parity_scale_codec::{alloc::collections::BTreeMap, alloc::string::String};
+use parity_scale_codec::{alloc::collections::BTreeMap, alloc::string::String, alloc::vec::Vec};
 #[cfg(feature = "parity-encoding")]
 use scale_encode::error::Kind;
 #[cfg(not(feature = "std"))]
@@ -149,21 +146,21 @@ impl Attribute {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Attributes {
 	typ: Option<DomaintypeId>,
-	items: Vec<(String, Attribute)>,
+	items: Vec<Attribute>,
 }
 
 impl Attributes {
-	pub fn new(typ: Option<DomaintypeId>, items: Vec<(String, Attribute)>) -> Self {
-		Self { typ, items: items.into_iter().collect::<BTreeMap<_, _>>().into_iter().collect() }
+	pub fn new(typ: Option<DomaintypeId>, items: Vec<Attribute>) -> Self {
+		Self { typ, items }
 	}
 
-	pub fn new_from_btree(typ: Option<DomaintypeId>, items: BTreeMap<String, Attribute>) -> Self {
-		Self { typ, items: items.into_iter().collect() }
+	pub fn get_attribute(&self, key: &str) -> Option<&Attribute> {
+		self.items.iter().find(|&attribute| attribute.typ == key)
 	}
 
 	#[tracing::instrument(skip(self))]
 	pub fn get_values(&self) -> Vec<&Attribute> {
-		self.items.iter().map(|(_, attribute)| attribute).collect()
+		self.items.iter().collect()
 	}
 
 	pub fn type_only(typ: Option<DomaintypeId>) -> Self {
@@ -174,11 +171,15 @@ impl Attributes {
 		&self.typ
 	}
 
-	pub fn get_items(&self) -> &[(String, Attribute)] {
+	pub fn get_items(&self) -> &[Attribute] {
 		&self.items
 	}
 
-	pub fn add_item(&mut self, key: String, value: Attribute) {
-		self.items.push((key, value));
+	pub fn into_items(self) -> Vec<Attribute> {
+		self.items
+	}
+
+	pub fn add_item(&mut self, value: Attribute) {
+		self.items.push(value);
 	}
 }

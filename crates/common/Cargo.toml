@@ -53,7 +53,9 @@ parity-scale-codec = { version = "^3.4.0", default-features = false, features = 
   "derive",
   "max-encoded-len",
 ], optional = true }
-percent-encoding = { version = "^2.1", default-features = false }
+percent-encoding = { version = "^2.1", default-features = false, features = [
+  "alloc",
+] }
 rdf-types = { version = "0.14", optional = true }
 reqwest = { version = "0.11", optional = true }
 rust-embed = { version = "6", features = [
@@ -76,7 +78,7 @@ serde = { version = "1.0", default-features = false, features = [
   "derive",
 ] }
 serde_derive = { version = "1.0", default-features = false }
-serde_json = { workspace = true, optional = true }
+serde_json = { version = "^1.0", default-features = false }
 serde_yaml = { workspace = true, optional = true }
 sp-core = { version = "25.0.0", default-features = false }
 sp-std = { version = "11.0.0", optional = true }
@@ -118,17 +120,17 @@ std = [
   "chrono/std",
   "anyhow/std",
   "percent-encoding/std",
-  "dep:opa",
+  "opa",
   "sp-core/full_crypto",
-  "dep:url",
-  "dep:reqwest",
-  "dep:rust-embed",
+  "url",
+  "reqwest",
+  "rust-embed",
   "scale-encode/std",
   "scale-decode/std",
   "scale-info/std",
   "uuid/v4",
-  "dep:Inflector",
-  "dep:serde_yaml",
+  "Inflector",
+  "serde_yaml",
 ]
 # Enable parity support, annoyingly lazy_static has a non standard way of enabling non_std
 parity-encoding = [

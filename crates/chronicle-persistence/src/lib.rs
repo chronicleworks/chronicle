@@ -101,6 +101,9 @@ pub enum StoreError {
 		#[source]
 		uuid::Error,
 	),
+
+	#[error("Serialization error: {0}")]
+	SerializationError(String),
 }
 
 #[derive(Debug)]
@@ -241,7 +244,7 @@ impl Store {
 			.values(
 				attributes
 					.iter()
-					.map(|(_, Attribute { typ, value, .. })| query::ActivityAttribute {
+					.map(|Attribute { typ, value, .. }| query::ActivityAttribute {
 						activity_id: id,
 						typename: typ.to_owned(),
 						value: value.to_string(),
@@ -296,7 +299,7 @@ impl Store {
 			.values(
 				attributes
 					.iter()
-					.map(|(_, Attribute { typ, value, .. })| query::AgentAttribute {
+					.map(|Attribute { typ, value, .. }| query::AgentAttribute {
 						agent_id: id,
 						typename: typ.to_owned(),
 						value: value.to_string(),
@@ -347,7 +350,7 @@ impl Store {
 			.values(
 				attributes
 					.iter()
-					.map(|(_, Attribute { typ, value, .. })| query::EntityAttribute {
+					.map(|Attribute { typ, value, .. }| query::EntityAttribute {
 						entity_id: id,
 						typename: typ.to_owned(),
 						value: value.to_string(),
@@ -764,6 +767,7 @@ impl Store {
 		Ok(Store { pool })
 	}
 
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_agent(
 		&self,
 		agent: query::Agent,
@@ -786,13 +790,13 @@ impl Store {
 				external_id: ExternalId::from(&agent.external_id),
 				domaintypeid: agent.domaintype.map(DomaintypeId::from_external_id),
 				attributes: attributes
-					.into_iter()
+					.iter()
 					.map(|attr| {
-						serde_json::from_str(&attr.value).map(|value| {
-							(attr.typename.clone(), Attribute { typ: attr.typename, value })
-						})
+						serde_json::from_str(&attr.value)
+							.map_err(|e| StoreError::SerializationError(e.to_string()))
+							.map(|value| Attribute { typ: attr.typename.clone(), value })
 					})
-					.collect::<Result<BTreeMap<_, _>, _>>()?,
+					.collect::<Result<Vec<_>, StoreError>>()?,
 			}
 			.into(),
 		);
@@ -838,6 +842,7 @@ impl Store {
 		Ok(())
 	}
 
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_activity(
 		&self,
 		activity: query::Activity,
@@ -845,8 +850,6 @@ impl Store {
 		model: &mut ProvModel,
 		connection: &mut PgConnection,
 	) -> Result<(), StoreError> {
-		debug!(?activity, "Map activity to prov");
-
 		let attributes = schema::activity_attribute::table
 			.filter(schema::activity_attribute::activity_id.eq(&activity.id))
 			.load::<query::ActivityAttribute>(connection)?;
@@ -862,13 +865,13 @@ impl Store {
 				ended: activity.ended.map(|x| Utc.from_utc_datetime(&x).into()),
 				domaintype_id: activity.domaintype.map(DomaintypeId::from_external_id),
 				attributes: attributes
-					.into_iter()
+					.iter()
 					.map(|attr| {
-						serde_json::from_str(&attr.value).map(|value| {
-							(attr.typename.clone(), Attribute { typ: attr.typename, value })
-						})
+						serde_json::from_str(&attr.value)
+							.map_err(|e| StoreError::SerializationError(e.to_string()))
+							.map(|value| Attribute { typ: attr.typename.clone(), value })
 					})
-					.collect::<Result<BTreeMap<_, _>, _>>()?,
+					.collect::<Result<Vec<_>, StoreError>>()?,
 			}
 			.into(),
 		);
@@ -932,6 +935,7 @@ impl Store {
 		Ok(())
 	}
 
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_entity(
 		&self,
 		entity: query::Entity,
@@ -978,13 +982,13 @@ impl Store {
 				external_id: external_id.into(),
 				domaintypeid: domaintype.map(DomaintypeId::from_external_id),
 				attributes: attributes
-					.into_iter()
+					.iter()
 					.map(|attr| {
-						serde_json::from_str(&attr.value).map(|value| {
-							(attr.typename.clone(), Attribute { typ: attr.typename, value })
-						})
+						serde_json::from_str(&attr.value)
+							.map_err(|e| StoreError::SerializationError(e.to_string()))
+							.map(|value| Attribute { typ: attr.typename.clone(), value })
 					})
-					.collect::<Result<BTreeMap<_, _>, _>>()?,
+					.collect::<Result<Vec<_>, StoreError>>()?,
 			}
 			.into(),
 		);
@@ -1027,7 +1031,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_namespace(
 		&self,
 		connection: &mut PgConnection,
@@ -1065,7 +1069,7 @@ impl Store {
 	}
 
 	/// Set the last fully synchronized offset
-	#[instrument]
+	#[instrument(level = "info")]
 	pub fn set_last_block_id(
 		&self,
 		block_id: &BlockId,
@@ -1088,7 +1092,7 @@ impl Store {
 		})?)
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn use_agent(
 		&self,
 		connection: &mut PgConnection,
@@ -1112,7 +1116,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_agent_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1133,7 +1137,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn apply_prov_model_for_agent_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1155,7 +1159,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_activity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1176,7 +1180,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn apply_prov_model_for_activity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1198,7 +1202,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_entity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1219,7 +1223,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "debug", skip(connection))]
+	#[instrument(level = "trace", skip(connection))]
 	pub fn apply_prov_model_for_entity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1241,6 +1245,7 @@ impl Store {
 		Ok(model)
 	}
 
+	#[instrument(level = "trace", skip(connection))]
 	pub fn prov_model_for_usage(
 		&self,
 		connection: &mut PgConnection,

@@ -1,6 +1,33 @@
-name: "untyped"
-attributes: {}
-entities: {}
-activities: {}
-agents: {}
-roles: []
+name: Manufacturing
+attributes:
+  BatchID:
+    type: String
+  CertID:
+    type: String
+  CompanyName:
+    type: String
+  PartID:
+    type: String
+  Location:
+    type: String
+agents:
+  Contractor:
+    attributes:
+      - CompanyName
+      - Location
+entities:
+  Certificate:
+    attributes:
+      - CertID
+  Item:
+    attributes:
+      - PartID
+activities:
+  ItemCertified:
+    attributes: []
+  ItemManufactured:
+    attributes:
+      - BatchID
+roles:
+  - CERTIFIER
+  - MANUFACTURER

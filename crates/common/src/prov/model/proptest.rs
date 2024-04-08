@@ -184,7 +184,7 @@ prop_compose! {
 
 		Attributes::new(
 			Some(typ),
-			attributes.into_iter().map(|a| (a.typ.clone(), a)).collect(),
+			attributes
 		)
 	}
 }

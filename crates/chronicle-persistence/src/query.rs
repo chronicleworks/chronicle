@@ -2,7 +2,8 @@ use super::schema::*;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-#[derive(Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = namespace)]
 pub struct Namespace {
 	pub external_id: String,
 	pub uuid: String,
@@ -104,8 +105,9 @@ pub struct Entity {
 	pub domaintype: Option<String>,
 }
 
-#[derive(Debug, Queryable, Selectable, Associations, PartialEq)]
+#[derive(Debug, Queryable, Selectable, Identifiable, Associations, PartialEq)]
 #[diesel(table_name = wasinformedby)]
+#[diesel(primary_key(activity_id, informing_activity_id))]
 #[diesel(belongs_to(Activity, foreign_key = activity_id , foreign_key = informing_activity_id))]
 pub struct WasInformedBy {
 	activity_id: i32,
@@ -122,8 +124,9 @@ pub struct Generation {
 	generated_entity_id: i32,
 }
 
-#[derive(Debug, Queryable, Selectable, Associations, PartialEq)]
+#[derive(Debug, Queryable, Selectable, Identifiable, Associations, PartialEq)]
 #[diesel(table_name = usage)]
+#[diesel(primary_key(activity_id, entity_id))]
 #[diesel(belongs_to(Activity))]
 #[diesel(belongs_to(Entity))]
 pub struct Usage {
@@ -163,10 +166,11 @@ pub struct Delegation {
 	role: String,
 }
 
-#[derive(Debug, Queryable, Selectable, Associations, PartialEq)]
+#[derive(Debug, Queryable, Selectable, Identifiable, Associations, PartialEq)]
 #[diesel(table_name = derivation)]
 #[diesel(belongs_to(Activity))]
 #[diesel(belongs_to(Entity, foreign_key = generated_entity_id, foreign_key = used_entity_id))]
+#[diesel(primary_key(activity_id, used_entity_id, generated_entity_id, typ))]
 pub struct Derivation {
 	activity_id: i32,
 	used_entity_id: i32,

@@ -9,8 +9,8 @@ use crate::{
 			CreateNamespace, EndActivity, EntityDerive, EntityExists, SetAttributes, StartActivity,
 			WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
 		},
-		ActivityId, AgentId, ChronicleIri, ChronicleTransactionId, Contradiction, EntityId,
-		NamespaceId, ProcessorError, ProvModel,
+		ChronicleIri, ChronicleTransactionId, Contradiction, NamespaceId, ProcessorError,
+		ProvModel,
 	},
 };
 

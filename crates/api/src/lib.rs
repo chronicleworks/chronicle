@@ -64,6 +64,9 @@ pub enum ApiError {
 		chronicle_persistence::StoreError,
 	),
 
+	#[error("Storage: {0:?}")]
+	ArrowService(#[source] anyhow::Error),
+
 	#[error("Transaction failed: {0}")]
 	Transaction(
 		#[from]
@@ -375,6 +378,11 @@ where
 		// Append namespace bindings and system namespace
 		store.namespace_binding(system_namespace_uuid.0, system_namespace_uuid.1)?;
 		for ns in namespace_bindings {
+			info!(
+				"Binding namespace with external ID: {}, UUID: {}",
+				ns.external_id_part().as_str(),
+				ns.uuid_part()
+			);
 			store.namespace_binding(ns.external_id_part().as_str(), ns.uuid_part().to_owned())?
 		}
 
@@ -433,8 +441,8 @@ where
 								  // subscription subscribers
 								  Some((ChronicleEvent::Committed{ref diff, ref identity, ..},tx,block_id,_position,_span )) => {
 
-										debug!(committed = ?tx);
-										debug!(delta = %serde_json::to_string_pretty(&diff.to_json().compact().await.unwrap()).unwrap());
+										debug!(diff = ?diff.summarize());
+										trace!(delta = %serde_json::to_string_pretty(&diff.to_json().compact().await.unwrap()).unwrap());
 
 										api.sync( diff.clone().into(), &block_id,tx )
 											.instrument(info_span!("Incoming confirmation", offset = ?block_id, tx = %tx))
@@ -522,7 +530,6 @@ where
 										if commit.tx_id == tx_id {
 											let end_time = Instant::now();
 											let elapsed_time = end_time - start_time;
-
 											debug!(
 												"Depth charge transaction committed: {}",
 												commit.tx_id
@@ -531,10 +538,10 @@ where
 												"Depth charge round trip time: {:.2?}",
 												elapsed_time
 											);
-											histogram!(
-												"depth_charge_round_trip",
-												elapsed_time.as_millis() as f64
-											);
+											let hist = histogram!("depth_charge_round_trip",);
+
+											hist.record(elapsed_time.as_millis() as f64);
+
 											break;
 										}
 									},
@@ -557,10 +564,8 @@ where
 		Ok(dispatch)
 	}
 
-	/// Notify after a successful submission, for now this makes little
-	/// difference, but with the future introduction of a submission queue,
-	/// submission notifications will be decoupled from api invocation.
-	/// This is a measure to keep the api interface stable once this is introduced
+	/// Notify after a successful submission, depending on the consistency requirement TODO: set in
+	/// the transaction
 	fn submit_blocking(
 		&mut self,
 		tx: ChronicleTransaction,
@@ -609,7 +614,7 @@ where
 	/// # Arguments
 	/// * `connection` - Connection to the Chronicle database
 	/// * `to_apply` - Chronicle operations resulting from an API call
-	#[instrument(skip(self, connection))]
+	#[instrument(skip(self, connection, to_apply))]
 	fn check_for_effects(
 		&mut self,
 		connection: &mut PgConnection,
@@ -1519,7 +1524,10 @@ where
 			let mut connection = api.store.connection()?;
 			connection.build_transaction().run(|connection| {
 				if let Some(operations_to_apply) = api.check_for_effects(connection, &operations)? {
-					info!("Submitting import operations to ledger");
+					tracing::trace!(
+						operations_to_apply = operations_to_apply.len(),
+						"Import operations submitted"
+					);
 					let tx_id = api.submit_blocking(futures::executor::block_on(
 						ChronicleTransaction::new(&signer, identity, operations_to_apply),
 					)?)?;
@@ -1533,7 +1541,7 @@ where
 		.await?
 	}
 
-	#[instrument(level = "debug", skip(self), ret(Debug))]
+	#[instrument(level = "trace", skip(self), ret(Debug))]
 	async fn sync(
 		&self,
 		prov: Box<ProvModel>,

@@ -294,7 +294,7 @@ pub struct Agent {
 	pub namespaceid: NamespaceId,
 	pub external_id: ExternalId,
 	pub domaintypeid: Option<DomaintypeId>,
-	pub attributes: BTreeMap<String, Attribute>,
+	pub attributes: Vec<Attribute>,
 }
 
 impl Agent {
@@ -306,7 +306,7 @@ impl Agent {
 			namespaceid,
 			external_id,
 			domaintypeid: attributes.get_typ().clone(),
-			attributes: attributes.get_items().iter().cloned().collect(),
+			attributes: attributes.get_items().to_vec(),
 		}
 	}
 
@@ -317,7 +317,7 @@ impl Agent {
 			external_id: id.external_id_part().to_owned(),
 			id,
 			domaintypeid: None,
-			attributes: BTreeMap::new(),
+			attributes: Vec::new(),
 		}
 	}
 }
@@ -332,7 +332,7 @@ pub struct Activity {
 	pub namespace_id: NamespaceId,
 	pub external_id: ExternalId,
 	pub domaintype_id: Option<DomaintypeId>,
-	pub attributes: BTreeMap<String, Attribute>,
+	pub attributes: Vec<Attribute>,
 	pub started: Option<TimeWrapper>,
 	pub ended: Option<TimeWrapper>,
 }
@@ -347,7 +347,7 @@ impl Activity {
 			started,
 			ended,
 			domaintype_id: attributes.get_typ().clone(),
-			attributes: attributes.get_items().iter().cloned().collect(),
+			attributes: attributes.get_items().to_vec(),
 		}
 	}
 
@@ -360,7 +360,7 @@ impl Activity {
 			started: None,
 			ended: None,
 			domaintype_id: None,
-			attributes: BTreeMap::new(),
+			attributes: Vec::new(),
 		}
 	}
 }
@@ -375,7 +375,7 @@ pub struct Entity {
 	pub namespace_id: NamespaceId,
 	pub external_id: ExternalId,
 	pub domaintypeid: Option<DomaintypeId>,
-	pub attributes: BTreeMap<String, Attribute>,
+	pub attributes: Vec<Attribute>,
 }
 
 impl Entity {
@@ -386,7 +386,7 @@ impl Entity {
 			namespace_id: namespaceid,
 			external_id,
 			domaintypeid: attributes.get_typ().clone(),
-			attributes: attributes.get_items().iter().cloned().collect(),
+			attributes: attributes.get_items().to_vec(),
 		}
 	}
 
@@ -396,7 +396,7 @@ impl Entity {
 			id,
 			namespace_id: namespaceid,
 			domaintypeid: None,
-			attributes: BTreeMap::new(),
+			attributes: Vec::new(),
 		}
 	}
 }
@@ -547,6 +547,19 @@ type NamespacedAgent = NamespacedId<AgentId>;
 type NamespacedEntity = NamespacedId<EntityId>;
 type NamespacedActivity = NamespacedId<ActivityId>;
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProvSummary {
+	pub total_agents: usize,
+	pub total_entities: usize,
+	pub total_activities: usize,
+	pub total_attributions: usize,
+	pub total_derivations: usize,
+	pub total_generations: usize,
+	pub total_usages: usize,
+	pub total_associations: usize,
+	pub total_delegations: usize,
+}
+
 #[cfg_attr(
 	feature = "parity-encoding",
 	derive(scale_info::TypeInfo, parity_scale_codec::Encode, parity_scale_codec::Decode)
@@ -633,6 +646,39 @@ impl parity_scale_codec::MaxEncodedLen for ProvModel {
 }
 
 impl ProvModel {
+	pub fn summarize(&self) -> ProvSummary {
+		ProvSummary {
+			total_agents: self.agents.len(),
+			total_entities: self.entities.len(),
+			total_activities: self.activities.len(),
+			total_attributions: self
+				.attribution
+				.iter()
+				.map(|(_, attributions)| attributions.len())
+				.sum(),
+			total_derivations: self
+				.derivation
+				.iter()
+				.map(|(_, derivations)| derivations.len())
+				.sum(),
+			total_generations: self
+				.generation
+				.iter()
+				.map(|(_, generations)| generations.len())
+				.sum(),
+			total_usages: self.usage.iter().map(|(_, usages)| usages.len()).sum(),
+			total_associations: self
+				.association
+				.iter()
+				.map(|(_, associations)| associations.len())
+				.sum(),
+			total_delegations: self
+				.delegation
+				.iter()
+				.map(|(_, delegations)| delegations.len())
+				.sum(),
+		}
+	}
 	/// Merge the supplied ProvModel into this one
 	pub fn combine(&mut self, other: &ProvModel) {
 		self.namespaces.extend(other.namespaces.clone());
@@ -1183,22 +1229,26 @@ impl ProvModel {
 	fn validate_attribute_changes(
 		id: &ChronicleIri,
 		namespace: &NamespaceId,
-		current: &BTreeMap<String, Attribute>,
+		current: &Vec<Attribute>,
 		attempted: &Attributes,
 	) -> Result<(), Contradiction> {
+		let current_map: BTreeMap<String, &Attribute> =
+			current.iter().map(|attr| (attr.typ.clone(), attr)).collect();
 		let contradictions = attempted
 			.get_items()
 			.iter()
-			.filter_map(|(current_name, current_value)| {
-				if let Some(attempted_value) = current.get(current_name) {
-					if current_value != attempted_value {
-						Some((current_name.clone(), current_value.clone(), attempted_value.clone()))
+			.filter_map(|attempted_attr| {
+				current_map.get(&attempted_attr.typ).and_then(|&current_attr| {
+					if attempted_attr != current_attr {
+						Some((
+							attempted_attr.typ.clone(),
+							attempted_attr.clone(),
+							(*current_attr).clone(),
+						))
 					} else {
 						None
 					}
-				} else {
-					None
-				}
+				})
 			})
 			.collect::<Vec<_>>();
 

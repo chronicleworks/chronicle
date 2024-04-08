@@ -20,8 +20,6 @@ pub trait ToJson {
 }
 
 impl ToJson for ProvModel {
-	/// Write the model out as a JSON-LD document in expanded form
-	#[tracing::instrument(skip(self), ret)]
 	fn to_json(&self) -> ExpandedJson {
 		let mut doc = Vec::new();
 
@@ -73,7 +71,7 @@ impl ToJson for ProvModel {
 
 				agentdoc.insert(Chronicle::HasNamespace.to_string(), Value::Array(values));
 
-				Self::write_attributes(&mut agentdoc, agent.attributes.values());
+				Self::write_attributes(&mut agentdoc, agent.attributes.iter());
 
 				doc.push(Value::Object(agentdoc));
 			}
@@ -293,7 +291,7 @@ impl ToJson for ProvModel {
 					activitydoc.insert(Prov::WasInformedBy.to_string(), Value::Array(values));
 				}
 
-				Self::write_attributes(&mut activitydoc, activity.attributes.values());
+				Self::write_attributes(&mut activitydoc, activity.attributes.iter());
 
 				doc.push(Value::Object(activitydoc));
 			}
@@ -386,7 +384,7 @@ impl ToJson for ProvModel {
 
 				entitydoc.insert(Chronicle::HasNamespace.to_string(), Value::Array(values));
 
-				Self::write_attributes(&mut entitydoc, entity.attributes.values());
+				Self::write_attributes(&mut entitydoc, entity.attributes.iter());
 
 				doc.push(Value::Object(entitydoc));
 			}

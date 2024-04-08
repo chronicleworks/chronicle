@@ -19,6 +19,7 @@ members = [
   "crates/pallet-chronicle",
   "crates/pallet-opa",
   "crates/opactl",
+  "crates/chronicle-data",
   "node/runtime-chronicle",
   "node/node-chronicle",
   "crates/embedded-substrate",
@@ -28,17 +29,13 @@ members = [
   "crates/protocol-substrate-chronicle",
   "crates/protocol-substrate-opa",
   "crates/chronicle-test-infrastructure",
-  "crates/chronicle-arrow",
   "crates/chronicle-persistence",
+  "crates/chronicle-data",
 ]
 
 [workspace.dependencies]
 Inflector = "0.11.4"
 anyhow = { version = "^1", features = ["backtrace"] }
-arrow-array = { versipn = "^0.50" }
-arrow-flight = { versipn = "^0.50" }
-arrow-ipc = { versipn = "^0.50" }
-arrow-schema = { versipn = "^0.50" }
 assert_fs = "1.0"
 async-graphql = "^7"
 async-graphql-poem = "^7"
@@ -56,7 +53,7 @@ clap_complete = "3.2.3"
 clap_generate = "3.0.3"
 collecting-hashmap = { version = "0.2" }
 colored_json = "^3"
-console-subscriber = "0.1"
+console-subscriber = "0.2"
 const_format = "0.2"
 criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
 crossbeam = "^0.8"
@@ -98,8 +95,8 @@ locspan = "0.7"
 lru = "0.11"
 macro-attr-2018 = "3.0.0"
 maplit = "1.0.2"
-metrics = "0.21.0"
-metrics-exporter-prometheus = "0.12.1"
+metrics = "^0.22"
+metrics-exporter-prometheus = "^0.14"
 mime = "0.3"
 mobc = "0.8"
 mockito = "1.1"
@@ -114,7 +111,7 @@ pin-project = "1.0.12"
 pin-project-lite = "0.2"
 pinvec = "0.1.0"
 pkcs8 = { version = "0.10", features = ["std", "alloc"] }
-poem = { version = "^2", features = ["opentelemetry", "websocket"] }
+poem = { version = "^3", features = ["opentelemetry", "websocket"] }
 poem-grpc = { version = "^0.3" }
 portpicker = "0.1"
 pow_of_2 = "0.1"
@@ -132,7 +129,7 @@ secret-vault = { version = "1.8", features = [] }
 secret-vault-value = "0.3"
 serde = "1.0"
 serde_derive = "1.0"
-serde_json = "1.0"
+serde_json = { version = "^1.0", default-features = false }
 serde_yaml = "0.9.14"
 shellexpand = "3.0.0"
 temp-dir = "0.1.11"

@@ -1,0 +1,21 @@
+[package]
+edition = "2021"
+name    = "chronicle-data"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arrow-array = { version = "50" }
+arrow-data = { version = "50" }
+arrow-flight = { version = "50" }
+arrow-ipc = { version = "50" }
+arrow-schema = { version = "50" }
+clap = { workspace = true }
+clap_complete = { workspace = true }
+prettytable-rs = "^0.10"
+tokio = { workspace = true }
+tonic = { version = "0.10.2", default-features = false, features = [
+  "transport",
+  "prost",
+] }

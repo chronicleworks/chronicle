@@ -1,10 +1,11 @@
+mod meta;
+mod operations;
 mod peekablestream;
 mod query;
 
-use api::commands::{ApiCommand, ImportCommand, NamespaceCommand};
 use api::{ApiDispatch, ApiError};
-use arrow_array::cast::AsArray;
-use arrow_array::{ArrayRef, BooleanArray, Int64Array, NullArray, RecordBatch, StringArray};
+
+use arrow_array::Array;
 use arrow_flight::decode::FlightRecordBatchStream;
 
 use arrow_flight::{
@@ -13,42 +14,43 @@ use arrow_flight::{
 	Ticket,
 };
 
-use arrow_flight::{FlightEndpoint, IpcMessage, SchemaAsIpc};
-use arrow_schema::{ArrowError, Schema, SchemaBuilder};
+use arrow_flight::{IpcMessage, SchemaAsIpc};
 
-use common::attributes::{Attribute, Attributes};
-use common::domain::{
-	ActivityDef, AgentDef, AttributesTypeName, ChronicleDomainDef, EntityDef, PrimitiveType,
-	TypeName,
+use arrow_schema::ArrowError;
+
+use common::{domain::TypeName, prov::ExternalIdPart};
+
+use common::prov::{DomaintypeId, ParseIriError};
+use diesel::{r2d2::ConnectionManager, PgConnection};
+
+use futures::{
+	future::join_all,
+	stream::{self, BoxStream},
+	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
 
-use common::identity::AuthId;
-use common::prov::operations::{ChronicleOperation, SetAttributes};
-use common::prov::{
-	ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart, NamespaceId, ParseIriError,
-};
-use diesel::r2d2::ConnectionManager;
-use diesel::PgConnection;
-use futures::future::ok;
-use futures::{stream, TryStreamExt};
-use futures::{stream::BoxStream, StreamExt};
-use lazy_static::lazy_static;
+use meta::{DomainTypeMeta, Term};
+use operations::create_flight_info_for_type;
+use query::EntityAndReferences;
 use r2d2::Pool;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::net::SocketAddr;
-use tokio::task::spawn_blocking;
 
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::vec::Vec;
-use tonic::transport::Server;
-use tonic::{Request, Response, Status, Streaming};
+use std::{sync::Arc, vec::Vec};
+use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tracing::{info, instrument};
 
 use thiserror::Error;
 
-use crate::peekablestream::PeekableFlightDataStream;
+use crate::{
+	meta::get_domain_type_meta_from_cache,
+	operations::{batch_to_flight_data, process_record_batch},
+	peekablestream::PeekableFlightDataStream,
+	query::{
+		load_activities_by_type, load_agents_by_type, load_entities_by_type, ActivityAndReferences,
+		AgentAndReferences,
+	},
+};
 
 #[derive(Error, Debug)]
 pub enum ChronicleArrowError {
@@ -61,8 +63,17 @@ pub enum ChronicleArrowError {
 	#[error("Missing schema for the requested entity or activity")]
 	MissingSchemaError,
 
+	#[error("Schema field not found: {0}")]
+	SchemaFieldNotFound(String),
+
 	#[error("Missing column: {0}")]
 	MissingColumn(String),
+
+	#[error("Column type mismatch for: {0}")]
+	ColumnTypeMismatch(String),
+
+	#[error("Invalid value: {0}")]
+	InvalidValue(String),
 
 	#[error("Invalid descriptor path")]
 	InvalidDescriptorPath,
@@ -103,6 +114,20 @@ pub enum ChronicleArrowError {
 		#[source]
 		serde_json::Error,
 	),
+
+	#[error("Join error: {0}")]
+	JoinError(
+		#[from]
+		#[source]
+		tokio::task::JoinError,
+	),
+
+	#[error("UUID parse error: {0}")]
+	UuidParseError(
+		#[from]
+		#[source]
+		uuid::Error,
+	),
 }
 
 #[derive(Clone)]
@@ -110,143 +135,48 @@ pub struct FlightServiceImpl {
 	domain: common::domain::ChronicleDomainDef,
 	pool: r2d2::Pool<ConnectionManager<PgConnection>>,
 	api: ApiDispatch,
+	record_batch_size: usize,
 }
 
-fn field_for_domain_primitive(prim: &PrimitiveType) -> Option<arrow_schema::DataType> {
-	match prim {
-		PrimitiveType::String => Some(arrow_schema::DataType::Utf8),
-		PrimitiveType::Int => Some(arrow_schema::DataType::Int64),
-		PrimitiveType::Bool => Some(arrow_schema::DataType::Boolean),
-		_ => None,
+impl FlightServiceImpl {
+	pub fn new(
+		domain: &common::domain::ChronicleDomainDef,
+		pool: &r2d2::Pool<ConnectionManager<PgConnection>>,
+		api: &ApiDispatch,
+		record_batch_size: usize,
+	) -> Self {
+		Self { domain: domain.clone(), pool: pool.clone(), api: api.clone(), record_batch_size }
 	}
-}
-
-#[tracing::instrument]
-fn schema_for_namespace() -> Schema {
-	let mut builder = SchemaBuilder::new();
-
-	builder.push(arrow_schema::Field::new("name", arrow_schema::DataType::Utf8, false));
-	builder.push(arrow_schema::Field::new(
-		"uuid",
-		arrow_schema::DataType::FixedSizeBinary(16),
-		false,
-	));
-
-	builder.finish()
-}
-
-fn schema_for_entity(entity: &EntityDef) -> Schema {
-	let mut builder = SchemaBuilder::new();
-
-	builder.push(arrow_schema::Field::new("namespace_id", arrow_schema::DataType::Utf8, false));
-
-	builder.push(arrow_schema::Field::new("id", arrow_schema::DataType::Utf8, false));
-	for attribute in &entity.attributes {
-		if let Some(data_type) = field_for_domain_primitive(&attribute.primitive_type) {
-			builder.push(arrow_schema::Field::new(
-				&attribute.preserve_inflection(),
-				data_type,
-				true,
-			));
-		}
-	}
-	builder.finish()
-}
-
-fn schema_for_activity(activity: &ActivityDef) -> Schema {
-	let mut builder = SchemaBuilder::new();
-
-	builder.push(arrow_schema::Field::new("namespace_id", arrow_schema::DataType::Utf8, false));
-	builder.push(arrow_schema::Field::new("id", arrow_schema::DataType::Utf8, false));
-	builder.push(arrow_schema::Field::new(
-		"started",
-		arrow_schema::DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
-		true,
-	));
-	builder.push(arrow_schema::Field::new(
-		"ended",
-		arrow_schema::DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
-		true,
-	));
-
-	for attribute in &activity.attributes {
-		if let Some(typ) = field_for_domain_primitive(&attribute.primitive_type) {
-			builder.push(arrow_schema::Field::new(&attribute.preserve_inflection(), typ, true));
-		}
-	}
-
-	builder.push(arrow_schema::Field::new(
-		"was_associated_with",
-		arrow_schema::DataType::List(Arc::new(arrow_schema::Field::new(
-			"agent",
-			arrow_schema::DataType::Utf8,
-			false,
-		))),
-		false,
-	));
-	builder.push(arrow_schema::Field::new(
-		"used",
-		arrow_schema::DataType::List(Arc::new(arrow_schema::Field::new(
-			"entity",
-			arrow_schema::DataType::Utf8,
-			false,
-		))),
-		true,
-	));
-	builder.push(arrow_schema::Field::new(
-		"was_informed_by",
-		arrow_schema::DataType::List(Arc::new(arrow_schema::Field::new(
-			"activity",
-			arrow_schema::DataType::Utf8,
-			false,
-		))),
-		false,
-	));
-	builder.push(arrow_schema::Field::new(
-		"generated",
-		arrow_schema::DataType::List(Arc::new(arrow_schema::Field::new(
-			"entity",
-			arrow_schema::DataType::Utf8,
-			true,
-		))),
-		true,
-	));
-	builder.finish()
-}
-
-fn schema_for_agent(agent: &AgentDef) -> Schema {
-	let mut builder = SchemaBuilder::new();
-	builder.push(arrow_schema::Field::new("namespace_id", arrow_schema::DataType::Utf8, false));
-	builder.push(arrow_schema::Field::new("id", arrow_schema::DataType::Utf8, false));
-	for attribute in &agent.attributes {
-		if let Some(typ) = field_for_domain_primitive(&attribute.primitive_type) {
-			builder.push(arrow_schema::Field::new(&attribute.preserve_inflection(), typ, true));
-		}
-	}
-
-	builder.finish()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-enum Term {
-	Namespace,
-	Entity,
-	Activity,
-	Agent,
-}
-
-struct DomainTypeMeta {
-	pub schema: Schema,
-	pub term: Term,
-	pub typ: Option<DomaintypeId>,
 }
 
 #[derive(Debug, Serialize, serde::Deserialize)]
 struct ChronicleTicket {
 	term: Term,
+	descriptor_path: Vec<String>,
 	typ: Option<DomaintypeId>,
 	start: u64,
 	count: u64,
+}
+
+impl ChronicleTicket {
+	pub fn new(term: Term, typ: Option<DomaintypeId>, start: u64, count: u64) -> Self {
+		Self {
+			term,
+			descriptor_path: vec![
+				term.to_string(),
+				typ.as_ref()
+					.map(|x| x.external_id_part().to_string())
+					.unwrap_or_else(|| format!("Prov{}", term)),
+			],
+			typ,
+			start,
+			count,
+		}
+	}
+
+	pub fn descriptor_path(&self) -> &Vec<String> {
+		&self.descriptor_path
+	}
 }
 
 impl TryFrom<ChronicleTicket> for Ticket {
@@ -267,375 +197,18 @@ impl TryFrom<Ticket> for ChronicleTicket {
 	}
 }
 
-lazy_static! {
-	static ref SCHEMA_CACHE: Mutex<HashMap<Vec<String>, Arc<DomainTypeMeta>>> =
-		Mutex::new(HashMap::new());
-}
-
-fn get_domain_type_meta_from_cache(descriptor_path: &Vec<String>) -> Option<Arc<DomainTypeMeta>> {
-	let cache = SCHEMA_CACHE.lock().unwrap();
-	cache.get(descriptor_path).cloned()
-}
-
-fn cache_metadata(
-	term: Term,
-	domain_type_id: DomaintypeId,
-	descriptor_path: Vec<String>,
-	schema: Schema,
-) {
-	let mut cache = SCHEMA_CACHE.lock().unwrap();
-	let domain_type_meta = Arc::new(DomainTypeMeta { schema, term, typ: Some(domain_type_id) });
-	cache.insert(descriptor_path, domain_type_meta);
-}
-
-fn cache_namespace_schema() {
-	let mut cache = SCHEMA_CACHE.lock().unwrap();
-	cache.insert(
-		vec!["Namespace".to_string()],
-		Arc::new(DomainTypeMeta {
-			schema: schema_for_namespace(),
-			term: Term::Namespace,
-			typ: None,
-		}),
-	);
-}
-
-#[tracing::instrument(skip(domain_def))]
-fn cache_domain_schemas(domain_def: &ChronicleDomainDef) {
-	for entity in &domain_def.entities {
-		let schema = schema_for_entity(entity);
-		let descriptor_path = vec![entity.as_type_name()];
-		cache_metadata(
-			Term::Entity,
-			DomaintypeId::from_external_id(entity.as_type_name()),
-			descriptor_path,
-			schema,
-		);
+fn parse_flight_descriptor_path(descriptor: &FlightDescriptor) -> Result<(Term, String), Status> {
+	let path = &descriptor.path;
+	if path.is_empty() {
+		return Err(Status::invalid_argument("FlightDescriptor path is empty"));
 	}
 
-	for agent in &domain_def.agents {
-		let schema = schema_for_agent(agent);
-		let descriptor_path = vec![agent.as_type_name()];
-		cache_metadata(
-			Term::Agent,
-			DomaintypeId::from_external_id(agent.as_type_name()),
-			descriptor_path,
-			schema,
-		);
-	}
+	let term = path[0]
+		.parse::<Term>()
+		.map_err(|_| Status::invalid_argument("First element of the path must be a valid Term"))?;
 
-	for activity in &domain_def.activities {
-		let schema = schema_for_activity(activity);
-		let descriptor_path = vec![activity.as_type_name()];
-		cache_metadata(
-			Term::Activity,
-			DomaintypeId::from_external_id(activity.as_type_name()),
-			descriptor_path,
-			schema,
-		);
-	}
+	Ok((term, path[1].to_string()))
 }
-
-#[tracing::instrument(skip(record_batch))]
-async fn process_record_batch(
-	descriptor_path: &Vec<String>,
-	record_batch: RecordBatch,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	if descriptor_path.is_empty() {
-		return Err(ChronicleArrowError::InvalidDescriptorPath);
-	}
-
-	let domain_type_meta = get_domain_type_meta_from_cache(descriptor_path)
-		.ok_or(ChronicleArrowError::MetadataNotFound)?;
-
-	let attribute_columns = domain_type_meta
-		.schema
-		.fields()
-		.iter()
-		.filter_map(|field| {
-			if field.name().ends_with("Attribute") {
-				Some(field.name().clone())
-			} else {
-				None
-			}
-		})
-		.collect::<Vec<String>>();
-
-	tracing::debug!(?attribute_columns, "Extracted attribute column names");
-	match domain_type_meta.term {
-		Term::Entity => {
-			create_chronicle_entity(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
-		Term::Activity => {
-			create_chronicle_activity(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
-		Term::Agent => {
-			create_chronicle_agent(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
-		Term::Namespace => create_chronicle_namespace(&record_batch, api).await?,
-	}
-	Ok(())
-}
-
-async fn create_chronicle_namespace(
-	record_batch: &RecordBatch,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	let uuid = record_batch
-		.column_by_name("uuid")
-		.ok_or(ChronicleArrowError::MissingColumn("uuid".to_string()))?;
-	let name = record_batch
-		.column_by_name("name")
-		.ok_or(ChronicleArrowError::MissingColumn("name".to_string()))?;
-
-	Ok(())
-}
-
-async fn create_chronicle_entity(
-	domain_type: &Option<DomaintypeId>,
-	record_batch: &RecordBatch,
-	attribute_columns: &Vec<String>,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	create_chronicle_terms(record_batch, Term::Entity, domain_type, attribute_columns, api).await
-}
-
-async fn create_chronicle_activity(
-	domain_type: &Option<DomaintypeId>,
-	record_batch: &RecordBatch,
-	attribute_columns: &Vec<String>,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	create_chronicle_terms(record_batch, Term::Activity, domain_type, attribute_columns, api).await
-}
-
-async fn create_chronicle_agent(
-	domain_type: &Option<DomaintypeId>,
-	record_batch: &RecordBatch,
-	attribute_columns: &Vec<String>,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	create_chronicle_terms(record_batch, Term::Agent, domain_type, attribute_columns, api).await
-}
-
-async fn create_chronicle_terms(
-	record_batch: &RecordBatch,
-	record_type: Term,
-	domain_type: &Option<DomaintypeId>,
-	attribute_columns: &Vec<String>,
-	api: &ApiDispatch,
-) -> Result<(), ChronicleArrowError> {
-	let ns_column = record_batch
-		.column_by_name("namespace_id")
-		.ok_or(ChronicleArrowError::MissingColumn("namespace_id".to_string()))?;
-
-	let id_column = record_batch
-		.column_by_name("id")
-		.ok_or(ChronicleArrowError::MissingColumn("id".to_string()))?;
-
-	let attribute_columns_refs: Vec<&String> = attribute_columns.iter().collect();
-	let attribute_values = attribute_columns_refs
-		.iter()
-		.map(|column_name| (column_name.to_string(), record_batch.column_by_name(column_name)))
-		.filter_map(|(column_name, array_ref)| array_ref.map(|array_ref| (column_name, array_ref)))
-		.collect::<Vec<(_, _)>>();
-
-	tracing::debug!(?attribute_columns, "Processing attribute columns");
-
-	let total_rows = record_batch.num_rows();
-	for batch_start in (0..total_rows).step_by(100) {
-		let batch_end = std::cmp::min(batch_start + 100, total_rows);
-		tracing::debug!(batch_start, batch_end, "Processing batch");
-
-		let mut operations = Vec::new();
-		for row_index in batch_start..batch_end {
-			let ns: NamespaceId =
-				NamespaceId::try_from(ns_column.as_string::<i32>().value(row_index))?;
-			let id = id_column.as_string::<i32>().value(row_index);
-
-			let mut attributes: Vec<(String, Attribute)> = vec![];
-
-			for (attribute_name, attribute_array) in attribute_values.iter() {
-				tracing::trace!(%attribute_name, row_index, "Appending to attributes");
-				if let Some(array) = attribute_array.as_any().downcast_ref::<StringArray>() {
-					let value = array.value(row_index);
-					attributes.push((
-						attribute_name.clone(),
-						Attribute::new(
-							attribute_name.clone(),
-							serde_json::Value::String(value.to_string()),
-						),
-					));
-				} else if let Some(array) = attribute_array.as_any().downcast_ref::<Int64Array>() {
-					let value = array.value(row_index);
-					attributes.push((
-						attribute_name.clone(),
-						Attribute::new(
-							attribute_name.clone(),
-							serde_json::Value::Number(value.into()),
-						),
-					));
-				} else if let Some(array) = attribute_array.as_any().downcast_ref::<BooleanArray>()
-				{
-					let value = array.value(row_index);
-					attributes.push((
-						attribute_name.clone(),
-						Attribute::new(attribute_name.clone(), serde_json::Value::Bool(value)),
-					));
-				} else {
-					tracing::warn!(%attribute_name, row_index, "Unsupported attribute type");
-				}
-			}
-
-			let attributes = Attributes::new(domain_type.clone(), attributes);
-
-			match record_type {
-				Term::Entity => {
-					operations.push(ChronicleOperation::entity_exists(
-						ns.clone(),
-						EntityId::from_external_id(id),
-					));
-					operations.push(ChronicleOperation::set_attributes(SetAttributes::entity(
-						ns.clone(),
-						EntityId::from_external_id(id),
-						attributes,
-					)));
-				},
-				Term::Activity => {
-					operations.push(ChronicleOperation::activity_exists(
-						ns.clone(),
-						ActivityId::from_external_id(id),
-					));
-					operations.push(ChronicleOperation::set_attributes(SetAttributes::activity(
-						ns.clone(),
-						ActivityId::from_external_id(id),
-						attributes,
-					)));
-				},
-				Term::Agent => {
-					operations.push(ChronicleOperation::agent_exists(
-						ns.clone(),
-						AgentId::from_external_id(id),
-					));
-					operations.push(ChronicleOperation::set_attributes(SetAttributes::agent(
-						ns.clone(),
-						AgentId::from_external_id(id),
-						attributes,
-					)));
-				},
-				Term::Namespace => {
-					// Noop / unreachable
-				},
-			}
-		}
-
-		api.dispatch(ApiCommand::Import(ImportCommand { operations }), AuthId::anonymous())
-			.await?;
-	}
-
-	Ok(())
-}
-
-#[instrument(skip(pool, term, domaintype))]
-async fn calculate_count_by_metadata_term(
-	pool: &Pool<ConnectionManager<PgConnection>>,
-	term: &Term,
-	domaintype: Option<String>,
-) -> Result<i64, Status> {
-	let pool = pool.clone();
-	match term {
-		Term::Entity => {
-			spawn_blocking(move || {
-				query::entity_count_by_type(
-					&pool,
-					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
-				)
-			})
-			.await
-		},
-		Term::Agent => {
-			spawn_blocking(move || {
-				query::agent_count_by_type(
-					&pool,
-					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
-				)
-			})
-			.await
-		},
-		Term::Activity => {
-			spawn_blocking(move || {
-				query::activity_count_by_type(
-					&pool,
-					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
-				)
-			})
-			.await
-		},
-		_ => Ok(Ok(0)),
-	}
-	.map_err(|e| Status::from_error(e.into()))
-	.and_then(|res| res.map_err(|e| Status::from_error(e.into())))
-}
-
-async fn create_flight_info_for_type(
-	pool: Arc<Pool<ConnectionManager<PgConnection>>>,
-	domain_items: Vec<impl TypeName + Send + Sync + 'static>,
-	term: Term,
-) -> BoxStream<'static, Result<Vec<FlightInfo>, Status>> {
-	stream::iter(domain_items.into_iter().map(|item| Ok::<_, tonic::Status>(item)))
-		.then(move |item| {
-			let pool = pool.clone();
-			async move {
-				let item = item?; // Handle the Result from the iterator
-				let descriptor_path = vec![item.as_type_name()];
-				let metadata =
-					get_domain_type_meta_from_cache(&descriptor_path).ok_or_else(|| {
-						Status::from_error(Box::new(ChronicleArrowError::MissingSchemaError))
-					})?;
-
-				let count = calculate_count_by_metadata_term(
-					&pool,
-					&term,
-					Some(item.as_type_name().to_string()),
-				)
-				.await?;
-
-				let flight_infos = (0..count)
-					.step_by(FLIGHT_MAX_SIZE)
-					.map(|start| {
-						let end = std::cmp::min(start as usize + FLIGHT_MAX_SIZE, count as usize);
-
-						let chunk_descriptor_path = descriptor_path.clone();
-						let ticket_metadata = ChronicleTicket {
-							term: term.clone(),
-							typ: metadata.typ.clone(),
-							start: start as _,
-							count: (end - start as usize) as _,
-						};
-						let ticket = Ticket::try_from(ticket_metadata).map_err(|e| {
-							Status::from_error(Box::new(ChronicleArrowError::from(e)))
-						})?;
-
-						FlightInfo::new()
-							.with_endpoint(FlightEndpoint::new().with_ticket(ticket))
-							.with_descriptor(FlightDescriptor::new_path(chunk_descriptor_path))
-							.try_with_schema(&metadata.schema)
-							.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))
-					})
-					.collect::<Result<Vec<_>, _>>();
-
-				flight_infos
-			}
-		})
-		.boxed()
-}
-
-/// Maximum number of records in a flight
-const FLIGHT_MAX_SIZE: usize = 1024 * 10;
 
 #[tonic::async_trait]
 impl FlightService for FlightServiceImpl {
@@ -653,94 +226,139 @@ impl FlightService for FlightServiceImpl {
 	) -> Result<Response<Self::HandshakeStream>, Status> {
 		Ok(Response::new(Box::pin(futures::stream::empty()) as Self::HandshakeStream))
 	}
-
+	#[instrument(skip(self, _request))]
 	async fn list_flights(
 		&self,
 		_request: Request<Criteria>,
 	) -> Result<Response<Self::ListFlightsStream>, Status> {
 		let entity_flights_stream = create_flight_info_for_type(
 			Arc::new(self.pool.clone()),
-			self.domain.entities.iter().map(|e| e.clone()).collect(),
+			self.domain.entities.to_vec(),
 			Term::Entity,
+			self.record_batch_size,
 		)
 		.await;
 		let activities_flights_stream = create_flight_info_for_type(
 			Arc::new(self.pool.clone()),
-			self.domain.activities.iter().map(|a| a.clone()).collect(),
+			self.domain.activities.to_vec(),
 			Term::Activity,
+			self.record_batch_size,
 		)
 		.await;
 		let agents_flights_stream = create_flight_info_for_type(
 			Arc::new(self.pool.clone()),
-			self.domain.agents.iter().map(|a| a.clone()).collect(),
+			self.domain.agents.to_vec(),
 			Term::Agent,
+			self.record_batch_size,
 		)
 		.await;
 
-		let combined_flights = futures::stream::select_all(vec![
+		let combined_stream = futures::stream::select_all(vec![
 			entity_flights_stream,
 			activities_flights_stream,
 			agents_flights_stream,
 		])
-		.flat_map(|result| match result {
-			Ok(vec_flight_info) => {
-				futures::stream::iter(vec_flight_info.into_iter().map(Ok)).boxed()
-			},
-			Err(e) => futures::stream::once(async move { Err(e) }).boxed(),
-		})
 		.boxed();
 
-		Ok(Response::new(Box::pin(combined_flights) as Self::ListFlightsStream))
+		Ok(Response::new(combined_stream as Self::ListFlightsStream))
 	}
+
 	#[instrument(skip(self, request))]
 	async fn get_flight_info(
 		&self,
 		request: Request<FlightDescriptor>,
 	) -> Result<Response<FlightInfo>, Status> {
 		let descriptor = request.into_inner();
-		let path = descriptor.path;
-		if path.is_empty() {
-			return Err(Status::invalid_argument("Descriptor path is empty"));
+
+		let (term, type_name) = parse_flight_descriptor_path(&descriptor)?;
+
+		let mut flight_info_stream = match term {
+			Term::Entity => {
+				let definition = self
+					.domain
+					.entities
+					.iter()
+					.find(|&item| item.as_type_name() == type_name)
+					.ok_or_else(|| {
+						Status::not_found(format!(
+							"Definition not found for term: {:?}, type_name: {}",
+							term, type_name
+						))
+					})?;
+				create_flight_info_for_type(
+					Arc::new(self.pool.clone()),
+					vec![definition.clone()],
+					term,
+					self.record_batch_size,
+				)
+				.boxed()
+			},
+			Term::Activity => {
+				let definition = self
+					.domain
+					.activities
+					.iter()
+					.find(|&item| item.as_type_name() == type_name)
+					.ok_or_else(|| {
+						Status::not_found(format!(
+							"Definition not found for term: {:?}, type_name: {}",
+							term, type_name
+						))
+					})?;
+				create_flight_info_for_type(
+					Arc::new(self.pool.clone()),
+					vec![definition.clone()],
+					term,
+					self.record_batch_size,
+				)
+				.boxed()
+			},
+			Term::Agent => {
+				let definition = self
+					.domain
+					.agents
+					.iter()
+					.find(|&item| item.as_type_name() == type_name)
+					.ok_or_else(|| {
+						Status::not_found(format!(
+							"Definition not found for term: {:?}, type_name: {}",
+							term, type_name
+						))
+					})?;
+				create_flight_info_for_type(
+					Arc::new(self.pool.clone()),
+					vec![definition.clone()],
+					term,
+					self.record_batch_size,
+				)
+				.boxed()
+			},
+			_ => {
+				return Err(Status::not_found(format!(
+					"Definition not found for term: {:?}, type_name: {}",
+					term, type_name
+				)))
+			},
 		}
+		.await;
 
-		let type_name = &path[0];
-		let descriptor_path = vec![type_name.to_string()];
-		let metadata = get_domain_type_meta_from_cache(&descriptor_path)
-			.ok_or_else(|| ChronicleArrowError::MissingSchemaError)
-			.map_err(|e| Status::internal(format!("Failed to get cached schema: {}", e)))?;
-
-		let mut flight_info = FlightInfo::new()
-			.with_descriptor(FlightDescriptor::new_path(descriptor_path))
-			.try_with_schema(&metadata.schema)
+		let flight_info = flight_info_stream
+			.next()
+			.await
+			.ok_or(Status::not_found("No flight info for descriptor"))?
 			.map_err(|e| Status::from_error(e.into()))?;
-
-		let count = calculate_count_by_metadata_term(
-			&self.pool,
-			&metadata.term,
-			metadata.typ.as_ref().map(|x| x.external_id_part().to_string()),
-		)
-		.await
-		.map_err(|e| Status::internal(format!("Failed to get count: {}", e)))?;
-
-		flight_info = flight_info.with_total_records(count);
 
 		Ok(Response::new(flight_info))
 	}
 
-	#[instrument(skip(self, _request))]
+	#[instrument(skip(self, request))]
 	async fn get_schema(
 		&self,
-		_request: Request<FlightDescriptor>,
+		request: Request<FlightDescriptor>,
 	) -> Result<Response<SchemaResult>, Status> {
-		let descriptor = _request.into_inner();
-		let path = descriptor.path;
-		if path.is_empty() {
-			return Err(Status::invalid_argument("Descriptor path is empty"));
-		}
+		let descriptor = request.into_inner();
 
-		let type_name = &path[0];
-		let descriptor_path = vec![type_name.to_string()];
-		let schema = get_domain_type_meta_from_cache(&descriptor_path)
+		let schema = get_domain_type_meta_from_cache(&descriptor.path)
 			.ok_or_else(|| ChronicleArrowError::MissingSchemaError)
 			.map_err(|e| Status::internal(format!("Failed to get cached schema: {}", e)))?;
 
@@ -753,6 +371,8 @@ impl FlightService for FlightServiceImpl {
 			},
 		}
 	}
+
+	#[instrument(skip(self))]
 	async fn do_get(
 		&self,
 		request: Request<Ticket>,
@@ -762,44 +382,83 @@ impl FlightService for FlightServiceImpl {
 			.try_into()
 			.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))?;
 
-		let entities = match ticket.term {
+		let meta = get_domain_type_meta_from_cache(&ticket.descriptor_path)
+			.ok_or(Status::from_error(Box::new(ChronicleArrowError::InvalidDescriptorPath)))?;
+
+		tracing::debug!(ticket = ?ticket);
+
+		let terms_result = match ticket.term {
 			Term::Entity => {
-				let domain_type_str =
-					ticket.typ.as_ref().map(|typ| typ.external_id_part().to_string());
-				let domain_types =
-					domain_type_str.as_ref().map_or_else(Vec::new, |s| vec![s.as_str()]);
-				query::load_entities_by_type(&self.pool, domain_types, ticket.start, ticket.count)
-					.await
+				let pool = self.pool.clone();
+				let meta_clone = meta.clone();
+				let result = tokio::task::spawn_blocking(move || {
+					load_entities_by_type(
+						&pool,
+						&ticket.typ,
+						&meta_clone.attributes,
+						ticket.start,
+						ticket.count,
+					)
+				})
+				.await
+				.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))?
+				.map_err(|e| Status::from_error(Box::new(e)))?;
+
+				let (entities, _returned_records, _total_records) = result;
+
+				EntityAndReferences::to_record_batch(entities, &meta).map_err(|e| {
+					Status::internal(format!("Failed to convert to record batch: {}", e))
+				})?
 			},
 			Term::Activity => {
-				let domain_type_str =
-					ticket.typ.as_ref().map(|typ| typ.external_id_part().to_string());
-				let domain_types =
-					domain_type_str.as_ref().map_or_else(Vec::new, |s| vec![s.as_str()]);
-				query::load_activities_by_type(&self.pool, domain_types, ticket.start, ticket.count)
-					.await
+				let pool = self.pool.clone();
+				let result = tokio::task::spawn_blocking(move || {
+					load_activities_by_type(&pool, &ticket.typ, ticket.start, ticket.count)
+				})
+				.await
+				.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))?
+				.map_err(|e| Status::from_error(Box::new(e)))?;
+
+				let (activities, _returned_records, _total_records) = result;
+
+				ActivityAndReferences::to_record_batch(activities, &meta).map_err(|e| {
+					Status::internal(format!("Failed to convert to record batch: {}", e))
+				})?
 			},
 			Term::Agent => {
-				let domain_type_str =
-					ticket.typ.as_ref().map(|typ| typ.external_id_part().to_string());
-				let domain_types =
-					domain_type_str.as_ref().map_or_else(Vec::new, |s| vec![s.as_str()]);
-				query::load_agents_by_type(&self.pool, domain_types, ticket.start, ticket.count)
-					.await
+				let pool = self.pool.clone();
+				let result = tokio::task::spawn_blocking(move || {
+					load_agents_by_type(&pool, &ticket.typ, ticket.start, ticket.count)
+				})
+				.await
+				.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))?
+				.map_err(|e| Status::from_error(Box::new(e)))?;
+
+				let (agents, _returned_records, _total_records) = result;
+
+				AgentAndReferences::to_record_batch(agents, &meta).map_err(|e| {
+					Status::internal(format!("Failed to convert to record batch: {}", e))
+				})?
 			},
 			Term::Namespace => {
-				tracing::warn!("Namespace query not implemented. Returning empty stream.");
-				futures::stream::empty()
+				tracing::error!("Attempted to put namespaces, which is not supported.");
+				return Err(Status::internal("Cannot put namespaces"));
 			},
 		};
 
-		let entities =
-			entities.map_err(|e| Status::internal(format!("Failed to load entities: {}", e)))?;
+		let flight_data_result = batch_to_flight_data(
+			&FlightDescriptor::new_path(ticket.descriptor_path),
+			&meta,
+			terms_result,
+		);
 
-		let stream = stream::iter(entities.into_iter().map(Ok::<_, Status>));
-		let response = Response::new(Box::pin(stream) as Self::DoGetStream);
-
-		Ok(response)
+		match flight_data_result {
+			Ok(flight_data) => {
+				let stream = futures::stream::iter(flight_data.into_iter().map(Ok)).boxed();
+				Ok(Response::new(stream))
+			},
+			Err(e) => Err(Status::internal(e.to_string())),
+		}
 	}
 
 	#[instrument(skip(self, request))]
@@ -830,7 +489,7 @@ impl FlightService for FlightServiceImpl {
 			descriptor_type = %flight_descriptor.r#type,
 			descriptor_cmd = %String::from_utf8_lossy(&flight_descriptor.cmd),
 			descriptor_path = ?flight_descriptor.path,
-			"Flight descriptor properties"
+			"Flight descriptor"
 		);
 
 		let filtered_stream = stream.filter_map(|item| async move {
@@ -848,9 +507,8 @@ impl FlightService for FlightServiceImpl {
 
 		let mut decoder = FlightRecordBatchStream::new_from_flight_data(filtered_stream);
 		while let Some(batch) = decoder.next().await {
-			tracing::debug!("Processing batch: {:?}", batch);
 			let batch = batch?;
-
+			tracing::debug!("Processing batch of: {:?}", batch.num_rows());
 			process_record_batch(&flight_descriptor.path, batch, &self.api)
 				.await
 				.map_err(|e| Status::from_error(e.into()))?;
@@ -886,52 +544,68 @@ impl FlightService for FlightServiceImpl {
 
 #[instrument(skip(pool, api))]
 pub async fn run_flight_service(
+	domain: &common::domain::ChronicleDomainDef,
 	pool: &Pool<ConnectionManager<PgConnection>>,
-	domain: common::domain::ChronicleDomainDef,
-	api: ApiDispatch,
-	addr: SocketAddr,
-) -> Result<(), Box<dyn std::error::Error>> {
-	cache_domain_schemas(&domain);
-	let flight_service = FlightServiceImpl { pool: pool.clone(), domain, api };
+	api: &ApiDispatch,
+	addrs: Vec<SocketAddr>,
+	record_batch_size: usize,
+) -> Result<(), tonic::transport::Error> {
+	meta::cache_domain_schemas(domain);
+	let mut services = vec![];
+	for addr in addrs {
+		let flight_service = FlightServiceImpl::new(domain, pool, api, record_batch_size);
 
-	info!("Starting flight service at {}", addr);
+		info!("Starting flight service at {}", addr);
 
-	Server::builder()
-		.add_service(arrow_flight::flight_service_server::FlightServiceServer::new(flight_service))
-		.serve(addr)
-		.await?;
+		let server = Server::builder()
+			.add_service(arrow_flight::flight_service_server::FlightServiceServer::new(
+				flight_service,
+			))
+			.serve(addr);
+
+		services.push(server);
+	}
+
+	let results: Result<Vec<_>, _> = join_all(services.into_iter()).await.into_iter().collect();
+	results?;
 
 	Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-
 	use api::commands::{ApiCommand, ImportCommand};
 	use arrow_array::RecordBatch;
 	use arrow_flight::{
-		flight_service_client::FlightServiceClient, Criteria, FlightData, FlightDescriptor,
-		SchemaAsIpc,
+		decode::FlightRecordBatchStream, flight_service_client::FlightServiceClient, Criteria,
+		FlightData, FlightDescriptor, FlightInfo, SchemaAsIpc,
 	};
 
 	use arrow_ipc::writer::{self, IpcWriteOptions};
 	use arrow_schema::ArrowError;
-	use chronicle_persistence::Store;
+
 	use chronicle_test_infrastructure::substitutes::{test_api, TestDispatch};
+	use chrono::{TimeZone, Utc};
 	use common::{
-		domain::ChronicleDomainDef,
+		attributes::{Attribute, Attributes},
+		domain::{ChronicleDomainDef, PrimitiveType},
 		identity::AuthId,
 		prov::{operations::ChronicleOperation, NamespaceId},
 	};
-	use futures::{stream, StreamExt};
+	use futures::{pin_mut, stream, StreamExt};
 	use portpicker::pick_unused_port;
-	use serde::{Deserialize, Serialize};
 
-	use std::{net::SocketAddr, sync::Arc, time::Duration};
-	use tonic::{Request, Status};
+	use std::{net::SocketAddr, time::Duration};
+	use tonic::{transport::Channel, Request, Status};
 	use uuid::Uuid;
 
-	use crate::{cache_domain_schemas, get_domain_type_meta_from_cache, DomainTypeMeta};
+	use crate::{
+		meta::{cache_domain_schemas, get_domain_type_meta_from_cache, DomainTypeMeta},
+		query::{
+			ActedOnBehalfOfRef, ActivityAndReferences, AgentAndReferences, AgentAttributionRef,
+			AssociationRef, DerivationRef, EntityAndReferences, EntityAttributionRef,
+		},
+	};
 
 	async fn setup_test_environment<'a>(
 		domain: &ChronicleDomainDef,
@@ -947,7 +621,9 @@ mod tests {
 		let dispatch = api.api_dispatch().clone();
 		let domain = domain.clone();
 		tokio::spawn(async move {
-			super::run_flight_service(&pool, domain, dispatch, addr).await.unwrap();
+			super::run_flight_service(&domain, &pool, &dispatch, vec![addr], 10)
+				.await
+				.unwrap();
 		});
 
 		tokio::time::sleep(Duration::from_secs(5)).await;
@@ -956,7 +632,6 @@ mod tests {
 		Ok((client, api))
 	}
 
-	#[tracing::instrument]
 	fn create_test_domain_def() -> ChronicleDomainDef {
 		let yaml = r#"
 name: Manufacturing
@@ -997,52 +672,162 @@ roles:
 		ChronicleDomainDef::from_input_string(yaml).unwrap()
 	}
 
-	#[derive(Serialize, Deserialize)]
-	struct Certificate {
-		namespace_id: String,
-		id: String,
-		certIDAttribute: String,
+	fn create_attributes(
+		typ: Option<&(dyn common::domain::TypeName + Send + Sync)>,
+		attributes: &[(String, PrimitiveType)],
+	) -> Attributes {
+		Attributes::new(
+			typ.map(|x| x.as_domain_type_id()),
+			attributes
+				.iter()
+				.map(|(name, typ)| {
+					let value = match typ {
+						PrimitiveType::String => {
+							serde_json::Value::String(format!("{}-value", name))
+						},
+						PrimitiveType::Int => {
+							serde_json::Value::Number(serde_json::Number::from(42))
+						},
+						PrimitiveType::Bool => serde_json::Value::Bool(true),
+						PrimitiveType::JSON => {
+							serde_json::Value::String(format!("{{\"{}\": \"example\"}}", name))
+						},
+					};
+					Attribute::new(name, value)
+				})
+				.collect(),
+		)
 	}
 
-	#[derive(Serialize, Deserialize)]
-	struct Item {
-		namespace_id: String,
-		id: String,
-		partIDAttribute: String,
-	}
-
-	fn create_test_entity_certificate(meta: &DomainTypeMeta, count: u32) -> RecordBatch {
-		let fields = meta.schema.all_fields().into_iter().cloned().collect::<Vec<_>>();
-
-		let mut certs = Vec::new();
+	fn create_test_entity(
+		attributes: Vec<(String, PrimitiveType)>,
+		meta: &DomainTypeMeta,
+		count: u32,
+	) -> RecordBatch {
+		let mut entities = Vec::new();
 		for i in 0..count {
-			certs.push(Certificate {
-				namespace_id: NamespaceId::from_external_id("default", Uuid::default()).to_string(),
-				id: format!("certificate-{}", i),
-				certIDAttribute: format!("CERT-{}", i),
-			});
+			let entity = EntityAndReferences {
+				id: format!("{}-{}", meta.typ.as_ref().map(|x| x.as_type_name()).unwrap(), i),
+				namespace_name: "default".to_string(),
+				namespace_uuid: Uuid::default().into_bytes(),
+				attributes: create_attributes(meta.typ.as_deref(), &attributes),
+				was_generated_by: vec![format!("activity-{}", i), format!("activity-{}", i + 1)],
+				was_attributed_to: vec![
+					EntityAttributionRef {
+						agent: format!("agent-{}", i),
+						role: Some("CERTIFIER".to_string()),
+					},
+					EntityAttributionRef {
+						agent: format!("agent-{}", i + 1),
+						role: Some("MANUFACTURER".to_string()),
+					},
+				],
+				was_derived_from: vec![
+					DerivationRef {
+						target: format!("entity-d-{}", i),
+						activity: format!("activity-d-{}", i),
+					},
+					DerivationRef {
+						target: format!("entity-d-{}", i),
+						activity: format!("activity-d-{}", i),
+					},
+				],
+				was_quoted_from: vec![
+					DerivationRef {
+						target: format!("entity-q-{}", i),
+						activity: format!("activity-q-{}", i),
+					},
+					DerivationRef {
+						target: format!("entity-q-{}", i),
+						activity: format!("activity-q-{}", i),
+					},
+				],
+				was_revision_of: vec![
+					DerivationRef {
+						target: format!("entity-r-{}", i),
+						activity: format!("activity-r-{}", i),
+					},
+					DerivationRef {
+						target: format!("entity-r-{}", i),
+						activity: format!("activity-r-{}", i),
+					},
+				],
+				had_primary_source: vec![
+					DerivationRef {
+						target: format!("entity-ps-{}", i),
+						activity: format!("activity-ps-{}", i),
+					},
+					DerivationRef {
+						target: format!("entity-ps-{}", i),
+						activity: format!("activity-ps-{}", i),
+					},
+				],
+			};
+			entities.push(entity);
 		}
 
-		let arrays = serde_arrow::to_arrow(&fields, &certs).unwrap();
-
-		RecordBatch::try_new(Arc::new(meta.schema.clone()), arrays).unwrap()
+		EntityAndReferences::to_record_batch(entities.into_iter(), meta)
+			.expect("Failed to convert entities to record batch")
 	}
 
-	fn create_test_entity_item(meta: &DomainTypeMeta, count: u32) -> RecordBatch {
-		let fields = meta.schema.all_fields().into_iter().cloned().collect::<Vec<_>>();
-
-		let mut certs = Vec::new();
+	fn create_test_activity(
+		attributes: Vec<(String, PrimitiveType)>,
+		meta: &DomainTypeMeta,
+		count: u32,
+	) -> RecordBatch {
+		let mut activities = Vec::new();
 		for i in 0..count {
-			certs.push(Item {
-				namespace_id: NamespaceId::from_external_id("default", Uuid::default()).to_string(),
-				id: format!("item-{}", i),
-				partIDAttribute: format!("PART-{}", i),
-			});
+			let activity = ActivityAndReferences {
+				id: format!("{}-{}", meta.typ.as_ref().map(|x| x.as_type_name()).unwrap(), i),
+				namespace_name: "default".to_string(),
+				namespace_uuid: Uuid::default().into_bytes(),
+				attributes: create_attributes(meta.typ.as_deref(), &attributes),
+				started: Some(Utc.ymd(2022, 1, 1).and_hms(0, 0, 0)),
+				ended: Some(Utc.ymd(2022, 1, 2).and_hms(0, 0, 0)),
+				generated: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
+				was_informed_by: vec![format!("activity-{}", i), format!("activity-{}", i + 1)],
+				was_associated_with: vec![AssociationRef {
+					responsible_agent: format!("agent-{}", i),
+					responsible_role: Some("CERTIFIER".to_string()),
+					delegate_agent: Some(format!("agent-{}", i + 1)),
+					delegate_role: Some("MANUFACTURER".to_string()),
+				}],
+				used: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
+			};
+			activities.push(activity);
 		}
 
-		let arrays = serde_arrow::to_arrow(&fields, &certs).unwrap();
+		ActivityAndReferences::to_record_batch(activities.into_iter(), meta)
+			.expect("Failed to convert activities to record batch")
+	}
 
-		RecordBatch::try_new(Arc::new(meta.schema.clone()), arrays).unwrap()
+	fn create_test_agent(
+		attributes: Vec<(String, PrimitiveType)>,
+		meta: &DomainTypeMeta,
+		count: u32,
+	) -> RecordBatch {
+		let mut agents = Vec::new();
+		for i in 0..count {
+			let agent = AgentAndReferences {
+				id: format!("{}-{}", meta.typ.as_ref().map(|x| x.as_type_name()).unwrap(), i),
+				namespace_name: "default".to_string(),
+				namespace_uuid: Uuid::default().into_bytes(),
+				attributes: create_attributes(meta.typ.as_deref(), &attributes),
+				acted_on_behalf_of: vec![ActedOnBehalfOfRef {
+					agent: format!("agent-{}", i),
+					role: Some("CERTIFIER".to_string()),
+					activity: Some(format!("activity-{}", i)),
+				}],
+				was_attributed_to: vec![AgentAttributionRef {
+					entity: format!("entity-{}", i),
+					role: Some("CERTIFIER".to_string()),
+				}],
+			};
+			agents.push(agent);
+		}
+
+		AgentAndReferences::to_record_batch(agents.into_iter(), meta)
+			.expect("Failed to convert agents to record batch")
 	}
 
 	pub fn batches_to_flight_data(
@@ -1068,6 +853,7 @@ roles:
 			let next: FlightData = encoded_batch.into();
 			flight_data.push(next);
 		}
+
 		let mut stream = vec![schema_flight_data];
 		stream.extend(dictionaries);
 		stream.extend(flight_data);
@@ -1075,27 +861,74 @@ roles:
 		Ok(flight_data)
 	}
 
-	async fn create_test_flight_data() -> Result<Vec<FlightData>, Box<dyn std::error::Error>> {
-		let path = vec!["CertificateEntity".to_owned()];
-		let meta = get_domain_type_meta_from_cache(&path).unwrap();
-		let batch = create_test_entity_certificate(
-			&get_domain_type_meta_from_cache(&path).unwrap().clone(),
-			1000,
+	async fn create_test_flight_data(
+		count: u32,
+	) -> Result<Vec<Vec<FlightData>>, Box<dyn std::error::Error>> {
+		let entity_meta = get_domain_type_meta_from_cache(&vec![
+			"Entity".to_string(),
+			"CertificateEntity".to_owned(),
+		])
+		.expect("Failed to get entity meta");
+		let entity_batch = create_test_entity(
+			vec![("certIDAttribute".to_string(), PrimitiveType::String)],
+			&entity_meta,
+			count,
 		);
+		let entity_flight_data = batches_to_flight_data(
+			&FlightDescriptor::new_path(vec!["Entity".to_string(), "CertificateEntity".to_owned()]),
+			&entity_meta,
+			vec![entity_batch],
+		)?;
 
-		let flight_data =
-			batches_to_flight_data(&FlightDescriptor::new_path(path.clone()), &meta, vec![batch])
-				.unwrap();
+		let activity_meta = get_domain_type_meta_from_cache(&vec![
+			"Activity".to_string(),
+			"ItemManufacturedActivity".to_owned(),
+		])
+		.expect("Failed to get activity meta");
+		let activity_batch = create_test_activity(
+			vec![("batchIDAttribute".to_string(), PrimitiveType::String)],
+			&activity_meta,
+			count,
+		);
+		let activity_flight_data = batches_to_flight_data(
+			&FlightDescriptor::new_path(vec![
+				"Activity".to_string(),
+				"ItemManufacturedActivity".to_owned(),
+			]),
+			&activity_meta,
+			vec![activity_batch],
+		)?;
 
-		Ok(flight_data)
+		let agent_meta = get_domain_type_meta_from_cache(&vec![
+			"Agent".to_string(),
+			"ContractorAgent".to_owned(),
+		])
+		.expect("Failed to get agent meta");
+		let agent_batch = create_test_agent(
+			vec![
+				("companyNameAttribute".to_string(), PrimitiveType::String),
+				("locationAttribute".to_string(), PrimitiveType::String),
+			],
+			&agent_meta,
+			count,
+		);
+		let agent_flight_data = batches_to_flight_data(
+			&FlightDescriptor::new_path(vec!["Agent".to_string(), "ContractorAgent".to_owned()]),
+			&agent_meta,
+			vec![agent_batch],
+		)?;
+
+		let combined_flight_data =
+			vec![entity_flight_data, agent_flight_data, activity_flight_data];
+
+		Ok(combined_flight_data)
 	}
 
-	#[tokio::test]
-	async fn flight_service_is_isomorphic() -> Result<(), Box<dyn std::error::Error>> {
-		cache_domain_schemas(&create_test_domain_def());
-		let domain = create_test_domain_def();
-		let (mut client, mut api) = setup_test_environment(&domain).await?;
-
+	async fn put_test_data(
+		count: u32,
+		client: &mut FlightServiceClient<Channel>,
+		api: &mut TestDispatch<'_>,
+	) -> Result<(), Box<dyn std::error::Error>> {
 		let create_namespace_operation = ChronicleOperation::create_namespace(
 			NamespaceId::from_external_id("default", Uuid::default()),
 		);
@@ -1106,11 +939,668 @@ roles:
 		.await
 		.map_err(|e| Status::from_error(e.into()))?;
 
-		client
-			.do_put(stream::iter(create_test_flight_data().await.unwrap()).boxed())
-			.await
-			.unwrap();
+		for flight_data in create_test_flight_data(count).await? {
+			client.do_put(stream::iter(flight_data)).await?;
+		}
 
 		Ok(())
+	}
+
+	async fn stable_sorted_flight_info(
+		client: &mut FlightServiceClient<Channel>,
+	) -> Result<Vec<FlightInfo>, Box<dyn std::error::Error>> {
+		let list_flights_response = client.list_flights(Request::new(Criteria::default())).await?;
+
+		let flights = list_flights_response.into_inner().collect::<Vec<_>>().await;
+		let mut valid_flights: Vec<FlightInfo> =
+			flights.into_iter().filter_map(Result::ok).collect();
+
+		valid_flights.sort_by(|a, b| {
+			a.flight_descriptor
+				.as_ref()
+				.map(|a| a.path.clone())
+				.cmp(&b.flight_descriptor.as_ref().map(|b| b.path.clone()))
+		});
+		Ok(valid_flights)
+	}
+
+	async fn load_flights(
+		flights: &[FlightInfo],
+		client: &mut FlightServiceClient<Channel>,
+	) -> Result<Vec<Vec<FlightData>>, Box<dyn std::error::Error>> {
+		let mut all_flight_data_results = Vec::new();
+		for flight_info in flights {
+			for endpoint in &flight_info.endpoint {
+				if let Some(ticket) = &endpoint.ticket {
+					let request = Request::new(ticket.clone());
+					let mut stream = client.do_get(request).await?.into_inner();
+					let mut flight_data_results = Vec::new();
+					while let Some(flight_data) = stream.message().await? {
+						flight_data_results.push(flight_data);
+					}
+					all_flight_data_results.push(flight_data_results);
+				}
+			}
+		}
+		Ok(all_flight_data_results)
+	}
+
+	async fn decode_flight_data(
+		flight_data: Vec<FlightData>,
+	) -> Result<Vec<RecordBatch>, Box<dyn std::error::Error>> {
+		let decoder = FlightRecordBatchStream::new_from_flight_data(stream::iter(
+			flight_data.into_iter().map(Ok),
+		));
+		let mut record_batches = Vec::new();
+		pin_mut!(decoder);
+		while let Some(batch) = decoder.next().await.transpose()? {
+			record_batches.push(batch);
+		}
+		Ok(record_batches)
+	}
+
+	#[tokio::test]
+	//Test using a reasonably large data set, over the endpoint paging boundary size so we can
+	// observe it
+	async fn flight_service_info() {
+		chronicle_telemetry::full_telemetry(
+			None,
+			None,
+			chronicle_telemetry::ConsoleLogging::Pretty,
+		);
+		let domain = create_test_domain_def();
+		let (mut client, mut api) = setup_test_environment(&domain).await.unwrap();
+		cache_domain_schemas(&domain);
+		put_test_data(22, &mut client, &mut api).await.unwrap();
+
+		tokio::time::sleep(Duration::from_secs(10)).await;
+
+		let flights = stable_sorted_flight_info(&mut client).await.unwrap();
+
+		insta::assert_debug_snapshot!(flights, @r###"
+  [
+      FlightInfo {
+          schema: b"\xff\xff\xff\xff\xb8\x03\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\t\0\0\0P\x03\0\0\x0c\x03\0\0\xe4\x02\0\0\xa0\x02\0\0T\x02\0\0\xfc\x01\0\0\xa0\x01\0\0@\x01\0\0\x04\0\0\0\xe4\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x10\x01\0\0\x01\0\0\0\x08\0\0\0\xd8\xfc\xff\xff\x04\xfd\xff\xff$\0\0\0\x0c\0\0\0\0\0\0\r\xe4\0\0\0\x04\0\0\0\xa8\0\0\0p\0\0\0<\0\0\0\x08\0\0\0\x04\xfd\xff\xff\xd4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0 \xfd\xff\xff\r\0\0\0delegate_role\0\0\0\x04\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0P\xfd\xff\xff\x0e\0\0\0delegate_agent\0\04\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x80\xfd\xff\xff\x10\0\0\0responsible_role\0\0\0\0\xc4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb4\xfd\xff\xff\x11\0\0\0responsible_agent\0\0\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\x1c\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x10\xfe\xff\xff<\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0,\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0\x1c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0l\xfe\xff\xff\x98\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\0t\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xc4\xfe\xff\xff\xf0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xe0\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\xc8\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xb8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0",
+          flight_descriptor: Some(
+              FlightDescriptor {
+                  r#type: Path,
+                  cmd: b"",
+                  path: [
+                      "Activity",
+                      "ItemCertifiedActivity",
+                  ],
+              },
+          ),
+          endpoint: [],
+          total_records: 0,
+          total_bytes: -1,
+          ordered: false,
+      },
+      FlightInfo {
+          schema: b"\xff\xff\xff\xff\xf8\x03\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\x88\x03\0\0D\x03\0\0\x1c\x03\0\0\xe4\x02\0\0\x90\x02\0\0T\x02\0\0\xfc\x01\0\0\xa0\x01\0\0@\x01\0\0\x04\0\0\0\xb0\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x10\x01\0\0\x01\0\0\0\x08\0\0\0\xa4\xfc\xff\xff\xd0\xfc\xff\xff$\0\0\0\x0c\0\0\0\0\0\0\r\xe4\0\0\0\x04\0\0\0\xa8\0\0\0p\0\0\0<\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\x94\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\xec\xfc\xff\xff\r\0\0\0delegate_role\0\0\0\xc4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x1c\xfd\xff\xff\x0e\0\0\0delegate_agent\0\0\xf4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0L\xfd\xff\xff\x10\0\0\0responsible_role\0\0\0\0\x90\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x80\xfd\xff\xff\x11\0\0\0responsible_agent\0\0\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\xe8\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xdc\xfd\xff\xff\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0\xdc\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\08\xfe\xff\xffd\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0T\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\04\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x90\xfe\xff\xff\xbc\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xac\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\x88\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xc8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\xc0\xff\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0h\xff\xff\xff\x10\0\0\0batchIDAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+          flight_descriptor: Some(
+              FlightDescriptor {
+                  r#type: Path,
+                  cmd: b"",
+                  path: [
+                      "Activity",
+                      "ItemManufacturedActivity",
+                  ],
+              },
+          ),
+          endpoint: [
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Activity\",\"descriptor_path\":[\"Activity\",\"ItemManufacturedActivity\"],\"typ\":\"ItemManufacturedActivity\",\"start\":0,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Activity\",\"descriptor_path\":[\"Activity\",\"ItemManufacturedActivity\"],\"typ\":\"ItemManufacturedActivity\",\"start\":10,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Activity\",\"descriptor_path\":[\"Activity\",\"ItemManufacturedActivity\"],\"typ\":\"ItemManufacturedActivity\",\"start\":20,\"count\":2}",
+                      },
+                  ),
+                  location: [],
+              },
+          ],
+          total_records: 22,
+          total_bytes: -1,
+          ordered: false,
+      },
+      FlightInfo {
+          schema: b"\xff\xff\xff\xff8\x02\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\x07\0\0\0\xbc\x01\0\0x\x01\0\0P\x01\0\0\x14\x01\0\0\xcc\0\0\0h\0\0\0\x04\0\0\0p\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0d\xfe\xff\xff\x90\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x80\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0l\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xc4\xfe\xff\xff\xf0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xe0\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x12\0\0\0acted_on_behalf_of\0\0\xcc\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0 \xff\xff\xff\x11\0\0\0locationAttribute\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0d\xff\xff\xff\x14\0\0\0companyNameAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+          flight_descriptor: Some(
+              FlightDescriptor {
+                  r#type: Path,
+                  cmd: b"",
+                  path: [
+                      "Agent",
+                      "ContractorAgent",
+                  ],
+              },
+          ),
+          endpoint: [
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Agent\",\"descriptor_path\":[\"Agent\",\"ContractorAgent\"],\"typ\":\"ContractorAgent\",\"start\":0,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Agent\",\"descriptor_path\":[\"Agent\",\"ContractorAgent\"],\"typ\":\"ContractorAgent\",\"start\":10,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Agent\",\"descriptor_path\":[\"Agent\",\"ContractorAgent\"],\"typ\":\"ContractorAgent\",\"start\":20,\"count\":2}",
+                      },
+                  ),
+                  location: [],
+              },
+          ],
+          total_records: 22,
+          total_bytes: -1,
+          ordered: false,
+      },
+      FlightInfo {
+          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0certIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
+          flight_descriptor: Some(
+              FlightDescriptor {
+                  r#type: Path,
+                  cmd: b"",
+                  path: [
+                      "Entity",
+                      "CertificateEntity",
+                  ],
+              },
+          ),
+          endpoint: [
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Entity\",\"descriptor_path\":[\"Entity\",\"CertificateEntity\"],\"typ\":\"CertificateEntity\",\"start\":0,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Entity\",\"descriptor_path\":[\"Entity\",\"CertificateEntity\"],\"typ\":\"CertificateEntity\",\"start\":10,\"count\":10}",
+                      },
+                  ),
+                  location: [],
+              },
+              FlightEndpoint {
+                  ticket: Some(
+                      Ticket {
+                          ticket: b"{\"term\":\"Entity\",\"descriptor_path\":[\"Entity\",\"CertificateEntity\"],\"typ\":\"CertificateEntity\",\"start\":20,\"count\":2}",
+                      },
+                  ),
+                  location: [],
+              },
+          ],
+          total_records: 22,
+          total_bytes: -1,
+          ordered: false,
+      },
+      FlightInfo {
+          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0partIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
+          flight_descriptor: Some(
+              FlightDescriptor {
+                  r#type: Path,
+                  cmd: b"",
+                  path: [
+                      "Entity",
+                      "ItemEntity",
+                  ],
+              },
+          ),
+          endpoint: [],
+          total_records: 0,
+          total_bytes: -1,
+          ordered: false,
+      },
+  ]
+  "###);
+	}
+
+	#[tokio::test]
+	async fn get_and_put_are_isomorphic() {
+		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+		let domain = create_test_domain_def();
+		let (mut client, mut api) = setup_test_environment(&domain).await.unwrap();
+		cache_domain_schemas(&domain);
+		put_test_data(8, &mut client, &mut api).await.unwrap();
+
+		tokio::time::sleep(Duration::from_secs(2)).await;
+
+		let flights = stable_sorted_flight_info(&mut client).await.unwrap();
+		let flight_data = load_flights(&flights, &mut client).await.unwrap();
+
+		let mut decoded_flight_data = vec![];
+
+		for flight_data in flight_data.into_iter() {
+			decoded_flight_data
+				.push(decode_flight_data(flight_data).await.expect("Failed to decode flight data"));
+		}
+
+		let json_arrays = decoded_flight_data
+			.into_iter()
+			.map(|batch| {
+				let batch_refs: Vec<&RecordBatch> = batch.iter().collect();
+				arrow::json::writer::record_batches_to_json_rows(&batch_refs)
+					.expect("Failed to convert record batches to JSON")
+			})
+			.collect::<Vec<_>>();
+
+		insta::assert_debug_snapshot!(json_arrays, @r###"
+  [
+      [
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-0"),
+                  String("entity-1"),
+              ],
+              "id": String("ItemManufacturedActivity-0"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-0"),
+                  String("entity-1"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-1"),
+                  String("entity-2"),
+              ],
+              "id": String("ItemManufacturedActivity-1"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-1"),
+                  String("entity-2"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-2"),
+                  String("entity-3"),
+              ],
+              "id": String("ItemManufacturedActivity-2"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-2"),
+                  String("entity-3"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-3"),
+                  String("entity-4"),
+              ],
+              "id": String("ItemManufacturedActivity-3"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-3"),
+                  String("entity-4"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-4"),
+                  String("entity-5"),
+              ],
+              "id": String("ItemManufacturedActivity-4"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-4"),
+                  String("entity-5"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-5"),
+                  String("entity-6"),
+              ],
+              "id": String("ItemManufacturedActivity-5"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-5"),
+                  String("entity-6"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-6"),
+                  String("entity-7"),
+              ],
+              "id": String("ItemManufacturedActivity-6"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-6"),
+                  String("entity-7"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+          {
+              "ended": String("2022-01-02T00:00:00Z"),
+              "generated": Array [
+                  String("entity-7"),
+                  String("entity-8"),
+              ],
+              "id": String("ItemManufacturedActivity-7"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "started": String("2022-01-01T00:00:00Z"),
+              "used": Array [
+                  String("entity-7"),
+                  String("entity-8"),
+              ],
+              "was_associated_with": Array [],
+              "was_informed_by": Array [],
+          },
+      ],
+      [
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-0"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-1"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-2"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-3"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-4"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-5"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-6"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+          {
+              "acted_on_behalf_of": Array [],
+              "id": String("ContractorAgent-7"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [],
+          },
+      ],
+      [
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-0"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-0"),
+                      "role": String("CERTIFIER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-0"),
+                  String("activity-1"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-1"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-1"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-1"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-1"),
+                  String("activity-2"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-2"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-2"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-2"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-2"),
+                  String("activity-3"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-3"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-3"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-3"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-3"),
+                  String("activity-4"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-4"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-4"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-4"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-4"),
+                  String("activity-5"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-5"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-5"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-5"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-5"),
+                  String("activity-6"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-6"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-6"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-6"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-6"),
+                  String("activity-7"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+          {
+              "certIDAttribute": String("certIDAttribute-value"),
+              "had_primary_source": Array [],
+              "id": String("CertificateEntity-7"),
+              "namespace_name": String("default"),
+              "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
+              "was_attributed_to": Array [
+                  Object {
+                      "agent": String("agent-7"),
+                      "role": String("CERTIFIER"),
+                  },
+                  Object {
+                      "agent": String("agent-7"),
+                      "role": String("MANUFACTURER"),
+                  },
+              ],
+              "was_derived_from": Array [],
+              "was_generated_by": Array [
+                  String("activity-7"),
+                  String("activity-8"),
+              ],
+              "was_quoted_from": Array [],
+              "was_revision_of": Array [],
+          },
+      ],
+  ]
+  "###);
 	}
 }

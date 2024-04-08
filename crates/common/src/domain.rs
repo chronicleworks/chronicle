@@ -7,6 +7,8 @@ use inflector::cases::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::prov::DomaintypeId;
+
 #[derive(Debug, Error)]
 pub enum ModelError {
 	#[error("Attribute not defined argument: {attr}")]
@@ -44,7 +46,7 @@ pub enum PrimitiveType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributeDef {
-	typ: String,
+	pub typ: String,
 	pub doc: Option<String>,
 	pub primitive_type: PrimitiveType,
 }
@@ -94,6 +96,10 @@ pub trait TypeName {
 
 	fn as_method_name(&self) -> String {
 		format!("define{}", self.as_type_name())
+	}
+
+	fn as_domain_type_id(&self) -> DomaintypeId {
+		DomaintypeId::from_external_id(self.as_type_name())
 	}
 }
 
@@ -152,6 +158,36 @@ impl TypeName for AgentDef {
 
 	fn preserve_inflection(&self) -> String {
 		preserve_inflection_for_kind("Agent", &self.external_id)
+	}
+}
+
+impl<'a> TypeName for &'a AgentDef {
+	fn as_type_name(&self) -> String {
+		TypeName::as_type_name(*self)
+	}
+
+	fn preserve_inflection(&self) -> String {
+		TypeName::preserve_inflection(*self)
+	}
+}
+
+impl<'a> TypeName for &'a EntityDef {
+	fn as_type_name(&self) -> String {
+		TypeName::as_type_name(*self)
+	}
+
+	fn preserve_inflection(&self) -> String {
+		TypeName::preserve_inflection(*self)
+	}
+}
+
+impl<'a> TypeName for &'a ActivityDef {
+	fn as_type_name(&self) -> String {
+		TypeName::as_type_name(*self)
+	}
+
+	fn preserve_inflection(&self) -> String {
+		TypeName::preserve_inflection(*self)
 	}
 }
 

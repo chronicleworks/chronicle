@@ -835,11 +835,11 @@ fn gen_attribute_definition(typ: impl TypeName, attributes: &[AttributeDef]) -> 
 				#abstract_attributes::new(
 					Some(#domain_type_id::from_external_id(#_(#(typ.as_type_name())))),
 					vec![
-					#(for attribute in attributes =>
-						(#_(#(&attribute.preserve_inflection())).to_owned() ,
+					 #(for attribute in attributes =>
+						(
 							#abstract_attribute::new(#_(#(&attribute.preserve_inflection())),
 							#serde_value::from(attributes.#(&attribute.as_property())))),
-					)
+						)
 					]
 				)
 			}

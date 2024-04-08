@@ -16,6 +16,7 @@ use common::{
 };
 #[cfg(feature = "devmode")]
 use embedded_substrate::EmbeddedSubstrate;
+use futures::{future::join, Future, FutureExt};
 #[cfg(not(feature = "devmode"))]
 use protocol_substrate_chronicle::ChronicleSubstrateClient;
 
@@ -130,20 +131,49 @@ async fn pool_remote(db_uri: impl ToString) -> Result<ConnectionPool, ApiError> 
 	Ok(pool)
 }
 
-pub async fn api_server<Query, Mutation>(
+#[instrument(skip_all)]
+pub async fn arrow_api_server(
+	domain: &ChronicleDomainDef,
+	api: &ApiDispatch,
+	pool: &ConnectionPool,
+	addresses: Option<Vec<SocketAddr>>,
+	_security_conf: &SecurityConf,
+	record_batch_size: usize,
+	operation_batch_size: usize,
+) -> Result<Option<impl Future<Output = Result<(), ApiError>> + Send>, ApiError> {
+	tracing::info!(
+		addresses = ?addresses,
+		security_conf = ?_security_conf,
+		record_batch_size,
+		operation_batch_size,
+		"Starting arrow flight with the provided configuration"
+	);
+
+	match addresses {
+		Some(addresses) => {
+			chronicle_arrow::run_flight_service(domain, pool, api, addresses, record_batch_size)
+				.await
+				.map_err(|e| ApiError::ArrowService(e.into()))
+				.map(|_| Some(futures::future::ready(Ok(()))))
+		},
+		None => Ok(None),
+	}
+}
+
+pub async fn graphql_api_server<Query, Mutation>(
 	api: &ApiDispatch,
 	pool: &ConnectionPool,
 	gql: ChronicleGraphQl<Query, Mutation>,
-	interface: Option<Vec<SocketAddr>>,
-	security_conf: SecurityConf,
+	graphql_interface: Option<Vec<SocketAddr>>,
+	security_conf: &SecurityConf,
 	serve_graphql: bool,
 	serve_data: bool,
-) -> Result<(), ApiError>
+) -> Result<Option<impl Future<Output = Result<(), ApiError>> + Send>, ApiError>
 where
-	Query: ObjectType + Copy,
-	Mutation: ObjectType + Copy,
+	Query: ObjectType + Copy + Send + 'static,
+	Mutation: ObjectType + Copy + Send + 'static,
 {
-	if let Some(addresses) = interface {
+	if let Some(addresses) = graphql_interface {
 		gql.serve_api(
 			pool.clone(),
 			api.clone(),
@@ -152,10 +182,11 @@ where
 			serve_graphql,
 			serve_data,
 		)
-		.await?
+		.await?;
+		Ok(Some(futures::future::ready(Ok(()))))
+	} else {
+		Ok(None)
 	}
-
-	Ok(())
 }
 
 #[allow(dead_code)]
@@ -439,6 +470,7 @@ fn configure_depth_charge(matches: &ArgMatches) -> Option<u64> {
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
 	gql: ChronicleGraphQl<Query, Mutation>,
+	domain: &ChronicleDomainDef,
 	cli: CliModel,
 ) -> Result<(ApiResponse, ApiDispatch), CliError>
 where
@@ -460,6 +492,17 @@ where
 
 	if let Some(matches) = matches.subcommand_matches("serve-api") {
 		let interface = match matches.get_many::<String>("interface") {
+			Some(interface_args) => {
+				let mut addrs = Vec::new();
+				for interface_arg in interface_args {
+					addrs.extend(interface_arg.to_socket_addrs()?);
+				}
+				Some(addrs)
+			},
+			None => None,
+		};
+
+		let arrow_interface = match matches.get_many::<String>("arrow-interface") {
 			Some(interface_args) => {
 				let mut addrs = Vec::new();
 				for interface_arg in interface_args {
@@ -507,23 +550,39 @@ where
 		let endpoints: Vec<String> =
 			matches.get_many("offer-endpoints").unwrap().map(String::clone).collect();
 
-		api_server(
+		let security_conf = SecurityConf::new(
+			jwks_uri,
+			userinfo_uri,
+			id_claims,
+			jwt_must_claim,
+			allow_anonymous,
+			opa.context().clone(),
+		);
+
+		let arrow =
+			arrow_api_server(domain, &api, &pool, arrow_interface, &security_conf, 1000, 100);
+
+		let serve_graphql = endpoints.contains(&"graphql".to_string());
+		let serve_data = endpoints.contains(&"data".to_string());
+
+		let gql = graphql_api_server(
 			&api,
 			&pool,
 			gql,
 			interface,
-			SecurityConf::new(
-				jwks_uri,
-				userinfo_uri,
-				id_claims,
-				jwt_must_claim,
-				allow_anonymous,
-				opa.context().clone(),
-			),
-			endpoints.contains(&"graphql".to_string()),
-			endpoints.contains(&"data".to_string()),
-		)
-		.await?;
+			&security_conf,
+			serve_graphql,
+			serve_data,
+		);
+
+		let (gql_result, arrow_result) = tokio::join!(gql, arrow);
+
+		if let Err(e) = gql_result {
+			return Err(e.into());
+		}
+		if let Err(e) = arrow_result {
+			return Err(e.into());
+		}
 
 		Ok((ApiResponse::Unit, ret_api))
 	} else if let Some(matches) = matches.subcommand_matches("import") {
@@ -583,6 +642,7 @@ fn get_namespace(matches: &ArgMatches) -> NamespaceId {
 
 async fn config_and_exec<Query, Mutation>(
 	gql: ChronicleGraphQl<Query, Mutation>,
+	domain: &ChronicleDomainDef,
 	model: CliModel,
 ) -> Result<(), CliError>
 where
@@ -591,7 +651,7 @@ where
 {
 	use colored_json::prelude::*;
 
-	let response = execute_subcommand(gql, model).await?;
+	let response = execute_subcommand(gql, &domain, model).await?;
 
 	match response {
         (
@@ -760,7 +820,7 @@ pub async fn bootstrap<Query, Mutation>(
 		},
 	);
 
-	config_and_exec(gql, domain.into())
+	config_and_exec(gql, &domain, domain.clone().into())
 		.await
 		.map_err(|e| {
 			error!(?e, "Api error");

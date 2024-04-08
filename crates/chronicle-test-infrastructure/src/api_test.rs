@@ -124,7 +124,7 @@ async fn test_import_operations() {
 	let identity = AuthId::chronicle();
 
 	insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::Import(ImportCommand { namespace: namespace.clone(), operations: operations.clone() } ), identity.clone())
+            .dispatch(ApiCommand::Import(ImportCommand {  operations: operations.clone() } ), identity.clone())
             .await
             .unwrap()
             .unwrap()
@@ -154,7 +154,7 @@ async fn test_import_operations() {
 
 	// Check that the operations that do not result in data changes are not submitted
 	insta::assert_json_snapshot!(api
-            .dispatch(ApiCommand::Import(ImportCommand { namespace, operations } ), identity)
+            .dispatch(ApiCommand::Import(ImportCommand {  operations } ), identity)
             .await
             .unwrap()
             .unwrap()
@@ -218,13 +218,12 @@ async fn create_agent() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
               ),
@@ -319,13 +318,12 @@ async fn create_activity() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
               ),
@@ -375,13 +373,12 @@ async fn start_activity() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),

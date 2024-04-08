@@ -360,10 +360,10 @@ fn attributes_from(
 					args.get_one::<String>(&attr.attribute_name).unwrap(),
 					attr.attribute.primitive_type,
 				)?;
-				Ok::<_, CliError>((
-					attr.attribute.as_type_name(),
-					Attribute { typ: attr.attribute.as_type_name(), value: value.into() },
-				))
+				Ok::<_, CliError>(Attribute {
+					typ: attr.attribute.as_type_name(),
+					value: value.into(),
+				})
 			})
 			.collect::<Result<Vec<_>, _>>()?,
 	))

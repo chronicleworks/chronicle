@@ -16,8 +16,7 @@ use parity_scale_codec::alloc::string::String;
 use crate::attributes::Attributes;
 
 use super::{
-	ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, ExternalId,
-	NamespaceId, Role,
+	ActivityId, AgentId, AssociationId, AttributionId, DelegationId, EntityId, NamespaceId, Role,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
@@ -410,12 +409,6 @@ impl WasGeneratedBy {
 	/// * `id` - The unique identifier for the entity.
 	/// * `activity` - The identifier for the activity that generated the entity.
 	pub fn new(namespace: NamespaceId, id: EntityId, activity: ActivityId) -> Self {
-		tracing::debug!(
-			"Creating WasGeneratedBy with namespace: {:?}, id: {:?}, activity: {:?}",
-			namespace,
-			id,
-			activity
-		);
 		Self { namespace, id, activity }
 	}
 }
@@ -669,7 +662,7 @@ impl ChronicleOperation {
 	}
 
 	#[tracing::instrument]
-	pub fn activity_uses(
+	pub fn activity_used(
 		namespace: NamespaceId,
 		activity_id: ActivityId,
 		entity_id: EntityId,
@@ -767,6 +760,73 @@ impl ChronicleOperation {
 			ChronicleOperation::WasAssociatedWith(o) => &o.namespace,
 			ChronicleOperation::WasAttributedTo(o) => &o.namespace,
 			ChronicleOperation::WasInformedBy(o) => &o.namespace,
+		}
+	}
+
+	// Chronicle is open world, so the use of an id implies that it exists. Match an operation and return the implied existential operations.
+	pub fn implied_by(&self) -> Vec<ChronicleOperation> {
+		match self {
+			ChronicleOperation::AgentActsOnBehalfOf(o) => vec![
+				ChronicleOperation::agent_exists(o.namespace.clone(), o.delegate_id.clone()),
+				ChronicleOperation::agent_exists(o.namespace.clone(), o.responsible_id.clone()),
+			],
+			ChronicleOperation::StartActivity(o) => {
+				vec![ChronicleOperation::activity_exists(o.namespace.clone(), o.id.clone())]
+			},
+			ChronicleOperation::EndActivity(o) => {
+				vec![ChronicleOperation::activity_exists(o.namespace.clone(), o.id.clone())]
+			},
+			ChronicleOperation::ActivityUses(o) => vec![
+				ChronicleOperation::activity_exists(o.namespace.clone(), o.activity.clone()),
+				ChronicleOperation::entity_exists(o.namespace.clone(), o.id.clone()),
+			],
+			ChronicleOperation::EntityExists(o) => {
+				vec![ChronicleOperation::entity_exists(o.namespace.clone(), o.id.clone())]
+			},
+			ChronicleOperation::WasGeneratedBy(o) => vec![
+				ChronicleOperation::entity_exists(o.namespace.clone(), o.id.clone()),
+				ChronicleOperation::activity_exists(o.namespace.clone(), o.activity.clone()),
+			],
+			ChronicleOperation::EntityDerive(o) => {
+				let mut ops = vec![
+					ChronicleOperation::entity_exists(o.namespace.clone(), o.id.clone()),
+					ChronicleOperation::entity_exists(o.namespace.clone(), o.used_id.clone()),
+				];
+				if let Some(activity_id) = &o.activity_id {
+					ops.push(ChronicleOperation::activity_exists(
+						o.namespace.clone(),
+						activity_id.clone(),
+					));
+				}
+				ops
+			},
+			ChronicleOperation::SetAttributes(o) => match o {
+				SetAttributes::Activity { namespace, id, .. } => {
+					vec![ChronicleOperation::activity_exists(namespace.clone(), id.clone())]
+				},
+				SetAttributes::Agent { namespace, id, .. } => {
+					vec![ChronicleOperation::agent_exists(namespace.clone(), id.clone())]
+				},
+				SetAttributes::Entity { namespace, id, .. } => {
+					vec![ChronicleOperation::entity_exists(namespace.clone(), id.clone())]
+				},
+			},
+			ChronicleOperation::WasAssociatedWith(o) => vec![
+				ChronicleOperation::activity_exists(o.namespace.clone(), o.activity_id.clone()),
+				ChronicleOperation::agent_exists(o.namespace.clone(), o.agent_id.clone()),
+			],
+			ChronicleOperation::WasAttributedTo(o) => vec![
+				ChronicleOperation::entity_exists(o.namespace.clone(), o.entity_id.clone()),
+				ChronicleOperation::agent_exists(o.namespace.clone(), o.agent_id.clone()),
+			],
+			ChronicleOperation::WasInformedBy(o) => vec![
+				ChronicleOperation::activity_exists(o.namespace.clone(), o.activity.clone()),
+				ChronicleOperation::activity_exists(
+					o.namespace.clone(),
+					o.informing_activity.clone(),
+				),
+			],
+			_ => vec![],
 		}
 	}
 }

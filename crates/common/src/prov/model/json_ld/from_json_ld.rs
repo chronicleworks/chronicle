@@ -21,12 +21,11 @@ use crate::{
 	prov::{
 		operations::{
 			ActivityExists, ActivityUses, ActsOnBehalfOf, AgentExists, ChronicleOperation,
-			CreateNamespace, DerivationType, EndActivity, EntityDerive, EntityExists,
-			SetAttributes, StartActivity, WasAssociatedWith, WasAttributedTo, WasGeneratedBy,
-			WasInformedBy,
+			CreateNamespace, DerivationType, EntityDerive, EntityExists, SetAttributes,
+			WasAssociatedWith, WasAttributedTo, WasGeneratedBy, WasInformedBy,
 		},
 		vocab::{self, Chronicle, Prov},
-		ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart, NamespaceId, Role,
+		ActivityId, AgentId, DomaintypeId, EntityId, NamespaceId, Role,
 	},
 };
 
@@ -198,15 +197,10 @@ impl ProvModel {
 					if let serde_json::Value::Object(object) = serde_object {
 						let attributes = object
 							.into_iter()
-							.map(|(typ, value)| {
-								(
-									typ.clone(),
-									Attribute { typ: typ.clone(), value: value.clone().into() },
-								)
-							})
+							.map(|(typ, value)| Attribute::new(typ, value.clone().into()))
 							.collect();
 
-						return Ok(Attributes::new_from_btree(typ?, attributes));
+						return Ok(Attributes::new(typ?, attributes));
 					}
 				}
 			}
@@ -504,7 +498,7 @@ trait Operation {
 	fn used_entity(&self) -> EntityId;
 	fn derivation(&self) -> DerivationType;
 	fn domain(&self) -> Option<DomaintypeId>;
-	fn attributes(&self) -> BTreeMap<String, Attribute>;
+	fn attributes(&self) -> Vec<Attribute>;
 	fn informing_activity(&self) -> ActivityId;
 }
 
@@ -592,31 +586,30 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
 		Some(DomaintypeId::from_external_id(d))
 	}
 
-	fn attributes(&self) -> BTreeMap<String, Attribute> {
+	fn attributes(&self) -> Vec<Attribute> {
 		self.get(&id_from_iri_string(vocab::ChronicleOperation::Attributes))
-			.map(|o| {
+			.filter_map(|o| {
 				let serde_object =
 					if let Some(json_ld::object::Value::Json(Meta(json, _))) = o.as_value() {
-						json.clone().into()
+						Some(json.clone().into())
 					} else {
-						serde_json::from_str(&as_json(o.as_node().unwrap())["@value"].to_string())
-							.unwrap()
+						serde_json::from_str(&as_json(o.as_node()?)["@value"].to_string()).ok()
 					};
 
-				if let serde_json::Value::Object(object) = serde_object {
-					Ok(object
-						.into_iter()
-						.map(|(typ, value)| Attribute { typ, value: value.into() })
-						.collect::<Vec<_>>())
-				} else {
-					Err(ProcessorError::NotAnObject {})
-				}
+				serde_object.and_then(|obj: serde_json::Value| {
+					if let serde_json::Value::Object(object) = obj {
+						Some(
+							object
+								.into_iter()
+								.map(|(typ, value)| Attribute { typ, value: value.into() })
+								.collect::<Vec<_>>(),
+						)
+					} else {
+						None
+					}
+				})
 			})
-			.collect::<Result<Vec<_>, _>>()
-			.unwrap()
-			.into_iter()
 			.flatten()
-			.map(|attr| (attr.typ.clone(), attr))
 			.collect()
 	}
 
@@ -770,7 +763,7 @@ impl ChronicleOperation {
 
 				let attrs = o.attributes();
 
-				let attributes = Attributes::new_from_btree(domain, attrs);
+				let attributes = Attributes::new(domain, attrs);
 				let actor: SetAttributes = {
 					if o.has_key(&Term::Id(id_from_iri_string(
 						vocab::ChronicleOperation::EntityName,

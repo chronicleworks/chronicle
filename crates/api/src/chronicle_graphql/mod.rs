@@ -24,7 +24,7 @@ use diesel::{
 	r2d2::{ConnectionManager, Pool, PooledConnection},
 	PgConnection, Queryable,
 };
-use futures::Stream;
+use futures::{Future, Stream};
 use lazy_static::lazy_static;
 use poem::{
 	get, handler,
@@ -433,6 +433,7 @@ impl core::fmt::Debug for UserInfoUri {
 	}
 }
 
+#[derive(Clone, Debug)]
 pub struct SecurityConf {
 	jwks_uri: Option<JwksUri>,
 	userinfo_uri: Option<UserInfoUri>,
@@ -462,7 +463,7 @@ pub trait ChronicleApiServer {
 		pool: Pool<ConnectionManager<PgConnection>>,
 		api: ApiDispatch,
 		addresses: Vec<SocketAddr>,
-		security_conf: SecurityConf,
+		security_conf: &SecurityConf,
 		serve_graphql: bool,
 		serve_data: bool,
 	) -> Result<(), ApiError>;
@@ -620,7 +621,6 @@ where
 	}
 }
 
-#[poem::async_trait]
 impl<Q, M, S> Endpoint for QueryEndpoint<Q, M, S>
 where
 	Q: ObjectType + 'static,
@@ -629,16 +629,18 @@ where
 {
 	type Output = poem::Response;
 
-	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
-		let checked_claims = check_claims(&self.secconf, &req).await?;
-		self.respond(req, |api_req| {
-			if let Some(claims) = checked_claims {
-				api_req.0.data(claims)
-			} else {
-				api_req.0
-			}
-		})
-		.await
+	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
+		async move {
+			let checked_claims = check_claims(&self.secconf, &req).await?;
+			self.respond(req, |api_req| {
+				if let Some(claims) = checked_claims {
+					api_req.0.data(claims)
+				} else {
+					api_req.0
+				}
+			})
+			.await
+		}
 	}
 }
 
@@ -673,7 +675,6 @@ where
 	}
 }
 
-#[poem::async_trait]
 impl<Q, M, S> Endpoint for SubscriptionEndpoint<Q, M, S>
 where
 	Q: ObjectType + 'static,
@@ -682,19 +683,21 @@ where
 {
 	type Output = poem::Response;
 
-	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
-		let checked_claims = check_claims(&self.secconf, &req).await?;
-		self.respond(
-			req,
-			if let Some(claims) = checked_claims {
-				let mut data = async_graphql::Data::default();
-				data.insert(claims);
-				data
-			} else {
-				async_graphql::Data::default()
-			},
-		)
-		.await
+	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
+		async move {
+			let checked_claims = check_claims(&self.secconf, &req).await?;
+			self.respond(
+				req,
+				if let Some(claims) = checked_claims {
+					let mut data = async_graphql::Data::default();
+					data.insert(claims);
+					data
+				} else {
+					async_graphql::Data::default()
+				},
+			)
+			.await
+		}
 	}
 }
 
@@ -752,8 +755,8 @@ impl IriEndpoint {
 								.body("failed to compact JSON response"))
 						},
 					},
-					Err(StoreError::Db(diesel::result::Error::NotFound)) |
-					Err(StoreError::RecordNotFound) => {
+					Err(StoreError::Db(diesel::result::Error::NotFound))
+					| Err(StoreError::RecordNotFound) => {
 						tracing::debug!("not found: {prov_type} {} in {ns}", id.external_id_part());
 						Ok(poem::Response::builder()
 							.status(StatusCode::NOT_FOUND)
@@ -805,20 +808,21 @@ impl IriEndpoint {
 		let (req, mut body) = req.split();
 
 		let ns_iri: poem::Result<Path<NamespacedIri>> =
-			FromRequest::from_request(&req, &mut body).await;
+			poem::web::Path::from_request(&req, &mut body).await;
 
 		let ns_iri: NamespacedIri = match ns_iri {
 			Ok(Path(nsi)) => nsi,
 			Err(_) => {
-				let path: Path<Iri> = FromRequest::from_request(&req, &mut body).await?;
+				let path: Path<Iri> = poem::web::Path::from_request(&req, &mut body).await?;
 				path.0.into()
 			},
 		};
 
 		match ChronicleIri::from_str(&ns_iri.iri) {
 			Ok(iri) => Ok(Ok((ns_iri.ns.into(), iri))),
-			Err(error) =>
-				Ok(Err(Response::builder().status(StatusCode::NOT_FOUND).body(error.to_string()))),
+			Err(error) => {
+				Ok(Err(Response::builder().status(StatusCode::NOT_FOUND).body(error.to_string())))
+			},
 		}
 	}
 
@@ -829,21 +833,24 @@ impl IriEndpoint {
 		claims: Option<&JwtClaims>,
 	) -> poem::Result<poem::Response> {
 		match self.parse_ns_iri_from_uri_path(req).await? {
-			Ok((ns, ChronicleIri::Activity(id))) =>
+			Ok((ns, ChronicleIri::Activity(id))) => {
 				self.response_for_query(claims, "activity", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_activity_id(&mut conn, id, ns)
 				})
-				.await,
-			Ok((ns, ChronicleIri::Agent(id))) =>
+				.await
+			},
+			Ok((ns, ChronicleIri::Agent(id))) => {
 				self.response_for_query(claims, "agent", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_agent_id(&mut conn, id, ns)
 				})
-				.await,
-			Ok((ns, ChronicleIri::Entity(id))) =>
+				.await
+			},
+			Ok((ns, ChronicleIri::Entity(id))) => {
 				self.response_for_query(claims, "entity", &id, &ns, |mut conn, id, ns| {
 					self.store.prov_model_for_entity_id(&mut conn, id, ns)
 				})
-				.await,
+				.await
+			},
 			Ok(_) => Ok(poem::Response::builder()
 				.status(StatusCode::NOT_FOUND)
 				.body("may query only: activity, agent, entity")),
@@ -852,29 +859,31 @@ impl IriEndpoint {
 	}
 }
 
-#[poem::async_trait]
 impl Endpoint for IriEndpoint {
 	type Output = poem::Response;
 
-	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
-		let checked_claims = if let Some(secconf) = &self.secconf {
-			check_claims(secconf, &req).await?
-		} else {
-			None
-		};
-		self.respond(req, checked_claims.as_ref()).await
+	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
+		async move {
+			let checked_claims = if let Some(secconf) = &self.secconf {
+				check_claims(secconf, &req).await?
+			} else {
+				None
+			};
+			self.respond(req, checked_claims.as_ref()).await
+		}
 	}
 }
 
 struct LdContextEndpoint;
 
-#[poem::async_trait]
 impl Endpoint for LdContextEndpoint {
 	type Output = poem::Response;
 
-	async fn call(&self, _req: poem::Request) -> poem::Result<Self::Output> {
-		let context: &serde_json::Value = &common::context::PROV;
-		Ok(IntoResponse::into_response(poem::web::Json(context)))
+	fn call(&self, _req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
+		async move {
+			let context: &serde_json::Value = &common::context::PROV;
+			Ok(IntoResponse::into_response(poem::web::Json(context)))
+		}
 	}
 }
 
@@ -918,7 +927,6 @@ impl async_graphql::extensions::Extension for AuthFromJwt {
 	}
 }
 
-#[async_trait::async_trait]
 impl async_graphql::extensions::ExtensionFactory for AuthFromJwt {
 	fn create(&self) -> Arc<dyn async_graphql::extensions::Extension> {
 		Arc::new(AuthFromJwt {
@@ -1000,10 +1008,12 @@ where
 		pool: Pool<ConnectionManager<PgConnection>>,
 		api: ApiDispatch,
 		addresses: Vec<SocketAddr>,
-		sec: SecurityConf,
+		sec: &SecurityConf,
 		serve_graphql: bool,
 		serve_data: bool,
 	) -> Result<(), ApiError> {
+		tracing::info!("Serve graphql on {:?}", addresses);
+		let sec = sec.clone();
 		let claim_parser = sec
 			.id_claims
 			.map(|id_claims| AuthFromJwt { id_claims, allow_anonymous: sec.allow_anonymous });

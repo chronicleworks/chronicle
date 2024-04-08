@@ -6,10 +6,14 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arrow-array = { workspace = true }
-arrow-flight = { workspace = true }
-arrow-ipc = { workspace = true }
-arrow-schema = { workspace = true }
+arrow = { version = "50", features = ["json", "prettyprint", "chrono-tz"] }
+arrow-array = { version = "50" }
+arrow-buffer = { version = "50" }
+arrow-data = { version = "50" }
+arrow-flight = { version = "50" }
+arrow-ipc = { version = "50" }
+arrow-schema = { version = "50" }
+chrono = { workspace = true }
 diesel = { workspace = true }
 futures = { workspace = true }
 lazy_static = { workspace = true }
@@ -23,7 +27,7 @@ tokio = { version = "^1", default-features = false, features = [
   "rt",
   "rt-multi-thread",
 ] }
-tonic = { version = "^0.10.0", default-features = false, features = [
+tonic = { version = "0.10.2", default-features = false, features = [
   "transport",
   "codegen",
   "prost",
@@ -39,6 +43,7 @@ common                = { path = "../common", features = ["std"] }
 
 
 [dev-dependencies]
+arrow-json                    = { version = "50" }
 chronicle-telemetry           = { path = "../chronicle-telemetry" }
 chronicle-test-infrastructure = { path = "../chronicle-test-infrastructure" }
 insta                         = { workspace = true, features = ["toml"] }

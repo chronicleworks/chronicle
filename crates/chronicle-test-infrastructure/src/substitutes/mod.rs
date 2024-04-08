@@ -99,9 +99,8 @@ impl<'a> TestDispatch<'a> {
 					let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
 					match commit {
 						common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
-						common::ledger::SubmissionStage::Committed(commit, _id) => {
-							return Ok(Some((commit.delta, commit.tx_id)))
-						},
+						common::ledger::SubmissionStage::Committed(commit, _id) =>
+							return Ok(Some((commit.delta, commit.tx_id))),
 						common::ledger::SubmissionStage::Submitted(Err(e)) => panic!("{e:?}"),
 						common::ledger::SubmissionStage::NotCommitted((_, tx, _id)) => {
 							panic!("{tx:?}")
@@ -109,9 +108,8 @@ impl<'a> TestDispatch<'a> {
 					}
 				}
 			},
-			ApiResponse::AlreadyRecorded { subject: _, prov } => {
-				Ok(Some((prov, ChronicleTransactionId::default())))
-			},
+			ApiResponse::AlreadyRecorded { subject: _, prov } =>
+				Ok(Some((prov, ChronicleTransactionId::default()))),
 			_ => Ok(None),
 		}
 	}

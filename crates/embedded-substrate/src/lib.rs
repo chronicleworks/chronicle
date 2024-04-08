@@ -314,7 +314,7 @@ pub mod test_runtime {
 								&ExternalId::from("test"),
 								Uuid::default(),
 							),
-							"test",
+							AgentId::from_external_id("test"),
 						)),
 						ChronicleOperation::SetAttributes(SetAttributes::agent(
 							NamespaceId::from_external_id(
