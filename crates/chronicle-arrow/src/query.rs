@@ -9,8 +9,7 @@ use crate::{
 };
 use arrow::array::{ArrayBuilder, StringBuilder, StructBuilder};
 use arrow_array::{
-	Array, BooleanArray, Int64Array, ListArray, RecordBatch, StringArray,
-	TimestampNanosecondArray,
+	Array, BooleanArray, Int64Array, ListArray, RecordBatch, StringArray, TimestampNanosecondArray,
 };
 use arrow_buffer::{Buffer, ToByteSlice};
 use arrow_data::ArrayData;
@@ -189,9 +188,8 @@ impl EntityAndReferences {
 			let field_name = field.name();
 			match hashed_fields.get(field_name) {
 				Some(array) => columns.push(array.clone()),
-				None => {
-					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string()))
-				},
+				None =>
+					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string())),
 			}
 		}
 
@@ -353,9 +351,8 @@ impl ActivityAndReferences {
 			let field_name = field.name();
 			match hashed_fields.get(field_name) {
 				Some(array) => columns.push(array.clone()),
-				None => {
-					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string()))
-				},
+				None =>
+					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string())),
 			}
 		}
 
@@ -485,9 +482,8 @@ impl AgentAndReferences {
 			let field_name = field.name();
 			match hashed_fields.get(field_name) {
 				Some(array) => columns.push(array.clone()),
-				None => {
-					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string()))
-				},
+				None =>
+					return Err(ChronicleArrowError::SchemaFieldNotFound(field_name.to_string())),
 			}
 		}
 

@@ -511,12 +511,11 @@ where
 								};
 
 								match stage {
-									SubmissionStage::Submitted(Ok(id)) => {
+									SubmissionStage::Submitted(Ok(id)) =>
 										if id == tx_id {
 											debug!("Depth charge operation submitted: {id}");
 											continue;
-										}
-									},
+										},
 									SubmissionStage::Submitted(Err(err)) => {
 										if err.tx_id() == &tx_id {
 											error!("Depth charge transaction rejected by Chronicle: {} {}",
@@ -620,6 +619,7 @@ where
 		connection: &mut PgConnection,
 		to_apply: &Vec<ChronicleOperation>,
 	) -> Result<Option<Vec<ChronicleOperation>>, ApiError> {
+		debug!(checking_for_effects = to_apply.len());
 		let mut model = ProvModel::default();
 		let mut transactions = Vec::<ChronicleOperation>::with_capacity(to_apply.len());
 		for op in to_apply {
@@ -630,30 +630,27 @@ where
 					model.namespace_context(&namespace);
 					model
 				},
-				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref id }) => {
+				ChronicleOperation::AgentExists(AgentExists { ref namespace, ref id }) =>
 					self.store.apply_prov_model_for_agent_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
-				ChronicleOperation::ActivityExists(ActivityExists { ref namespace, ref id }) => {
+					)?,
+				ChronicleOperation::ActivityExists(ActivityExists { ref namespace, ref id }) =>
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
-				ChronicleOperation::EntityExists(EntityExists { ref namespace, ref id }) => {
+					)?,
+				ChronicleOperation::EntityExists(EntityExists { ref namespace, ref id }) =>
 					self.store.apply_prov_model_for_entity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
+					)?,
 				ChronicleOperation::ActivityUses(ActivityUses {
 					ref namespace,
 					ref id,
@@ -666,47 +663,42 @@ where
 					namespace.external_id_part(),
 				)?,
 				ChronicleOperation::SetAttributes(ref o) => match o {
-					SetAttributes::Activity { namespace, id, .. } => {
+					SetAttributes::Activity { namespace, id, .. } =>
 						self.store.apply_prov_model_for_activity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
-					SetAttributes::Agent { namespace, id, .. } => {
+						)?,
+					SetAttributes::Agent { namespace, id, .. } =>
 						self.store.apply_prov_model_for_agent_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
-					SetAttributes::Entity { namespace, id, .. } => {
+						)?,
+					SetAttributes::Entity { namespace, id, .. } =>
 						self.store.apply_prov_model_for_entity_id(
 							connection,
 							model,
 							id,
 							namespace.external_id_part(),
-						)?
-					},
+						)?,
 				},
-				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) => {
+				ChronicleOperation::StartActivity(StartActivity { namespace, id, .. }) =>
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
-				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) => {
+					)?,
+				ChronicleOperation::EndActivity(EndActivity { namespace, id, .. }) =>
 					self.store.apply_prov_model_for_activity_id(
 						connection,
 						model,
 						id,
 						namespace.external_id_part(),
-					)?
-				},
+					)?,
 				ChronicleOperation::WasInformedBy(WasInformedBy {
 					namespace,
 					activity,
@@ -870,6 +862,7 @@ where
 		if applying_new_namespace {
 			self.submit(id, identity, to_apply)
 		} else if let Some(to_apply) = self.check_for_effects(connection, &to_apply)? {
+			info!(sending_operations = to_apply.len());
 			self.submit(id, identity, to_apply)
 		} else {
 			info!("API call will not result in any data changes");
@@ -1243,21 +1236,16 @@ where
 	#[instrument(skip(self))]
 	async fn dispatch(&mut self, command: (ApiCommand, AuthId)) -> Result<ApiResponse, ApiError> {
 		match command {
-			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) => {
-				self.depth_charge(namespace, identity).await
-			},
-			(ApiCommand::Import(ImportCommand { operations }), identity) => {
-				self.submit_import_operations(identity, operations).await
-			},
-			(ApiCommand::NameSpace(NamespaceCommand::Create { id }), identity) => {
-				self.create_namespace(&id, identity).await
-			},
-			(ApiCommand::Agent(AgentCommand::Create { id, namespace, attributes }), identity) => {
-				self.create_agent(id, namespace, attributes, identity).await
-			},
-			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) => {
-				self.use_agent_in_cli_context(id, namespace).await
-			},
+			(ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) =>
+				self.depth_charge(namespace, identity).await,
+			(ApiCommand::Import(ImportCommand { operations }), identity) =>
+				self.submit_import_operations(identity, operations).await,
+			(ApiCommand::NameSpace(NamespaceCommand::Create { id }), identity) =>
+				self.create_namespace(&id, identity).await,
+			(ApiCommand::Agent(AgentCommand::Create { id, namespace, attributes }), identity) =>
+				self.create_agent(id, namespace, attributes, identity).await,
+			(ApiCommand::Agent(AgentCommand::UseInContext { id, namespace }), _identity) =>
+				self.use_agent_in_cli_context(id, namespace).await,
 			(
 				ApiCommand::Agent(AgentCommand::Delegate {
 					id,
@@ -1284,9 +1272,8 @@ where
 				ApiCommand::Activity(ActivityCommand::End { id, namespace, time, agent }),
 				identity,
 			) => self.end_activity(id, namespace, time, agent, identity).await,
-			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) => {
-				self.activity_use(id, namespace, activity, identity).await
-			},
+			(ApiCommand::Activity(ActivityCommand::Use { id, namespace, activity }), identity) =>
+				self.activity_use(id, namespace, activity, identity).await,
 			(
 				ApiCommand::Activity(ActivityCommand::WasInformedBy {
 					id,
@@ -1308,10 +1295,9 @@ where
 				ApiCommand::Entity(EntityCommand::Attribute { id, namespace, responsible, role }),
 				identity,
 			) => self.attribute(namespace, responsible, id, role, identity).await,
-			(ApiCommand::Entity(EntityCommand::Create { id, namespace, attributes }), identity) => {
+			(ApiCommand::Entity(EntityCommand::Create { id, namespace, attributes }), identity) =>
 				self.create_entity(EntityId::from_external_id(&id), namespace, attributes, identity)
-					.await
-			},
+					.await,
 			(
 				ApiCommand::Activity(ActivityCommand::Generate { id, namespace, activity }),
 				identity,
@@ -1325,10 +1311,9 @@ where
 					derivation,
 				}),
 				identity,
-			) => {
+			) =>
 				self.entity_derive(id, namespace, activity, used_entity, derivation, identity)
-					.await
-			},
+					.await,
 			(ApiCommand::Query(query), _identity) => self.query(query).await,
 		}
 	}

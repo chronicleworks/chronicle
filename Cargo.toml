@@ -39,6 +39,7 @@ anyhow = { version = "^1", features = ["backtrace"] }
 assert_fs = "1.0"
 async-graphql = "^7"
 async-graphql-poem = "^7"
+async-signals = "^0.4"
 async-stream = "^0.3.3"
 async-trait = "^0.1.61"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

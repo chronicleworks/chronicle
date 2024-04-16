@@ -2,10 +2,11 @@ mod meta;
 mod operations;
 mod peekablestream;
 mod query;
+use lazy_static::lazy_static;
+use tokio::sync::broadcast;
 
 use api::{ApiDispatch, ApiError};
 
-use arrow_array::Array;
 use arrow_flight::decode::FlightRecordBatchStream;
 
 use arrow_flight::{
@@ -35,6 +36,7 @@ use query::EntityAndReferences;
 use r2d2::Pool;
 use serde::Serialize;
 use std::net::SocketAddr;
+use tokio::sync::Semaphore;
 
 use std::{sync::Arc, vec::Vec};
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -226,6 +228,7 @@ impl FlightService for FlightServiceImpl {
 	) -> Result<Response<Self::HandshakeStream>, Status> {
 		Ok(Response::new(Box::pin(futures::stream::empty()) as Self::HandshakeStream))
 	}
+
 	#[instrument(skip(self, _request))]
 	async fn list_flights(
 		&self,
@@ -485,13 +488,6 @@ impl FlightService for FlightServiceImpl {
 			},
 		};
 
-		tracing::debug!(
-			descriptor_type = %flight_descriptor.r#type,
-			descriptor_cmd = %String::from_utf8_lossy(&flight_descriptor.cmd),
-			descriptor_path = ?flight_descriptor.path,
-			"Flight descriptor"
-		);
-
 		let filtered_stream = stream.filter_map(|item| async move {
 			match item {
 				Ok(flight_data) => {
@@ -542,12 +538,27 @@ impl FlightService for FlightServiceImpl {
 	}
 }
 
+lazy_static! {
+	static ref SHUTDOWN_CHANNEL: (broadcast::Sender<()>, broadcast::Receiver<()>) =
+		broadcast::channel(1);
+}
+
+/// Triggers a shutdown signal across the application.
+pub fn trigger_shutdown() {
+	let _ = SHUTDOWN_CHANNEL.0.send(());
+}
+
+/// Returns a receiver for the shutdown signal.
+pub async fn await_shutdown() {
+	SHUTDOWN_CHANNEL.0.subscribe().recv().await.ok();
+}
+
 #[instrument(skip(pool, api))]
 pub async fn run_flight_service(
 	domain: &common::domain::ChronicleDomainDef,
 	pool: &Pool<ConnectionManager<PgConnection>>,
 	api: &ApiDispatch,
-	addrs: Vec<SocketAddr>,
+	addrs: &Vec<SocketAddr>,
 	record_batch_size: usize,
 ) -> Result<(), tonic::transport::Error> {
 	meta::cache_domain_schemas(domain);
@@ -561,7 +572,7 @@ pub async fn run_flight_service(
 			.add_service(arrow_flight::flight_service_server::FlightServiceServer::new(
 				flight_service,
 			))
-			.serve(addr);
+			.serve_with_shutdown(*addr, await_shutdown());
 
 		services.push(server);
 	}
@@ -621,7 +632,7 @@ mod tests {
 		let dispatch = api.api_dispatch().clone();
 		let domain = domain.clone();
 		tokio::spawn(async move {
-			super::run_flight_service(&domain, &pool, &dispatch, vec![addr], 10)
+			super::run_flight_service(&domain, &pool, &dispatch, &vec![addr], 10)
 				.await
 				.unwrap();
 		});
@@ -782,8 +793,8 @@ roles:
 				namespace_name: "default".to_string(),
 				namespace_uuid: Uuid::default().into_bytes(),
 				attributes: create_attributes(meta.typ.as_deref(), &attributes),
-				started: Some(Utc.ymd(2022, 1, 1).and_hms(0, 0, 0)),
-				ended: Some(Utc.ymd(2022, 1, 2).and_hms(0, 0, 0)),
+				started: Some(Utc.with_ymd_and_hms(2022, 1, 1, 0, 0, 0).unwrap()),
+				ended: Some(Utc.with_ymd_and_hms(2022, 1, 2, 0, 0, 0).unwrap()),
 				generated: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
 				was_informed_by: vec![format!("activity-{}", i), format!("activity-{}", i + 1)],
 				was_associated_with: vec![AssociationRef {

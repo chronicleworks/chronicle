@@ -272,13 +272,12 @@ async fn create_system_activity() {
             namespace: common::prov::SYSTEM_ID.into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
               ),
@@ -483,13 +482,12 @@ async fn contradict_attributes() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
               ),
@@ -533,13 +531,10 @@ async fn contradict_attributes() {
 				namespace: "testns".into(),
 				attributes: Attributes::new(
 					Some(DomaintypeId::from_external_id("test")),
-					[(
-						"test".to_owned(),
-						Attribute {
-							typ: "test".to_owned(),
-							value: serde_json::Value::String("test2".to_owned()).into(),
-						},
-					)]
+					[Attribute {
+						typ: "test".to_owned(),
+						value: serde_json::Value::String("test2".to_owned()).into(),
+					}]
 					.into_iter()
 					.collect(),
 				),
@@ -563,13 +558,12 @@ async fn contradict_start_time() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),
@@ -689,13 +683,12 @@ async fn contradict_end_time() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),
@@ -815,13 +808,12 @@ async fn end_activity() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),
@@ -973,13 +965,12 @@ async fn activity_use() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
            ),
@@ -1032,13 +1023,12 @@ async fn activity_use() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),
@@ -1175,13 +1165,12 @@ async fn activity_generate() {
             namespace: "testns".into(),
             attributes: Attributes::new(
                 Some(DomaintypeId::from_external_id("test")),
-                [(
-                    "test".to_owned(),
+                [
                     Attribute {
                         typ: "test".to_owned(),
                         value: serde_json::Value::String("test".to_owned()).into(),
                     },
-                )]
+                ]
                 .into_iter()
                 .collect(),
             ),

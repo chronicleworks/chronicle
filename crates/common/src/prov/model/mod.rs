@@ -679,6 +679,7 @@ impl ProvModel {
 				.sum(),
 		}
 	}
+
 	/// Merge the supplied ProvModel into this one
 	pub fn combine(&mut self, other: &ProvModel) {
 		self.namespaces.extend(other.namespaces.clone());
@@ -1006,22 +1007,20 @@ impl ProvModel {
 					activity.and_then(|activity| activity.started),
 					activity.and_then(|activity| activity.ended),
 				) {
-					(Some(TimeWrapper(started)), _) if started != time.0 => {
+					(Some(TimeWrapper(started)), _) if started != time.0 =>
 						return Err(Contradiction::start_date_alteration(
 							id.into(),
 							namespace,
 							started,
 							time.0,
-						))
-					},
-					(_, Some(TimeWrapper(ended))) if ended < time.0 => {
+						)),
+					(_, Some(TimeWrapper(ended))) if ended < time.0 =>
 						return Err(Contradiction::invalid_range(
 							id.into(),
 							namespace,
 							time.0,
 							ended,
-						))
-					},
+						)),
 					_ => {},
 				};
 
@@ -1041,22 +1040,20 @@ impl ProvModel {
 					activity.and_then(|activity| activity.started),
 					activity.and_then(|activity| activity.ended),
 				) {
-					(_, Some(TimeWrapper(ended))) if ended != time.0 => {
+					(_, Some(TimeWrapper(ended))) if ended != time.0 =>
 						return Err(Contradiction::end_date_alteration(
 							id.into(),
 							namespace,
 							ended,
 							time.0,
-						))
-					},
-					(Some(TimeWrapper(started)), _) if started > time.0 => {
+						)),
+					(Some(TimeWrapper(started)), _) if started > time.0 =>
 						return Err(Contradiction::invalid_range(
 							id.into(),
 							namespace,
 							started,
 							time.0,
-						))
-					},
+						)),
 					_ => {},
 				};
 

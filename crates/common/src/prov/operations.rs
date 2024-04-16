@@ -763,7 +763,8 @@ impl ChronicleOperation {
 		}
 	}
 
-	// Chronicle is open world, so the use of an id implies that it exists. Match an operation and return the implied existential operations.
+	// Chronicle is open world, so the use of an id implies that it exists. Match an operation and
+	// return the implied existential operations.
 	pub fn implied_by(&self) -> Vec<ChronicleOperation> {
 		match self {
 			ChronicleOperation::AgentActsOnBehalfOf(o) => vec![

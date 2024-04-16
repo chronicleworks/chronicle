@@ -38,7 +38,7 @@ use crate::{
 	ChronicleArrowError, ChronicleTicket,
 };
 
-#[tracing::instrument(skip(record_batch))]
+#[tracing::instrument(skip(record_batch, api))]
 pub async fn process_record_batch(
 	descriptor_path: &Vec<String>,
 	record_batch: RecordBatch,
@@ -61,18 +61,15 @@ pub async fn process_record_batch(
 		.collect::<Vec<String>>();
 
 	match domain_type_meta.term {
-		Term::Entity => {
+		Term::Entity =>
 			create_chronicle_entity(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
-		Term::Activity => {
+				.await?,
+		Term::Activity =>
 			create_chronicle_activity(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
-		Term::Agent => {
+				.await?,
+		Term::Agent =>
 			create_chronicle_agent(&domain_type_meta.typ, &record_batch, &attribute_columns, api)
-				.await?
-		},
+				.await?,
 		Term::Namespace => create_chronicle_namespace(&record_batch, api).await?,
 	}
 	Ok(())
@@ -173,7 +170,7 @@ pub async fn create_chronicle_terms(
 		.filter_map(|(column_name, array_ref)| array_ref.map(|array_ref| (column_name, array_ref)))
 		.collect::<Vec<(_, _)>>();
 
-	tracing::debug!(?attribute_columns, "Processing attribute columns");
+	tracing::trace!(?attribute_columns, "Processing attribute columns");
 
 	let mut operations = Vec::new();
 	for row_index in 0..record_batch.num_rows() {
@@ -742,33 +739,30 @@ pub async fn calculate_count_by_metadata_term(
 ) -> Result<i64, Status> {
 	let pool = pool.clone();
 	match term {
-		Term::Entity => {
+		Term::Entity =>
 			spawn_blocking(move || {
 				entity_count_by_type(
 					&pool,
 					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
 				)
 			})
-			.await
-		},
-		Term::Agent => {
+			.await,
+		Term::Agent =>
 			spawn_blocking(move || {
 				agent_count_by_type(
 					&pool,
 					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
 				)
 			})
-			.await
-		},
-		Term::Activity => {
+			.await,
+		Term::Activity =>
 			spawn_blocking(move || {
 				activity_count_by_type(
 					&pool,
 					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
 				)
 			})
-			.await
-		},
+			.await,
 		_ => Ok(Ok(0)),
 	}
 	.map_err(|e| Status::from_error(e.into()))

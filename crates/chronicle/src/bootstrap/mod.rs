@@ -16,7 +16,7 @@ use common::{
 };
 #[cfg(feature = "devmode")]
 use embedded_substrate::EmbeddedSubstrate;
-use futures::{future::join, Future, FutureExt};
+use futures::{future::join, Future, FutureExt, StreamExt};
 #[cfg(not(feature = "devmode"))]
 use protocol_substrate_chronicle::ChronicleSubstrateClient;
 
@@ -151,7 +151,7 @@ pub async fn arrow_api_server(
 
 	match addresses {
 		Some(addresses) => {
-			chronicle_arrow::run_flight_service(domain, pool, api, addresses, record_batch_size)
+			chronicle_arrow::run_flight_service(domain, pool, api, &addresses, record_batch_size)
 				.await
 				.map_err(|e| ApiError::ArrowService(e.into()))
 				.map(|_| Some(futures::future::ready(Ok(()))))
@@ -574,6 +574,16 @@ where
 			serve_graphql,
 			serve_data,
 		);
+
+		tokio::task::spawn(async move {
+			use async_signals::Signals;
+
+			let mut signals = Signals::new(vec![libc::SIGHUP, libc::SIGINT]).unwrap();
+
+			signals.next().await;
+			chronicle_arrow::trigger_shutdown();
+			api::chronicle_graphql::trigger_shutdown();
+		});
 
 		let (gql_result, arrow_result) = tokio::join!(gql, arrow);
 

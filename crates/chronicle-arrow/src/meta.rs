@@ -227,6 +227,7 @@ use std::str::FromStr;
 
 impl FromStr for Term {
 	type Err = ();
+
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
 			"Namespace" => Ok(Term::Namespace),

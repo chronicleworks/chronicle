@@ -9,6 +9,7 @@ version = "0.7.5"
 [dependencies]
 Inflector = { workspace = true }
 async-graphql = { workspace = true }
+async-signals = { workspace = true }
 async-trait = { workspace = true }
 cfg-if = { workspace = true }
 chronicle-signing = { workspace = true }
@@ -27,6 +28,7 @@ iri-string = { version = "^0.7", default-features = false, features = [
 ] }
 is-terminal = { workspace = true }
 jsonschema = { workspace = true }
+libc = { version = "^0.2" }
 opa = { workspace = true }
 opentelemetry = { workspace = true }
 percent-encoding = { workspace = true }
