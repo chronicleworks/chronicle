@@ -493,7 +493,6 @@ impl<
         }
 
         let channel = self.channel.clone();
-        let from_block = from_block;
         let event_stream = channel.recv_stream::<EventList>().await?;
         let event_stream = event_stream.then(move |events| {
             let event_type = event_type.clone();

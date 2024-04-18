@@ -214,7 +214,7 @@ impl ProvModel {
                 map.get(Chronicle::Value.as_iri().as_str())
             {
                 if array.len() == 1 {
-                    let o = array.get(0).unwrap();
+                    let o = array.first().unwrap();
                     let serde_object = &o["@value"];
 
                     if let serde_json::Value::Object(object) = serde_object {

@@ -484,7 +484,7 @@ impl ProvModel {
     ) {
         self.derivation
             .entry((namespace_id, id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(Derivation {
                 typ,
                 generated_id: id,
@@ -517,11 +517,11 @@ impl ProvModel {
         };
         self.delegation
             .entry((namespace_id.clone(), responsible_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(delegation.clone());
         self.acted_on_behalf_of
             .entry((namespace_id.clone(), delegate_id.clone()))
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(delegation);
     }
 

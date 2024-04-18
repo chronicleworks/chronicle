@@ -264,7 +264,7 @@ where
         pool.get()?
             .build_transaction()
             .run(|connection| connection.run_pending_migrations(MIGRATIONS).map(|_| ()))
-            .map_err(|migration| StoreError::DbMigration(migration))?;
+            .map_err(StoreError::DbMigration)?;
 
         // Append namespace bindings and system namespace
         store.namespace_binding(
