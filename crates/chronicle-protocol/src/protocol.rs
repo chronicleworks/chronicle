@@ -159,8 +159,7 @@ impl messages::Event {
 
 /// `Submission` protocol buffer serializer
 pub fn serialize_submission(submission: &messages::Submission) -> Vec<u8> {
-    let mut buf = Vec::new();
-    buf.reserve(submission.encoded_len());
+    let mut buf = Vec::with_capacity(submission.encoded_len());
     submission.encode(&mut buf).unwrap();
     buf
 }

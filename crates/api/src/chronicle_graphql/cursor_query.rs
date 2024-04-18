@@ -34,7 +34,7 @@ where
     T: OutputType,
     I: IntoIterator<Item = (T, i64)>,
 {
-    let rx = Vec::from_iter(rx.into_iter());
+    let rx = Vec::from_iter(rx);
     let mut gql = async_graphql::connection::Connection::new(
         rx.first().map(|(_, _total)| start > 0).unwrap_or(false),
         rx.first()
