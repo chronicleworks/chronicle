@@ -2,6 +2,7 @@ mod meta;
 mod operations;
 mod peekablestream;
 mod query;
+use api::chronicle_graphql::EndpointSecurityConfiguration;
 use lazy_static::lazy_static;
 use tokio::sync::broadcast;
 
@@ -27,7 +28,7 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use futures::{
 	future::join_all,
 	stream::{self, BoxStream},
-	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+	FutureExt, StreamExt,
 };
 
 use meta::{DomainTypeMeta, Term};
@@ -171,7 +172,7 @@ pub async fn calculate_count_by_metadata_term(
 	.and_then(|res| res.map_err(|e| Status::from_error(e.into())))
 }
 
-pub async fn create_flight_info_for_type(
+async fn create_flight_info_for_type(
 	pool: Arc<Pool<ConnectionManager<PgConnection>>>,
 	domain_items: Vec<impl TypeName + Send + Sync + 'static>,
 	term: Term,
@@ -234,6 +235,7 @@ pub struct FlightServiceImpl {
 	pool: r2d2::Pool<ConnectionManager<PgConnection>>,
 	api: ApiDispatch,
 	record_batch_size: usize,
+	security: EndpointSecurityConfiguration,
 }
 
 impl FlightServiceImpl {
@@ -241,9 +243,16 @@ impl FlightServiceImpl {
 		domain: &common::domain::ChronicleDomainDef,
 		pool: &r2d2::Pool<ConnectionManager<PgConnection>>,
 		api: &ApiDispatch,
+		security: EndpointSecurityConfiguration,
 		record_batch_size: usize,
 	) -> Self {
-		Self { domain: domain.clone(), pool: pool.clone(), api: api.clone(), record_batch_size }
+		Self {
+			domain: domain.clone(),
+			pool: pool.clone(),
+			api: api.clone(),
+			security,
+			record_batch_size,
+		}
 	}
 }
 
@@ -643,18 +652,20 @@ pub async fn await_shutdown() {
 	SHUTDOWN_CHANNEL.0.subscribe().recv().await.ok();
 }
 
-#[instrument(skip(pool, api))]
+#[instrument(skip(pool, api, security))]
 pub async fn run_flight_service(
 	domain: &common::domain::ChronicleDomainDef,
 	pool: &Pool<ConnectionManager<PgConnection>>,
 	api: &ApiDispatch,
+	security: EndpointSecurityConfiguration,
 	addrs: &Vec<SocketAddr>,
 	record_batch_size: usize,
 ) -> Result<(), tonic::transport::Error> {
 	meta::cache_domain_schemas(domain);
 	let mut services = vec![];
 	for addr in addrs {
-		let flight_service = FlightServiceImpl::new(domain, pool, api, record_batch_size);
+		let flight_service =
+			FlightServiceImpl::new(domain, pool, api, security.clone(), record_batch_size);
 
 		info!("Starting flight service at {}", addr);
 
@@ -675,7 +686,10 @@ pub async fn run_flight_service(
 
 #[cfg(test)]
 mod tests {
-	use api::commands::{ApiCommand, ImportCommand};
+	use api::{
+		chronicle_graphql::{authorization::TokenChecker, EndpointSecurityConfiguration},
+		commands::{ApiCommand, ImportCommand},
+	};
 	use arrow_array::RecordBatch;
 	use arrow_flight::{
 		decode::FlightRecordBatchStream, flight_service_client::FlightServiceClient, Criteria,
@@ -696,7 +710,7 @@ mod tests {
 	use futures::{pin_mut, stream, StreamExt};
 	use portpicker::pick_unused_port;
 
-	use std::{net::SocketAddr, time::Duration};
+	use std::{collections::HashMap, net::SocketAddr, time::Duration};
 	use tonic::{transport::Channel, Request, Status};
 	use uuid::Uuid;
 
@@ -704,7 +718,8 @@ mod tests {
 		meta::{cache_domain_schemas, get_domain_type_meta_from_cache, DomainTypeMeta},
 		query::{
 			ActedOnBehalfOfRef, ActivityAndReferences, ActivityAssociationRef, AgentAndReferences,
-			AgentAttributionRef, DerivationRef, EntityAndReferences, EntityAttributionRef,
+			AgentAttributionRef, AgentInteraction, DerivationRef, EntityAndReferences,
+			EntityAttributionRef,
 		},
 	};
 
@@ -722,9 +737,20 @@ mod tests {
 		let dispatch = api.api_dispatch().clone();
 		let domain = domain.clone();
 		tokio::spawn(async move {
-			super::run_flight_service(&domain, &pool, &dispatch, &vec![addr], 10)
-				.await
-				.unwrap();
+			super::run_flight_service(
+				&domain,
+				&pool,
+				&dispatch,
+				EndpointSecurityConfiguration::new(
+					TokenChecker::new(None, None, 30),
+					HashMap::default(),
+					true,
+				),
+				&vec![addr],
+				10,
+			)
+			.await
+			.unwrap();
 		});
 
 		tokio::time::sleep(Duration::from_secs(5)).await;
@@ -822,41 +848,41 @@ roles:
 				],
 				was_derived_from: vec![
 					DerivationRef {
-						target: format!("entity-d-{}", i),
+						source: format!("entity-d-{}", i),
 						activity: format!("activity-d-{}", i),
 					},
 					DerivationRef {
-						target: format!("entity-d-{}", i),
+						source: format!("entity-d-{}", i),
 						activity: format!("activity-d-{}", i),
 					},
 				],
 				was_quoted_from: vec![
 					DerivationRef {
-						target: format!("entity-q-{}", i),
+						source: format!("entity-q-{}", i),
 						activity: format!("activity-q-{}", i),
 					},
 					DerivationRef {
-						target: format!("entity-q-{}", i),
+						source: format!("entity-q-{}", i),
 						activity: format!("activity-q-{}", i),
 					},
 				],
 				was_revision_of: vec![
 					DerivationRef {
-						target: format!("entity-r-{}", i),
+						source: format!("entity-r-{}", i),
 						activity: format!("activity-r-{}", i),
 					},
 					DerivationRef {
-						target: format!("entity-r-{}", i),
+						source: format!("entity-r-{}", i),
 						activity: format!("activity-r-{}", i),
 					},
 				],
 				had_primary_source: vec![
 					DerivationRef {
-						target: format!("entity-ps-{}", i),
+						source: format!("entity-ps-{}", i),
 						activity: format!("activity-ps-{}", i),
 					},
 					DerivationRef {
-						target: format!("entity-ps-{}", i),
+						source: format!("entity-ps-{}", i),
 						activity: format!("activity-ps-{}", i),
 					},
 				],
@@ -885,10 +911,14 @@ roles:
 				generated: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
 				was_informed_by: vec![format!("activity-{}", i), format!("activity-{}", i + 1)],
 				was_associated_with: vec![ActivityAssociationRef {
-					responsible_agent: format!("agent-{}", i),
-					responsible_role: Some("CERTIFIER".to_string()),
-					delegate_agent: Some(format!("agent-{}", i + 1)),
-					delegate_role: Some("MANUFACTURER".to_string()),
+					responsible: AgentInteraction {
+						agent: format!("agent-{}", i),
+						role: Some("ROLE_TYPE".to_string()),
+					},
+					delegated: vec![AgentInteraction {
+						agent: format!("delegated-agent-{}", i),
+						role: Some("DELEGATED_ROLE".to_string()),
+					}],
 				}],
 				used: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
 			};
@@ -913,12 +943,12 @@ roles:
 				attributes: create_attributes(meta.typ.as_deref(), &attributes),
 				acted_on_behalf_of: vec![ActedOnBehalfOfRef {
 					agent: format!("agent-{}", i),
-					role: Some("CERTIFIER".to_string()),
-					activity: Some(format!("activity-{}", i)),
+					role: Some("DELEGATED_CERTIFIER".to_string()),
+					activity: format!("activity-{}", i),
 				}],
 				was_attributed_to: vec![AgentAttributionRef {
 					entity: format!("entity-{}", i),
-					role: Some("CERTIFIER".to_string()),
+					role: Some("UNSPECIFIED_INTERACTION".to_string()),
 				}],
 			};
 			agents.push(agent);
@@ -1118,7 +1148,7 @@ roles:
 		insta::assert_debug_snapshot!(flights, @r###"
   [
       FlightInfo {
-          schema: b"\xff\xff\xff\xff\xb8\x03\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\t\0\0\0P\x03\0\0\x0c\x03\0\0\xe4\x02\0\0\xa0\x02\0\0T\x02\0\0\xfc\x01\0\0\xa0\x01\0\0@\x01\0\0\x04\0\0\0\xe4\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x10\x01\0\0\x01\0\0\0\x08\0\0\0\xd8\xfc\xff\xff\x04\xfd\xff\xff$\0\0\0\x0c\0\0\0\0\0\0\r\xe4\0\0\0\x04\0\0\0\xa8\0\0\0p\0\0\0<\0\0\0\x08\0\0\0\x04\xfd\xff\xff\xd4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0 \xfd\xff\xff\r\0\0\0delegate_role\0\0\0\x04\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0P\xfd\xff\xff\x0e\0\0\0delegate_agent\0\04\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x80\xfd\xff\xff\x10\0\0\0responsible_role\0\0\0\0\xc4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb4\xfd\xff\xff\x11\0\0\0responsible_agent\0\0\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\x1c\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x10\xfe\xff\xff<\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0,\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0\x1c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0l\xfe\xff\xff\x98\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\0t\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xc4\xfe\xff\xff\xf0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xe0\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\xc8\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xb8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0",
+          schema: b"\xff\xff\xff\xff8\x04\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\t\0\0\0\xb4\x03\0\0p\x03\0\0H\x03\0\0\x04\x03\0\0\xb8\x02\0\0`\x02\0\0\x04\x02\0\0\xa4\x01\0\0\x04\0\0\0\x80\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0ct\x01\0\0\x01\0\0\0\x08\0\0\0t\xfc\xff\xffD\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\rH\x01\0\0\x02\0\0\0\xbc\0\0\0\x08\0\0\0\x98\xfc\xff\xff\xc4\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0\xb8\xfc\xff\xff\x88\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0\xdc\xfc\xff\xff\xac\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\xf8\xfc\xff\xff\x04\0\0\0role\0\0\0\00\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0 \xfd\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\t\0\0\0delegated\0\0\0t\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfd\xff\xff<\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfd\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfd\xff\xff\x05\0\0\0agent\0\0\0\x0b\0\0\0responsible\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\x1c\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x10\xfe\xff\xff<\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0,\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0x\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0l\xfe\xff\xff\x98\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\0\xd0\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xc4\xfe\xff\xff\xf0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xe0\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\xc8\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xb8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
           flight_descriptor: Some(
               FlightDescriptor {
                   r#type: Path,
@@ -1135,7 +1165,7 @@ roles:
           ordered: false,
       },
       FlightInfo {
-          schema: b"\xff\xff\xff\xff\xf8\x03\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\x88\x03\0\0D\x03\0\0\x1c\x03\0\0\xe4\x02\0\0\x90\x02\0\0T\x02\0\0\xfc\x01\0\0\xa0\x01\0\0@\x01\0\0\x04\0\0\0\xb0\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x10\x01\0\0\x01\0\0\0\x08\0\0\0\xa4\xfc\xff\xff\xd0\xfc\xff\xff$\0\0\0\x0c\0\0\0\0\0\0\r\xe4\0\0\0\x04\0\0\0\xa8\0\0\0p\0\0\0<\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\x94\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\xec\xfc\xff\xff\r\0\0\0delegate_role\0\0\0\xc4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x1c\xfd\xff\xff\x0e\0\0\0delegate_agent\0\0\xf4\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0L\xfd\xff\xff\x10\0\0\0responsible_role\0\0\0\0\x90\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x80\xfd\xff\xff\x11\0\0\0responsible_agent\0\0\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\xe8\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xdc\xfd\xff\xff\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0\xdc\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\08\xfe\xff\xffd\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0T\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\04\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x90\xfe\xff\xff\xbc\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xac\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\x88\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xc8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\xc0\xff\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0h\xff\xff\xff\x10\0\0\0batchIDAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+          schema: b"\xff\xff\xff\xffx\x04\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xec\x03\0\0\xa8\x03\0\0\x80\x03\0\0H\x03\0\0\xf4\x02\0\0\xb8\x02\0\0`\x02\0\0\x04\x02\0\0\xa4\x01\0\0\x04\0\0\0L\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0ct\x01\0\0\x01\0\0\0\x08\0\0\0@\xfc\xff\xff\x04\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\rH\x01\0\0\x02\0\0\0\xbc\0\0\0\x08\0\0\0d\xfc\xff\xff\x90\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0\x84\xfc\xff\xffH\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0\xa8\xfc\xff\xffl\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\xc4\xfc\xff\xff\x04\0\0\0role\0\0\0\0\xfc\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xec\xfc\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\t\0\0\0delegated\0\0\0@\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\08\xfd\xff\xff\xfc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0T\xfd\xff\xff\x04\0\0\0role\0\0\0\0\x8c\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0|\xfd\xff\xff\x05\0\0\0agent\0\0\0\x0b\0\0\0responsible\0\x04\0\0\0item\0\0\0\0\x13\0\0\0was_associated_with\0\xe8\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xdc\xfd\xff\xff\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_informed_by\0D\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\08\xfe\xff\xffd\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0T\xfe\xff\xff\x04\0\0\0item\0\0\0\0\t\0\0\0generated\0\0\0\x9c\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\x90\xfe\xff\xff\xbc\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xac\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x04\0\0\0used\0\0\0\0\x88\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\n\x1c\0\0\0\0\0\0\0\xc8\xff\xff\xff\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x05\0\0\0ended\0\0\0\xc0\xff\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\x01\n$\0\0\0\0\0\0\0\x08\0\x0c\0\n\0\x04\0\x08\0\0\0\x08\0\0\0\0\0\x03\0\x03\0\0\0UTC\0\x07\0\0\0started\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0h\xff\xff\xff\x10\0\0\0batchIDAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
           flight_descriptor: Some(
               FlightDescriptor {
                   r#type: Path,
@@ -1177,7 +1207,7 @@ roles:
           ordered: false,
       },
       FlightInfo {
-          schema: b"\xff\xff\xff\xff8\x02\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\x07\0\0\0\xbc\x01\0\0x\x01\0\0P\x01\0\0\x14\x01\0\0\xcc\0\0\0h\0\0\0\x04\0\0\0p\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0d\xfe\xff\xff\x90\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x80\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0l\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\x01\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\xc4\xfe\xff\xff\xf0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xe0\xfe\xff\xff\x04\0\0\0item\0\0\0\0\x12\0\0\0acted_on_behalf_of\0\0\xcc\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0 \xff\xff\xff\x11\0\0\0locationAttribute\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0d\xff\xff\xff\x14\0\0\0companyNameAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+          schema: b"\xff\xff\xff\xff8\x03\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\x07\0\0\0\x9c\x02\0\0X\x02\0\00\x02\0\0\xf4\x01\0\0\xac\x01\0\0\xc0\0\0\0\x04\0\0\0\x90\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0\x84\xfd\xff\xff\xb0\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0\xa8\xfd\xff\xffp\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\xc4\xfd\xff\xff\x04\0\0\0role\0\0\0\0\xfc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xec\xfd\xff\xff\x06\0\0\0entity\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0H\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\xc0\0\0\0\x01\0\0\0\x08\0\0\0<\xfe\xff\xffh\xfe\xff\xff \0\0\0\x0c\0\0\0\0\0\0\r\x94\0\0\0\x03\0\0\0d\0\0\04\0\0\0\x08\0\0\0d\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x80\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xb8\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa8\xfe\xff\xff\x08\0\0\0activity\0\0\0\0\xe4\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xd4\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0acted_on_behalf_of\0\0\xcc\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0 \xff\xff\xff\x11\0\0\0locationAttribute\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0d\xff\xff\xff\x14\0\0\0companyNameAttribute\0\0\0\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
           flight_descriptor: Some(
               FlightDescriptor {
                   r#type: Path,
@@ -1219,7 +1249,7 @@ roles:
           ordered: false,
       },
       FlightInfo {
-          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0certIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
+          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0certIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
           flight_descriptor: Some(
               FlightDescriptor {
                   r#type: Path,
@@ -1261,7 +1291,7 @@ roles:
           ordered: false,
       },
       FlightInfo {
-          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0target\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0partIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
+          schema: b"\xff\xff\xff\xff8\x05\0\0\x10\0\0\0\0\0\n\0\x0c\0\n\0\t\0\x04\0\n\0\0\0\x10\0\0\0\0\x01\x04\0\x08\0\x08\0\0\0\x04\0\x08\0\0\0\x04\0\0\0\n\0\0\0\xcc\x04\0\0\x88\x04\0\0`\x04\0\0,\x04\0\0\xb8\x03\0\0\xfc\x02\0\0<\x02\0\0|\x01\0\0\xc0\0\0\0\x04\0\0\0l\xfb\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0`\xfb\xff\xff\x8c\xfb\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\x84\xfb\xff\xff\xb0\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xa0\xfb\xff\xff\x08\0\0\0activity\0\0\0\0\xdc\xfb\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfb\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_revision_of\0$\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x18\xfc\xff\xffD\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0<\xfc\xff\xffh\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0X\xfc\xff\xff\x08\0\0\0activity\0\0\0\0\x94\xfc\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x84\xfc\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x0f\0\0\0was_quoted_from\0\xdc\xfc\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\xd0\xfc\xff\xff\xfc\xfc\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xf4\xfc\xff\xff \xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x10\xfd\xff\xff\x08\0\0\0activity\0\0\0\0L\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0<\xfd\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x12\0\0\0had_primary_source\0\0\x98\xfd\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x94\0\0\0\x01\0\0\0\x08\0\0\0\x8c\xfd\xff\xff\xb8\xfd\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rh\0\0\0\x02\0\0\08\0\0\0\x08\0\0\0\xb0\xfd\xff\xff\xdc\xfd\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xcc\xfd\xff\xff\x08\0\0\0activity\0\0\0\0\x08\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xf8\xfd\xff\xff\x06\0\0\0source\0\0\x04\0\0\0item\0\0\0\0\x10\0\0\0was_derived_from\0\0\0\0T\xfe\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c\x90\0\0\0\x01\0\0\0\x08\0\0\0H\xfe\xff\xfft\xfe\xff\xff\x1c\0\0\0\x0c\0\0\0\0\0\0\rd\0\0\0\x02\0\0\04\0\0\0\x08\0\0\0l\xfe\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0\x88\xfe\xff\xff\x04\0\0\0role\0\0\0\0\xc0\xfe\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xb0\xfe\xff\xff\x05\0\0\0agent\0\0\0\x04\0\0\0item\0\0\0\0\x11\0\0\0was_attributed_to\0\0\0\x0c\xff\xff\xff\x18\0\0\0\x0c\0\0\0\0\0\0\x0c8\0\0\0\x01\0\0\0\x08\0\0\0\0\xff\xff\xff,\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x1c\xff\xff\xff\x04\0\0\0item\0\0\0\0\x10\0\0\0was_generated_by\0\0\0\0\x10\0\x14\0\x10\0\x0e\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x14\0\0\0\x0c\0\0\0\0\0\x01\x05\x0c\0\0\0\0\0\0\0l\xff\xff\xff\x0f\0\0\0partIDAttribute\0\xac\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\x9c\xff\xff\xff\x02\0\0\0id\0\0\xd0\xff\xff\xff\x14\0\0\0\x0c\0\0\0\0\0\0\x05\x0c\0\0\0\0\0\0\0\xc0\xff\xff\xff\x0e\0\0\0namespace_uuid\0\0\x10\0\x14\0\x10\0\0\0\x0f\0\x04\0\0\0\x08\0\x10\0\0\0\x18\0\0\0\x0c\0\0\0\0\0\0\x05\x10\0\0\0\0\0\0\0\x04\0\x04\0\x04\0\0\0\x0e\0\0\0namespace_name\0\0\0\0\0\0\0\0\0\0",
           flight_descriptor: Some(
               FlightDescriptor {
                   r#type: Path,
@@ -1327,7 +1357,15 @@ roles:
                   String("entity-0"),
                   String("entity-1"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-0"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1344,7 +1382,15 @@ roles:
                   String("entity-1"),
                   String("entity-2"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-1"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1361,7 +1407,15 @@ roles:
                   String("entity-2"),
                   String("entity-3"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-2"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1378,7 +1432,15 @@ roles:
                   String("entity-3"),
                   String("entity-4"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-3"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1395,7 +1457,15 @@ roles:
                   String("entity-4"),
                   String("entity-5"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-4"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1412,7 +1482,15 @@ roles:
                   String("entity-5"),
                   String("entity-6"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-5"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1429,7 +1507,15 @@ roles:
                   String("entity-6"),
                   String("entity-7"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-6"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
           {
@@ -1446,72 +1532,173 @@ roles:
                   String("entity-7"),
                   String("entity-8"),
               ],
-              "was_associated_with": Array [],
+              "was_associated_with": Array [
+                  Object {
+                      "delegated": Array [],
+                      "responsible": Object {
+                          "agent": String("agent-7"),
+                          "role": String("ROLE_TYPE"),
+                      },
+                  },
+              ],
               "was_informed_by": Array [],
           },
       ],
       [
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-0"),
+                      "agent": String("agent-0"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-0"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-0"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-1"),
+                      "agent": String("agent-1"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-1"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-1"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-2"),
+                      "agent": String("agent-2"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-2"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-2"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-3"),
+                      "agent": String("agent-3"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-3"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-3"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-4"),
+                      "agent": String("agent-4"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-4"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-4"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-5"),
+                      "agent": String("agent-5"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-5"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-5"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-6"),
+                      "agent": String("agent-6"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-6"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-6"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
           {
-              "acted_on_behalf_of": Array [],
+              "acted_on_behalf_of": Array [
+                  Object {
+                      "activity": String("activity-7"),
+                      "agent": String("agent-7"),
+                      "role": String("DELEGATED_CERTIFIER"),
+                  },
+              ],
               "id": String("ContractorAgent-7"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
-              "was_attributed_to": Array [],
+              "was_attributed_to": Array [
+                  Object {
+                      "entity": String("entity-7"),
+                      "role": String("UNSPECIFIED_INTERACTION"),
+                  },
+              ],
           },
       ],
       [
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-0"),
+                      "source": String("CertificateEntity-0"),
+                  },
+              ],
               "id": String("CertificateEntity-0"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1521,17 +1708,37 @@ roles:
                       "role": String("CERTIFIER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-0"),
+                      "source": String("CertificateEntity-0"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-0"),
                   String("activity-1"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-0"),
+                      "source": String("CertificateEntity-0"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-0"),
+                      "source": String("CertificateEntity-0"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-1"),
+                      "source": String("CertificateEntity-1"),
+                  },
+              ],
               "id": String("CertificateEntity-1"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1545,17 +1752,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-1"),
+                      "source": String("CertificateEntity-1"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-1"),
                   String("activity-2"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-1"),
+                      "source": String("CertificateEntity-1"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-1"),
+                      "source": String("CertificateEntity-1"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-2"),
+                      "source": String("CertificateEntity-2"),
+                  },
+              ],
               "id": String("CertificateEntity-2"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1569,17 +1796,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-2"),
+                      "source": String("CertificateEntity-2"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-2"),
                   String("activity-3"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-2"),
+                      "source": String("CertificateEntity-2"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-2"),
+                      "source": String("CertificateEntity-2"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-3"),
+                      "source": String("CertificateEntity-3"),
+                  },
+              ],
               "id": String("CertificateEntity-3"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1593,17 +1840,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-3"),
+                      "source": String("CertificateEntity-3"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-3"),
                   String("activity-4"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-3"),
+                      "source": String("CertificateEntity-3"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-3"),
+                      "source": String("CertificateEntity-3"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-4"),
+                      "source": String("CertificateEntity-4"),
+                  },
+              ],
               "id": String("CertificateEntity-4"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1617,17 +1884,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-4"),
+                      "source": String("CertificateEntity-4"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-4"),
                   String("activity-5"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-4"),
+                      "source": String("CertificateEntity-4"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-4"),
+                      "source": String("CertificateEntity-4"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-5"),
+                      "source": String("CertificateEntity-5"),
+                  },
+              ],
               "id": String("CertificateEntity-5"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1641,17 +1928,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-5"),
+                      "source": String("CertificateEntity-5"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-5"),
                   String("activity-6"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-5"),
+                      "source": String("CertificateEntity-5"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-5"),
+                      "source": String("CertificateEntity-5"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-6"),
+                      "source": String("CertificateEntity-6"),
+                  },
+              ],
               "id": String("CertificateEntity-6"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1665,17 +1972,37 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-6"),
+                      "source": String("CertificateEntity-6"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-6"),
                   String("activity-7"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-6"),
+                      "source": String("CertificateEntity-6"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-6"),
+                      "source": String("CertificateEntity-6"),
+                  },
+              ],
           },
           {
               "certIDAttribute": String("certIDAttribute-value"),
-              "had_primary_source": Array [],
+              "had_primary_source": Array [
+                  Object {
+                      "activity": String("activity-ps-7"),
+                      "source": String("CertificateEntity-7"),
+                  },
+              ],
               "id": String("CertificateEntity-7"),
               "namespace_name": String("default"),
               "namespace_uuid": String("00000000-0000-0000-0000-000000000000"),
@@ -1689,13 +2016,28 @@ roles:
                       "role": String("MANUFACTURER"),
                   },
               ],
-              "was_derived_from": Array [],
+              "was_derived_from": Array [
+                  Object {
+                      "activity": String("activity-d-7"),
+                      "source": String("CertificateEntity-7"),
+                  },
+              ],
               "was_generated_by": Array [
                   String("activity-7"),
                   String("activity-8"),
               ],
-              "was_quoted_from": Array [],
-              "was_revision_of": Array [],
+              "was_quoted_from": Array [
+                  Object {
+                      "activity": String("activity-q-7"),
+                      "source": String("CertificateEntity-7"),
+                  },
+              ],
+              "was_revision_of": Array [
+                  Object {
+                      "activity": String("activity-r-7"),
+                      "source": String("CertificateEntity-7"),
+                  },
+              ],
           },
       ],
   ]

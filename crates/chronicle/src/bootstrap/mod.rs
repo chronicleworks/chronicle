@@ -1,7 +1,10 @@
 mod cli;
 pub mod opa;
 use api::{
-	chronicle_graphql::{ChronicleApiServer, ChronicleGraphQl, JwksUri, SecurityConf, UserInfoUri},
+	chronicle_graphql::{
+		ChronicleApiServer, ChronicleGraphQl, EndpointSecurityConfiguration, JwksUri, SecurityConf,
+		UserInfoUri,
+	},
 	commands::ApiResponse,
 	Api, ApiDispatch, ApiError, StoreError, UuidGen,
 };
@@ -137,24 +140,31 @@ pub async fn arrow_api_server(
 	api: &ApiDispatch,
 	pool: &ConnectionPool,
 	addresses: Option<Vec<SocketAddr>>,
-	_security_conf: &SecurityConf,
+	security_conf: EndpointSecurityConfiguration,
 	record_batch_size: usize,
 	operation_batch_size: usize,
 ) -> Result<Option<impl Future<Output = Result<(), ApiError>> + Send>, ApiError> {
 	tracing::info!(
 		addresses = ?addresses,
-		security_conf = ?_security_conf,
+		allow_anonymous = ?security_conf.allow_anonymous,
+		jwt_must_claim = ?security_conf.must_claim,
 		record_batch_size,
 		operation_batch_size,
 		"Starting arrow flight with the provided configuration"
 	);
 
 	match addresses {
-		Some(addresses) =>
-			chronicle_arrow::run_flight_service(domain, pool, api, &addresses, record_batch_size)
-				.await
-				.map_err(|e| ApiError::ArrowService(e.into()))
-				.map(|_| Some(futures::future::ready(Ok(())))),
+		Some(addresses) => chronicle_arrow::run_flight_service(
+			domain,
+			pool,
+			api,
+			security_conf,
+			&addresses,
+			record_batch_size,
+		)
+		.await
+		.map_err(|e| ApiError::ArrowService(e.into()))
+		.map(|_| Some(futures::future::ready(Ok(())))),
 		None => Ok(None),
 	}
 }
@@ -553,13 +563,20 @@ where
 			jwks_uri,
 			userinfo_uri,
 			id_claims,
-			jwt_must_claim,
+			jwt_must_claim.clone(),
 			allow_anonymous,
 			opa.context().clone(),
 		);
 
-		let arrow =
-			arrow_api_server(domain, &api, &pool, arrow_interface, &security_conf, 1000, 100);
+		let arrow = arrow_api_server(
+			domain,
+			&api,
+			&pool,
+			arrow_interface,
+			security_conf.as_endpoint_conf(30),
+			1000,
+			100,
+		);
 
 		let serve_graphql = endpoints.contains(&"graphql".to_string());
 		let serve_data = endpoints.contains(&"data".to_string());

@@ -10,6 +10,7 @@ use common::{
 	prov::{ChronicleTransactionId, ProvModel},
 };
 
+use pallet_chronicle::NamespaceId;
 use uuid::Uuid;
 
 use chronicle_signing::{
@@ -152,7 +153,10 @@ pub async fn test_api<'a>() -> TestDispatch<'a> {
 		embed_substrate.clone(),
 		SameUuid,
 		secrets,
-		vec![],
+		vec![NamespaceId::from_external_id(
+			"testns",
+			Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+		)],
 		None,
 		liveness_check_interval,
 	)

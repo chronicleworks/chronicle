@@ -8,6 +8,7 @@ use async_graphql_poem::{
 	GraphQLWebSocket,
 };
 
+use crate::Store;
 use common::{
 	identity::{AuthId, IdentityError, JwtClaims, OpaData, SignedIdentity},
 	ledger::{SubmissionError, SubmissionStage},
@@ -56,7 +57,7 @@ use crate::{ApiDispatch, ApiError, StoreError};
 #[macro_use]
 pub mod activity;
 pub mod agent;
-mod authorization;
+pub mod authorization;
 mod cursor_project;
 pub mod entity;
 pub mod mutation;
@@ -189,19 +190,6 @@ impl ErrorExtensions for GraphQlError {
 				}
 			}
 		})
-	}
-}
-
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct Store {
-	#[derivative(Debug = "ignore")]
-	pub pool: Pool<ConnectionManager<PgConnection>>,
-}
-
-impl Store {
-	pub fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Self {
-		Store { pool }
 	}
 }
 
@@ -453,6 +441,18 @@ impl SecurityConf {
 	) -> Self {
 		Self { jwks_uri, userinfo_uri, id_claims, jwt_must_claim, allow_anonymous, opa }
 	}
+
+	pub fn as_endpoint_conf(&self, cache_expiry_seconds: u32) -> EndpointSecurityConfiguration {
+		EndpointSecurityConfiguration::new(
+			TokenChecker::new(
+				self.jwks_uri.as_ref(),
+				self.userinfo_uri.as_ref(),
+				cache_expiry_seconds,
+			),
+			self.jwt_must_claim.clone(),
+			self.allow_anonymous,
+		)
+	}
 }
 
 #[async_trait::async_trait]
@@ -576,14 +576,15 @@ async fn execute_opa_check(
 	}
 }
 
-struct EndpointSecurityConfiguration {
+#[derive(Clone)]
+pub struct EndpointSecurityConfiguration {
 	checker: TokenChecker,
-	must_claim: HashMap<String, String>,
-	allow_anonymous: bool,
+	pub must_claim: HashMap<String, String>,
+	pub allow_anonymous: bool,
 }
 
 impl EndpointSecurityConfiguration {
-	fn new(
+	pub fn new(
 		checker: TokenChecker,
 		must_claim: HashMap<String, String>,
 		allow_anonymous: bool,
@@ -984,6 +985,51 @@ async fn await_shutdown() {
 	let _permit = SHUTDOWN_SIGNAL.acquire().await.unwrap();
 }
 
+
+#[derive(Clone)]
+struct DatabaseContext {
+    pool: Pool<ConnectionManager<PgConnection>>,
+}
+
+impl DatabaseContext {
+    fn new(pool: &Pool<ConnectionManager<PgConnection>>) -> Result<Self, StoreError> {
+        Ok(DatabaseContext { pool: pool.clone() })
+    }
+
+    fn connection(&self) -> Result<PooledConnection<ConnectionManager<PgConnection>>, r2d2::Error> {
+        self.pool.get()
+    }
+}
+
+pub fn construct_schema<Query, Mutation, Subscription>(
+	query: Query,
+	mutation: Mutation,
+	subscription: Subscription,
+	claim_parser: Option<AuthFromJwt>,
+	pool: &Pool<ConnectionManager<PgConnection>>,
+	api: &ApiDispatch,
+	opa: ExecutorContext,
+) -> Result<Schema<Query, Mutation, Subscription>, StoreError>
+where
+	Query: ObjectType + Copy + 'static,
+	Mutation: ObjectType + Copy + 'static,
+	Subscription: SubscriptionType + 'static,
+{
+	let mut schema = Schema::build(query, mutation, subscription)
+		.extension(OpaCheck { claim_parser: claim_parser.clone() });
+
+	if let Some(claim_parser) = &claim_parser {
+		schema = schema.extension(claim_parser.clone());
+	}
+
+	Ok(schema
+		.data(api.clone())
+		.data(opa.clone())
+		.data(AuthId::anonymous())
+		.data(DatabaseContext::new(pool)?)
+		.finish())
+}
+
 #[async_trait::async_trait]
 impl<Query, Mutation> ChronicleApiServer for ChronicleGraphQl<Query, Mutation>
 where
@@ -1004,19 +1050,16 @@ where
 		let claim_parser = sec
 			.id_claims
 			.map(|id_claims| AuthFromJwt { id_claims, allow_anonymous: sec.allow_anonymous });
-		let mut schema = Schema::build(self.query, self.mutation, Subscription)
-			//TODO: update
-			// .extension(OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")))
-			.extension(OpaCheck { claim_parser: claim_parser.clone() });
-		if let Some(claim_parser) = &claim_parser {
-			schema = schema.extension(claim_parser.clone());
-		}
-		let schema = schema
-			.data(Store::new(pool.clone()))
-			.data(api)
-			.data(sec.opa.clone())
-			.data(AuthId::anonymous())
-			.finish();
+
+		let schema = construct_schema(
+			self.query,
+			self.mutation,
+			Subscription,
+			claim_parser.clone(),
+			&pool,
+			&api,
+			sec.opa.clone(),
+		)?;
 
 		let iri_endpoint = |secconf| IriEndpoint {
 			secconf,

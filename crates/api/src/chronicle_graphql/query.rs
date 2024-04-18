@@ -6,13 +6,15 @@ use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use diesel::{debug_query, pg::Pg, prelude::*};
 use tracing::{debug, instrument};
 
+use crate::chronicle_graphql::DatabaseContext;
+
 use super::{cursor_project::project_to_nodes, GraphQlError, Store, TimelineOrder};
 use chronicle_persistence::{
 	cursor::Cursorize,
 	queryable::{Activity, Agent, Entity},
 	schema::generation,
 };
-use common::prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart};
+use common::{identity::AuthId, prov::{ActivityId, AgentId, DomaintypeId, EntityId, ExternalIdPart}};
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(ctx))]
@@ -35,9 +37,9 @@ pub async fn activity_timeline<'a>(
 		wasinformedby,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 	let ns = namespace.unwrap_or_else(|| "default".into());
 
 	// Default from and to to the maximum possible time range
@@ -139,9 +141,9 @@ pub async fn entities_by_type<'a>(
 ) -> async_graphql::Result<Connection<i32, Entity, EmptyFields, EmptyFields>> {
 	use chronicle_persistence::schema::{entity, namespace::dsl as nsdsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 	let ns = namespace.unwrap_or_else(|| "default".into());
 
 	let sql_query = entity::table
@@ -180,9 +182,9 @@ pub async fn activities_by_type<'a>(
 ) -> async_graphql::Result<Connection<i32, Activity, EmptyFields, EmptyFields>> {
 	use chronicle_persistence::schema::{activity, namespace::dsl as nsdsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 	let ns = namespace.unwrap_or_else(|| "default".into());
 
 	let sql_query =
@@ -220,9 +222,9 @@ pub async fn agents_by_type<'a>(
 ) -> async_graphql::Result<Connection<i32, Agent, EmptyFields, EmptyFields>> {
 	use chronicle_persistence::schema::{agent, namespace::dsl as nsdsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 	let ns = namespace.unwrap_or_else(|| "default".into());
 
 	let sql_query = agent::table
@@ -259,10 +261,10 @@ pub async fn agent_by_id<'a>(
 		namespace::dsl as nsdsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let ns = namespace.unwrap_or_else(|| "default".into());
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(agent::table
 		.inner_join(nsdsl::namespace)
@@ -282,10 +284,10 @@ pub async fn activity_by_id<'a>(
 		namespace::dsl as nsdsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let ns = namespace.unwrap_or_else(|| "default".into());
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(activity::table
 		.inner_join(nsdsl::namespace)
@@ -305,9 +307,9 @@ pub async fn entity_by_id<'a>(
 		namespace::dsl as nsdsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 	let ns = namespace.unwrap_or_else(|| "default".into());
-	let mut connection = store.pool.get()?;
+	let mut connection = store.connection()?;
 
 	Ok(entity::table
 		.inner_join(nsdsl::namespace)

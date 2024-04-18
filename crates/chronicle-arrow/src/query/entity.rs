@@ -67,7 +67,7 @@ pub fn entity_count_by_type(
 
 #[derive(Default, Debug)]
 pub struct DerivationRef {
-	pub target: String,
+	pub source: String,
 	pub activity: String,
 }
 
@@ -237,7 +237,7 @@ fn derivations_to_list_array(
 		.collect();
 
 	let fields = vec![
-		Field::new("target", DataType::Utf8, false),
+		Field::new("source", DataType::Utf8, false),
 		Field::new("activity", DataType::Utf8, false),
 	];
 	let field_builders = vec![
@@ -251,7 +251,7 @@ fn derivations_to_list_array(
 		builder
 			.field_builder::<StringBuilder>(0)
 			.unwrap()
-			.append_value(derivation.target);
+			.append_value(derivation.source);
 		builder
 			.field_builder::<StringBuilder>(1)
 			.unwrap()
@@ -439,7 +439,7 @@ pub fn load_entities_by_type(
 				 (entity_id, activity_external_id, entity_external_id, derivation_type)| {
 					acc.entry((entity_id, derivation_type)).or_default().push(DerivationRef {
 						activity: activity_external_id,
-						target: entity_external_id,
+						source: entity_external_id,
 					});
 					acc
 				},

@@ -1,11 +1,14 @@
 #[cfg(feature = "parity-encoding")]
 use parity_scale_codec::Encode;
 #[cfg(not(feature = "std"))]
-use parity_scale_codec::{alloc::collections::BTreeMap, alloc::string::String, alloc::vec::Vec};
+use parity_scale_codec::{alloc::collections::BTreeMap,alloc::collections::BTreeSet, alloc::string::String, alloc::vec::Vec};
 #[cfg(feature = "parity-encoding")]
 use scale_encode::error::Kind;
 #[cfg(not(feature = "std"))]
 use scale_info::{prelude::borrow::ToOwned, prelude::string::ToString, prelude::*};
+#[cfg(feature = "std")]
+use std::collections::BTreeSet;
+
 
 use serde_json::Value;
 
@@ -150,7 +153,10 @@ pub struct Attributes {
 }
 
 impl Attributes {
-	pub fn new(typ: Option<DomaintypeId>, items: Vec<Attribute>) -> Self {
+	pub fn new(typ: Option<DomaintypeId>, mut items: Vec<Attribute>) -> Self {
+		let mut seen_types = BTreeSet::new();
+		items.retain(|attr| seen_types.insert(attr.typ.clone()));
+		items.sort_by(|a, b| a.typ.cmp(&b.typ));
 		Self { typ, items }
 	}
 
@@ -180,6 +186,12 @@ impl Attributes {
 	}
 
 	pub fn add_item(&mut self, value: Attribute) {
-		self.items.push(value);
+		if !self.items.iter().any(|item| item.typ == value.typ) {
+			if let Some(pos) = self.items.iter().position(|item| item.typ > value.typ) {
+				self.items.insert(pos, value);
+			} else {
+				self.items.push(value);
+			}
+		}
 	}
 }

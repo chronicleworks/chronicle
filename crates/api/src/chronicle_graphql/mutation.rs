@@ -31,9 +31,9 @@ async fn derivation<'a>(
 	used_entity: EntityId,
 	derivation: DerivationType,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".into()).into();
 
@@ -59,9 +59,9 @@ pub async fn agent<'a>(
 	namespace: Option<String>,
 	attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
@@ -85,9 +85,9 @@ pub async fn activity<'a>(
 	namespace: Option<String>,
 	attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
@@ -111,9 +111,9 @@ pub async fn entity<'a>(
 	namespace: Option<String>,
 	attributes: Attributes,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned());
 
@@ -139,9 +139,9 @@ pub async fn acted_on_behalf_of<'a>(
 	activity_id: Option<ActivityId>,
 	role: Option<Role>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -202,9 +202,9 @@ pub async fn start_activity<'a>(
 	agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
 	time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -225,9 +225,9 @@ pub async fn end_activity<'a>(
 	agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
 	time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -248,9 +248,9 @@ pub async fn instant_activity<'a>(
 	agent: Option<AgentId>, // deprecated, slated for removal in CHRON-185
 	time: Option<DateTime<Utc>>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -271,9 +271,9 @@ pub async fn was_associated_with<'a>(
 	activity: ActivityId,
 	role: Option<Role>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -299,9 +299,9 @@ pub async fn was_attributed_to<'a>(
 	id: EntityId,
 	role: Option<Role>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -321,9 +321,9 @@ pub async fn used<'a>(
 	entity: EntityId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -343,9 +343,9 @@ pub async fn was_informed_by<'a>(
 	informing_activity: ActivityId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 
@@ -369,9 +369,9 @@ pub async fn was_generated_by<'a>(
 	entity: EntityId,
 	namespace: Option<String>,
 ) -> async_graphql::Result<Submission> {
-	let api = ctx.data_unchecked::<ApiDispatch>();
+	let api = ctx.data::<ApiDispatch>()?;
 
-	let identity = ctx.data_unchecked::<AuthId>().to_owned();
+	let identity = ctx.data::<AuthId>()?.to_owned();
 
 	let namespace = namespace.unwrap_or_else(|| "default".to_owned()).into();
 

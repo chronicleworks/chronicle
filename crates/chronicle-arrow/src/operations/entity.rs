@@ -44,9 +44,9 @@ fn get_derivation(
 	record_batch: &RecordBatch,
 	row_index: usize,
 ) -> Result<Vec<DerivationRef>, ChronicleArrowError> {
-	Ok(struct_2_list_column(record_batch, column_name, row_index, "target", "activity")?
+	Ok(struct_2_list_column(record_batch, column_name, row_index, "source", "activity")?
 		.into_iter()
-		.map(|(target, activity)| DerivationRef { target, activity })
+		.map(|(target, activity)| DerivationRef { source: target, activity })
 		.collect())
 }
 
@@ -92,8 +92,8 @@ pub fn entity_operations(
 	for was_derived_from_ref in was_derived_from_refs {
 		operations.push(ChronicleOperation::entity_derive(
 			ns.clone(),
+			EntityId::from_external_id(was_derived_from_ref.source),
 			EntityId::from_external_id(id),
-			EntityId::from_external_id(was_derived_from_ref.target),
 			Some(ActivityId::from_external_id(was_derived_from_ref.activity)),
 			DerivationType::None,
 		))
@@ -104,8 +104,8 @@ pub fn entity_operations(
 	for had_primary_source_ref in had_primary_source_refs {
 		operations.push(ChronicleOperation::entity_derive(
 			ns.clone(),
+			EntityId::from_external_id(had_primary_source_ref.source),
 			EntityId::from_external_id(id),
-			EntityId::from_external_id(had_primary_source_ref.target),
 			Some(ActivityId::from_external_id(had_primary_source_ref.activity)),
 			DerivationType::PrimarySource,
 		))
@@ -116,8 +116,8 @@ pub fn entity_operations(
 	for was_quoted_from_ref in was_quoted_from_refs {
 		operations.push(ChronicleOperation::entity_derive(
 			ns.clone(),
+			EntityId::from_external_id(was_quoted_from_ref.source),
 			EntityId::from_external_id(id),
-			EntityId::from_external_id(was_quoted_from_ref.target),
 			Some(ActivityId::from_external_id(was_quoted_from_ref.activity)),
 			DerivationType::Quotation,
 		))
@@ -128,8 +128,8 @@ pub fn entity_operations(
 	for was_revision_of_ref in was_revision_of_refs {
 		operations.push(ChronicleOperation::entity_derive(
 			ns.clone(),
+			EntityId::from_external_id(was_revision_of_ref.source),
 			EntityId::from_external_id(id),
-			EntityId::from_external_id(was_revision_of_ref.target),
 			Some(ActivityId::from_external_id(was_revision_of_ref.activity)),
 			DerivationType::Revision,
 		))

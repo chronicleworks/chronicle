@@ -12,6 +12,8 @@ use diesel::{
 
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::alloc::string::String;
+#[cfg(not(feature = "std"))]
+use scale_info::prelude::{vec::Vec,vec};
 
 use crate::attributes::Attributes;
 

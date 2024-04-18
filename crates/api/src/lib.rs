@@ -2,6 +2,7 @@
 pub mod chronicle_graphql;
 pub mod commands;
 
+pub use chronicle_persistence::Store;
 use chronicle_signing::{ChronicleKnownKeyNamesSigner, ChronicleSigning, SecretError};
 use chrono::{DateTime, Utc};
 
@@ -28,7 +29,7 @@ use diesel_migrations::MigrationHarness;
 use futures::{select, FutureExt, StreamExt};
 
 pub use chronicle_persistence::StoreError;
-use chronicle_persistence::{Store, MIGRATIONS};
+use chronicle_persistence::MIGRATIONS;
 use diesel::r2d2::Pool;
 use metrics::histogram;
 use metrics_exporter_prometheus::PrometheusBuilder;

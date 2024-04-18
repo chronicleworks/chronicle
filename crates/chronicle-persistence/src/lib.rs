@@ -10,7 +10,6 @@ use common::{
 		ProvModel, Role, Usage,
 	},
 };
-use derivative::*;
 
 use diesel::{
 	prelude::*,
@@ -113,10 +112,8 @@ pub struct ConnectionOptions {
 	pub busy_timeout: Option<Duration>,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug, Clone)]
+#[derive(Clone)]
 pub struct Store {
-	#[derivative(Debug = "ignore")]
 	pool: Pool<ConnectionManager<PgConnection>>,
 }
 
@@ -454,7 +451,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(skip_all)]
 	fn apply_used(
 		&self,
 		connection: &mut PgConnection,
@@ -485,7 +482,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(skip_all)]
 	fn apply_was_informed_by(
 		&self,
 		connection: &mut PgConnection,
@@ -644,7 +641,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(skip_all)]
 	fn apply_was_generated_by(
 		&self,
 		connection: &mut PgConnection,
@@ -714,7 +711,7 @@ impl Store {
 		self.pool.get().map_err(StoreError::DbPool)
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(skip_all)]
 	pub fn get_current_agent(
 		&self,
 		connection: &mut PgConnection,
@@ -726,7 +723,7 @@ impl Store {
 	}
 
 	/// Get the last fully synchronized offset
-	#[instrument]
+	#[instrument(skip_all)]
 	pub fn get_last_block_id(&self) -> Result<Option<BlockId>, StoreError> {
 		use schema::ledgersync::dsl;
 		self.connection()?.build_transaction().run(|connection| {
@@ -744,7 +741,7 @@ impl Store {
 		})
 	}
 
-	#[instrument(skip(connection))]
+	#[instrument(skip_all)]
 	pub fn namespace_by_external_id(
 		&self,
 		connection: &mut PgConnection,
@@ -762,12 +759,12 @@ impl Store {
 		Ok((NamespaceId::from_external_id(ns.1, Uuid::from_str(&ns.2)?), ns.0))
 	}
 
-	#[instrument]
+	#[instrument(skip_all)]
 	pub fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Result<Self, StoreError> {
 		Ok(Store { pool })
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_agent(
 		&self,
 		agent: query::Agent,
@@ -842,7 +839,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_activity(
 		&self,
 		activity: query::Activity,
@@ -935,7 +932,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_entity(
 		&self,
 		entity: query::Entity,
@@ -1031,7 +1028,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_namespace(
 		&self,
 		connection: &mut PgConnection,
@@ -1069,7 +1066,7 @@ impl Store {
 	}
 
 	/// Set the last fully synchronized offset
-	#[instrument(level = "info")]
+	#[instrument(skip(self),level = "info")]
 	pub fn set_last_block_id(
 		&self,
 		block_id: &BlockId,
@@ -1092,7 +1089,7 @@ impl Store {
 		})?)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn use_agent(
 		&self,
 		connection: &mut PgConnection,
@@ -1116,7 +1113,7 @@ impl Store {
 		Ok(())
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_agent_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1137,7 +1134,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn apply_prov_model_for_agent_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1159,7 +1156,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_activity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1180,7 +1177,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn apply_prov_model_for_activity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1202,7 +1199,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_entity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1223,7 +1220,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn apply_prov_model_for_entity_id(
 		&self,
 		connection: &mut PgConnection,
@@ -1245,7 +1242,7 @@ impl Store {
 		Ok(model)
 	}
 
-	#[instrument(level = "trace", skip(connection))]
+#[instrument(skip_all)]
 	pub fn prov_model_for_usage(
 		&self,
 		connection: &mut PgConnection,

@@ -1,16 +1,18 @@
 use arrow_array::{Array, RecordBatch};
-
 use common::{
 	attributes::Attributes,
 	prov::{
 		operations::{ChronicleOperation, SetAttributes},
-		ActivityId, EntityId, NamespaceId,
+		ActivityId, AgentId, EntityId, NamespaceId, Role,
 	},
 };
 
 use futures::StreamExt;
 
-use crate::ChronicleArrowError;
+use crate::{
+	query::{ActivityAssociationRef, AgentInteraction},
+	ChronicleArrowError,
+};
 
 use super::{string_list_column, with_implied};
 
@@ -70,6 +72,100 @@ fn get_ended(
 	row_index: usize,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ChronicleArrowError> {
 	opt_time_column(record_batch, "ended", row_index)
+}
+
+fn get_was_associated_with(
+	record_batch: &RecordBatch,
+	row_index: usize,
+) -> Result<Vec<ActivityAssociationRef>, ChronicleArrowError> {
+	use arrow_array::{ListArray, StringArray, StructArray};
+
+	let column_index = record_batch
+		.schema()
+		.index_of("was_associated_with")
+		.map_err(|_| ChronicleArrowError::MissingColumn("was_associated_with".to_string()))?;
+	let column = record_batch.column(column_index);
+	let list_array = column
+		.as_any()
+		.downcast_ref::<ListArray>()
+		.ok_or(ChronicleArrowError::ColumnTypeMismatch("Expected ListArray".to_string()))?;
+	let binding = list_array.value(row_index);
+	let struct_array = binding
+		.as_any()
+		.downcast_ref::<StructArray>()
+		.ok_or(ChronicleArrowError::ColumnTypeMismatch("Expected StructArray".to_string()))?;
+
+	let mut associations = Vec::new();
+	for i in 0..struct_array.len() {
+		let responsible_struct_array =
+			struct_array.column(0).as_any().downcast_ref::<StructArray>().ok_or(
+				ChronicleArrowError::ColumnTypeMismatch(
+					"Expected StructArray for responsible".to_string(),
+				),
+			)?;
+
+		let agent_array = responsible_struct_array
+			.column(0)
+			.as_any()
+			.downcast_ref::<StringArray>()
+			.ok_or(ChronicleArrowError::ColumnTypeMismatch(
+				"Expected StringArray for agent".to_string(),
+			))?;
+		let role_array = responsible_struct_array
+			.column(1)
+			.as_any()
+			.downcast_ref::<StringArray>()
+			.ok_or(ChronicleArrowError::ColumnTypeMismatch(
+				"Expected StringArray for role".to_string(),
+			))?;
+
+		let agent = agent_array.value(i).to_string();
+		let role = Some(role_array.value(i).to_string());
+
+		// Handling the delegated field, which is a ListArray of StructArray
+		let delegated_list_array =
+			struct_array.column(1).as_any().downcast_ref::<ListArray>().ok_or(
+				ChronicleArrowError::ColumnTypeMismatch(
+					"Expected ListArray for delegated".to_string(),
+				),
+			)?;
+		let delegated_binding = delegated_list_array.value(i);
+		let delegated_struct_array = delegated_binding
+			.as_any()
+			.downcast_ref::<StructArray>()
+			.ok_or(ChronicleArrowError::ColumnTypeMismatch(
+				"Expected StructArray for delegated".to_string(),
+			))?;
+
+		let mut delegated_agents = Vec::new();
+		for j in 0..delegated_struct_array.len() {
+			let delegated_agent_array =
+				delegated_struct_array.column(0).as_any().downcast_ref::<StringArray>().ok_or(
+					ChronicleArrowError::ColumnTypeMismatch(
+						"Expected StringArray for delegated agent".to_string(),
+					),
+				)?;
+			let delegated_role_array =
+				delegated_struct_array.column(1).as_any().downcast_ref::<StringArray>().ok_or(
+					ChronicleArrowError::ColumnTypeMismatch(
+						"Expected StringArray for delegated role".to_string(),
+					),
+				)?;
+
+			let delegated_agent = delegated_agent_array.value(j).to_string();
+			let delegated_role = Some(delegated_role_array.value(j).to_string());
+
+			delegated_agents
+				.push(AgentInteraction { agent: delegated_agent, role: delegated_role });
+		}
+
+		associations.push(ActivityAssociationRef {
+			responsible: AgentInteraction { agent, role },
+			delegated: delegated_agents,
+		});
+	}
+
+	Ok(associations)
 }
 
 pub fn activity_operations(
@@ -136,6 +232,27 @@ pub fn activity_operations(
 			ActivityId::from_external_id(id),
 			ended,
 		));
+	}
+
+	let was_associated_with_refs = get_was_associated_with(record_batch, row_index)?;
+
+	for association_ref in was_associated_with_refs {
+		operations.push(ChronicleOperation::was_associated_with(
+			ns.clone(),
+			ActivityId::from_external_id(id),
+			AgentId::from_external_id(&association_ref.responsible.agent),
+			association_ref.responsible.role.map(Role),
+		));
+
+		for delegated in &association_ref.delegated {
+			operations.push(ChronicleOperation::agent_acts_on_behalf_of(
+				ns.clone(),
+				AgentId::from_external_id(id),
+				AgentId::from_external_id(&association_ref.responsible.agent),
+				Some(ActivityId::from_external_id(id)),
+				delegated.role.as_ref().map(|role| Role(role.clone())),
+			));
+		}
 	}
 
 	Ok(with_implied(operations))

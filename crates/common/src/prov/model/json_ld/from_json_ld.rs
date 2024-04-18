@@ -482,107 +482,93 @@ impl ProvModel {
 		Ok(())
 	}
 }
-
 trait Operation {
-	fn namespace(&self) -> NamespaceId;
-	fn agent(&self) -> AgentId;
-	fn delegate(&self) -> AgentId;
-	fn responsible(&self) -> AgentId;
-	fn optional_activity(&self) -> Option<ActivityId>;
-	fn activity(&self) -> ActivityId;
+	fn namespace(&self) -> Option<NamespaceId>;
+	fn agent(&self) -> Option<AgentId>;
+	fn delegate(&self) -> Option<AgentId>;
+	fn responsible(&self) -> Option<AgentId>;
+
+	fn activity(&self) -> Option<ActivityId>;
 	fn optional_role(&self) -> Option<Role>;
-	fn start_time(&self) -> String;
+	fn start_time(&self) -> Option<String>;
 	fn locator(&self) -> Option<String>;
-	fn end_time(&self) -> String;
-	fn entity(&self) -> EntityId;
-	fn used_entity(&self) -> EntityId;
+	fn end_time(&self) -> Option<String>;
+	fn entity(&self) -> Option<EntityId>;
+	fn used_entity(&self) -> Option<EntityId>;
 	fn derivation(&self) -> DerivationType;
 	fn domain(&self) -> Option<DomaintypeId>;
 	fn attributes(&self) -> Vec<Attribute>;
-	fn informing_activity(&self) -> ActivityId;
+	fn informing_activity(&self) -> Option<ActivityId>;
 }
 
 impl Operation for Node<IriBuf, BlankIdBuf, ()> {
-	fn namespace(&self) -> NamespaceId {
+	fn namespace(&self) -> Option<NamespaceId> {
 		let mut uuid_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::NamespaceUuid));
-		let uuid = uuid_objects.next().unwrap().as_str().unwrap();
+		let uuid = uuid_objects.next()?.as_str()?;
 		let mut name_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::NamespaceName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		let uuid = uuid::Uuid::parse_str(uuid).unwrap();
-		NamespaceId::from_external_id(external_id, uuid)
+		let external_id = name_objects.next()?.as_str()?;
+		let uuid = uuid::Uuid::parse_str(uuid).ok()?;
+		Some(NamespaceId::from_external_id(external_id, uuid))
 	}
 
-	fn agent(&self) -> AgentId {
+	fn agent(&self) -> Option<AgentId> {
 		let mut name_objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::AgentName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		AgentId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(AgentId::from_external_id(external_id))
 	}
 
-	fn delegate(&self) -> AgentId {
+	fn delegate(&self) -> Option<AgentId> {
 		let mut name_objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::DelegateId));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		AgentId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(AgentId::from_external_id(external_id))
 	}
 
-	fn optional_activity(&self) -> Option<ActivityId> {
-		let mut name_objects =
-			self.get(&id_from_iri_string(vocab::ChronicleOperation::ActivityName));
-		let object = match name_objects.next() {
-			Some(object) => object,
-			None => return None,
-		};
-		Some(ActivityId::from_external_id(object.as_str().unwrap()))
-	}
-
-	fn start_time(&self) -> String {
+	fn start_time(&self) -> Option<String> {
 		let mut objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::StartActivityTime));
-		let time = objects.next().unwrap().as_str().unwrap();
-		time.to_owned()
+		let time = objects.next()?.as_str()?;
+		Some(time.to_owned())
 	}
 
-	fn end_time(&self) -> String {
+	fn end_time(&self) -> Option<String> {
 		let mut objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::EndActivityTime));
-		let time = objects.next().unwrap().as_str().unwrap();
-		time.to_owned()
+		let time = objects.next()?.as_str()?;
+		Some(time.to_owned())
 	}
 
-	fn entity(&self) -> EntityId {
+	fn entity(&self) -> Option<EntityId> {
 		let mut name_objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::EntityName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		EntityId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(EntityId::from_external_id(external_id))
 	}
 
-	fn used_entity(&self) -> EntityId {
+	fn used_entity(&self) -> Option<EntityId> {
 		let mut name_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::UsedEntityName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		EntityId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(EntityId::from_external_id(external_id))
 	}
 
 	fn derivation(&self) -> DerivationType {
 		let mut objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::DerivationType));
-		let derivation = match objects.next() {
-			Some(object) => object.as_str().unwrap(),
-			None => return DerivationType::None,
-		};
-
-		match derivation {
-			"Revision" => DerivationType::Revision,
-			"Quotation" => DerivationType::Quotation,
-			"PrimarySource" => DerivationType::PrimarySource,
-			_ => unreachable!(),
+		if let Some(object) = objects.next() {
+			if let Some(derivation) = object.as_str() {
+				return match derivation {
+					"Revision" => DerivationType::Revision,
+					"Quotation" => DerivationType::Quotation,
+					"PrimarySource" => DerivationType::PrimarySource,
+					_ => DerivationType::None,
+				};
+			}
 		}
+		DerivationType::None
 	}
 
 	fn domain(&self) -> Option<DomaintypeId> {
 		let mut objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::DomaintypeId));
-		let d = match objects.next() {
-			Some(object) => object.as_str().unwrap(),
-			None => return None,
-		};
+		let d = objects.next()?.as_str()?;
 		Some(DomaintypeId::from_external_id(d))
 	}
 
@@ -613,45 +599,37 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
 			.collect()
 	}
 
-	fn responsible(&self) -> AgentId {
+	fn responsible(&self) -> Option<AgentId> {
 		let mut name_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::ResponsibleId));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		AgentId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(AgentId::from_external_id(external_id))
 	}
 
 	fn optional_role(&self) -> Option<Role> {
 		let mut name_objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::Role));
-		let object = match name_objects.next() {
-			Some(object) => object,
-			None => return None,
-		};
-		Some(Role::from(object.as_str().unwrap()))
+		let object = name_objects.next()?;
+		Some(Role::from(object.as_str()?))
 	}
 
-	fn activity(&self) -> ActivityId {
+	fn activity(&self) -> Option<ActivityId> {
 		let mut name_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::ActivityName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		ActivityId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(ActivityId::from_external_id(external_id))
 	}
 
 	fn locator(&self) -> Option<String> {
 		let mut objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::Locator));
-
-		let locator = match objects.next() {
-			Some(object) => object,
-			None => return None,
-		};
-
-		Some(locator.as_str().unwrap().to_owned())
+		let locator = objects.next()?;
+		Some(locator.as_str()?.to_owned())
 	}
 
-	fn informing_activity(&self) -> ActivityId {
+	fn informing_activity(&self) -> Option<ActivityId> {
 		let mut name_objects =
 			self.get(&id_from_iri_string(vocab::ChronicleOperation::InformingActivityName));
-		let external_id = name_objects.next().unwrap().as_str().unwrap();
-		ActivityId::from_external_id(external_id)
+		let external_id = name_objects.next()?.as_str()?;
+		Some(ActivityId::from_external_id(external_id))
 	}
 }
 
@@ -669,19 +647,19 @@ impl ChronicleOperation {
 			let o =
 				object.value().inner().as_node().ok_or(ProcessorError::NotANode(json.clone()))?;
 			if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::CreateNamespace)) {
-				let namespace = o.namespace();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
 				Ok(ChronicleOperation::CreateNamespace(CreateNamespace { id: namespace }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::AgentExists)) {
-				let namespace = o.namespace();
-				let agent_id = o.agent();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let agent_id = o.agent().ok_or(ProcessorError::MissingAgent)?;
 				Ok(ChronicleOperation::AgentExists(AgentExists { namespace, id: agent_id }))
 			} else if o
 				.has_type(&id_from_iri_string(vocab::ChronicleOperation::AgentActsOnBehalfOf))
 			{
-				let namespace = o.namespace();
-				let delegate_id = o.delegate();
-				let responsible_id = o.responsible();
-				let activity_id = o.optional_activity();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let delegate_id = o.delegate().ok_or(ProcessorError::MissingAgent)?;
+				let responsible_id = o.responsible().ok_or(ProcessorError::MissingAgent)?;
+				let activity_id = o.activity();
 
 				Ok(ChronicleOperation::AgentActsOnBehalfOf(ActsOnBehalfOf::new(
 					namespace,
@@ -691,64 +669,47 @@ impl ChronicleOperation {
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::ActivityExists)) {
-				let namespace = o.namespace();
-				if let Some(activity_id) = o.optional_activity() {
-					Ok(ChronicleOperation::ActivityExists(ActivityExists {
-						namespace,
-						id: activity_id,
-					}))
-				} else {
-					Err(ProcessorError::MissingActivity)
-				}
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let activity_id = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				Ok(ChronicleOperation::ActivityExists(ActivityExists {
+					namespace,
+					id: activity_id,
+				}))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::StartActivity)) {
-				let namespace = o.namespace();
-				if let Some(id) = o.optional_activity() {
-					match o.start_time().parse::<DateTime<Utc>>() {
-						Ok(time) => Ok(ChronicleOperation::start_activity(namespace, id, time)),
-						Err(e) => Err(ProcessorError::Time(e)),
-					}
-				} else {
-					Err(ProcessorError::MissingActivity)
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let id = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				let time_str = o.start_time().ok_or(ProcessorError::MissingTime)?;
+				match time_str.parse::<DateTime<Utc>>() {
+					Ok(time) => Ok(ChronicleOperation::start_activity(namespace, id, time)),
+					Err(e) => Err(ProcessorError::Time(e)),
 				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EndActivity)) {
-				let namespace = o.namespace();
-				if let Some(id) = o.optional_activity() {
-					match o.start_time().parse::<DateTime<Utc>>() {
-						Ok(time) => Ok(ChronicleOperation::end_activity(namespace, id, time)),
-						Err(e) => Err(ProcessorError::Time(e)),
-					}
-				} else {
-					Err(ProcessorError::MissingActivity)
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let id = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				let time_str = o.end_time().ok_or(ProcessorError::MissingTime)?;
+				match time_str.parse::<DateTime<Utc>>() {
+					Ok(time) => Ok(ChronicleOperation::end_activity(namespace, id, time)),
+					Err(e) => Err(ProcessorError::Time(e)),
 				}
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::ActivityUses)) {
-				let namespace = o.namespace();
-				let id = o.entity();
-				if let Some(activity) = o.optional_activity() {
-					Ok(ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }))
-				} else {
-					Err(ProcessorError::MissingActivity)
-				}
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let id = o.entity().ok_or(ProcessorError::MissingEntity)?;
+				let activity = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				Ok(ChronicleOperation::ActivityUses(ActivityUses { namespace, id, activity }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EntityExists)) {
-				let namespace = o.namespace();
-				let entity_id = o.entity();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let entity_id = o.entity().ok_or(ProcessorError::MissingEntity)?;
 				Ok(ChronicleOperation::EntityExists(EntityExists { namespace, id: entity_id }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasGeneratedBy)) {
-				let namespace = o.namespace();
-				let id = o.entity();
-				if let Some(activity) = o.optional_activity() {
-					Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy {
-						namespace,
-						id,
-						activity,
-					}))
-				} else {
-					Err(ProcessorError::MissingActivity)
-				}
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let id = o.entity().ok_or(ProcessorError::MissingEntity)?;
+				let activity = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				Ok(ChronicleOperation::WasGeneratedBy(WasGeneratedBy { namespace, id, activity }))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::EntityDerive)) {
-				let namespace = o.namespace();
-				let id = o.entity();
-				let used_id = o.used_entity();
-				let activity_id = o.optional_activity();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let id = o.entity().ok_or(ProcessorError::MissingEntity)?;
+				let used_id = o.used_entity().ok_or(ProcessorError::MissingEntity)?;
+				let activity_id = o.activity();
 				let typ = o.derivation();
 				Ok(ChronicleOperation::EntityDerive(EntityDerive {
 					namespace,
@@ -758,9 +719,8 @@ impl ChronicleOperation {
 					typ,
 				}))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::SetAttributes)) {
-				let namespace = o.namespace();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
 				let domain = o.domain();
-
 				let attrs = o.attributes();
 
 				let attributes = Attributes::new(domain, attrs);
@@ -768,15 +728,15 @@ impl ChronicleOperation {
 					if o.has_key(&Term::Id(id_from_iri_string(
 						vocab::ChronicleOperation::EntityName,
 					))) {
-						let id = o.entity();
+						let id = o.entity().ok_or(ProcessorError::MissingEntity)?;
 						SetAttributes::Entity { namespace, id, attributes }
 					} else if o.has_key(&Term::Id(id_from_iri_string(
 						vocab::ChronicleOperation::AgentName,
 					))) {
-						let id = o.agent();
+						let id = o.agent().ok_or(ProcessorError::MissingAgent)?;
 						SetAttributes::Agent { namespace, id, attributes }
 					} else {
-						let id = o.optional_activity().unwrap();
+						let id = o.activity().ok_or(ProcessorError::MissingActivity)?;
 						SetAttributes::Activity { namespace, id, attributes }
 					}
 				};
@@ -785,22 +745,23 @@ impl ChronicleOperation {
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasAssociatedWith))
 			{
 				Ok(ChronicleOperation::WasAssociatedWith(WasAssociatedWith::new(
-					o.namespace(),
-					o.activity(),
-					o.agent(),
+					o.namespace().ok_or(ProcessorError::MissingNamespace)?,
+					o.activity().ok_or(ProcessorError::MissingActivity)?,
+					o.agent().ok_or(ProcessorError::MissingAgent)?,
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasAttributedTo)) {
 				Ok(ChronicleOperation::WasAttributedTo(WasAttributedTo::new(
-					o.namespace(),
-					o.entity(),
-					o.agent(),
+					o.namespace().ok_or(ProcessorError::MissingNamespace)?,
+					o.entity().ok_or(ProcessorError::MissingEntity)?,
+					o.agent().ok_or(ProcessorError::MissingAgent)?,
 					o.optional_role(),
 				)))
 			} else if o.has_type(&id_from_iri_string(vocab::ChronicleOperation::WasInformedBy)) {
-				let namespace = o.namespace();
-				let activity = o.activity();
-				let informing_activity = o.informing_activity();
+				let namespace = o.namespace().ok_or(ProcessorError::MissingNamespace)?;
+				let activity = o.activity().ok_or(ProcessorError::MissingActivity)?;
+				let informing_activity =
+					o.informing_activity().ok_or(ProcessorError::MissingActivity)?;
 				Ok(ChronicleOperation::WasInformedBy(WasInformedBy {
 					namespace,
 					activity,

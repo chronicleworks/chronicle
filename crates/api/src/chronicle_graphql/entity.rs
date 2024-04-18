@@ -6,6 +6,8 @@ use chronicle_persistence::{
 use common::prov::{operations::DerivationType, Role};
 use diesel::prelude::*;
 
+use crate::chronicle_graphql::DatabaseContext;
+
 async fn typed_derivation<'a>(
 	id: i32,
 	ctx: &Context<'a>,
@@ -16,7 +18,7 @@ async fn typed_derivation<'a>(
 		entity as entitydsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -35,7 +37,7 @@ pub async fn namespace<'a>(
 ) -> async_graphql::Result<Namespace> {
 	use chronicle_persistence::schema::namespace::{self, dsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -52,7 +54,7 @@ pub async fn was_attributed_to<'a>(
 ) -> async_graphql::Result<Vec<(Agent, Option<Role>)>> {
 	use chronicle_persistence::schema::{agent, attribution};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 	let mut connection = store.connection()?;
 
 	let res = attribution::table
@@ -77,7 +79,7 @@ pub async fn was_generated_by<'a>(
 ) -> async_graphql::Result<Vec<Activity>> {
 	use chronicle_persistence::schema::generation::{self, dsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -99,7 +101,7 @@ pub async fn was_derived_from<'a>(
 		entity as entitydsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -133,7 +135,7 @@ pub async fn load_attribute<'a>(
 ) -> async_graphql::Result<Option<serde_json::Value>> {
 	use chronicle_persistence::schema::entity_attribute;
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 

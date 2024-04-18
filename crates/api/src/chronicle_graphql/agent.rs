@@ -6,12 +6,14 @@ use chronicle_persistence::{
 use common::prov::Role;
 use diesel::prelude::*;
 
+use crate::chronicle_graphql::DatabaseContext;
+
 pub async fn namespace<'a>(
 	namespace_id: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
 	use chronicle_persistence::schema::namespace::{self, dsl};
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -29,7 +31,7 @@ pub async fn acted_on_behalf_of<'a>(
 		delegation::{self, dsl},
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -55,7 +57,7 @@ pub async fn attribution<'a>(
 		entity as entity_dsl,
 	};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -77,7 +79,7 @@ pub async fn load_attribute<'a>(
 ) -> async_graphql::Result<Option<serde_json::Value>> {
 	use chronicle_persistence::schema::agent_attribute;
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 

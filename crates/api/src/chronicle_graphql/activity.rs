@@ -7,12 +7,14 @@ use common::prov::Role;
 use diesel::prelude::*;
 use std::collections::HashMap;
 
+use crate::chronicle_graphql::DatabaseContext;
+
 pub async fn namespace<'a>(
 	namespaceid: i32,
 	ctx: &Context<'a>,
 ) -> async_graphql::Result<Namespace> {
 	use chronicle_persistence::schema::namespace::{self, dsl};
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -34,7 +36,7 @@ pub async fn was_associated_with<'a>(
 		role: String,
 	}
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 	let mut connection = store.connection()?;
 
 	let delegation_entries = delegation::table
@@ -94,7 +96,7 @@ pub async fn was_associated_with<'a>(
 pub async fn used<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
 	use chronicle_persistence::schema::usage::{self, dsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -114,7 +116,7 @@ pub async fn was_informed_by<'a>(
 ) -> async_graphql::Result<Vec<Activity>> {
 	use chronicle_persistence::schema::wasinformedby::{self, dsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -133,7 +135,7 @@ pub async fn was_informed_by<'a>(
 pub async fn generated<'a>(id: i32, ctx: &Context<'a>) -> async_graphql::Result<Vec<Entity>> {
 	use chronicle_persistence::schema::generation::{self, dsl};
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 
@@ -153,7 +155,7 @@ pub async fn load_attribute<'a>(
 ) -> async_graphql::Result<Option<serde_json::Value>> {
 	use chronicle_persistence::schema::activity_attribute;
 
-	let store = ctx.data_unchecked::<Store>();
+	let store = ctx.data::<DatabaseContext>()?;
 
 	let mut connection = store.connection()?;
 

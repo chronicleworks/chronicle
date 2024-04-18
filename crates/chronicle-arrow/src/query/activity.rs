@@ -1,16 +1,18 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{meta::association_struct, ChronicleArrowError, DomainTypeMeta};
-use arrow::array::{ArrayBuilder, StringBuilder, StructBuilder};
+use crate::{ChronicleArrowError, DomainTypeMeta};
+use arrow::array::{ArrayBuilder, ListBuilder, StringBuilder, StructBuilder};
 use arrow_array::{
 	Array, BooleanArray, Int64Array, ListArray, RecordBatch, StringArray, TimestampNanosecondArray,
 };
-use arrow_buffer::{Buffer, ToByteSlice};
-use arrow_data::ArrayData;
+
 use arrow_schema::{DataType, Field};
 use chronicle_persistence::{
-	query::{Activity, Generation, Namespace, Usage, WasInformedBy},
-	schema::{activity, entity, generation, namespace, usage, wasinformedby},
+	query::{Activity, Association, Delegation, Generation, Namespace, Usage, WasInformedBy},
+	schema::{
+		activity, agent, association, delegation, entity, generation, namespace, usage,
+		wasinformedby,
+	},
 };
 use chrono::{DateTime, Utc};
 use common::{
@@ -41,11 +43,15 @@ pub fn activity_count_by_type(
 }
 
 #[derive(Default)]
+pub struct AgentInteraction {
+	pub(crate) agent: String,
+	pub(crate) role: Option<String>,
+}
+
+#[derive(Default)]
 pub struct ActivityAssociationRef {
-	pub(crate) responsible_agent: String,
-	pub(crate) responsible_role: Option<String>,
-	pub(crate) delegate_agent: Option<String>,
-	pub(crate) delegate_role: Option<String>,
+	pub(crate) responsible: AgentInteraction,
+	pub(crate) delegated: Vec<AgentInteraction>,
 }
 
 #[derive(Default)]
@@ -206,86 +212,74 @@ impl ActivityAndReferences {
 fn associations_to_list_array(
 	associations: Vec<Vec<ActivityAssociationRef>>,
 ) -> Result<ListArray, ChronicleArrowError> {
-	let offsets: Vec<i32> = std::iter::once(0)
-		.chain(associations.iter().map(|v| v.len() as i32))
-		.scan(0, |state, len| {
-			*state += len;
-			Some(*state)
-		})
-		.collect();
+	let fields =
+		vec![Field::new("agent", DataType::Utf8, false), Field::new("role", DataType::Utf8, true)];
 
-	let fields = vec![
-		Field::new("responsible_agent", DataType::Utf8, false),
-		Field::new("responsible_role", DataType::Utf8, true),
-		Field::new("delegate_agent", DataType::Utf8, true),
-		Field::new("delegate_role", DataType::Utf8, true),
-	];
-	let field_builders = vec![
-		Box::new(StringBuilder::new()) as Box<dyn ArrayBuilder>,
-		Box::new(StringBuilder::new()) as Box<dyn ArrayBuilder>,
-		Box::new(StringBuilder::new()) as Box<dyn ArrayBuilder>,
-		Box::new(StringBuilder::new()) as Box<dyn ArrayBuilder>,
-	];
+	let agent_struct = DataType::Struct(fields.clone().into());
 
-	let mut builder = StructBuilder::new(fields, field_builders);
+	let mut builder = ListBuilder::new(StructBuilder::new(
+		vec![
+			Field::new("responsible", agent_struct.clone(), false),
+			Field::new(
+				"delegated",
+				DataType::List(Arc::new(Field::new("item", agent_struct, true))),
+				false,
+			),
+		],
+		vec![
+			Box::new(StructBuilder::from_fields(fields.clone(), 0)),
+			Box::new(ListBuilder::new(StructBuilder::from_fields(fields, 0))),
+		],
+	));
 
-	for association in associations.into_iter().flatten() {
-		builder
-			.field_builder::<StringBuilder>(0)
-			.expect("Failed to get field builder for responsible_agent")
-			.append_value(&association.responsible_agent);
-		if let Some(role) = &association.responsible_role {
-			builder
-				.field_builder::<StringBuilder>(1)
-				.expect("Failed to get field builder for responsible_role")
-				.append_value(role);
-		} else {
-			builder
-				.field_builder::<StringBuilder>(1)
-				.expect("Failed to get field builder for responsible_role")
-				.append_null();
-		}
-		if let Some(agent) = &association.delegate_agent {
-			builder
-				.field_builder::<StringBuilder>(2)
-				.expect("Failed to get field builder for delegate_agent")
-				.append_value(agent);
-		} else {
-			builder
-				.field_builder::<StringBuilder>(2)
-				.expect("Failed to get field builder for delegate_agent")
-				.append_null();
-		}
-		if let Some(role) = &association.delegate_role {
-			builder
-				.field_builder::<StringBuilder>(3)
-				.expect("Failed to get field builder for delegate_role")
-				.append_value(role);
-		} else {
-			builder
-				.field_builder::<StringBuilder>(3)
-				.expect("Failed to get field builder for delegate_role")
-				.append_null();
+	for association_vec in associations {
+		let struct_builder = builder.values();
+
+		for association in association_vec {
+			// Build the responsible field
+			let responsible_builder = struct_builder.field_builder::<StructBuilder>(0).unwrap();
+			responsible_builder
+				.field_builder::<StringBuilder>(0)
+				.unwrap()
+				.append_value(&association.responsible.agent);
+			if let Some(role) = &association.responsible.role {
+				responsible_builder
+					.field_builder::<StringBuilder>(1)
+					.unwrap()
+					.append_value(role);
+			} else {
+				responsible_builder.field_builder::<StringBuilder>(1).unwrap().append_null();
+			}
+			responsible_builder.append(true);
+
+			// Build the delegated field
+			let delegated_builder =
+				struct_builder.field_builder::<ListBuilder<StructBuilder>>(1).unwrap();
+			for agent_interaction in &association.delegated {
+				let interaction_builder = delegated_builder.values();
+				interaction_builder
+					.field_builder::<StringBuilder>(0)
+					.unwrap()
+					.append_value(&agent_interaction.agent);
+				if let Some(role) = &agent_interaction.role {
+					interaction_builder
+						.field_builder::<StringBuilder>(1)
+						.unwrap()
+						.append_value(role);
+				} else {
+					interaction_builder.field_builder::<StringBuilder>(1).unwrap().append_null();
+				}
+				interaction_builder.append(true);
+			}
+			delegated_builder.append(true);
+
+			struct_builder.append(true);
 		}
 
 		builder.append(true);
 	}
 
-	let values_array = builder.finish();
-
-	let data_type = DataType::new_list(association_struct(), false);
-	let offsets_buffer = Buffer::from(offsets.to_byte_slice());
-
-	let list_array = ListArray::from(
-		ArrayData::builder(data_type.clone())
-			.add_child_data(values_array.to_data())
-			.len(offsets.len() - 1)
-			.null_count(0)
-			.add_buffer(offsets_buffer)
-			.build()?,
-	);
-
-	Ok(list_array)
+	Ok(builder.finish())
 }
 
 pub fn load_activities_by_type(
@@ -349,6 +343,69 @@ pub fn load_activities_by_type(
 			acc
 		});
 
+	let associations_map: HashMap<i32, HashMap<i32, (String, String)>> =
+		Association::belonging_to(&activities)
+			.inner_join(agent::table.on(association::agent_id.eq(agent::id)))
+			.select((association::activity_id, (agent::id, agent::external_id, association::role)))
+			.load::<(i32, (i32, String, String))>(&mut connection)?
+			.into_iter()
+			.fold(
+				HashMap::new(),
+				|mut acc: HashMap<i32, HashMap<i32, (String, String)>>,
+				 (activity_id, (agent_id, agent_external_id, role_external_id))| {
+					acc.entry(activity_id)
+						.or_default()
+						.insert(agent_id, (agent_external_id, role_external_id));
+					acc
+				},
+			);
+
+	let delegations_map: HashMap<i32, HashMap<i32, (String, String)>> =
+		Delegation::belonging_to(&activities)
+			.inner_join(agent::table.on(delegation::delegate_id.eq(agent::id)))
+			.select((
+				delegation::activity_id,
+				(delegation::responsible_id, agent::external_id, delegation::role),
+			))
+			.load::<(i32, (i32, String, String))>(&mut connection)?
+			.into_iter()
+			.fold(
+				HashMap::new(),
+				|mut acc: HashMap<i32, HashMap<i32, (String, String)>>,
+				 (activity_id, (agent_id, agent_external_id, role_external_id))| {
+					acc.entry(activity_id)
+						.or_default()
+						.insert(agent_id, (agent_external_id, role_external_id));
+					acc
+				},
+			);
+
+	let mut activity_associations: HashMap<i32, Vec<ActivityAssociationRef>> = HashMap::new();
+
+	for (activity_id, agent_map) in associations_map.into_iter() {
+		let mut association_refs = Vec::new();
+		for (agent_id, (agent_external_id, role_external_id)) in agent_map.into_iter() {
+			let mut delegated_agents = Vec::new();
+			if let Some(delegations) = delegations_map.get(&activity_id) {
+				if let Some((delegated_agent_external_id, delegated_role_external_id)) =
+					delegations.get(&agent_id)
+				{
+					delegated_agents.push(AgentInteraction {
+						agent: delegated_agent_external_id.clone(),
+						role: Some(delegated_role_external_id.clone()),
+					});
+				}
+			}
+			association_refs.push(ActivityAssociationRef {
+				responsible: AgentInteraction {
+					agent: agent_external_id,
+					role: Some(role_external_id),
+				},
+				delegated: delegated_agents,
+			});
+		}
+		activity_associations.insert(activity_id, association_refs);
+	}
 	let fetched_records = activities.len() as u64;
 
 	let mut activities_and_references = vec![];
@@ -367,8 +424,120 @@ pub fn load_activities_by_type(
 			was_informed_by: was_informed_by_map.remove(&activity.id).unwrap_or_default(),
 			used: used_map.remove(&activity.id).unwrap_or_default(),
 			generated: generated_map.remove(&activity.id).unwrap_or_default(),
-			..Default::default()
+			was_associated_with: activity_associations.remove(&activity.id).unwrap_or_default(),
 		});
 	}
 	Ok((activities_and_references.into_iter(), fetched_records, fetched_records))
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_associations_to_list_array_empty() {
+		let associations = Vec::new();
+		let result = associations_to_list_array(associations);
+		assert!(result.is_ok());
+		let array = result.unwrap();
+		assert_eq!(array.len(), 0);
+	}
+
+	#[test]
+	fn test_associations_to_list_array_single() {
+		let associations = vec![ActivityAssociationRef {
+			responsible: AgentInteraction {
+				agent: "agent1".to_string(),
+				role: Some("role1".to_string()),
+			},
+			delegated: vec![AgentInteraction {
+				agent: "delegated1".to_string(),
+				role: Some("role3".to_string()),
+			}],
+		}];
+		let result = associations_to_list_array(vec![associations]).unwrap();
+
+		let json = arrow::json::writer::array_to_json_array(&result).unwrap();
+
+		insta::assert_debug_snapshot!(&json, @r###"
+  [
+      Array [
+          Object {
+              "delegated": Array [
+                  Object {
+                      "agent": String("delegated1"),
+                      "role": String("role3"),
+                  },
+              ],
+              "responsible": Object {
+                  "agent": String("agent1"),
+                  "role": String("role1"),
+              },
+          },
+      ],
+  ]
+  "### );
+	}
+
+	#[test]
+	fn test_associations_to_list_array_multiple() {
+		let associations = vec![
+			ActivityAssociationRef {
+				responsible: AgentInteraction {
+					agent: "agent1".to_string(),
+					role: Some("role1".to_string()),
+				},
+				delegated: vec![],
+			},
+			ActivityAssociationRef {
+				responsible: AgentInteraction {
+					agent: "agent2".to_string(),
+					role: Some("role2".to_string()),
+				},
+				delegated: vec![
+					AgentInteraction {
+						agent: "delegated1".to_string(),
+						role: Some("role3".to_string()),
+					},
+					AgentInteraction {
+						agent: "delegated2".to_string(),
+						role: Some("role3".to_string()),
+					},
+				],
+			},
+		];
+		let result = associations_to_list_array(vec![associations]).unwrap();
+
+		let json = arrow::json::writer::array_to_json_array(&result).unwrap();
+
+		insta::assert_debug_snapshot!(&json, @r###"
+  [
+      Array [
+          Object {
+              "delegated": Array [],
+              "responsible": Object {
+                  "agent": String("agent1"),
+                  "role": String("role1"),
+              },
+          },
+          Object {
+              "delegated": Array [
+                  Object {
+                      "agent": String("delegated1"),
+                      "role": String("role3"),
+                  },
+                  Object {
+                      "agent": String("delegated2"),
+                      "role": String("role3"),
+                  },
+              ],
+              "responsible": Object {
+                  "agent": String("agent2"),
+                  "role": String("role2"),
+              },
+          },
+      ],
+  ]
+  "### );
+	}
 }

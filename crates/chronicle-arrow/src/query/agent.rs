@@ -10,13 +10,13 @@ use arrow_buffer::{Buffer, ToByteSlice};
 use arrow_data::ArrayData;
 use arrow_schema::{DataType, Field};
 use chronicle_persistence::{
-	query::{Agent, Namespace},
-	schema::{agent, namespace},
+	query::{Agent, Attribution, Delegation, Namespace},
+	schema::{activity, agent, attribution, delegation, entity, namespace},
 };
 use common::{
 	attributes::Attributes,
 	domain::PrimitiveType,
-	prov::{DomaintypeId, ExternalIdPart},
+	prov::{DomaintypeId, ExternalIdPart, Role},
 };
 use diesel::{
 	pg::PgConnection,
@@ -41,7 +41,7 @@ pub fn agent_count_by_type(
 pub struct ActedOnBehalfOfRef {
 	pub(crate) agent: String,
 	pub(crate) role: Option<String>,
-	pub(crate) activity: Option<String>,
+	pub(crate) activity: String,
 }
 
 #[derive(Default)]
@@ -167,6 +167,7 @@ impl AgentAndReferences {
 		RecordBatch::try_new(meta.schema.clone(), columns).map_err(ChronicleArrowError::from)
 	}
 }
+
 fn agent_acted_on_behalf_of_to_list_array(
 	agent_attributions: Vec<Vec<ActedOnBehalfOfRef>>,
 ) -> Result<ListArray, ChronicleArrowError> {
@@ -184,7 +185,7 @@ fn agent_acted_on_behalf_of_to_list_array(
 
 	let fields = vec![
 		Field::new("agent", DataType::Utf8, false),
-		Field::new("activity", DataType::Utf8, true),
+		Field::new("activity", DataType::Utf8, false),
 		Field::new("role", DataType::Utf8, true),
 	];
 	let field_builders = vec![
@@ -203,7 +204,7 @@ fn agent_acted_on_behalf_of_to_list_array(
 		builder
 			.field_builder::<StringBuilder>(1)
 			.expect("Failed to get activity field builder")
-			.append_option(acted_on_behalf_of.activity.as_deref());
+			.append_value(acted_on_behalf_of.activity);
 		builder
 			.field_builder::<StringBuilder>(2)
 			.expect("Failed to get role field builder")
@@ -315,6 +316,47 @@ pub fn load_agents_by_type(
 	let (agents, namespaces): (Vec<Agent>, Vec<Namespace>) =
 		agents_and_namespaces.into_iter().unzip();
 
+	let mut attributions_map: HashMap<i32, Vec<AgentAttributionRef>> =
+		Attribution::belonging_to(&agents)
+			.inner_join(entity::table.on(attribution::entity_id.eq(entity::id)))
+			.select((attribution::agent_id, attribution::role, entity::external_id))
+			.load::<(i32, Role, String)>(&mut connection)?
+			.into_iter()
+			.fold(
+				HashMap::new(),
+				|mut acc: HashMap<i32, Vec<AgentAttributionRef>>, (id, role, external_id)| {
+					acc.entry(id).or_default().push(AgentAttributionRef {
+						entity: external_id,
+						role: Some(role.to_string()),
+					});
+					acc
+				},
+			);
+
+	let mut delegations_map: HashMap<i32, Vec<ActedOnBehalfOfRef>> =
+		Delegation::belonging_to(&agents)
+			.inner_join(activity::table.on(delegation::activity_id.eq(activity::id)))
+			.inner_join(agent::table.on(delegation::delegate_id.eq(agent::id)))
+			.select((
+				delegation::responsible_id,
+				delegation::role,
+				activity::external_id,
+				agent::external_id,
+			))
+			.load::<(i32, Role, String, String)>(&mut connection)?
+			.into_iter()
+			.fold(
+				HashMap::new(),
+				|mut acc: HashMap<i32, Vec<ActedOnBehalfOfRef>>, (id, role, activity, delegate)| {
+					acc.entry(id).or_default().push(ActedOnBehalfOfRef {
+						agent: delegate,
+						activity,
+						role: Some(role.to_string()),
+					});
+					acc
+				},
+			);
+
 	let mut agents_and_references = vec![];
 
 	for (agent, ns) in agents.into_iter().zip(namespaces) {
@@ -325,8 +367,9 @@ pub fn load_agents_by_type(
 			attributes: Attributes::new(
 				agent.domaintype.map(DomaintypeId::from_external_id),
 				vec![],
-			), // Placeholder for attribute loading logic
-			..Default::default()
+			),
+			was_attributed_to: attributions_map.remove(&agent.id).unwrap_or_default(),
+			acted_on_behalf_of: delegations_map.remove(&agent.id).unwrap_or_default(),
 		});
 	}
 

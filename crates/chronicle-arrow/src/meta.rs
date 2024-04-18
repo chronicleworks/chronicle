@@ -40,8 +40,18 @@ pub fn attribution_struct() -> arrow_schema::DataType {
 pub fn derivation_struct() -> arrow_schema::DataType {
 	arrow_schema::DataType::Struct(
 		vec![
-			arrow_schema::Field::new("target", arrow_schema::DataType::Utf8, false),
+			arrow_schema::Field::new("source", arrow_schema::DataType::Utf8, false),
 			arrow_schema::Field::new("activity", arrow_schema::DataType::Utf8, false),
+		]
+		.into(),
+	)
+}
+
+pub fn qualified_agent_struct() -> arrow_schema::DataType {
+	arrow_schema::DataType::Struct(
+		vec![
+			arrow_schema::Field::new("agent", arrow_schema::DataType::Utf8, false),
+			arrow_schema::Field::new("role", arrow_schema::DataType::Utf8, true),
 		]
 		.into(),
 	)
@@ -50,10 +60,15 @@ pub fn derivation_struct() -> arrow_schema::DataType {
 pub fn association_struct() -> arrow_schema::DataType {
 	arrow_schema::DataType::Struct(
 		vec![
-			arrow_schema::Field::new("responsible_agent", arrow_schema::DataType::Utf8, false),
-			arrow_schema::Field::new("responsible_role", arrow_schema::DataType::Utf8, true),
-			arrow_schema::Field::new("delegate_agent", arrow_schema::DataType::Utf8, true),
-			arrow_schema::Field::new("delegate_role", arrow_schema::DataType::Utf8, true),
+			arrow_schema::Field::new("responsible", qualified_agent_struct(), false),
+			arrow_schema::Field::new(
+				"delegated",
+				arrow_schema::DataType::new_list(
+					qualified_agent_struct(),
+					true, // Set the List type as non-nullable
+				),
+				false,
+			),
 		]
 		.into(),
 	)
@@ -63,7 +78,7 @@ pub fn agent_delegation_struct() -> arrow_schema::DataType {
 	arrow_schema::DataType::Struct(
 		vec![
 			arrow_schema::Field::new("agent", arrow_schema::DataType::Utf8, false),
-			arrow_schema::Field::new("activity", arrow_schema::DataType::Utf8, true),
+			arrow_schema::Field::new("activity", arrow_schema::DataType::Utf8, false),
 			arrow_schema::Field::new("role", arrow_schema::DataType::Utf8, true),
 		]
 		.into(),
@@ -164,13 +179,13 @@ pub fn schema_for_activity(activity: &ActivityDef) -> Schema {
 	builder.push(arrow_schema::Field::new(
 		"used",
 		arrow_schema::DataType::new_list(arrow_schema::DataType::Utf8, false),
-		true,
+		false,
 	));
 
 	builder.push(arrow_schema::Field::new(
 		"generated",
 		arrow_schema::DataType::new_list(arrow_schema::DataType::Utf8, false),
-		true,
+		false,
 	));
 
 	builder.push(arrow_schema::Field::new(
@@ -181,7 +196,7 @@ pub fn schema_for_activity(activity: &ActivityDef) -> Schema {
 
 	builder.push(arrow_schema::Field::new(
 		"was_associated_with",
-		arrow_schema::DataType::new_list(association_struct(), false),
+		arrow_schema::DataType::new_list(association_struct(), true),
 		false,
 	));
 
@@ -203,7 +218,7 @@ pub fn schema_for_agent(agent: &AgentDef) -> Schema {
 	builder.push(arrow_schema::Field::new(
 		"acted_on_behalf_of",
 		arrow_schema::DataType::new_list(agent_delegation_struct(), false),
-		true,
+		false,
 	));
 
 	builder.push(arrow_schema::Field::new(

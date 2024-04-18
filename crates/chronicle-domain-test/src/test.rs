@@ -65,8 +65,8 @@ pub async fn main() {
 mod test {
 	use chronicle::{
 		api::{
-			chronicle_graphql::{OpaCheck, Store, Subscription},
-			Api, UuidGen,
+			chronicle_graphql::{construct_schema, OpaCheck, Subscription},
+			Api, Store, UuidGen,
 		},
 		async_graphql::{Request, Response, Schema},
 		bootstrap::opa::CliPolicyLoader,
@@ -78,7 +78,6 @@ mod test {
 		CHRONICLE_NAMESPACE,
 	};
 	use chronicle_test_infrastructure::substitutes::{embed_substrate, TemporaryDatabase};
-	use common::identity::AuthId;
 
 	use uuid::Uuid;
 
@@ -152,15 +151,10 @@ mod test {
 		.await
 		.unwrap();
 
-		let schema = Schema::build(Query, Mutation, Subscription)
-			.extension(OpaCheck { claim_parser: None })
-			.data(Store::new(pool))
-			.data(dispatch)
-			.data(AuthId::chronicle())
-			.data(opa_executor)
-			.finish();
+		let schema =
+			construct_schema(Query, Mutation, Subscription, None, &pool, &dispatch, opa_executor);
 
-		(schema, database)
+		(schema.unwrap(), database)
 	}
 
 	#[tokio::test]
@@ -1391,8 +1385,6 @@ mod test {
 	async fn agent_delegation_for_activity() {
 		let (schema, _database) = test_schema().await;
 
-		// create contractors
-
 		insta::assert_toml_snapshot!(schema
           .execute(Request::new(
               r#"
@@ -1851,16 +1843,16 @@ mod test {
       "#,
           ))
           .await, @r###"
-        [data.entityById]
-        id = 'chronicle:entity:testentity1'
-        externalId = 'testentity1'
+  [data.entityById]
+  id = 'chronicle:entity:testentity1'
+  externalId = 'testentity1'
 
-        [[data.entityById.wasDerivedFrom]]
-        id = 'chronicle:entity:testentity2'
+  [[data.entityById.wasDerivedFrom]]
+  id = 'chronicle:entity:testentity2'
 
-        [[data.entityById.hadPrimarySource]]
-        id = 'chronicle:entity:testentity2'
-        "###);
+  [[data.entityById.hadPrimarySource]]
+  id = 'chronicle:entity:testentity2'
+  "###);
 	}
 
 	#[tokio::test]
@@ -1909,16 +1901,16 @@ mod test {
       "#,
           ))
           .await, @r###"
-        [data.entityById]
-        id = 'chronicle:entity:testentity1'
-        externalId = 'testentity1'
+  [data.entityById]
+  id = 'chronicle:entity:testentity1'
+  externalId = 'testentity1'
 
-        [[data.entityById.wasDerivedFrom]]
-        id = 'chronicle:entity:testentity2'
+  [[data.entityById.wasDerivedFrom]]
+  id = 'chronicle:entity:testentity2'
 
-        [[data.entityById.wasRevisionOf]]
-        id = 'chronicle:entity:testentity2'
-        "###);
+  [[data.entityById.wasRevisionOf]]
+  id = 'chronicle:entity:testentity2'
+  "###);
 	}
 
 	#[tokio::test]

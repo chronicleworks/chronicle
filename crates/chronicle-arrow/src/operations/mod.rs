@@ -23,8 +23,6 @@ use common::{
 	prov::{operations::ChronicleOperation, NamespaceId},
 };
 
-use futures::StreamExt;
-
 use uuid::Uuid;
 
 use crate::{
@@ -99,12 +97,12 @@ pub fn batch_to_flight_data(
 
 async fn create_chronicle_namespace(
 	record_batch: &RecordBatch,
-	api: &ApiDispatch,
+	_api: &ApiDispatch,
 ) -> Result<(), ChronicleArrowError> {
-	let uuid = record_batch
+	let _uuid = record_batch
 		.column_by_name("uuid")
 		.ok_or(ChronicleArrowError::MissingColumn("uuid".to_string()))?;
-	let name = record_batch
+	let _name = record_batch
 		.column_by_name("name")
 		.ok_or(ChronicleArrowError::MissingColumn("name".to_string()))?;
 
@@ -305,7 +303,7 @@ fn struct_3_list_column_opt_string(
 	field1_name: &str,
 	field2_name: &str,
 	field3_name: &str,
-) -> Result<Vec<(String, Option<String>, Option<String>)>, ChronicleArrowError> {
+) -> Result<Vec<(String, String, Option<String>)>, ChronicleArrowError> {
 	let column_index = record_batch
 		.schema()
 		.index_of(column_name)
@@ -329,18 +327,21 @@ fn struct_3_list_column_opt_string(
 				.as_any()
 				.downcast_ref::<arrow_array::StringArray>()
 				.ok_or_else(|| ChronicleArrowError::ColumnTypeMismatch(field1_name.to_string()))?;
-			let field2_array = field2_index.as_any().downcast_ref::<arrow_array::StringArray>();
+			let field2_array = field2_index
+				.as_any()
+				.downcast_ref::<arrow_array::StringArray>()
+				.ok_or_else(|| ChronicleArrowError::ColumnTypeMismatch(field2_name.to_string()))?;
 			let field3_array = field3_index.as_any().downcast_ref::<arrow_array::StringArray>();
 
 			Ok((0..struct_array.len())
 				.map(|i| {
 					(
 						field1_array.value(i).to_string(),
-						field2_array.map(|arr| arr.value(i).to_string()),
+						field2_array.value(i).to_string(),
 						field3_array.map(|arr| arr.value(i).to_string()),
 					)
 				})
-				.collect::<Vec<(String, Option<String>, Option<String>)>>())
+				.collect::<Vec<(String, String, Option<String>)>>())
 		} else {
 			Ok(vec![])
 		}

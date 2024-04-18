@@ -320,7 +320,7 @@ impl MaxEncodedLen for OpaSettings {
 #[cfg(feature = "parity-encoding")]
 pub mod codec {
 	use super::*;
-	use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+	use parity_scale_codec::{Decode, Encode};
 
 	use scale_decode::DecodeAsType;
 	use scale_encode::EncodeAsType;

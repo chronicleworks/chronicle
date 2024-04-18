@@ -49,7 +49,7 @@ impl TypesAttributesRoles {
 				Ok(domain)
 			}
 		}
-		#[allow(non_local_definitions)]
+
 		impl From<ChronicleDomain> for TypesAttributesRoles {
 			fn from(value: ChronicleDomain) -> Self {
 				let mut attribute_types = BTreeMap::new();

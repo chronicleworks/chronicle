@@ -62,7 +62,7 @@ impl LedgerReader for Stubstrate {
 		// The block to start from
 		from_block: FromBlock,
 		// The number of blocks to process before ending the stream
-		number_of_blocks: Option<u32>,
+		_number_of_blocks: Option<u32>,
 	) -> Result<BoxStream<LedgerEventContext<Self::Event>>, Self::Error> {
 		tracing::debug!("Starting state updates stream from block {:?}", from_block);
 		let rx = self.tx.subscribe();
@@ -101,7 +101,7 @@ impl LedgerWriter for Stubstrate {
 	// Submit is used to submit a transaction to the ledger
 	async fn do_submit(
 		&self,
-		consistency: WriteConsistency,
+		_consistency: WriteConsistency,
 		submittable: Self::Submittable,
 	) -> Result<ChronicleTransactionId, (Self::Error, ChronicleTransactionId)> {
 		let correlation_id = submittable.correlation_id;
@@ -144,9 +144,9 @@ impl SubstrateStateReader for Stubstrate {
 
 	async fn get_state_entry<K: EncodeWithMetadata + Send + Sync, V: DecodeWithMetadata>(
 		&self,
-		pallet_name: &str,
-		entry_name: &str,
-		address: K,
+		_pallet_name: &str,
+		_entry_name: &str,
+		_address: K,
 	) -> Result<Option<V>, Self::Error> {
 		unimplemented!()
 	}

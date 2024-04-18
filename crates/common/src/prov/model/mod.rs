@@ -95,6 +95,20 @@ pub enum ProcessorError {
 
 	#[error("Missing activity")]
 	MissingActivity,
+
+	#[error("Missing namespace")]
+	MissingNamespace,
+	#[error("Missing entity")]
+	MissingEntity,
+	#[error("Missing agent")]
+	MissingAgent,
+	#[error("Missing time")]
+	MissingTime,
+	#[error("Missing derivation")]
+	MissingDerivation,
+	#[error("Missing domain type")]
+	MissingDomainType,
+
 	#[error("OpaExecutorError: {0}")]
 	OpaExecutor(
 		#[from]

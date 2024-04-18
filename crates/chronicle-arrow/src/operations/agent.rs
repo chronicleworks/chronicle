@@ -39,11 +39,11 @@ fn get_acted_on_behalf_of(
 		"acted_on_behalf_of",
 		row_index,
 		"agent",
-		"role",
 		"activity",
+		"role",
 	)?
 	.into_iter()
-	.map(|(agent, role, activity)| ActedOnBehalfOfRef { agent, role, activity })
+	.map(|(agent, activity, role)| ActedOnBehalfOfRef { agent, role, activity })
 	.collect())
 }
 
@@ -81,7 +81,7 @@ pub fn agent_operations(
 			ns.clone(),
 			AgentId::from_external_id(id),
 			AgentId::from_external_id(acted_on_behalf_of_ref.agent),
-			acted_on_behalf_of_ref.activity.map(ActivityId::from_external_id),
+			Some(ActivityId::from_external_id(acted_on_behalf_of_ref.activity)),
 			acted_on_behalf_of_ref.role.map(Role::from),
 		));
 	}

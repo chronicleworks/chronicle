@@ -134,10 +134,11 @@ pub struct Usage {
 	entity_id: i32,
 }
 
-#[derive(Debug, Queryable, Selectable, Associations, PartialEq)]
+#[derive(Debug, Queryable, Selectable, Identifiable, Associations, PartialEq)]
 #[diesel(table_name = association)]
 #[diesel(belongs_to(Agent))]
 #[diesel(belongs_to(Activity))]
+#[diesel(primary_key(agent_id, activity_id, role))]
 pub struct Association {
 	agent_id: i32,
 	activity_id: i32,
@@ -155,10 +156,11 @@ pub struct Attribution {
 	role: String,
 }
 
-#[derive(Debug, Queryable, Selectable, Associations, PartialEq)]
+#[derive(Debug, Queryable, Selectable, Associations, Identifiable, PartialEq)]
 #[diesel(table_name = delegation)]
 #[diesel(belongs_to(Agent, foreign_key = delegate_id, foreign_key = responsible_id))]
 #[diesel(belongs_to(Activity))]
+#[diesel(primary_key(delegate_id, responsible_id, activity_id, role))]
 pub struct Delegation {
 	delegate_id: i32,
 	responsible_id: i32,

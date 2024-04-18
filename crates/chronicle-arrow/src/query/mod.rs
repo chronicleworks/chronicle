@@ -13,13 +13,6 @@ use arrow_buffer::{Buffer, ToByteSlice};
 use arrow_data::ArrayData;
 use arrow_schema::DataType;
 
-use common::prov::DomaintypeId;
-use diesel::{
-	pg::PgConnection,
-	r2d2::{ConnectionManager, Pool},
-};
-
-
 // For simple id only relations, we can just reuse this mapping
 fn vec_vec_string_to_list_array(
 	vec_vec_string: Vec<Vec<String>>,

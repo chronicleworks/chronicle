@@ -42,9 +42,10 @@ pub enum Error {
 	UnexpectedResponse { server: String, status: StatusCode },
 }
 
+#[derive(Clone)]
 pub struct TokenChecker {
 	client: reqwest::Client,
-	verifier: Option<RemoteJwksVerifier>,
+	verifier: Option<Arc<RemoteJwksVerifier>>,
 	jwks_uri: Option<JwksUri>,
 	userinfo_uri: Option<UserInfoUri>,
 	userinfo_cache: Arc<Mutex<TimedCache<String, Map<String, Value>>>>,
@@ -60,11 +61,14 @@ impl TokenChecker {
 		Self {
 			client: reqwest::Client::new(),
 			verifier: jwks_uri.map(|uri| {
-				RemoteJwksVerifier::new(
-					uri.full_uri(),
-					None,
-					Duration::from_secs(cache_expiry_seconds.into()),
-				)
+				{
+					RemoteJwksVerifier::new(
+						uri.full_uri(),
+						None,
+						Duration::from_secs(cache_expiry_seconds.into()),
+					)
+				}
+				.into()
 			}),
 			jwks_uri: jwks_uri.cloned(),
 			userinfo_uri: userinfo_uri.cloned(),

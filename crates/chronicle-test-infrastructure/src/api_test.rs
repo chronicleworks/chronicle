@@ -158,25 +158,22 @@ async fn test_import_operations() {
             .await
             .unwrap()
             .unwrap()
-            .1, @r###"
- [
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0
- ]
+            .0, @r###"
+ {
+   "namespaces": {},
+   "agents": {},
+   "acted_on_behalf_of": {},
+   "delegation": {},
+   "entities": {},
+   "derivation": {},
+   "generation": {},
+   "attribution": {},
+   "activities": {},
+   "was_informed_by": {},
+   "generated": {},
+   "association": {},
+   "usage": {}
+ }
  "###);
 }
 
@@ -198,13 +195,10 @@ async fn create_namespace() {
             .compact_stable_order()
             .await
             .unwrap(), @r###"
-        {
-          "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-          "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-          "@type": "chronicle:Namespace",
-          "externalId": "testns"
-        }
-        "###);
+ {
+   "@context": "http://chronicle.works/chr/1.0/c.jsonld"
+ }
+ "###);
 }
 
 #[tokio::test]
@@ -238,25 +232,16 @@ async fn create_agent() {
             .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 }
@@ -337,25 +322,16 @@ async fn create_activity() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:activity:testactivity",
-       "@type": [
-         "prov:Activity",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:activity:testactivity",
+   "@type": [
+     "prov:Activity",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testactivity",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 }
@@ -392,25 +368,16 @@ async fn start_activity() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -446,7 +413,7 @@ async fn start_activity() {
        "@id": "chronicle:activity:testactivity",
        "@type": "prov:Activity",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -460,7 +427,7 @@ async fn start_activity() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -502,25 +469,16 @@ async fn contradict_attributes() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -578,25 +536,16 @@ async fn contradict_start_time() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -632,7 +581,7 @@ async fn contradict_start_time() {
        "@id": "chronicle:activity:testactivity",
        "@type": "prov:Activity",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -646,7 +595,7 @@ async fn contradict_start_time() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -703,25 +652,16 @@ async fn contradict_end_time() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -758,7 +698,7 @@ async fn contradict_end_time() {
        "@type": "prov:Activity",
        "endTime": "2018-07-08T09:10:11+00:00",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -771,7 +711,7 @@ async fn contradict_end_time() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -828,25 +768,16 @@ async fn end_activity() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -882,7 +813,7 @@ async fn end_activity() {
        "@id": "chronicle:activity:testactivity",
        "@type": "prov:Activity",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -896,7 +827,7 @@ async fn end_activity() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -929,7 +860,7 @@ async fn end_activity() {
        "@type": "prov:Activity",
        "endTime": "2014-07-08T09:10:11+00:00",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -943,7 +874,7 @@ async fn end_activity() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -985,25 +916,16 @@ async fn activity_use() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:agent:testagent",
-       "@type": [
-         "prov:Agent",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:agent:testagent",
+   "@type": [
+     "prov:Agent",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testagent",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -1049,7 +971,7 @@ async fn activity_use() {
      "chronicle:domaintype:test"
    ],
    "externalId": "testactivity",
-   "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
    "value": {
      "test": "test"
    }
@@ -1080,7 +1002,7 @@ async fn activity_use() {
          "chronicle:domaintype:test"
        ],
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "used": [
          "chronicle:entity:testentity"
        ],
@@ -1092,7 +1014,7 @@ async fn activity_use() {
        "@id": "chronicle:entity:testentity",
        "@type": "prov:Entity",
        "externalId": "testentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
      }
    ]
@@ -1125,7 +1047,7 @@ async fn activity_use() {
        ],
        "endTime": "2014-07-08T09:10:11+00:00",
        "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:qualifiedAssociation": {
          "@id": "chronicle:association:testagent:testactivity:role="
        },
@@ -1143,7 +1065,7 @@ async fn activity_use() {
        "@id": "chronicle:association:testagent:testactivity:role=",
        "@type": "prov:Association",
        "agent": "chronicle:agent:testagent",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "prov:hadActivity": {
          "@id": "chronicle:activity:testactivity"
        }
@@ -1185,25 +1107,16 @@ async fn activity_generate() {
         .unwrap(), @r###"
  {
    "@context": "http://chronicle.works/chr/1.0/c.jsonld",
-   "@graph": [
-     {
-       "@id": "chronicle:activity:testactivity",
-       "@type": [
-         "prov:Activity",
-         "chronicle:domaintype:test"
-       ],
-       "externalId": "testactivity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "value": {
-         "test": "test"
-       }
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
-     }
-   ]
+   "@id": "chronicle:activity:testactivity",
+   "@type": [
+     "prov:Activity",
+     "chronicle:domaintype:test"
+   ],
+   "externalId": "testactivity",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
+   "value": {
+     "test": "test"
+   }
  }
  "###);
 
@@ -1226,7 +1139,7 @@ async fn activity_generate() {
    "@id": "chronicle:entity:testentity",
    "@type": "prov:Entity",
    "externalId": "testentity",
-   "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+   "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
    "value": {},
    "wasGeneratedBy": [
      "chronicle:activity:testactivity"
@@ -1264,7 +1177,7 @@ async fn derive_entity_abstract() {
        "@id": "chronicle:entity:testgeneratedentity",
        "@type": "prov:Entity",
        "externalId": "testgeneratedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {},
        "wasDerivedFrom": [
          "chronicle:entity:testusedentity"
@@ -1274,13 +1187,8 @@ async fn derive_entity_abstract() {
        "@id": "chronicle:entity:testusedentity",
        "@type": "prov:Entity",
        "externalId": "testusedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
      }
    ]
  }
@@ -1319,20 +1227,15 @@ async fn derive_entity_primary_source() {
        "hadPrimarySource": [
          "chronicle:entity:testusedentity"
        ],
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
      },
      {
        "@id": "chronicle:entity:testusedentity",
        "@type": "prov:Entity",
        "externalId": "testusedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
      }
    ]
  }
@@ -1368,7 +1271,7 @@ async fn derive_entity_revision() {
        "@id": "chronicle:entity:testgeneratedentity",
        "@type": "prov:Entity",
        "externalId": "testgeneratedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {},
        "wasRevisionOf": [
          "chronicle:entity:testusedentity"
@@ -1378,13 +1281,8 @@ async fn derive_entity_revision() {
        "@id": "chronicle:entity:testusedentity",
        "@type": "prov:Entity",
        "externalId": "testusedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
      }
    ]
  }
@@ -1420,7 +1318,7 @@ async fn derive_entity_quotation() {
        "@id": "chronicle:entity:testgeneratedentity",
        "@type": "prov:Entity",
        "externalId": "testgeneratedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {},
        "wasQuotedFrom": [
          "chronicle:entity:testusedentity"
@@ -1430,13 +1328,8 @@ async fn derive_entity_quotation() {
        "@id": "chronicle:entity:testusedentity",
        "@type": "prov:Entity",
        "externalId": "testusedentity",
-       "namespace": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
+       "namespace": "chronicle:ns:testns:11111111-1111-1111-1111-111111111111",
        "value": {}
-     },
-     {
-       "@id": "chronicle:ns:testns:5a0ab5b8-eeb7-4812-9fe3-6dd69bd20cea",
-       "@type": "chronicle:Namespace",
-       "externalId": "testns"
      }
    ]
  }
