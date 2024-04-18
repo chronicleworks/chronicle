@@ -1,5 +1,4 @@
 use async_graphql::{
-	extensions::OpenTelemetry,
 	http::{playground_source, GraphQLPlaygroundConfig, ALL_WEBSOCKET_PROTOCOLS},
 	scalar, Context, Enum, Error, ErrorExtensions, ObjectType, Schema, ServerError, SimpleObject,
 	Subscription, SubscriptionType,
@@ -24,7 +23,7 @@ use diesel::{
 	r2d2::{ConnectionManager, Pool, PooledConnection},
 	PgConnection, Queryable,
 };
-use futures::{Future, Stream};
+use futures::Stream;
 use lazy_static::lazy_static;
 use poem::{
 	get, handler,
@@ -629,18 +628,16 @@ where
 {
 	type Output = poem::Response;
 
-	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
-		async move {
-			let checked_claims = check_claims(&self.secconf, &req).await?;
-			self.respond(req, |api_req| {
-				if let Some(claims) = checked_claims {
-					api_req.0.data(claims)
-				} else {
-					api_req.0
-				}
-			})
-			.await
-		}
+	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+		let checked_claims = check_claims(&self.secconf, &req).await?;
+		self.respond(req, |api_req| {
+			if let Some(claims) = checked_claims {
+				api_req.0.data(claims)
+			} else {
+				api_req.0
+			}
+		})
+		.await
 	}
 }
 
@@ -683,21 +680,19 @@ where
 {
 	type Output = poem::Response;
 
-	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
-		async move {
-			let checked_claims = check_claims(&self.secconf, &req).await?;
-			self.respond(
-				req,
-				if let Some(claims) = checked_claims {
-					let mut data = async_graphql::Data::default();
-					data.insert(claims);
-					data
-				} else {
-					async_graphql::Data::default()
-				},
-			)
-			.await
-		}
+	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+		let checked_claims = check_claims(&self.secconf, &req).await?;
+		self.respond(
+			req,
+			if let Some(claims) = checked_claims {
+				let mut data = async_graphql::Data::default();
+				data.insert(claims);
+				data
+			} else {
+				async_graphql::Data::default()
+			},
+		)
+		.await
 	}
 }
 
@@ -858,15 +853,13 @@ impl IriEndpoint {
 impl Endpoint for IriEndpoint {
 	type Output = poem::Response;
 
-	fn call(&self, req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
-		async move {
-			let checked_claims = if let Some(secconf) = &self.secconf {
-				check_claims(secconf, &req).await?
-			} else {
-				None
-			};
-			self.respond(req, checked_claims.as_ref()).await
-		}
+	async fn call(&self, req: poem::Request) -> poem::Result<Self::Output> {
+		let checked_claims = if let Some(secconf) = &self.secconf {
+			check_claims(secconf, &req).await?
+		} else {
+			None
+		};
+		self.respond(req, checked_claims.as_ref()).await
 	}
 }
 
@@ -875,11 +868,9 @@ struct LdContextEndpoint;
 impl Endpoint for LdContextEndpoint {
 	type Output = poem::Response;
 
-	fn call(&self, _req: poem::Request) -> impl Future<Output = poem::Result<Self::Output>> {
-		async move {
-			let context: &serde_json::Value = &common::context::PROV;
-			Ok(IntoResponse::into_response(poem::web::Json(context)))
-		}
+	async fn call(&self, _req: poem::Request) -> poem::Result<Self::Output> {
+		let context: &serde_json::Value = &common::context::PROV;
+		Ok(IntoResponse::into_response(poem::web::Json(context)))
 	}
 }
 
@@ -1014,7 +1005,8 @@ where
 			.id_claims
 			.map(|id_claims| AuthFromJwt { id_claims, allow_anonymous: sec.allow_anonymous });
 		let mut schema = Schema::build(self.query, self.mutation, Subscription)
-			.extension(OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")))
+			//TODO: update
+			// .extension(OpenTelemetry::new(opentelemetry::global::tracer("chronicle-api-gql")))
 			.extension(OpaCheck { claim_parser: claim_parser.clone() });
 		if let Some(claim_parser) = &claim_parser {
 			schema = schema.extension(claim_parser.clone());

@@ -15,7 +15,7 @@ use arrow_flight::{
 	Ticket,
 };
 
-use arrow_flight::{IpcMessage, SchemaAsIpc};
+use arrow_flight::{FlightEndpoint, IpcMessage, SchemaAsIpc};
 
 use arrow_schema::ArrowError;
 
@@ -31,12 +31,13 @@ use futures::{
 };
 
 use meta::{DomainTypeMeta, Term};
-use operations::create_flight_info_for_type;
-use query::EntityAndReferences;
+use query::{
+	activity_count_by_type, agent_count_by_type, entity_count_by_type, EntityAndReferences,
+};
 use r2d2::Pool;
 use serde::Serialize;
 use std::net::SocketAddr;
-use tokio::sync::Semaphore;
+use tokio::task::spawn_blocking;
 
 use std::{sync::Arc, vec::Vec};
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -130,6 +131,101 @@ pub enum ChronicleArrowError {
 		#[source]
 		uuid::Error,
 	),
+}
+
+#[instrument(skip(pool, term, domaintype))]
+pub async fn calculate_count_by_metadata_term(
+	pool: &Pool<ConnectionManager<PgConnection>>,
+	term: &Term,
+	domaintype: Option<String>,
+) -> Result<i64, Status> {
+	let pool = pool.clone();
+	match term {
+		Term::Entity =>
+			spawn_blocking(move || {
+				entity_count_by_type(
+					&pool,
+					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
+				)
+			})
+			.await,
+		Term::Agent =>
+			spawn_blocking(move || {
+				agent_count_by_type(
+					&pool,
+					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
+				)
+			})
+			.await,
+		Term::Activity =>
+			spawn_blocking(move || {
+				activity_count_by_type(
+					&pool,
+					domaintype.map(|x| x.to_string()).iter().map(|s| s.as_str()).collect(),
+				)
+			})
+			.await,
+		_ => Ok(Ok(0)),
+	}
+	.map_err(|e| Status::from_error(e.into()))
+	.and_then(|res| res.map_err(|e| Status::from_error(e.into())))
+}
+
+pub async fn create_flight_info_for_type(
+	pool: Arc<Pool<ConnectionManager<PgConnection>>>,
+	domain_items: Vec<impl TypeName + Send + Sync + 'static>,
+	term: Term,
+	record_batch_size: usize,
+) -> BoxStream<'static, Result<FlightInfo, Status>> {
+	stream::iter(domain_items.into_iter().map(|item| Ok::<_, tonic::Status>(item)))
+		.then(move |item| {
+			let pool = pool.clone();
+			async move {
+				let item = item?; // Handle the Result from the iterator
+				let descriptor_path = vec![term.to_string(), item.as_type_name()];
+				let metadata =
+					get_domain_type_meta_from_cache(&descriptor_path).ok_or_else(|| {
+						Status::from_error(Box::new(ChronicleArrowError::MissingSchemaError))
+					})?;
+
+				let count = calculate_count_by_metadata_term(
+					&pool,
+					&term,
+					Some(item.as_type_name().to_string()),
+				)
+				.await?;
+
+				let tickets = (0..count)
+					.step_by(record_batch_size as _)
+					.map(|start| {
+						let end = std::cmp::min(start as usize + record_batch_size, count as usize);
+
+						let ticket_metadata = ChronicleTicket::new(
+							term,
+							metadata.typ.as_ref().map(|x| x.as_domain_type_id()),
+							start as _,
+							(end - start as usize) as _,
+						);
+						Ticket::try_from(ticket_metadata)
+							.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+
+				let mut flight_info = FlightInfo::new();
+
+				for ticket in tickets {
+					flight_info =
+						flight_info.with_endpoint(FlightEndpoint::new().with_ticket(ticket));
+				}
+
+				Ok(flight_info
+					.with_descriptor(FlightDescriptor::new_path(descriptor_path))
+					.try_with_schema(&metadata.schema)
+					.map_err(|e| Status::from_error(Box::new(ChronicleArrowError::from(e))))?
+					.with_total_records(count))
+			}
+		})
+		.boxed()
 }
 
 #[derive(Clone)]
@@ -336,12 +432,11 @@ impl FlightService for FlightServiceImpl {
 				)
 				.boxed()
 			},
-			_ => {
+			_ =>
 				return Err(Status::not_found(format!(
 					"Definition not found for term: {:?}, type_name: {}",
 					term, type_name
-				)))
-			},
+				))),
 		}
 		.await;
 
@@ -369,9 +464,8 @@ impl FlightService for FlightServiceImpl {
 		let ipc_message_result = SchemaAsIpc::new(&schema.schema, &options).try_into();
 		match ipc_message_result {
 			Ok(IpcMessage(schema)) => Ok(Response::new(SchemaResult { schema })),
-			Err(e) => {
-				Err(Status::internal(format!("Failed to convert schema to IPC message: {}", e)))
-			},
+			Err(e) =>
+				Err(Status::internal(format!("Failed to convert schema to IPC message: {}", e))),
 		}
 	}
 
@@ -477,12 +571,8 @@ impl FlightService for FlightServiceImpl {
 				Some(descriptor) => descriptor,
 				None => return Err(Status::invalid_argument("Flight data has no descriptor")),
 			},
-			Some(Err(e)) => {
-				return Err(Status::internal(format!(
-					"Failed to get first item from stream: {}",
-					e
-				)))
-			},
+			Some(Err(e)) =>
+				return Err(Status::internal(format!("Failed to get first item from stream: {}", e))),
 			None => {
 				return Err(Status::invalid_argument("Stream is empty"));
 			},
@@ -613,8 +703,8 @@ mod tests {
 	use crate::{
 		meta::{cache_domain_schemas, get_domain_type_meta_from_cache, DomainTypeMeta},
 		query::{
-			ActedOnBehalfOfRef, ActivityAndReferences, AgentAndReferences, AgentAttributionRef,
-			AssociationRef, DerivationRef, EntityAndReferences, EntityAttributionRef,
+			ActedOnBehalfOfRef, ActivityAndReferences, ActivityAssociationRef, AgentAndReferences,
+			AgentAttributionRef, DerivationRef, EntityAndReferences, EntityAttributionRef,
 		},
 	};
 
@@ -693,16 +783,13 @@ roles:
 				.iter()
 				.map(|(name, typ)| {
 					let value = match typ {
-						PrimitiveType::String => {
-							serde_json::Value::String(format!("{}-value", name))
-						},
-						PrimitiveType::Int => {
-							serde_json::Value::Number(serde_json::Number::from(42))
-						},
+						PrimitiveType::String =>
+							serde_json::Value::String(format!("{}-value", name)),
+						PrimitiveType::Int =>
+							serde_json::Value::Number(serde_json::Number::from(42)),
 						PrimitiveType::Bool => serde_json::Value::Bool(true),
-						PrimitiveType::JSON => {
-							serde_json::Value::String(format!("{{\"{}\": \"example\"}}", name))
-						},
+						PrimitiveType::JSON =>
+							serde_json::Value::String(format!("{{\"{}\": \"example\"}}", name)),
 					};
 					Attribute::new(name, value)
 				})
@@ -797,7 +884,7 @@ roles:
 				ended: Some(Utc.with_ymd_and_hms(2022, 1, 2, 0, 0, 0).unwrap()),
 				generated: vec![format!("entity-{}", i), format!("entity-{}", i + 1)],
 				was_informed_by: vec![format!("activity-{}", i), format!("activity-{}", i + 1)],
-				was_associated_with: vec![AssociationRef {
+				was_associated_with: vec![ActivityAssociationRef {
 					responsible_agent: format!("agent-{}", i),
 					responsible_role: Some("CERTIFIER".to_string()),
 					delegate_agent: Some(format!("agent-{}", i + 1)),

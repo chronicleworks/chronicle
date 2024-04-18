@@ -1,9 +1,11 @@
+use std::net::SocketAddr;
+
+use opentelemetry_otlp::WithExportConfig;
 use tracing::subscriber::set_global_default;
-use tracing_elastic_apm::config::Config;
 use tracing_flame::FlameLayer;
 use tracing_log::{log::LevelFilter, LogTracer};
+
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
-use url::Url;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConsoleLogging {
@@ -28,15 +30,18 @@ macro_rules! stdio_layer {
 	};
 }
 
-macro_rules! apm_layer {
-	( $address: expr ) => {
-		tracing_elastic_apm::new_layer(
-			"chronicle".to_string(),
-			// remember to use desired protocol below, e.g. http://
-			Config::new($address.to_string()),
-		)
-		.unwrap()
-	};
+macro_rules! oltp_exporter_layer {
+	( $address: expr ) => {{
+		let tracer = opentelemetry_otlp::new_pipeline()
+			.tracing()
+			.with_exporter(
+				opentelemetry_otlp::new_exporter().tonic().with_endpoint($address.to_string()),
+			)
+			.install_simple()
+			.expect("Failed to install OpenTelemetry tracer");
+
+		tracing_opentelemetry::OpenTelemetryLayer::new(tracer)
+	}};
 }
 
 pub struct OptionalDrop<T> {
@@ -55,12 +60,15 @@ impl<T> Drop for OptionalDrop<T> {
 	}
 }
 
-pub fn telemetry(collector_endpoint: Option<Url>, console_logging: ConsoleLogging) -> impl Drop {
+pub fn telemetry(
+	collector_endpoint: Option<SocketAddr>,
+	console_logging: ConsoleLogging,
+) -> impl Drop {
 	full_telemetry(collector_endpoint, None, console_logging)
 }
 
 pub fn full_telemetry(
-	collector_endpoint: Option<Url>,
+	exporter_port: Option<SocketAddr>,
 	flame_file: Option<&str>,
 	console_logging: ConsoleLogging,
 ) -> impl Drop {
@@ -74,26 +82,27 @@ pub fn full_telemetry(
 	LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
 	let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
-	match (collector_endpoint, flame_layer, console_logging) {
+	match (exporter_port, flame_layer, console_logging) {
 		(Some(otel), Some(flame_layer), ConsoleLogging::Json) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
-				.with(apm_layer!(otel))
-				.with(stdio_layer!().json()),
+				.with(stdio_layer!().json())
+				.with(oltp_exporter_layer!(otel)),
 		),
+
 		(Some(otel), Some(flame_layer), ConsoleLogging::Pretty) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
 				.with(stdio_layer!().pretty())
-				.with(apm_layer!(otel.as_str())),
+				.with(oltp_exporter_layer!(otel)),
 		),
 		(Some(otel), Some(flame_layer), ConsoleLogging::Off) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
-				.with(apm_layer!(otel.as_str())),
+				.with(oltp_exporter_layer!(otel)),
 		),
 		(None, Some(flame_layer), ConsoleLogging::Json) => set_global_default(
 			Registry::default()
@@ -121,17 +130,19 @@ pub fn full_telemetry(
 		(Some(otel), None, ConsoleLogging::Json) => set_global_default(
 			Registry::default()
 				.with(env_filter)
-				.with(apm_layer!(otel))
-				.with(stdio_layer!().json()),
+				.with(stdio_layer!().json())
+				.with(oltp_exporter_layer!(otel)),
 		),
 		(Some(otel), None, ConsoleLogging::Pretty) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(stdio_layer!().pretty())
-				.with(apm_layer!(otel.as_str())),
+				.with(oltp_exporter_layer!(otel)),
 		),
-		(Some(otel), None, ConsoleLogging::Off) =>
-			set_global_default(Registry::default().with(env_filter).with(apm_layer!(otel.as_str()))),
+		(Some(otel), None, ConsoleLogging::Off) => {
+			let otel_layer = oltp_exporter_layer!(otel);
+			set_global_default(Registry::default().with(env_filter).with(otel_layer))
+		},
 		(None, None, ConsoleLogging::Json) =>
 			set_global_default(Registry::default().with(env_filter).with(stdio_layer!().json())),
 		(None, None, ConsoleLogging::Pretty) => {

@@ -28,13 +28,19 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
+use common::prov::operations::{ChronicleOperation, CreateNamespace, SetAttributes};
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_template.
 pub trait WeightInfo {
 	fn apply() -> Weight;
+
+	fn operation_weight(ops: &[ChronicleOperation]) -> Weight;
 }
+
+
+
 
 /// Weights for pallet_template using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
@@ -49,6 +55,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_parts(9_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	/// Calculates the weight of processing a vector of Chronicle operations.
+	/// Assumes a worst-case scenario where each operation requires one read and one write,
+	/// plus a base execution time.
+	fn operation_weight(ops: &[ChronicleOperation]) -> Weight {
+		let reads_writes = ops.len() as u64 * (T::DbWeight::get().reads(1) + T::DbWeight::get().writes(1));
+		Weight::from_parts(9_000_000, 0).saturating_add(reads_writes)
+	}
 }
 
 // For backwards compatibility and tests
@@ -62,5 +76,13 @@ impl WeightInfo for () {
 		// Minimum execution time: 8_000_000 picoseconds.
 		Weight::from_parts(9_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+
+	/// Calculates the weight of processing a vector of Chronicle operations.
+	/// Assumes a worst-case scenario where each operation requires one read and one write,
+	/// plus a base execution time.
+	fn operation_weight(ops: &[ChronicleOperation]) -> Weight {
+		let reads_writes = ops.len() as u64 * (RocksDbWeight::get().reads(1) + RocksDbWeight::get().writes(1));
+		Weight::from_parts(9_000_000, 0).saturating_add(reads_writes)
 	}
 }

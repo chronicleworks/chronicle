@@ -104,7 +104,7 @@ mockito = "1.1"
 newtype-derive-2018 = "0.2.1"
 oauth2 = "4.4"
 opa = { git = "https://github.com/chronicleworks/opa-rs", rev = "9fa2fbce" }
-opentelemetry = { version = "^0.21" }
+opentelemetry = { version = "0.22" }
 owo-colors = "3.5.0"
 parking_lot = "0.12.0"
 percent-encoding = "2.1.0"
@@ -149,7 +149,7 @@ toml = "0.7.3"
 tracing = "^0.1.35"
 tracing-elastic-apm = "^3.2.3"
 tracing-log = "^0.1.3"
-tracing-opentelemetry = "^0.22"
+tracing-opentelemetry = "0.23"
 tracing-subscriber = { version = "^0.3.15", features = [
   "default",
   "registry",

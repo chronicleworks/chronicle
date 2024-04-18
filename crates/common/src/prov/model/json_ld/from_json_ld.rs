@@ -10,7 +10,7 @@ use locspan::Meta;
 use mime::Mime;
 use rdf_types::{vocabulary::no_vocabulary_mut, BlankIdBuf, IriVocabularyMut};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+
 use tracing::{error, instrument, trace};
 
 #[cfg(not(feature = "std"))]
@@ -197,7 +197,7 @@ impl ProvModel {
 					if let serde_json::Value::Object(object) = serde_object {
 						let attributes = object
 							.into_iter()
-							.map(|(typ, value)| Attribute::new(typ, value.clone().into()))
+							.map(|(typ, value)| Attribute::new(typ, value.clone()))
 							.collect();
 
 						return Ok(Attributes::new(typ?, attributes));

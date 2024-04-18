@@ -155,21 +155,23 @@ pub mod pallet {
 		// contradiction
 		#[pallet::call_index(0)]
 		#[pallet::weight({
-			let weight = T::WeightInfo::apply();
+			let weight = T::WeightInfo::operation_weight(&operations.items);
 			let dispatch_class = DispatchClass::Normal;
 			let pays_fee = Pays::No;
 			(weight, dispatch_class, pays_fee)
 		})]
-		pub fn apply(origin: OriginFor<T>, operations: T::OperationSubmission) -> DispatchResult {
+		pub fn apply(origin: OriginFor<T>, operations: OperationSubmission) -> DispatchResult {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://docs.substrate.io/main-docs/build/origins/
 			let _who = ensure_signed(origin)?;
 
-			let sub = operations.into();
-
-			// Get operations and load their dependencies
-			let deps = sub.items.iter().flat_map(|tx| tx.dependencies()).collect::<BTreeSet<_>>();
+			// Get operations and load tßheir dependencies
+			let deps = operations
+				.items
+				.iter()
+				.flat_map(|tx| tx.dependencies())
+				.collect::<BTreeSet<_>>();
 
 			let initial_input_models: Vec<_> = deps
 				.into_iter()
@@ -182,7 +184,7 @@ pub mod pallet {
 
 			let mut model = common::prov::ProvModel::default();
 
-			for op in sub.items.iter() {
+			for op in operations.items.iter() {
 				let res = op.process(model, state.input());
 				match res {
 					// A contradiction raises an event, not an error and shortcuts processing -
@@ -193,8 +195,8 @@ pub mod pallet {
 
 						Self::deposit_event(Event::<T>::Contradiction(
 							source,
-							(*sub.identity).clone(),
-							sub.correlation_id,
+							(*operations.identity).clone(),
+							operations.correlation_id,
 						));
 
 						return Ok(());
@@ -226,7 +228,11 @@ pub mod pallet {
 			}
 
 			// Emit an event.
-			Self::deposit_event(Event::Applied(delta, (*sub.identity).clone(), sub.correlation_id));
+			Self::deposit_event(Event::Applied(
+				delta,
+				(*operations.identity).clone(),
+				operations.correlation_id,
+			));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}

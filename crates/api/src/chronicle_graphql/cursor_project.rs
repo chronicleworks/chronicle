@@ -2,12 +2,6 @@ use async_graphql::{
 	connection::{Edge, EmptyFields},
 	OutputType,
 };
-use diesel::{
-	prelude::*,
-	r2d2::{ConnectionManager, PooledConnection},
-};
-
-type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 
 pub fn project_to_nodes<T, I>(
 	rx: I,

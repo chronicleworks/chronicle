@@ -16,7 +16,7 @@ use common::{
 };
 #[cfg(feature = "devmode")]
 use embedded_substrate::EmbeddedSubstrate;
-use futures::{future::join, Future, FutureExt, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 #[cfg(not(feature = "devmode"))]
 use protocol_substrate_chronicle::ChronicleSubstrateClient;
 
@@ -150,12 +150,11 @@ pub async fn arrow_api_server(
 	);
 
 	match addresses {
-		Some(addresses) => {
+		Some(addresses) =>
 			chronicle_arrow::run_flight_service(domain, pool, api, &addresses, record_batch_size)
 				.await
 				.map_err(|e| ApiError::ArrowService(e.into()))
-				.map(|_| Some(futures::future::ready(Ok(()))))
-		},
+				.map(|_| Some(futures::future::ready(Ok(())))),
 		None => Ok(None),
 	}
 }
@@ -661,7 +660,7 @@ where
 {
 	use colored_json::prelude::*;
 
-	let response = execute_subcommand(gql, &domain, model).await?;
+	let response = execute_subcommand(gql, domain, model).await?;
 
 	match response {
         (
@@ -813,7 +812,7 @@ pub async fn bootstrap<Query, Mutation>(
 	chronicle_telemetry::telemetry(
 		matches
 			.get_one::<String>("instrument")
-			.map(|s| Url::parse(s).expect("cannot parse instrument as URI: {s}")),
+			.map(|s| s.to_socket_addrs().expect("Could not parse as socketaddr").next().unwrap()),
 		if matches.contains_id("console-logging") {
 			match matches.get_one::<String>("console-logging") {
 				Some(level) => match level.as_str() {

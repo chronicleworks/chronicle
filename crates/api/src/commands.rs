@@ -4,7 +4,7 @@ use std::{path::PathBuf, sync::Arc};
 use std::{path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Utc};
-use futures::{AsyncRead, Future};
+use futures::AsyncRead;
 
 use serde::{Deserialize, Serialize};
 

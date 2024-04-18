@@ -259,7 +259,6 @@ pub mod test_runtime {
 
 	#[tokio::test]
 	pub async fn connect() {
-		//chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
 		let handle = crate::shared_dev_node_rpc_on_port(2003, true).await.unwrap();
 
 		let client = handle.connect_chronicle::<PolkadotConfig>().await.unwrap();

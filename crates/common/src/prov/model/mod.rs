@@ -653,30 +653,18 @@ impl ProvModel {
 			total_activities: self.activities.len(),
 			total_attributions: self
 				.attribution
-				.iter()
-				.map(|(_, attributions)| attributions.len())
+				.values()
+				.map(|attributions| attributions.len())
 				.sum(),
-			total_derivations: self
-				.derivation
-				.iter()
-				.map(|(_, derivations)| derivations.len())
-				.sum(),
-			total_generations: self
-				.generation
-				.iter()
-				.map(|(_, generations)| generations.len())
-				.sum(),
-			total_usages: self.usage.iter().map(|(_, usages)| usages.len()).sum(),
+			total_derivations: self.derivation.values().map(|derivations| derivations.len()).sum(),
+			total_generations: self.generation.values().map(|generations| generations.len()).sum(),
+			total_usages: self.usage.values().map(|usages| usages.len()).sum(),
 			total_associations: self
 				.association
-				.iter()
-				.map(|(_, associations)| associations.len())
+				.values()
+				.map(|associations| associations.len())
 				.sum(),
-			total_delegations: self
-				.delegation
-				.iter()
-				.map(|(_, delegations)| delegations.len())
-				.sum(),
+			total_delegations: self.delegation.values().map(|delegations| delegations.len()).sum(),
 		}
 	}
 
@@ -1161,7 +1149,7 @@ impl ProvModel {
 
 				self.modify_entity(&namespace, &id, move |entity| {
 					entity.domaintypeid = attributes.get_typ().clone();
-					entity.attributes = attributes.get_items().iter().cloned().collect();
+					entity.attributes = attributes.get_items().to_vec();
 				});
 
 				Ok(())
@@ -1188,7 +1176,7 @@ impl ProvModel {
 
 				self.modify_activity(&namespace, &id, move |activity| {
 					activity.domaintype_id = attributes.get_typ().clone();
-					activity.attributes = attributes.get_items().iter().cloned().collect();
+					activity.attributes = attributes.get_items().to_vec();
 				});
 
 				Ok(())
@@ -1213,7 +1201,7 @@ impl ProvModel {
 
 				self.modify_agent(&namespace, &id, move |agent| {
 					agent.domaintypeid = attributes.get_typ().clone();
-					agent.attributes = attributes.get_items().iter().cloned().collect();
+					agent.attributes = attributes.get_items().to_vec();
 				});
 
 				Ok(())

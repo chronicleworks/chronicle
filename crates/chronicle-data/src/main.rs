@@ -39,7 +39,7 @@ fn format_flight_info_as_table(flight_infos: Vec<FlightInfo>) -> String {
 
 	table.set_titles(row!["Descriptor", "Endpoints", "Summary"]);
 
-	let mut grouped_by_descriptor: std::collections::HashMap<String, Vec<FlightInfo>> =
+	let grouped_by_descriptor: std::collections::HashMap<String, Vec<FlightInfo>> =
 		std::collections::HashMap::new();
 
 	table.to_string()
