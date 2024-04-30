@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "oauth-token"
-version = "0.7.0"
+version = "0.7.6"
 
 [dependencies]
 anyhow = { workspace = true }

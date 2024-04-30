@@ -231,19 +231,34 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
                     Ok((channel, Ok(Ok(response))))
                         if response.message_type == Message_MessageType::PING_REQUEST =>
                     {
-                        trace!(ping_request = ?response.correlation_id);
+                        debug!(ping_request = ?response.correlation_id);
                         let ping_reply = PingResponse::default().encode_to_vec();
-                        channel
-                            .tx
-                            .lock()
-                            .unwrap()
-                            .send(
-                                Message_MessageType::PING_RESPONSE,
-                                &response.correlation_id,
-                                &ping_reply,
-                            )
-                            .map_err(|e| error!(send_ping_reply = ?e))
-                            .ok();
+                        let tx_guard = channel.tx.lock().expect("Failed to lock tx for sending");
+                        let ping_response_result = tx_guard.send(
+                            Message_MessageType::PING_RESPONSE,
+                            &response.correlation_id,
+                            &ping_reply,
+                        );
+
+                        if let Err(e) = ping_response_result {
+                            error!(send_ping_reply = ?e);
+                        }
+
+                        let new_uuid = uuid::Uuid::new_v4().to_string();
+                        let ping_request_result = tx_guard.send(
+                            Message_MessageType::PING_REQUEST,
+                            &new_uuid,
+                            &ping_reply,
+                        );
+
+                        if let Err(e) = ping_request_result {
+                            error!(send_ping_request = ?e);
+                        }
+                    }
+                    Ok((_channel, Ok(Ok(response))))
+                        if response.message_type == Message_MessageType::PING_RESPONSE =>
+                    {
+                        debug!(ping_response = ?response.correlation_id);
                     }
                     Ok((channel, Ok(Ok(response)))) => {
                         let response = RX::parse_from_bytes(&response.content)

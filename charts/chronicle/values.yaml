@@ -46,7 +46,7 @@ startUpProbe:
   ## @md | `startUpProbe.periodSeconds` | how often (in seconds) to perform the probe | 10 |
   periodSeconds: 10
   ## @md | `startUpProbe.timeoutSeconds` | number of seconds after which the probe times out | 3 |
-  timeoutSeconds: 3
+  timeoutSeconds: 30
   ## @md | `startUpProbe.namespaceName` | the Chronicle namespace in which the probe operates | default |
   namespaceName: default
   ## @md | `startUpProbe.namespaceUuid` | the UUID of the Chronicle namespace in which the probe operates | fd717fd6-70f1-44c1-81de-287d5e101089 |

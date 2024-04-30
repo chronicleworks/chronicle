@@ -1837,6 +1837,7 @@ mod test {
     use opa_tp_protocol::state::{policy_address, policy_meta_address, PolicyMeta};
     use rand_core::SeedableRng;
     use sawtooth_sdk::messages::setting::{Setting, Setting_Entry};
+    use tracing::info;
 
     use std::{collections::HashMap, time::Duration};
     use tempfile::TempDir;
@@ -1860,6 +1861,7 @@ mod test {
                     // Recv until we get a commit notification
                     loop {
                         let commit = self.api.notify_commit.subscribe().recv().await.unwrap();
+                        info!(wait_for_commit = ?commit);
                         match commit {
                             common::ledger::SubmissionStage::Submitted(Ok(_)) => continue,
                             common::ledger::SubmissionStage::Committed(commit, _id) => {
