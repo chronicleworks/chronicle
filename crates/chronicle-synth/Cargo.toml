@@ -2,7 +2,7 @@
 build   = "build.rs"
 edition = "2021"
 name    = "chronicle-synth"
-version = "0.7.0"
+version = "0.7.6"
 
 [lib]
 name = "chronicle_synth"
