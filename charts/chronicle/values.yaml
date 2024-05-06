@@ -36,8 +36,13 @@ devIdProvider:
     ## @md | `devIdProvider.image.tag` | the image tag | latest |
     tag: BTP2.1.0-0.7.4
 
-## @md | `endpoints` | which API endpoints to offer | data, graphql |
+opa:
+  enabled: false
+
+## @md | `endpoints` | which API endpoints to offer | arrow, json-ld, graphql |
 endpoints:
+  arrow:
+    enabled: true
   data:
     enabled: true
   graphql:
@@ -184,8 +189,19 @@ resources:
 
 volumes: {}
 
-## @md | `sawtooth` | sawtooth options may be configured | see [Sawtooth](../sawtooth/README.md) |
 node:
+  vault:
+    keys:
+      - name: aura
+        type: aura
+        scheme: secp256k1
+        vaultPath: kv/secret/chronicle-node # path at which the secret is located in Vault
+        vaultKey: aura # key under which the secret value is stored in Vault
+        extraDerivation: "//${HOSTNAME}//aura" # allows to have unique derived keys for each pod of the statefulset
+    nodeKey:
+      name: bootnode-key
+      vaultPath: kv/secret/chronicle-node
+      vaultKey: bootnode-key
   image:
     ## @md | `test.api.image.pullPolicy` | the image pull policy | IfNotPresent |
     pullPolicy: IfNotPresent
@@ -196,3 +212,5 @@ node:
   node:
     chain: "chronicle"
     command: "node-chronicle"
+
+

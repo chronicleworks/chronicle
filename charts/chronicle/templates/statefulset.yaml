@@ -1,4 +1,4 @@
-{{$stlServiceName := include "lib.call-nested" (list . "sawtooth" "common.names.fullname")}}
+{{$substrateServiceName := include "lib.call-nested" (list . "node" "common.names.fullname")}}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -19,57 +19,6 @@ spec:
     spec:
       serviceAccountName: {{ include "lib.serviceAccountName" . }}
       affinity: {{ include "lib.safeToYaml" .Values.affinity | nindent 8 }}
-      initContainers:
-        - name: chronicle-permissions
-          image: busybox:1.36
-          command: [ "sh", "-c"]
-          args:
-            - |
-              chown -R 999:999 /var/lib/chronicle || true
-          volumeMounts:
-            - name: chronicle-config
-              mountPath: /etc/chronicle/config/
-            - name: chronicle-secrets
-              mountPath: /var/lib/chronicle/secrets/
-              readOnly: false
-        - name: chronicle-keystore
-          {{- include "lib.image" (dict "imageRoot" .Values.image "global" .Values.global ) | nindent 10 }}
-          command: [ "bash", "-c"]
-          args:
-            - |
-              /usr/local/bin/chronicle \
-              -c /etc/chronicle/config/config.toml \
-              verify-keystore
-          env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
-            - name: RUST_LOG
-              value: {{ .Values.logLevel }}
-          volumeMounts:
-            - name: chronicle-config
-              mountPath: /etc/chronicle/config/
-            - name: chronicle-secrets
-              mountPath: /var/lib/chronicle/secrets/
-              readOnly: false
-        {{- if and .Values.opa.enabled .Values.opa.policy.url }}
-        - name: wait-for-opa-settings
-          {{- include "lib.image" (dict "imageRoot" .Values.sawset.image "global" .Values.global ) | nindent 10 }}
-          command: [ "bash", "-exc"]
-          args:
-            - |
-              keepTrying=true
-              while [ $keepTrying = "true" ]; do
-                if sawtooth settings list --url http://$HOST:$PORT | grep -q "chronicle.opa.policy_name"; then
-                  break
-                else
-                  echo "Waiting for OPA policy id."
-                  sleep 10
-                fi
-              done
-          env:
-            - name: HOST
-              value: {{ $stlServiceName }}.{{ .Release.Namespace }}.svc.cluster.local
-            - name: PORT
-              value: "{{ include "chronicle.sawtooth.rest" . }}"
-        {{- end }}
       containers:
         {{- if .Values.postgres.enabled }}
         - name: postgres
@@ -113,7 +62,7 @@ spec:
               chronicle \
                 -c /etc/chronicle/config/config.toml \
                 --console-logging json \
-                --sawtooth tcp://{{ include "chronicle.sawtooth.service" . }}:{{ include "chronicle.sawtooth.sawcomp" . }} \
+                --substrate grpc://{{ include "chronicle.substrate.service" . }}:{{ include "chronicle.substrate.rpc" . }} \
                 --remote-database \
                 --database-name {{ .Values.postgres.database }} \
                 --database-username {{ .Values.postgres.user }} \

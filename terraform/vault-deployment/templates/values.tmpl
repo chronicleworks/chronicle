@@ -1,0 +1,85 @@
+global:
+  tlsDisable: false
+  %{ if kubernetes_image_pull_secrets != null }
+  imagePullSecrets:
+  %{ for secret in kubernetes_image_pull_secrets }
+    - name: ${secret}
+  %{ endfor }
+  %{ endif }
+injector:
+  enabled: ${vault_injector_enable}
+  logLevel: debug
+  image:
+    repository: ${vault_injector_image_repository}
+    tag: "${vault_injector_image_tag}"
+  agentImage:
+    repository: ${vault_image_repository}
+    tag: "${vault_image_tag}"
+server:
+  serviceAccount:
+    create: false
+    name: ${kubernetes_vault_service_account}
+  logLevel: debug
+  image:
+    repository: ${vault_image_repository}
+    tag: "${vault_image_tag}"
+  dataStorage:
+    size: ${vault_data_storage_size}Gi
+  service:
+    enabled: true
+    type: ${kubernetes_vault_server_service_type}
+  ha:
+    enabled: true
+    replicas: ${vault_replica_count}
+    apiAddr: "https://$(VAULT_K8S_POD_NAME).svc:8200"
+    raft:
+      enabled: true
+      setNodeId: true
+
+      config: |
+        ui = true
+
+        listener "tcp" {
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+
+          tls_disable   = false
+          tls_cert_file = "/vault/userconfig/${kubernetes_secret_name_tls_cert}/tls.crt"
+          tls_key_file  = "/vault/userconfig/${kubernetes_secret_name_tls_cert}/tls.key"
+          tls_client_ca_file = "/vault/userconfig/${kubernetes_secret_name_tls_ca}/ca.crt"
+
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+
+          retry_join {
+            auto_join             = "provider=k8s namespace=${kubernetes_namespace} label_selector=\"component=server,app.kubernetes.io/name=vault\""
+            leader_tls_servername = "${vault_leader_tls_servername}"
+            leader_ca_cert_file   = "/vault/userconfig/${kubernetes_secret_name_tls_ca}/ca.crt"
+          }
+        }
+
+        seal "${vault_seal_method}" {}
+
+        service_registration "kubernetes" {}
+  extraVolumes:
+    - type: secret
+      name: ${kubernetes_secret_name_tls_cert}
+    - type: secret
+      name: ${kubernetes_secret_name_tls_ca}
+  extraEnvironmentVars:
+    VAULT_CAPATH: /vault/userconfig/tls-ca/ca.crt
+    VAULT_ADDR: https://$(VAULT_K8S_POD_NAME).${helm_release_name}-internal:8200
+    VAULT_SKIP_VERIFY: false
+  %{ if kubernetes_extra_secret_environment_variables != null }
+  extraSecretEnvironmentVars:
+  %{ for secret in kubernetes_extra_secret_environment_variables }
+    - envName: ${secret["envName"]}
+      secretName: ${secret["secretName"]}
+      secretKey: ${secret["secretKey"]}
+  %{ endfor }
+  %{ endif }
+ui:
+  enabled: true
+  serviceType: ${kubernetes_vault_ui_service_type}

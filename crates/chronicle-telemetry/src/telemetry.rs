@@ -1,6 +1,4 @@
-use std::net::SocketAddr;
 
-use opentelemetry_otlp::WithExportConfig;
 use tracing::subscriber::set_global_default;
 use tracing_flame::FlameLayer;
 use tracing_log::{log::LevelFilter, LogTracer};
@@ -31,11 +29,11 @@ macro_rules! stdio_layer {
 }
 
 macro_rules! oltp_exporter_layer {
-	( $address: expr ) => {{
+	() => {{
 		let tracer = opentelemetry_otlp::new_pipeline()
 			.tracing()
 			.with_exporter(
-				opentelemetry_otlp::new_exporter().tonic().with_endpoint($address.to_string()),
+				opentelemetry_otlp::new_exporter().tonic().with_env(),
 			)
 			.install_simple()
 			.expect("Failed to install OpenTelemetry tracer");
@@ -61,14 +59,14 @@ impl<T> Drop for OptionalDrop<T> {
 }
 
 pub fn telemetry(
-	collector_endpoint: Option<SocketAddr>,
+	otel_enable: bool,
 	console_logging: ConsoleLogging,
 ) -> impl Drop {
-	full_telemetry(collector_endpoint, None, console_logging)
+	full_telemetry(otel_enable, None, console_logging)
 }
 
 pub fn full_telemetry(
-	exporter_port: Option<SocketAddr>,
+	otel_export: bool,
 	flame_file: Option<&str>,
 	console_logging: ConsoleLogging,
 ) -> impl Drop {
@@ -82,35 +80,35 @@ pub fn full_telemetry(
 	LogTracer::init_with_filter(LevelFilter::Trace).ok();
 
 	let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
-	match (exporter_port, flame_layer, console_logging) {
-		(Some(otel), Some(flame_layer), ConsoleLogging::Json) => set_global_default(
+	match (otel_export, flame_layer, console_logging) {
+		(true, Some(flame_layer), ConsoleLogging::Json) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
 				.with(stdio_layer!().json())
-				.with(oltp_exporter_layer!(otel)),
+				.with(oltp_exporter_layer!()),
 		),
 
-		(Some(otel), Some(flame_layer), ConsoleLogging::Pretty) => set_global_default(
+		(true, Some(flame_layer), ConsoleLogging::Pretty) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
 				.with(stdio_layer!().pretty())
-				.with(oltp_exporter_layer!(otel)),
+				.with(oltp_exporter_layer!()),
 		),
-		(Some(otel), Some(flame_layer), ConsoleLogging::Off) => set_global_default(
+		(true, Some(flame_layer), ConsoleLogging::Off) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
-				.with(oltp_exporter_layer!(otel)),
+				.with(oltp_exporter_layer!()),
 		),
-		(None, Some(flame_layer), ConsoleLogging::Json) => set_global_default(
+		(false, Some(flame_layer), ConsoleLogging::Json) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(flame_layer)
 				.with(stdio_layer!().json()),
 		),
-		(None, Some(flame_layer), ConsoleLogging::Pretty) => {
+		(false, Some(flame_layer), ConsoleLogging::Pretty) => {
 			cfg_if::cfg_if! {
 			  if #[cfg(feature = "tokio-tracing")] {
 				set_global_default(Registry::default()
@@ -127,25 +125,25 @@ pub fn full_telemetry(
 			  }
 			}
 		},
-		(Some(otel), None, ConsoleLogging::Json) => set_global_default(
+		(true, None, ConsoleLogging::Json) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(stdio_layer!().json())
-				.with(oltp_exporter_layer!(otel)),
+				.with(oltp_exporter_layer!()),
 		),
-		(Some(otel), None, ConsoleLogging::Pretty) => set_global_default(
+		(true, None, ConsoleLogging::Pretty) => set_global_default(
 			Registry::default()
 				.with(env_filter)
 				.with(stdio_layer!().pretty())
-				.with(oltp_exporter_layer!(otel)),
+				.with(oltp_exporter_layer!()),
 		),
-		(Some(otel), None, ConsoleLogging::Off) => {
-			let otel_layer = oltp_exporter_layer!(otel);
+		(true, None, ConsoleLogging::Off) => {
+			let otel_layer = oltp_exporter_layer!();
 			set_global_default(Registry::default().with(env_filter).with(otel_layer))
 		},
-		(None, None, ConsoleLogging::Json) =>
+		(false, None, ConsoleLogging::Json) =>
 			set_global_default(Registry::default().with(env_filter).with(stdio_layer!().json())),
-		(None, None, ConsoleLogging::Pretty) => {
+		(false, None, ConsoleLogging::Pretty) => {
 			cfg_if::cfg_if! {
 			  if #[cfg(feature = "tokio-tracing")] {
 				set_global_default(Registry::default()

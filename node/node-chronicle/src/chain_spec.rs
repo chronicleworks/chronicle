@@ -133,3 +133,67 @@ fn testnet_genesis(
 		chronicle: pallet_chronicle::GenesisConfig::<Runtime> { ..Default::default() },
 	}
 }
+
+
+pub fn chronicle_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
+	log::info!("testnet configuration");
+	Ok(ChainSpec::from_genesis(
+		// Name
+		"Chronicle Mainnet",
+		// ID
+		"chronicle",
+		ChainType::Local,
+		move || {
+			mainnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![],
+				// Sudo account
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				// Pre-funded accounts
+				true,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		Some("chronicle"),
+		// Properties
+		None,
+		None,
+		// Extensions
+		None,
+	))
+}
+
+/// Configure initial storage state for FRAME modules.
+fn mainnet_genesis(
+	wasm_binary: &[u8],
+	initial_authorities: Vec<(AuraId, GrandpaId)>,
+	root_key: AccountId,
+	_enable_println: bool,
+) -> RuntimeGenesisConfig {
+	RuntimeGenesisConfig {
+		system: SystemConfig {
+			// Add Wasm runtime to storage.
+			code: wasm_binary.to_vec(),
+			..Default::default()
+		},
+		aura: AuraConfig {
+			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		},
+		grandpa: GrandpaConfig {
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
+			..Default::default()
+		},
+		sudo: SudoConfig {
+			// Assign network admin rights.
+			key: Some(root_key),
+		},
+		chronicle: pallet_chronicle::GenesisConfig::<Runtime> { ..Default::default() },
+	}
+}

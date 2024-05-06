@@ -14,7 +14,7 @@ use try_runtime_cli::block_building_info::timestamp_with_aura_info;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
-		"Substrate Node".into()
+		"Chronicle Substrate Node".into()
 	}
 
 	fn impl_version() -> String {
@@ -30,7 +30,7 @@ impl SubstrateCli for Cli {
 	}
 
 	fn support_url() -> String {
-		"support.anonymous.an".into()
+		"support.chronicle.works".into()
 	}
 
 	fn copyright_start_year() -> i32 {
@@ -41,6 +41,7 @@ impl SubstrateCli for Cli {
 		Ok(match id {
 			"" | "dev" => Box::new(chain_spec::development_config()?),
 			"local" => Box::new(chain_spec::local_testnet_config()?),
+			"chronicle" => Box::new(chain_spec::chronicle_config()?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})

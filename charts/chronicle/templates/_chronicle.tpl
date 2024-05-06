@@ -3,7 +3,7 @@
 {{- end -}}
 
 {{- define "tp.replicas" -}}
-{{ include "lib.call-nested" (list . "sawtooth" "sawtooth.replicas") | int }}
+{{ include "lib.call-nested" (list . "node" "node.replicas") | int }}
 {{- end -}}
 
 {{- define "chronicle.service.name" -}}
@@ -26,16 +26,12 @@ chronicle: {{ include "common.names.fullname" . }}
 {{ include "chronicle.labels.appLabels" . }}
 {{- end -}}
 
-{{- define "chronicle.sawtooth.sawcomp" -}}
-{{ include "lib.call-nested" (list . "sawtooth" "sawtooth.ports.sawcomp") | int }}
+{{- define "chronicle.substrate.rpc" -}}
+9982
 {{- end -}}
 
-{{- define "chronicle.sawtooth.rest" -}}
-{{ include "lib.call-nested" (list . "sawtooth" "sawtooth.ports.rest") | int }}
-{{- end -}}
-
-{{- define "chronicle.sawtooth.service" -}}
-{{- $svc := include "lib.call-nested" (list . "sawtooth" "common.names.fullname") -}}
+{{- define "chronicle.substrate.service" -}}
+{{- $svc := include "lib.call-nested" (list . "node" "common.names.fullname") -}}
 {{- $ns := .Release.Namespace -}}
 {{- $domain := "svc.cluster.local" -}}
 {{ printf "%s.%s.%s" $svc $ns $domain }}
