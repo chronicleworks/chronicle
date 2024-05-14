@@ -98,6 +98,8 @@ prost = "0.10" # common, sawtooth-protocol, sawtooth-tp: version = "0.10.0"
 prost-build = "0.10.0"
 prost-types = "0.11.2"
 protobuf = "2.27.1"
+metrics = "0.21.0"
+metrics-exporter-prometheus = "0.12.1"
 question = "0.2.2"
 r2d2 = "0.8.9"
 rand = { version = "0.8.5", features = ["getrandom"] }

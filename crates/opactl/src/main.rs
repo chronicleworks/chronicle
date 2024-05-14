@@ -405,6 +405,8 @@ async fn main() {
             }
         })
         .ok();
+
+    std::process::exit(0);
 }
 
 // Use as much of the opa-tp as possible, by using a simulated `RequestResponseSawtoothChannel`

@@ -1,7 +1,6 @@
 use clap::{Arg, Command};
 use http::{HeaderValue, StatusCode};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde_json::{json, Value};
 use std::net::{SocketAddr, ToSocketAddrs};
 use tungstenite::{client::IntoClientRequest, connect, Message};
