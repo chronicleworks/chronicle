@@ -1094,7 +1094,32 @@ impl SubCommand for CliModel {
                         .value_parser(["data", "graphql"])
                         .default_values(&["data", "graphql"])
                         .help("which API endpoints to offer")
-                    ),
+                    )
+            .arg(
+                Arg::new("liveness-interval")
+                    .long("liveness-interval")
+                    .takes_value(true)
+                    .value_name("SECONDS")
+                    .required(false)
+                    .default_value("60")
+                    .env("LIVENESS_INTERVAL")
+                    .help("Interval in seconds for liveness checks"),
+            )
+            .arg(
+                Arg::new("liveness-deadline")
+                    .long("liveness-deadline")
+                    .takes_value(true)
+                    .value_name("SECONDS")
+                    .required(false)
+                    .default_value("30")
+                    .env("LIVENESS_DEADLINE")
+                    .help("Deadline in seconds for liveness checks to complete"),
+            )
+            .group(
+                ArgGroup::new("liveness")
+                    .args(&["liveness-interval", "liveness-deadline"])
+                    .multiple(true)
+            )
             )
             .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"))
             .subcommand(

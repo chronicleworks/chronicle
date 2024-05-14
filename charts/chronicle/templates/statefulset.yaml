@@ -123,13 +123,16 @@ spec:
                 {{- end }}
                 serve-api \
                   --interface 0.0.0.0:{{ .Values.port }} \
+                  {{- if .Values.livenessProbe.enabled }}
+                  --liveness-interval {{ .Values.livenessProbe.periodSeconds }}
+                  --liveness-deadline {{ .Values.livenessProbe.timeoutSeconds }}
+                  {{- end }}
                   {{- if .Values.auth.required }}
                   --require-auth \
                   {{- end }}
                   {{ include "chronicle.jwks-url.cli" . }}
                   {{ include "chronicle.userinfo-url.cli" . }}
-                  {{ include "chronicle.id-claims" . }}
-                  ;
+                  {{ include "chronicle.id-claims" . }};
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -144,6 +147,26 @@ spec:
               {{- end }}
             {{- include "lib.safeToYaml" .Values.postgres.env | nindent 12 }}
           resources: {{- include "lib.safeToYaml" .Values.resources | nindent 12 }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - /scripts/check_timeouts.sh
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            failureThreshold: 1
+          {{- end}}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - /scripts/first_depth_charge.sh
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            failureThreshold: 600
+          {{- end}}
           volumeMounts:
             - name: chronicle-config
               mountPath: /etc/chronicle/config/
@@ -152,107 +175,10 @@ spec:
               readOnly: true
             - name: chronicle-data
               mountPath: /var/lib/chronicle/store/
+            - name: check-metrics-available
+              mountPath: /scripts/
+              readOnly: true
             {{- include "lib.volumeMounts" .Values.extraVolumeMounts | nindent 12 }}
-          {{- if .Values.livenessProbe.enabled }}
-          livenessProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - |
-                  PROBE_ID="startup_$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 13)" &&
-                  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ") &&
-                  echo '[
-                    {
-                      "@id": "_:n1",
-                      "@type": [
-                        "http://btp.works/chronicleoperations/ns#ActivityExists"
-                      ],
-                      "http://btp.works/chronicleoperations/ns#activityName": [
-                        {
-                          "@value": "'"$PROBE_ID"'"
-                        }
-                      ],
-                      "http://btp.works/chronicleoperations/ns#namespaceName": [
-                        {
-                          "@value": "{{ .Values.livenessProbe.namespaceName }}"
-                        }
-                      ],
-                      "http://btp.works/chronicleoperations/ns#namespaceUuid": [
-                        {
-                          "@value": "{{ .Values.livenessProbe.namespaceUuid }}"
-                        }
-                      ]
-                    }
-                  ]' > /tmp/import.json &&
-                  echo "Probe ID: $PROBE_ID" &&
-                  chronicle \
-                    -c /etc/chronicle/config/config.toml \
-                    --console-logging json \
-                    --sawtooth tcp://{{ include "chronicle.sawtooth.service" . }}:{{ include "chronicle.sawtooth.sawcomp" . }} \
-                    --remote-database \
-                    --database-name {{ .Values.postgres.database }} \
-                    --database-username {{ .Values.postgres.user }} \
-                    --database-host {{ .Values.postgres.host }} \
-                {{- if not .Values.opa.enabled }}
-                    --embedded-opa-policy \
-                {{- end }}
-                    import {{ .Values.livenessProbe.namespaceName }} {{ .Values.livenessProbe.namespaceUuid }} < /tmp/import.json
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.startUpProbe.enabled }}
-          startupProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - |
-                  PROBE_ID="startup_$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 13)" &&
-                  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ") &&
-                  echo '[
-                    {
-                      "@id": "_:n1",
-                      "@type": [
-                        "http://btp.works/chronicleoperations/ns#ActivityExists"
-                      ],
-                      "http://btp.works/chronicleoperations/ns#activityName": [
-                        {
-                          "@value": "'"$PROBE_ID"'"
-                        }
-                      ],
-                      "http://btp.works/chronicleoperations/ns#namespaceName": [
-                        {
-                          "@value": "{{ .Values.startUpProbe.namespaceName }}"
-                        }
-                      ],
-                      "http://btp.works/chronicleoperations/ns#namespaceUuid": [
-                        {
-                          "@value": "{{ .Values.startUpProbe.namespaceUuid }}"
-                        }
-                      ]
-                    }
-                  ]' > /tmp/import.json &&
-                  echo "Probe ID: $PROBE_ID" &&
-                  chronicle \
-                    -c /etc/chronicle/config/config.toml \
-                    --console-logging json \
-                    --sawtooth tcp://{{ include "chronicle.sawtooth.service" . }}:{{ include "chronicle.sawtooth.sawcomp" . }} \
-                    --remote-database \
-                    --database-name {{ .Values.postgres.database }} \
-                    --database-username {{ .Values.postgres.user }} \
-                    --database-host {{ .Values.postgres.host }} \
-                {{- if not .Values.opa.enabled }}
-                    --embedded-opa-policy \
-                {{- end }}
-                    import {{ .Values.startUpProbe.namespaceName }} {{ .Values.startUpProbe.namespaceUuid }} < /tmp/import.json
-            initialDelaySeconds: {{ .Values.startUpProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.startUpProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.startUpProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.startUpProbe.failureThreshold }}
-          {{- end }}
       volumes:
         - name: chronicle-secrets
           persistentVolumeClaim:
@@ -263,6 +189,9 @@ spec:
         - name: chronicle-config
           configMap:
             name: {{ .Release.Name }}-chronicle-config
+        - name: check-metrics-available
+          configMap:
+            name:  {{ include "common.names.fullname" . }}-scripts
         {{- if not .Values.postgres.persistence.enabled }}
         - name: "pgdata"
           emptyDir: {}

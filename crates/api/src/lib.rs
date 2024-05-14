@@ -16,7 +16,7 @@ use chrono::{DateTime, Utc};
 
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use diesel_migrations::MigrationHarness;
-use futures::{select, AsyncReadExt, FutureExt, StreamExt};
+use futures::{select, AsyncReadExt, Future, FutureExt, StreamExt};
 
 use common::{
     attributes::Attributes,
@@ -39,12 +39,14 @@ use common::{
     signing::{DirectoryStoredKeys, SignerError},
 };
 
+use metrics::{describe_counter, describe_histogram};
+use metrics_exporter_prometheus::{BuildError, PrometheusBuilder, PrometheusRecorder};
 pub use persistence::StoreError;
 use persistence::{Store, MIGRATIONS};
 use r2d2::Pool;
 use std::{
     collections::HashMap, convert::Infallible, marker::PhantomData, net::AddrParseError,
-    path::Path, sync::Arc, time::Duration,
+    path::Path, pin::Pin, sync::Arc, time::Duration,
 };
 use thiserror::Error;
 use tokio::{
@@ -57,6 +59,9 @@ use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument
 pub use persistence::ConnectionOptions;
 use user_error::UFE;
 use uuid::Uuid;
+
+const SYSTEM_NAMESPACE_NAME: &str = "chronicle-system";
+const SYSTEM_NAMESPACE_UUID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -125,6 +130,15 @@ pub enum ApiError {
 
     #[error("Sawtooth communication error: {0}")]
     SawtoothCommunicationError(#[from] SawtoothCommunicationError),
+
+    #[error("Depth charge timeout")]
+    DepthChargeTimeout,
+
+    #[error("Liveness config not found")]
+    LivenessConfigNotFound,
+
+    #[error("Prometheus error: {0}")]
+    PrometheusError(#[from] BuildError),
 }
 
 /// Ugly but we need this until ! is stable, see <https://github.com/rust-lang/rust/issues/64715>
@@ -149,6 +163,12 @@ pub trait UuidGen {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct LivenessConfig {
+    pub interval: u64,
+    pub deadline: u64,
+}
+
 #[derive(Clone)]
 pub struct Api<
     U: UuidGen + Send + Sync + Clone,
@@ -166,6 +186,7 @@ pub struct Api<
     signer: SigningKey,
     uuid_source: PhantomData<U>,
     policy_name: Option<String>,
+    liveness_config: Option<LivenessConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -199,6 +220,32 @@ impl ApiDispatch {
     }
 
     #[instrument]
+    pub async fn handle_depth_charge(
+        &self,
+        namespace: &str,
+        uuid: &Uuid,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch_depth_charge(
+            AuthId::Chronicle,
+            NamespaceId::from_external_id(namespace, *uuid),
+        )
+        .await
+    }
+
+    #[instrument]
+    async fn dispatch_depth_charge(
+        &self,
+        identity: AuthId,
+        namespace: NamespaceId,
+    ) -> Result<ApiResponse, ApiError> {
+        self.dispatch(
+            ApiCommand::DepthCharge(DepthChargeCommand { namespace }),
+            identity.clone(),
+        )
+        .await
+    }
+
+    #[instrument]
     pub async fn handle_import_command(
         &self,
         identity: AuthId,
@@ -227,6 +274,32 @@ impl ApiDispatch {
     }
 }
 
+fn install_prometheus_metrics_exporter() -> Result<(), ApiError> {
+    let metrics_endpoint = "127.0.0.1:9000";
+    let metrics_listen_socket = match metrics_endpoint.parse::<std::net::SocketAddrV4>() {
+        Ok(addr) => addr,
+        Err(e) => {
+            error!("Unable to parse metrics listen socket address: {e:?}");
+            return Err(ApiError::AddressParse(e));
+        }
+    };
+
+    let res = PrometheusBuilder::new()
+        .with_http_listener(metrics_listen_socket)
+        .install();
+
+    describe_counter!(
+        "depth_charge_timeouts",
+        "The number of depth charge timeouts so far."
+    );
+    describe_histogram!(
+        "depth_charge_round_trip",
+        "The time taken for a transaction to be registered and confirmed by the ledger"
+    );
+
+    Ok(res?)
+}
+
 impl<U, LEDGER> Api<U, LEDGER>
 where
     U: UuidGen + Send + Sync + Clone + std::fmt::Debug + 'static,
@@ -245,6 +318,7 @@ where
         uuidgen: U,
         namespace_bindings: HashMap<String, Uuid>,
         policy_name: Option<String>,
+        liveness_config: Option<LivenessConfig>,
     ) -> Result<ApiDispatch, ApiError> {
         let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
@@ -267,10 +341,7 @@ where
             .map_err(StoreError::DbMigration)?;
 
         // Append namespace bindings and system namespace
-        store.namespace_binding(
-            "chronicle-system",
-            Uuid::try_from("00000000-0000-0000-0000-000000000001").unwrap(),
-        )?;
+        store.namespace_binding(SYSTEM_NAMESPACE_NAME, SYSTEM_NAMESPACE_UUID)?;
         for (ns, uuid) in namespace_bindings {
             store.namespace_binding(&ns, uuid)?
         }
@@ -287,6 +358,7 @@ where
 
         debug!(start_from_block = ?start_from_block, "Starting from block");
 
+        let liveness_config_clone = liveness_config.clone();
         tokio::task::spawn(async move {
             let mut api = Api::<U, LEDGER> {
                 _reply_tx: commit_tx.clone(),
@@ -297,6 +369,7 @@ where
                 store: store.clone(),
                 uuid_source: PhantomData,
                 policy_name,
+                liveness_config: liveness_config_clone,
             };
 
             loop {
@@ -373,6 +446,111 @@ where
                 }
             }
         });
+
+        if let Some(LivenessConfig { interval, .. }) = liveness_config.clone() {
+            debug!("Starting liveness depth charge task");
+
+            let depth_charge_api = dispatch.clone();
+
+            install_prometheus_metrics_exporter()?;
+            tokio::task::spawn(async move {
+                loop {
+                    let api = depth_charge_api.clone();
+
+                    let start_time = tokio::time::Instant::now();
+
+                    let response = api
+                        .handle_depth_charge(SYSTEM_NAMESPACE_NAME, &SYSTEM_NAMESPACE_UUID)
+                        .await;
+
+                    match response {
+                        Ok(ApiResponse::Submission { tx_id, .. }) => {
+                            let mut tx_notifications = api.notify_commit.subscribe();
+
+                            let deadline = tokio::time::Instant::now()
+                                + std::time::Duration::from_secs(
+                                    liveness_config.as_ref().unwrap().deadline,
+                                );
+                            loop {
+                                if tokio::time::Instant::now() >= deadline {
+                                    metrics::increment_counter!("depth_charge_timeouts");
+                                    break;
+                                }
+
+                                let stage = match tokio::time::timeout_at(
+                                    deadline,
+                                    tx_notifications.recv(),
+                                )
+                                .await
+                                {
+                                    Ok(Ok(stage)) => stage,
+                                    Ok(Err(e)) => {
+                                        error!("Error receiving depth charge transaction notifications: {}", e);
+                                        continue;
+                                    }
+                                    Err(_) => {
+                                        metrics::increment_counter!("depth_charge_timeouts");
+                                        error!("Depth charge operation timed out.");
+                                        break;
+                                    }
+                                };
+
+                                match stage {
+                                    SubmissionStage::Submitted(Ok(id)) => {
+                                        if id == tx_id {
+                                            info!("Depth charge operation submitted: {id}");
+                                            continue;
+                                        }
+                                    }
+                                    SubmissionStage::Submitted(Err(err)) => {
+                                        if err.tx_id() == &tx_id {
+                                            error!("Depth charge transaction rejected by Chronicle: {} {}",
+                                                err,
+                                                err.tx_id()
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    SubmissionStage::Committed(commit, _) => {
+                                        if commit.tx_id == tx_id {
+                                            let end_time = tokio::time::Instant::now();
+                                            let elapsed_time = end_time - start_time;
+
+                                            info!(
+                                                "Depth charge transaction committed: {}",
+                                                commit.tx_id
+                                            );
+                                            info!(
+                                                "Depth charge round trip time: {:.2?}",
+                                                elapsed_time
+                                            );
+                                            metrics::histogram!(
+                                                "depth_charge_round_trip",
+                                                elapsed_time.as_millis() as f64
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    SubmissionStage::NotCommitted((id, contradiction, _)) => {
+                                        if id == tx_id {
+                                            error!("Depth charge transaction rejected by ledger: {id} {contradiction}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(res) => error!("Unexpected ApiResponse from depth charge: {res:?}"),
+                        Err(ApiError::DepthChargeTimeout) => {
+                            metrics::increment_counter!("depth_charge_timeouts");
+                            error!("Depth charge operation timed out.");
+                        }
+                        Err(e) => error!("ApiError submitting depth charge: {e}"),
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
+                }
+            });
+        }
 
         Ok(dispatch)
     }
@@ -1253,6 +1431,9 @@ where
                     .await
             }
             (ApiCommand::Query(query), _identity) => self.query(query).await,
+            (ApiCommand::DepthCharge(DepthChargeCommand { namespace }), identity) => {
+                self.depth_charge(namespace, identity).await
+            }
         }
     }
 
@@ -1804,6 +1985,51 @@ where
         })
         .await?
     }
+
+    #[instrument(skip(self))]
+    async fn depth_charge(
+        &self,
+        namespace: NamespaceId,
+        identity: AuthId,
+    ) -> Result<ApiResponse, ApiError> {
+        if self.liveness_config.is_none() {
+            return Err(ApiError::LivenessConfigNotFound);
+        }
+        let mut api = self.clone();
+        let activity_id = ActivityId::from_external_id(Uuid::new_v4().to_string());
+
+        let mut task_handle = Some(tokio::task::spawn_blocking(move || {
+            let mut connection = api.store.connection()?;
+            connection.build_transaction().run(|connection| {
+                let time = Utc::now();
+                let to_apply = vec![
+                    ChronicleOperation::StartActivity(StartActivity {
+                        namespace: namespace.clone(),
+                        id: activity_id.clone(),
+                        time,
+                    }),
+                    ChronicleOperation::EndActivity(EndActivity {
+                        namespace,
+                        id: activity_id.clone(),
+                        time,
+                    }),
+                ];
+                api.apply_effects_and_submit(connection, activity_id, identity, to_apply, false)
+            })
+        }));
+        tokio::select! {
+            result = task_handle.as_mut().unwrap() => match result {
+                Ok(result) => result,
+                Err(e) => Err(ApiError::Join(e)),
+            },
+            _ = tokio::time::sleep(Duration::from_secs(self.liveness_config.as_ref().unwrap().interval)) => {
+                if let Some(handle) = task_handle.take() {
+                    handle.abort();
+                }
+                Err(ApiError::DepthChargeTimeout)
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1971,6 +2197,7 @@ mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".into()),
+            None,
         )
         .await
         .unwrap();

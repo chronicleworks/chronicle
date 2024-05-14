@@ -156,8 +156,15 @@ pub async fn api(
     options: &ArgMatches,
     config: &Config,
     policy_name: Option<String>,
+    liveness_config: Option<api::LivenessConfig>,
 ) -> Result<ApiDispatch, ApiError> {
     let ledger = ledger(config, options)?;
+
+    tracing::info!(
+        namespace_bindings = ?config.namespace_bindings,
+        policy_name = ?policy_name,
+        liveness_config = ?liveness_config,
+    );
 
     Api::new(
         pool.clone(),
@@ -166,6 +173,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         policy_name,
+        liveness_config,
     )
     .await
 }
@@ -300,6 +308,29 @@ async fn configure_opa(config: &Config, options: &ArgMatches) -> Result<Configur
     }
 }
 
+fn liveness_config(matches: &ArgMatches) -> Option<api::LivenessConfig> {
+    if let Some(matches) = matches.subcommand_matches("serve-api") {
+        if matches.is_present("liveness-interval") && matches.is_present("liveness-deadline") {
+            let interval = matches
+                .value_of("liveness-interval")
+                .and_then(|v| v.parse::<u64>().ok());
+            let deadline = matches
+                .value_of("liveness-deadline")
+                .and_then(|v| v.parse::<u64>().ok());
+
+            if let (Some(interval), Some(deadline)) = (interval, deadline) {
+                Some(api::LivenessConfig { interval, deadline })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 #[instrument(skip(gql, cli))]
 async fn execute_subcommand<Query, Mutation>(
     gql: ChronicleGraphQl<Query, Mutation>,
@@ -317,7 +348,15 @@ where
     let pool = pool_remote(&construct_db_uri(&matches)).await?;
 
     let opa = configure_opa(&config, &matches).await?;
-    let api = api(&pool, &matches, &config, opa.remote_settings()).await?;
+    let liveness_config = liveness_config(&matches);
+    let api = api(
+        &pool,
+        &matches,
+        &config,
+        opa.remote_settings(),
+        liveness_config,
+    )
+    .await?;
     let ret_api = api.clone();
 
     if let Some(matches) = matches.subcommand_matches("serve-api") {
@@ -809,6 +848,7 @@ pub mod test {
             SameUuid,
             HashMap::default(),
             Some("allow_transactions".to_owned()),
+            None,
         )
         .await
         .unwrap();

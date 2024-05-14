@@ -24,17 +24,15 @@ auth:
 
 ## @md | `livenessProbe.enabled` | if true, enables the liveness probe | false |
 livenessProbe:
-  enabled: false
+  enabled: true
   ## @md | `livenessProbe.timeoutSeconds` | number of seconds after which the probe times out | 10 |
   timeoutSeconds: 20
   ## @md | `livenessProbe.periodSeconds` | how often (in seconds) to perform the probe | 60 |
   periodSeconds: 60
-  ## @md | `livenessProbe.failureThreshold` | when a probe fails, Kubernetes will try failureThreshold times before giving up | 1 |
-  failureThreshold: 1
-  ## @md | `livenessProbe.namespaceName` | the Chronicle namespace in which the probe operates | default |
-  namespaceName: default
-  ## @md | `livenessProbe.namespaceUuid` | the UUID of the Chronicle namespace in which the probe operates | fd717fd6-70f1-44c1-81de-287d5e101089 |
-  namespaceUuid: fd717fd6-70f1-44c1-81de-287d5e101089
+
+## @md | `readinessProbe.enabled` | if true, enables the readiness probe | false |
+readinessProbe:
+  enabled: true
 
 ## @md | `startUpProbe.enabled` | if true, enables the startup probe | true |
 startUpProbe:

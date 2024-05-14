@@ -5,7 +5,6 @@ use async_graphql::{
     SimpleObject, Subscription, SubscriptionType,
 };
 
-
 use async_graphql_poem::{
     GraphQL, GraphQLBatchRequest, GraphQLBatchResponse, GraphQLProtocol, GraphQLSubscription,
     GraphQLWebSocket,

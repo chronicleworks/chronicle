@@ -200,6 +200,7 @@ mod test {
             SameUuid,
             HashMap::default(),
             None,
+            None,
         )
         .await
         .unwrap();

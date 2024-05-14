@@ -307,6 +307,11 @@ impl EntityCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthChargeCommand {
+    pub namespace: NamespaceId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryCommand {
     pub namespace: String,
 }
@@ -325,6 +330,7 @@ pub enum ApiCommand {
     Entity(EntityCommand),
     Query(QueryCommand),
     Import(ImportCommand),
+    DepthCharge(DepthChargeCommand),
 }
 
 #[derive(Debug)]

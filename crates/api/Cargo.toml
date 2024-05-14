@@ -40,6 +40,8 @@ opentelemetry = { workspace = true }
 parking_lot = { workspace = true }
 poem = { workspace = true }
 r2d2 = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
 reqwest = { workspace = true }

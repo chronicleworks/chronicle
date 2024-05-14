@@ -1534,7 +1534,6 @@ impl Store {
                     .select(schema::entity::external_id)
                     .load::<String>(connection)?
                 {
-                    let used = used;
                     model.used(
                         namespace.clone(),
                         activity_id,
