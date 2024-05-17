@@ -1,14 +1,14 @@
 {
-    "type": "object",
-    "@id": "_:n1",
-    "@type": {
-        "type": "array",
-        "length": 1,
-        "content": "http://chronicle.works/chronicleoperations/ns#AgentActsOnBehalfOf"
-    },
-    "http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
-    "http://chronicle.works/chronicleoperations/ns#delegateId": "@agent_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
-    "http://chronicle.works/chronicleoperations/ns#responsibleId": "@second_agent_name"
+  "type": "object",
+  "@id": "_:n1",
+  "@type": {
+    "type": "array",
+    "length": 1,
+    "content": "http://chronicle.works/chronicleoperations/ns#AgentActsOnBehalfOf"
+  },
+  "http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
+  "http://chronicle.works/chronicleoperations/ns#delegateId": "@agent_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
+  "http://chronicle.works/chronicleoperations/ns#responsibleId": "@second_agent_name"
 }

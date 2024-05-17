@@ -11,7 +11,7 @@ sp-api = { version = "23.0.0", default-features = false }
 sp-core = { version = "25.0.0", default-features = false }
 
 #Local dependencies
-common = {path="../common", default-features=false, features=["parity-encoding"]}
+common = { path = "../common", default-features = false, features = ["parity-encoding"] }
 
 [features]
 default = ["std"]

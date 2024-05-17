@@ -1,5 +1,6 @@
 alter table entity
-    drop column attachment_id;
+drop
+column attachment_id;
 
 drop table hadattachment;
 

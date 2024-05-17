@@ -1,13 +1,13 @@
 {
-    "type": "object",
-    "@id": "_:n1",
-    "@type": {
-        "type": "array",
-        "length": 1,
-        "content": "http://chronicle.works/chronicleoperations/ns#EntityDerive"
-    },
-    "http://chronicle.works/chronicleoperations/ns#entityName": "@entity_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
-    "http://chronicle.works/chronicleoperations/ns#usedEntityName": "@second_entity_name"
+  "type": "object",
+  "@id": "_:n1",
+  "@type": {
+    "type": "array",
+    "length": 1,
+    "content": "http://chronicle.works/chronicleoperations/ns#EntityDerive"
+  },
+  "http://chronicle.works/chronicleoperations/ns#entityName": "@entity_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid",
+  "http://chronicle.works/chronicleoperations/ns#usedEntityName": "@second_entity_name"
 }

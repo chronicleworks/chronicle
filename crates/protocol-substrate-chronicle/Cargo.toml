@@ -1,43 +1,43 @@
 [package]
 edition = "2021"
-name    = "protocol-substrate-chronicle"
+name = "protocol-substrate-chronicle"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait  = { workspace = true }
+async-trait = { workspace = true }
 clap_builder = { version = "*" }
-futures      = { workspace = true }
-k256         = { workspace = true }
-serde        = { workspace = true }
-subxt        = { version = "0.34", features = ["substrate-compat"] }
-thiserror    = { workspace = true }
-tracing      = { workspace = true }
-uuid         = { workspace = true, features = ["std", "v4"] }
+futures = { workspace = true }
+k256 = { workspace = true }
+serde = { workspace = true }
+subxt = { version = "0.34", features = ["substrate-compat"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["std", "v4"] }
 #local dependencies
 chronicle-signing = { path = "../chronicle-signing" }
 common = { path = "../common", features = ["parity-encoding", "std"] }
 hex = { workspace = true }
 opa = { git = "https://github.com/chronicleworks/opa-rs", rev = "9fa2fbce" }
 parity-scale-codec = { version = "^3.4.0", default-features = false, features = [
-  "derive",
-  "max-encoded-len",
-  "std",
+    "derive",
+    "max-encoded-len",
+    "std",
 ] }
 protocol-abstract = { path = "../protocol-abstract" }
 protocol-substrate = { path = "../protocol-substrate" }
 scale-encode = { version = "^0.5.0", features = [
-  "derive",
-  "primitive-types",
-  "bits",
+    "derive",
+    "primitive-types",
+    "bits",
 ] }
 scale-info = { version = "^2.10.0", features = ["derive", "std"] }
 tokio = { workspace = true }
 
 [dev-dependencies]
 chronicle-telemetry = { path = "../chronicle-telemetry" }
-embedded-substrate  = { path = "../embedded-substrate" }
+embedded-substrate = { path = "../embedded-substrate" }
 
 
 [features]

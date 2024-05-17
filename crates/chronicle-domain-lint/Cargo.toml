@@ -1,9 +1,9 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "chronicle-domain-lint"
+name = "chronicle-domain-lint"
 version = "0.7.6"
 
 [dependencies]
 chronicle = { path = "../chronicle" }
-clap      = { workspace = true }
+clap = { workspace = true }

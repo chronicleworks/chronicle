@@ -24,7 +24,7 @@ entities:
       - PartID
 activities:
   ItemCertified:
-    attributes: []
+    attributes: [ ]
   ItemManufactured:
     attributes:
       - BatchID

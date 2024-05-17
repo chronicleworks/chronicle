@@ -1,7 +1,7 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "chronicle-domain"
+name = "chronicle-domain"
 version = "0.7.5"
 
 [[bin]]
@@ -21,7 +21,7 @@ chronicle = { path = "../chronicle" }
 
 [features]
 devmode = ["chronicle/devmode"]
-strict  = []
+strict = []
 
 [dev-dependencies]
 tempfile = { workspace = true }

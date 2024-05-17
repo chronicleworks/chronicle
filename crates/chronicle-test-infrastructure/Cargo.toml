@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "chronicle-test-infrastructure"
+name = "chronicle-test-infrastructure"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,9 +13,9 @@ chronicle-signing = { path = "../chronicle-signing" }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 chrono = { workspace = true }
 common = { path = "../common", features = [
-  "parity-encoding",
-  "json-ld",
-  "std",
+    "parity-encoding",
+    "json-ld",
+    "std",
 ] }
 diesel = { workspace = true }
 frame-support = { version = "25.0.0", features = ["std"] }
@@ -25,7 +25,7 @@ insta = { workspace = true, features = ["json", "yaml"] }
 lazy_static = { workspace = true }
 pallet-chronicle = { path = "../pallet-chronicle" }
 parity-scale-codec = { version = "3.4.0", default-features = false, features = [
-  "derive",
+    "derive",
 ] }
 portpicker = { workspace = true }
 protocol-abstract = { path = "../protocol-abstract" }
@@ -33,7 +33,7 @@ protocol-substrate = { path = "../protocol-substrate" }
 protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
 r2d2 = { version = "^0.8.1" }
 scale-info = { version = "2.10.0", default-features = false, features = [
-  "derive",
+    "derive",
 ] }
 serde_json = { workspace = true }
 sp-core = { version = "25.0.0" }

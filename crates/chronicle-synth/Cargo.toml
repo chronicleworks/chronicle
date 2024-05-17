@@ -1,7 +1,7 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "chronicle-synth"
+name = "chronicle-synth"
 version = "0.7.5"
 
 [lib]
@@ -13,19 +13,19 @@ name = "chronicle-synth"
 path = "src/generate.rs"
 
 [dependencies]
-clap       = { workspace = true }
-maplit     = { workspace = true }
+clap = { workspace = true }
+maplit = { workspace = true }
 owo-colors = { workspace = true }
-serde      = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-thiserror  = { workspace = true }
+thiserror = { workspace = true }
 
 #local dependencies
 
 chronicle = { path = "../chronicle" }
-common    = { path = "../common", features = ["std"] }
+common = { path = "../common", features = ["std"] }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-insta     = { workspace = true, features = ["json"] }
+insta = { workspace = true, features = ["json"] }

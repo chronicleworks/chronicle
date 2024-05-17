@@ -1,18 +1,18 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "api"
+name = "api"
 version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = { workspace = true }
 async-graphql = { workspace = true, features = [
-  "opentelemetry",
-  "chrono",
-  "unblock",
-  "default",
-  "uuid",
+    "opentelemetry",
+    "chrono",
+    "unblock",
+    "default",
+    "uuid",
 ] }
 async-graphql-poem = { workspace = true }
 async-stream = { workspace = true }
@@ -56,10 +56,10 @@ chronicle-persistence = { path = "../chronicle-persistence" }
 chronicle-signing = { workspace = true }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 common = { path = "../common", features = [
-  "json-ld",
-  "diesel-bindings",
-  "graphql-bindings",
-  "std",
+    "json-ld",
+    "diesel-bindings",
+    "graphql-bindings",
+    "std",
 ] }
 protocol-substrate = { path = "../protocol-substrate" }
 protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
@@ -69,8 +69,8 @@ r2d2 = { version = "^0.8.1" }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-insta     = { workspace = true, features = ["json", "yaml"] }
-tempfile  = { workspace = true }
+insta = { workspace = true, features = ["json", "yaml"] }
+tempfile = { workspace = true }
 
 [build-dependencies]
 

@@ -1,36 +1,36 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "opactl"
+name = "opactl"
 version = "0.7.5"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait            = { workspace = true }
-chronicle-signing      = { workspace = true }
-chronicle-telemetry    = { path = "../chronicle-telemetry" }
-clap                   = { version = "4.1.1", features = ["env"] }
-common                 = { path = "../common", features = ["std"] }
-const_format           = { workspace = true }
-futures                = { workspace = true }
-k256                   = { workspace = true }
-lazy_static            = { workspace = true }
-protocol-abstract      = { path = "../protocol-abstract" }
-protocol-substrate     = { path = "../protocol-substrate" }
+async-trait = { workspace = true }
+chronicle-signing = { workspace = true }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
+clap = { version = "4.1.1", features = ["env"] }
+common = { path = "../common", features = ["std"] }
+const_format = { workspace = true }
+futures = { workspace = true }
+k256 = { workspace = true }
+lazy_static = { workspace = true }
+protocol-abstract = { path = "../protocol-abstract" }
+protocol-substrate = { path = "../protocol-substrate" }
 protocol-substrate-opa = { path = "../protocol-substrate-opa" }
-rand                   = { workspace = true }
-rand_core              = { workspace = true }
-serde                  = { workspace = true }
-serde_derive           = { workspace = true }
-serde_json             = { workspace = true }
-thiserror              = { workspace = true }
-tokio                  = { workspace = true }
-tokio-stream           = { workspace = true }
-tracing                = { workspace = true }
-url                    = { workspace = true }
-user-error             = { workspace = true }
-uuid                   = { workspace = true, features = ["v4"] }
+rand = { workspace = true }
+rand_core = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+user-error = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 
 [dev-dependencies]
@@ -41,12 +41,12 @@ hex = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
 pallet-opa = { path = "../pallet-opa", features = ["std"] }
 parity-scale-codec = { version = "3.4.0", default-features = false, features = [
-  "derive",
+    "derive",
 ] }
 
 portpicker = { workspace = true }
 scale-info = { version = "2.10.0", default-features = false, features = [
-  "derive",
+    "derive",
 ] }
 scale-value = { version = "^0.14" }
 serde_json = { workspace = true }

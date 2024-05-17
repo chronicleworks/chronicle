@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "chronicle"
+name = "chronicle"
 version = "0.7.5"
 
 
@@ -24,7 +24,7 @@ futures = { workspace = true }
 genco = { workspace = true }
 hex = { workspace = true }
 iri-string = { version = "^0.7", default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 is-terminal = { workspace = true }
 jsonschema = { workspace = true }
@@ -56,10 +56,10 @@ chronicle-arrow = { path = "../chronicle-arrow" }
 chronicle-persistence = { path = "../chronicle-persistence" }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
 common = { path = "../common", features = [
-  "json-ld",
-  "std",
-  "parity-encoding",
-  "graphql-bindings",
+    "json-ld",
+    "std",
+    "parity-encoding",
+    "graphql-bindings",
 ] }
 embedded-substrate = { path = "../embedded-substrate", optional = true }
 protocol-substrate = { path = "../protocol-substrate" }
@@ -68,17 +68,17 @@ protocol-substrate-opa = { path = "../protocol-substrate-opa" }
 
 [features]
 devmode = ["dep:embedded-substrate"]
-strict  = []
+strict = []
 
 [build-dependencies]
 
 [dev-dependencies]
-assert_fs                    = { workspace = true }
-embedded-substrate           = { path = "../embedded-substrate" }
-insta                        = { workspace = true, features = ["yaml"] }
-mockito                      = { version = "*" }
-protocol-abstract            = { path = "../protocol-abstract" }
-protocol-substrate           = { path = "../protocol-substrate" }
+assert_fs = { workspace = true }
+embedded-substrate = { path = "../embedded-substrate" }
+insta = { workspace = true, features = ["yaml"] }
+mockito = { version = "*" }
+protocol-abstract = { path = "../protocol-abstract" }
+protocol-substrate = { path = "../protocol-substrate" }
 protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
-protocol-substrate-opa       = { path = "../protocol-substrate-opa" }
-tempfile                     = { workspace = true }
+protocol-substrate-opa = { path = "../protocol-substrate-opa" }
+tempfile = { workspace = true }

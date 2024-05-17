@@ -1,6 +1,6 @@
 name: "untyped"
-attributes: {}
-entities: {}
-activities: {}
-agents: {}
-roles: []
+attributes: { }
+entities: { }
+activities: { }
+agents: { }
+roles: [ ]

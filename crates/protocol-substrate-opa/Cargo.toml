@@ -1,32 +1,32 @@
 [package]
 edition = "2021"
-name    = "protocol-substrate-opa"
+name = "protocol-substrate-opa"
 version = "0.7.5"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait       = { workspace = true }
+async-trait = { workspace = true }
 chronicle-signing = { workspace = true }
-derivative        = { workspace = true }
-futures           = { workspace = true }
-hex               = { workspace = true }
-lazy_static       = { workspace = true }
-opa               = { git = "https://github.com/chronicleworks/opa-rs", rev = "9fa2fbce" }
-rand              = { workspace = true }
-rand_core         = { workspace = true }
-serde             = { workspace = true, features = ["derive"] }
-serde_json        = { workspace = true }
-subxt             = { version = "0.34", features = ["substrate-compat"] }
-thiserror         = { workspace = true }
-tokio             = { workspace = true }
-tracing           = { workspace = true }
-uuid              = { workspace = true }
+derivative = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+lazy_static = { workspace = true }
+opa = { git = "https://github.com/chronicleworks/opa-rs", rev = "9fa2fbce" }
+rand = { workspace = true }
+rand_core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+subxt = { version = "0.34", features = ["substrate-compat"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
 
 #Local dependencies
-common             = { path = "../common", features = ["parity-encoding", "std"] }
-pallet-opa         = { path = "../pallet-opa", default-features = false }
-protocol-abstract  = { path = "../protocol-abstract" }
+common = { path = "../common", features = ["parity-encoding", "std"] }
+pallet-opa = { path = "../pallet-opa", default-features = false }
+protocol-abstract = { path = "../protocol-abstract" }
 protocol-substrate = { path = "../protocol-substrate" }
 
 [build-dependencies]

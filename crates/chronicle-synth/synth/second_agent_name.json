@@ -1,13 +1,13 @@
 {
-    "type": "array",
-    "length": 1,
-    "content": {
-        "type": "object",
-        "@value": {
-            "type": "string",
-            "faker": {
-                "generator": "name"
-            }
-        }
+  "type": "array",
+  "length": 1,
+  "content": {
+    "type": "object",
+    "@value": {
+      "type": "string",
+      "faker": {
+        "generator": "name"
+      }
     }
+  }
 }

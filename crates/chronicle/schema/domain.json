@@ -1,163 +1,163 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "http://chronicle.works/schema/chronicle-1.json",
-    "title": "Chronicle Domain",
-    "description": "a domain for Chronicle's blockchain-backed provenance",
-    "type": "object",
-    "properties": {
-        "name": {
-            "description": "the name of this application domain",
-            "type": "string",
-            "minLength": 1
-        },
-        "attributes": {
-            "description": "attributes of agents, entities, or activities",
-            "type": "object",
-            "patternProperties": {
-                "^[A-Z][A-Za-z0-9]*$": {
-                    "description": "details of an attribute",
-                    "type": "object",
-                    "properties": {
-                        "type": {
-                            "description": "the type of the attribute's value",
-                            "type": "string",
-                            "enum": [
-                                "String",
-                                "Bool",
-                                "Int",
-                                "JSON"
-                            ]
-                        },
-                        "doc": {
-                            "description": "optional documentation about an attribute",
-                            "type": "string",
-                            "minLength": 1
-                        }
-                    },
-                    "required": [
-                        "type"
-                    ],
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        },
-        "agents": {
-            "description": "agents and their attributes, these play some part in causing entities or activities",
-            "type": "object",
-            "patternProperties": {
-                "^[A-Z][A-Za-z0-9]*$": {
-                    "type": "object",
-                    "properties": {
-                        "attributes": {
-                            "description": "the agent's attributes",
-                            "type": "array",
-                            "items": {
-                                "description": "the name of an attribute",
-                                "type": "string",
-                                "pattern": "^[A-Z][A-Za-z0-9]*$"
-                            },
-                            "uniqueItems": true
-                        },
-                        "doc": {
-                            "description": "optional documentation about an agent",
-                            "type": "string",
-                            "minLength": 1
-                        }
-                    },
-                    "required": [
-                        "attributes"
-                    ],
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        },
-        "entities": {
-            "description": "entities and their attributes",
-            "type": "object",
-            "patternProperties": {
-                "^[A-Z][A-Za-z0-9]*$": {
-                    "type": "object",
-                    "properties": {
-                        "attributes": {
-                            "description": "the entity's attributes",
-                            "type": "array",
-                            "items": {
-                                "description": "the name of an attribute",
-                                "type": "string",
-                                "pattern": "^[A-Z][A-Za-z0-9]*$"
-                            },
-                            "uniqueItems": true
-                        },
-                        "doc": {
-                            "description": "optional documentation about an entity",
-                            "type": "string",
-                            "minLength": 1
-                        }
-                    },
-                    "required": [
-                        "attributes"
-                    ],
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        },
-        "activities": {
-            "description": "activities and their attributes, these happen with or to entities",
-            "type": "object",
-            "patternProperties": {
-                "^[A-Z][A-Za-z0-9]*$": {
-                    "type": "object",
-                    "properties": {
-                        "attributes": {
-                            "description": "the activity's attributes",
-                            "type": "array",
-                            "items": {
-                                "description": "the name of an attribute",
-                                "type": "string",
-                                "pattern": "^[A-Z][A-Za-z0-9]*$"
-                            },
-                            "uniqueItems": true
-                        },
-                        "doc": {
-                            "description": "optional documentation about an activity",
-                            "type": "string",
-                            "minLength": 1
-                        }
-                    },
-                    "required": [
-                        "attributes"
-                    ],
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        },
-        "roles_doc": {
-            "description": "optional documentation about roles in this application domain",
-            "type": "string",
-            "minLength": 1
-        },
-        "roles": {
-            "description": "roles, which are functions of agents or entities with respect to activities",
-            "type": "array",
-            "items": {
-                "description": "the name of a role",
-                "type": "string",
-                "pattern": "^[A-Z][A-Z0-9_]*$"
-            },
-            "uniqueItems": true
-        }
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "http://chronicle.works/schema/chronicle-1.json",
+  "title": "Chronicle Domain",
+  "description": "a domain for Chronicle's blockchain-backed provenance",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "the name of this application domain",
+      "type": "string",
+      "minLength": 1
     },
-    "required": [
-        "name",
-        "attributes",
-        "agents",
-        "entities",
-        "activities",
-        "roles"
-    ],
-    "additionalProperties": false
+    "attributes": {
+      "description": "attributes of agents, entities, or activities",
+      "type": "object",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "description": "details of an attribute",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "the type of the attribute's value",
+              "type": "string",
+              "enum": [
+                "String",
+                "Bool",
+                "Int",
+                "JSON"
+              ]
+            },
+            "doc": {
+              "description": "optional documentation about an attribute",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "description": "agents and their attributes, these play some part in causing entities or activities",
+      "type": "object",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "type": "object",
+          "properties": {
+            "attributes": {
+              "description": "the agent's attributes",
+              "type": "array",
+              "items": {
+                "description": "the name of an attribute",
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              },
+              "uniqueItems": true
+            },
+            "doc": {
+              "description": "optional documentation about an agent",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "attributes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "entities": {
+      "description": "entities and their attributes",
+      "type": "object",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "type": "object",
+          "properties": {
+            "attributes": {
+              "description": "the entity's attributes",
+              "type": "array",
+              "items": {
+                "description": "the name of an attribute",
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              },
+              "uniqueItems": true
+            },
+            "doc": {
+              "description": "optional documentation about an entity",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "attributes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "activities": {
+      "description": "activities and their attributes, these happen with or to entities",
+      "type": "object",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "type": "object",
+          "properties": {
+            "attributes": {
+              "description": "the activity's attributes",
+              "type": "array",
+              "items": {
+                "description": "the name of an attribute",
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              },
+              "uniqueItems": true
+            },
+            "doc": {
+              "description": "optional documentation about an activity",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "attributes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "roles_doc": {
+      "description": "optional documentation about roles in this application domain",
+      "type": "string",
+      "minLength": 1
+    },
+    "roles": {
+      "description": "roles, which are functions of agents or entities with respect to activities",
+      "type": "array",
+      "items": {
+        "description": "the name of a role",
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "name",
+    "attributes",
+    "agents",
+    "entities",
+    "activities",
+    "roles"
+  ],
+  "additionalProperties": false
 }

@@ -1,2 +1,3 @@
 alter table generation
-    drop typ;
+drop
+typ;

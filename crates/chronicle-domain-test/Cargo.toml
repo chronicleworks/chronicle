@@ -1,7 +1,7 @@
 [package]
-build   = "build.rs"
+build = "build.rs"
 edition = "2021"
-name    = "chronicle-example"
+name = "chronicle-example"
 version = "0.7.5"
 
 [[bin]]
@@ -11,12 +11,12 @@ path = "src/test.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chronicle           = { path = "../chronicle" }
-chronicle-signing   = { path = "../chronicle-signing" }
+chronicle = { path = "../chronicle" }
+chronicle-signing = { path = "../chronicle-signing" }
 chronicle-telemetry = { path = "../chronicle-telemetry" }
-tracing             = { workspace = true }
-tracing-log         = { workspace = true }
-uuid                = { workspace = true }
+tracing = { workspace = true }
+tracing-log = { workspace = true }
+uuid = { workspace = true }
 
 [build-dependencies]
 chronicle = { path = "../chronicle" }
@@ -28,13 +28,13 @@ devmode = ["chronicle/devmode"]
 
 [dev-dependencies]
 chronicle-test-infrastructure = { path = "../chronicle-test-infrastructure" }
-common                        = { path = "../common", features = ["std"] }
-embedded-substrate            = { path = "../embedded-substrate" }
-futures                       = { workspace = true }
-hex                           = { workspace = true }
-insta                         = { workspace = true, features = ["json"] }
-protocol-substrate            = { path = "../protocol-substrate" }
-protocol-substrate-chronicle  = { path = "../protocol-substrate-chronicle" }
-protocol-substrate-opa        = { path = "../protocol-substrate-opa" }
-tempfile                      = { workspace = true }
-tokio                         = { workspace = true }
+common = { path = "../common", features = ["std"] }
+embedded-substrate = { path = "../embedded-substrate" }
+futures = { workspace = true }
+hex = { workspace = true }
+insta = { workspace = true, features = ["json"] }
+protocol-substrate = { path = "../protocol-substrate" }
+protocol-substrate-chronicle = { path = "../protocol-substrate-chronicle" }
+protocol-substrate-opa = { path = "../protocol-substrate-opa" }
+tempfile = { workspace = true }
+tokio = { workspace = true }

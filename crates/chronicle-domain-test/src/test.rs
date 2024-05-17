@@ -66,7 +66,7 @@ mod test {
 	use chronicle::{
 		api::{
 			chronicle_graphql::{construct_schema, OpaCheck, Subscription},
-			Api, Store, UuidGen,
+			Store,
 		},
 		async_graphql::{Request, Response, Schema},
 		bootstrap::opa::CliPolicyLoader,
@@ -83,6 +83,7 @@ mod test {
 
 	use super::{Mutation, Query};
 
+	use chronicle::api::{Api, UuidGen};
 	use core::future::Future;
 	use std::time::Duration;
 
@@ -121,7 +122,7 @@ mod test {
 	async fn test_schema_with_opa<'a>(
 		opa_executor: ExecutorContext,
 	) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
-		chronicle_telemetry::telemetry(None, chronicle_telemetry::ConsoleLogging::Pretty);
+		chronicle_telemetry::telemetry(false, chronicle_telemetry::ConsoleLogging::Pretty);
 
 		let secrets = ChronicleSigning::new(
 			chronicle_secret_names(),
@@ -2976,16 +2977,16 @@ mod test {
 		let (schema, _database) = test_schema().await;
 
 		let res = schema
-                .execute(Request::new(
-                    r#"
+            .execute(Request::new(
+                r#"
             mutation {
                 defineContractorAgent(externalId:"testagent1", attributes: { locationAttribute: "testlocation" }) {
                     context
                 }
             }
         "#,
-                ))
-                .await;
+            ))
+            .await;
 
 		assert_eq!(res.errors, vec![]);
 
@@ -3014,16 +3015,16 @@ mod test {
 		tokio::time::sleep(Duration::from_millis(1000)).await;
 
 		let res = schema
-                .execute(Request::new(
-                    r#"
+            .execute(Request::new(
+                r#"
             mutation {
               defineCertificateEntity(externalId:"testentity1", attributes: { certIdAttribute: "testcertid" }) {
                     context
                 }
             }
         "#,
-                ))
-                .await;
+            ))
+            .await;
 
 		assert_eq!(res.errors, vec![]);
 

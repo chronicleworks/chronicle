@@ -1,15 +1,14 @@
 use chrono::Utc;
 use proptest::{option, prelude::*};
-
 use uuid::Uuid;
 
 use crate::{
-	attributes::{Attribute, Attributes},
-	prov::{
-		json_ld::ToJson, operations::*, ActivityId, AgentId, Association, AssociationId,
-		Attribution, Contradiction, Delegation, DelegationId, Derivation, DomaintypeId, EntityId,
-		ExternalId, ExternalIdPart, Generation, NamespaceId, ProvModel, Role, Usage, UuidPart,
-	},
+    attributes::{Attribute, Attributes},
+    prov::{
+        ActivityId, AgentId, Association, AssociationId, Attribution, Contradiction,
+        Delegation, DelegationId, Derivation, DomaintypeId, EntityId, ExternalId, ExternalIdPart,
+        Generation, json_ld::ToJson, NamespaceId, operations::*, ProvModel, Role, Usage, UuidPart,
+    },
 };
 
 use super::{ActivityUses, ActsOnBehalfOf, EntityDerive, StartActivity};
@@ -290,8 +289,8 @@ prop_compose! {
 	}
 }
 
-fn transaction() -> impl Strategy<Value = ChronicleOperation> {
-	prop_oneof![
+fn transaction() -> impl Strategy<Value=ChronicleOperation> {
+    prop_oneof![
 		1 => create_agent().prop_map(ChronicleOperation::AgentExists),
 		1 => create_activity().prop_map(ChronicleOperation::ActivityExists),
 		1 => start_activity().prop_map(ChronicleOperation::StartActivity),
@@ -308,8 +307,8 @@ fn transaction() -> impl Strategy<Value = ChronicleOperation> {
 	]
 }
 
-fn operation_seq() -> impl Strategy<Value = Vec<ChronicleOperation>> {
-	proptest::collection::vec(transaction(), 1..50)
+fn operation_seq() -> impl Strategy<Value=Vec<ChronicleOperation>> {
+    proptest::collection::vec(transaction(), 1..50)
 }
 
 proptest! {

@@ -1,9 +1,9 @@
 {
-    "type": "one_of",
-    "variants": [
-        {
-            "type": "string",
-            "constant": "UNSPECIFIED"
-        }
-    ]
+  "type": "one_of",
+  "variants": [
+    {
+      "type": "string",
+      "constant": "UNSPECIFIED"
+    }
+  ]
 }

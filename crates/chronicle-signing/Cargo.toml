@@ -1,23 +1,23 @@
 [package]
 edition = "2021"
-name    = "chronicle-signing"
+name = "chronicle-signing"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 
-async-trait        = { workspace = true }
-k256               = { workspace = true }
-rand               = { workspace = true }
-secret-vault       = { workspace = true }
+async-trait = { workspace = true }
+k256 = { workspace = true }
+rand = { workspace = true }
+secret-vault = { workspace = true }
 secret-vault-value = { workspace = true }
-thiserror          = { workspace = true }
-tokio              = { workspace = true }
-tokio-stream       = { workspace = true }
-tracing            = { workspace = true }
-url                = { workspace = true }
-vaultrs            = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+vaultrs = { workspace = true }
 
 [dev-dependencies]
 testcontainers = { workspace = true }

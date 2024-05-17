@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "chronicle-arrow"
+name = "chronicle-arrow"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,30 +23,30 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "^1", default-features = false, features = [
-  "macros",
-  "rt",
-  "rt-multi-thread",
+    "macros",
+    "rt",
+    "rt-multi-thread",
 ] }
 tonic = { version = "0.10.2", default-features = false, features = [
-  "transport",
-  "codegen",
-  "prost",
+    "transport",
+    "codegen",
+    "prost",
 ] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
 
 #local dependencies
-api                   = { path = "../api" }
+api = { path = "../api" }
 chronicle-persistence = { path = "../chronicle-persistence" }
-common                = { path = "../common", features = ["std"] }
+common = { path = "../common", features = ["std"] }
 
 
 [dev-dependencies]
-arrow-json                    = { version = "50" }
-chronicle-telemetry           = { path = "../chronicle-telemetry" }
+arrow-json = { version = "50" }
+chronicle-telemetry = { path = "../chronicle-telemetry" }
 chronicle-test-infrastructure = { path = "../chronicle-test-infrastructure" }
-insta                         = { workspace = true, features = ["toml"] }
-portpicker                    = { workspace = true }
-serde                         = { workspace = true, features = ["derive"] }
-serde_arrow                   = { version = "*", features = ["arrow-50"] }
+insta = { workspace = true, features = ["toml"] }
+portpicker = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_arrow = { version = "*", features = ["arrow-50"] }

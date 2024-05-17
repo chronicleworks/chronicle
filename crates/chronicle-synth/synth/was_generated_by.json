@@ -1,13 +1,13 @@
 {
-    "type": "object",
-    "@id": "_:n1",
-    "@type": {
-        "type": "array",
-        "length": 1,
-        "content": "http://chronicle.works/chronicleoperations/ns#WasGeneratedBy"
-    },
-    "http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
-    "http://chronicle.works/chronicleoperations/ns#entityName": "@entity_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
-    "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
+  "type": "object",
+  "@id": "_:n1",
+  "@type": {
+    "type": "array",
+    "length": 1,
+    "content": "http://chronicle.works/chronicleoperations/ns#WasGeneratedBy"
+  },
+  "http://chronicle.works/chronicleoperations/ns#activityName": "@activity_name",
+  "http://chronicle.works/chronicleoperations/ns#entityName": "@entity_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceName": "@same_namespace_name",
+  "http://chronicle.works/chronicleoperations/ns#namespaceUuid": "@same_namespace_uuid"
 }

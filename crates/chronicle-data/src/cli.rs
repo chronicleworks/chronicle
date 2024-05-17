@@ -1,39 +1,35 @@
-use clap::{Arg, Command};
-fn in_subcommand() -> Command<'static> {
-	Command::new("in").about("Handles incoming data operations")
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[clap(name = "chronicle-data", about = "CLI for Chronicle Data operations")]
+pub struct Cli {
+    #[arg(long, help = "The Chronicle server URL", global = true, required = true)]
+    pub chronicle: String,
+
+    #[arg(long, help = "Authentication token", global = true, required = false)]
+    pub auth: Option<String>,
+
+    #[clap(subcommand)]
+    pub command: Commands,
 }
 
-fn out_subcommand() -> Command<'static> {
-	Command::new("out").about("Handles outgoing data operations")
+#[derive(Subcommand)]
+pub enum Commands {
+    #[clap(about = "Describes the data schema and operations")]
+    Describe {
+        #[clap(subcommand)]
+        subcommand: DescribeSubcommands,
+    },
+    #[clap(about = "Handles incoming data operations")]
+    In,
+    #[clap(about = "Handles outgoing data operations")]
+    Out,
 }
 
-fn describe_subcommand() -> Command<'static> {
-	Command::new("describe")
-		.about("Describes the data schema and operations")
-		.subcommand(Command::new("schema").about("Describes the data schema"))
-		.subcommand(Command::new("flights").about("List the available flights"))
-}
-
-pub fn build_cli() -> Command<'static> {
-	Command::new("chronicle-data")
-		.about("CLI for Chronicle Data operations")
-		.arg(
-			Arg::new("chronicle")
-				.long("chronicle")
-				.help("The Chronicle server URL")
-				.takes_value(true)
-				.global(true)
-				.required(true),
-		)
-		.arg(
-			Arg::new("auth")
-				.long("auth")
-				.help("Authentication token")
-				.takes_value(true)
-				.global(true)
-				.required(false),
-		)
-		.subcommand(describe_subcommand())
-		.subcommand(in_subcommand())
-		.subcommand(out_subcommand())
+#[derive(Subcommand)]
+pub enum DescribeSubcommands {
+    #[clap(about = "Describes the data schema")]
+    Schema,
+    #[clap(about = "List the available flights")]
+    Flights,
 }

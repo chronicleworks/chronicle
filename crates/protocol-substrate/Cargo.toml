@@ -1,26 +1,26 @@
 [package]
 edition = "2021"
-name    = "protocol-substrate"
+name = "protocol-substrate"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow      = { workspace = true }
+anyhow = { workspace = true }
 async-trait = { workspace = true }
-derivative  = { workspace = true }
-futures     = { workspace = true }
-hex         = { workspace = true }
-k256        = { workspace = true }
-serde       = { workspace = true }
-subxt       = { version = "0.34", features = ["substrate-compat"] }
-thiserror   = { workspace = true }
-tokio       = { workspace = true }
-tracing     = { workspace = true }
-uuid        = { workspace = true }
+derivative = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+k256 = { workspace = true }
+serde = { workspace = true }
+subxt = { version = "0.34", features = ["substrate-compat"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
 
 # Local dependencies
 chronicle-signing = { path = "../chronicle-signing" }
-common            = { path = "../common", features = ["parity-encoding", "std"] }
-pallet-chronicle  = { path = "../pallet-chronicle", features = ["std"] }
+common = { path = "../common", features = ["parity-encoding", "std"] }
+pallet-chronicle = { path = "../pallet-chronicle", features = ["std"] }
 protocol-abstract = { path = "../protocol-abstract" }
