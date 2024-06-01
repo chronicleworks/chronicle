@@ -34,8 +34,7 @@ resource "tls_cert_request" "vault_cert_request" {
 
   dns_names = concat(local.dns_names, [
     "*.vault.svc.${var.cluster_name}",
-    "*.vault.svc",
-    "*.vault"
+    "*.vault.svc"
   ])
   ip_addresses = ["127.0.0.1"]
 

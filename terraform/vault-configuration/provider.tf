@@ -1,4 +1,5 @@
-provider  vault {
-  address = "https://localhost:8200"
-  ca_cert_file = var.vault_service_ca
+provider "vault" {
+  address      = "https://localhost:8200"
+  token        = var.vault_token
+  ca_cert_file = "${path.module}/ca_crt.pem"
 }

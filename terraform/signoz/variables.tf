@@ -35,3 +35,15 @@ variable "signoz_storage_size" {
   default     = "20"
 }
 
+variable "opentelemetry_operator_helm_chart_name" {
+  type        = string
+  description = "The chart name in the Helm repository for OpenTelemetry Collector"
+  default     = "opentelemetry-operator"
+}
+
+variable "opentelemetry_operator_helm_repository" {
+  type        = string
+  description = "The location of the Helm repository for OpenTelemetry Collector"
+  default     = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+}
+

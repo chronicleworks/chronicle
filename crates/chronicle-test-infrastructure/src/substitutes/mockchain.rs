@@ -40,6 +40,12 @@ impl frame_system::Config for Test {
     type SS58Prefix = ConstU16<42>;
     type SystemWeightInfo = ();
     type Version = ();
+    type RuntimeTask = ();
+    type SingleBlockMigrations = ();
+    type MultiBlockMigrator = ();
+    type PreInherents = ();
+    type PostInherents = ();
+    type PostTransactions = ();
 }
 
 impl pallet_chronicle::Config for Test {

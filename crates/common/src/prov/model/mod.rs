@@ -575,7 +575,7 @@ pub struct ProvSummary {
     pub total_delegations: usize,
 }
 
-use std::fmt;
+use core::fmt;
 
 impl fmt::Display for ProvSummary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

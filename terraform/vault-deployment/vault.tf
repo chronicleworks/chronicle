@@ -29,18 +29,36 @@ resource "kubernetes_secret" "tls_ca" {
   }
 
   data = {
-    "ca.crt"  = file("ca.crt")
+    "ca.crt"  = file("ca_crt.pem")
   }
 }
-
 
 resource "kubernetes_service_account" "vault" {
   metadata {
     name        = var.kubernetes_sa_name
     namespace   = var.kubernetes_namespace
-    annotations = null
   }
 }
+
+
+#------------------------------------------------------------------------------
+# We need to be able to get API tokens for the vault service account,
+# Long lived tokens will cause problems with the vault agent
+#------------------------------------------------------------------------------
+
+resource "kubernetes_secret" "vault_auth_secret" {
+  metadata {
+    name = "vault-auth-secret"
+    namespace = var.kubernetes_namespace
+    annotations = {
+      "kubernetes.io/service-account.name" = kubernetes_service_account.vault.metadata.0.name
+    }
+  }
+
+  type = "kubernetes.io/service-account-token"
+}
+
+
 
 #------------------------------------------------------------------------------
 # Vault deployment

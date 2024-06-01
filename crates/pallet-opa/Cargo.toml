@@ -10,9 +10,14 @@ version = "0.7.5"
 common = { path = "../common", default-features = false, features = [
     "parity-encoding",
 ] }
-frame-benchmarking = { version = "25.0.0", default-features = false, optional = true }
-frame-support = { version = "25.0.0", default-features = false }
-frame-system = { version = "25.0.0", default-features = false }
+
+# Start Generation Here
+frame-benchmarking = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false, optional = true }
+frame-support = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
+frame-system = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
+sp-core = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
+sp-core-hashing = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
+sp-std = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
 k256 = { version = "0.11", default-features = false, features = [
     "arithmetic",
     "ecdsa",
@@ -29,20 +34,19 @@ scale-info = { version = "^2.10.0", default-features = false, features = [
 ] }
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
-sp-core = { version = "25", default-features = false }
-sp-core-hashing = { version = "14", default-features = false }
-sp-std = { version = "12.0.0", default-features = false }
 tracing = { version = "0.1", default-features = false, features = [
     "attributes",
 ] }
 uuid = { version = "1.5", default-features = false }
 
+
 [dev-dependencies]
 chronicle-telemetry = { path = "../chronicle-telemetry" }
-sp-core = { version = "25.0.0" }
-sp-io = { version = "27.0.0" }
-sp-runtime = { version = "28.0.0" }
-uuid = { version = "1.5.0", default-features = true }
+sp-core = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0' }
+sp-io = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0' }
+sp-runtime = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0' }
+uuid = { version = "1.5.0", default-features = false }
+
 
 [features]
 default = ["std"]

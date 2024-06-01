@@ -1,0 +1,277 @@
+Name:             bootnode-0
+Namespace:        chronicle-substrate
+Priority:         0
+Service Account:  bootnode
+Node:             docker-desktop/192.168.65.3
+Start Time:       Thu, 23 May 2024 22:09:19 +0100
+Labels:           app.kubernetes.io/component=substrate-node
+                  app.kubernetes.io/instance=chronicle-substrate
+                  app.kubernetes.io/managed-by=Helm
+                  app.kubernetes.io/name=node
+                  app.kubernetes.io/version=local
+                  apps.kubernetes.io/pod-index=0
+                  chain=local
+                  controller-revision-hash=bootnode-6ff74ffd48
+                  database=rocksdb
+                  helm.sh/chart=node-5.8.0
+                  pruning=archive
+                  release=chronicle-substrate
+                  role=full
+                  statefulset.kubernetes.io/pod-name=bootnode-0
+Annotations:      vault.hashicorp.com/agent-init-first: true
+                  vault.hashicorp.com/agent-inject: true
+                  vault.hashicorp.com/agent-inject-secret-aura: kv/chronicle-substrate/aura
+                  vault.hashicorp.com/agent-inject-secret-bootnode-key: kv/chronicle-substrate/bootnode-key
+                  vault.hashicorp.com/agent-inject-status: injected
+                  vault.hashicorp.com/agent-inject-template-aura: {{ with secret "kv/chronicle-substrate/aura" }}{{ .Data.data.secretSeed }}{{ end }}
+                  vault.hashicorp.com/agent-inject-template-bootnode-key:
+                    {{ with secret "kv/chronicle-substrate/bootnode-key" }}{{ .Data.data.data }}{{ end }}
+                  vault.hashicorp.com/agent-pre-populate-only: true
+                  vault.hashicorp.com/auth-type: kubernetes
+                  vault.hashicorp.com/role: admin
+Status:           Pending
+IP:               10.1.0.144
+IPs:
+  IP:           10.1.0.144
+Controlled By:  StatefulSet/bootnode
+Init Containers:
+  vault-agent-init:
+    Container ID:  docker://7ebe8bae640b5041400930844c848bdd9b2e6894f8d7b2397df9f8b96bc1c46c
+    Image:         hashicorp/vault:1.16
+    Image ID:      docker-pullable://hashicorp/vault@sha256:e139ff28c23e1f22a6e325696318141259b177097d8e238a3a4c5b84862fadd8
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+      -ec
+    Args:
+      echo ${VAULT_CONFIG?} | base64 -d > /home/vault/config.json && vault agent -config=/home/vault/config.json
+    State:          Running
+      Started:      Thu, 23 May 2024 22:09:19 +0100
+    Ready:          False
+    Restart Count:  0
+    Limits:
+      cpu:     500m
+      memory:  128Mi
+    Requests:
+      cpu:     250m
+      memory:  64Mi
+    Environment:
+      NAMESPACE:         chronicle-substrate (v1:metadata.namespace)
+      HOST_IP:            (v1:status.hostIP)
+      POD_IP:             (v1:status.podIP)
+      VAULT_LOG_LEVEL:   info
+      VAULT_LOG_FORMAT:  standard
+      VAULT_CONFIG:      eyJhdXRvX2F1dGgiOnsibWV0aG9kIjp7InR5cGUiOiJrdWJlcm5ldGVzIiwibW91bnRfcGF0aCI6ImF1dGgva3ViZXJuZXRlcyIsImNvbmZpZyI6eyJyb2xlIjoiYWRtaW4iLCJ0b2tlbl9wYXRoIjoiL3Zhci9ydW4vc2VjcmV0cy9rdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3Rva2VuIn19LCJzaW5rIjpbeyJ0eXBlIjoiZmlsZSIsImNvbmZpZyI6eyJwYXRoIjoiL2hvbWUvdmF1bHQvLnZhdWx0LXRva2VuIn19XX0sImV4aXRfYWZ0ZXJfYXV0aCI6dHJ1ZSwicGlkX2ZpbGUiOiIvaG9tZS92YXVsdC8ucGlkIiwidmF1bHQiOnsiYWRkcmVzcyI6Imh0dHBzOi8vdmF1bHQudmF1bHQuc3ZjOjgyMDAifSwidGVtcGxhdGUiOlt7ImRlc3RpbmF0aW9uIjoiL3ZhdWx0L3NlY3JldHMvYm9vdG5vZGUta2V5IiwiY29udGVudHMiOiJ7eyB3aXRoIHNlY3JldCBcImt2L2Nocm9uaWNsZS1zdWJzdHJhdGUvYm9vdG5vZGUta2V5XCIgfX17eyAuRGF0YS5kYXRhLmRhdGEgfX17eyBlbmQgfX1cbiIsImxlZnRfZGVsaW1pdGVyIjoie3siLCJyaWdodF9kZWxpbWl0ZXIiOiJ9fSJ9LHsiZGVzdGluYXRpb24iOiIvdmF1bHQvc2VjcmV0cy9hdXJhIiwiY29udGVudHMiOiJ7eyB3aXRoIHNlY3JldCBcImt2L2Nocm9uaWNsZS1zdWJzdHJhdGUvYXVyYVwiIH19e3sgLkRhdGEuZGF0YS5zZWNyZXRTZWVkIH19e3sgZW5kIH19XG4iLCJsZWZ0X2RlbGltaXRlciI6Int7IiwicmlnaHRfZGVsaW1pdGVyIjoifX0ifV0sInRlbXBsYXRlX2NvbmZpZyI6eyJleGl0X29uX3JldHJ5X2ZhaWx1cmUiOnRydWV9fQ==
+    Mounts:
+      /home/vault from home-init (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+  inject-vault-keys:
+    Container ID:  
+    Image:         node-chronicle-arm64:local
+    Image ID:      
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+    Args:
+      -c
+      set -eu 
+      NODE_KEY_PATH="/vault/secrets/bootnode-key"
+      if [ ! -f ${NODE_KEY_PATH} ]; then
+         echo "Error: File ${NODE_KEY_PATH} does not exist"
+         exit 1
+      fi
+      NODE_PEER_ID="$(cat ${NODE_KEY_PATH} | node-chronicle key inspect-node-key)"
+      echo "Inserted node key at ${NODE_KEY_PATH} with peer-id: ${NODE_PEER_ID}"
+      if [ ! -f /vault/secrets/aura ]; then
+         echo "Error: File /vault/secrets/aura does not exist"
+         exit 1
+      fi
+      node-chronicle key insert \
+      --keystore-path /keystore \
+      --key-type aura \
+      --scheme sr25519 \
+      --suri "$(cat /vault/secrets/aura)//${HOSTNAME}//aura" \
+      && echo "Inserted key aura (type=aura, scheme=sr25519) into Keystore" \
+      || echo "Failed to insert key aura (type=aura, scheme=sr25519) into Keystore."
+      
+    State:          Waiting
+      Reason:       PodInitializing
+    Ready:          False
+    Restart Count:  0
+    Environment:
+      CHAIN:  local
+    Mounts:
+      /keystore from chain-keystore (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+  retrieve-service-info:
+    Container ID:  
+    Image:         paritytech/kubetools-kubectl:latest
+    Image ID:      
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+    Args:
+      -c
+      set -eu -o pipefail 
+      POD_INDEX="${HOSTNAME##*-}"
+      RELAY_CHAIN_P2P_PORT="$(kubectl --namespace chronicle-substrate get service bootnode-${POD_INDEX}-relay-chain-p2p -o jsonpath='{.spec.ports[?(@.name=="p2p")].nodePort}')"
+      echo "${RELAY_CHAIN_P2P_PORT}" > /chain-data/relay_chain_p2p_port
+      echo "Retrieved Kubernetes service node port from bootnode-${POD_INDEX}-relay-chain-p2p"
+      echo "Saved ${RELAY_CHAIN_P2P_PORT} to /chain-data/relay_chain_p2p_port"
+      
+    State:          Waiting
+      Reason:       PodInitializing
+    Ready:          False
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /chain-data from chain-data (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+  chainspec-generator:
+    Container ID:  
+    Image:         node-chronicle-arm64:local
+    Image ID:      
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/bash
+    Args:
+      -c
+      apt update && apt install -y jq &&
+      node-chronicle build-spec --chain local > base.json
+      if [ ! -s base.json ]; then
+        echo "base.json is empty or missing."
+        exit 1
+      fi
+      echo '{"bootNodes":["/dns/bootnode-0/tcp/30333/p2p/12D3KooWRpzRTivvJ5ySvgbFnPeEE6rDhitQKL1fFJvvBGhnenSk"]}' > override1.json
+      jq -s '.[0] * .[1]' base.json override1.json | sed 's/1e+18/1000000000000000000/' > plain.json
+      if [ ! -s plain.json ]; then
+        echo "plain.json is empty or malformed after jq processing."
+        exit 1
+      fi
+      cut -c -256 plain.json
+      node-chronicle build-spec --chain plain.json --raw > chainspec.json
+      if [ ! -s chainspec.json ]; then
+        echo "chainspec.json failed to generate."
+        exit 1
+      fi
+      cp chainspec.json /chain-data/chainspec.json
+      
+    State:          Waiting
+      Reason:       PodInitializing
+    Ready:          False
+    Restart Count:  0
+    Environment:
+      VAULT_LOG_LEVEL:  debug
+    Mounts:
+      /chain-data from chain-data (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+Containers:
+  local:
+    Container ID:  
+    Image:         node-chronicle-arm64:local
+    Image ID:      
+    Ports:         9944/TCP, 9615/TCP, 30333/TCP
+    Host Ports:    0/TCP, 0/TCP, 0/TCP
+    Command:
+      /bin/sh
+    Args:
+      -c
+      set -eu
+      POD_INDEX="${HOSTNAME##*-}"
+      RELAY_CHAIN_P2P_PORT="$(cat /chain-data/relay_chain_p2p_port)"
+      echo "RELAY_CHAIN_P2P_PORT=${RELAY_CHAIN_P2P_PORT}"
+      exec node-chronicle \
+        --name=${POD_NAME} \
+        --base-path=/chain-data \
+        --keystore-path=/keystore \
+        --chain=/chain-data/chainspec.json \
+        --database=rocksdb \
+        --state-pruning=archive \
+        --prometheus-external \
+        --prometheus-port 9615 \
+        --unsafe-rpc-external \
+        --rpc-port=9944 \
+        --rpc-cors=all \
+        --node-key $(cat /vault/secrets/bootnode-key) \
+        --allow-private-ipv4 \
+        --discover-local \
+        --listen-addr=/ip4/0.0.0.0/tcp/30333 \
+      
+    State:          Waiting
+      Reason:       PodInitializing
+    Ready:          False
+    Restart Count:  0
+    Startup:        http-get http://:rpc/health delay=0s timeout=1s period=10s #success=1 #failure=30
+    Environment:
+      CHAIN:      local
+      NODE_NAME:  $(POD_NAME)
+      POD_NAME:   bootnode-0 (v1:metadata.name)
+    Mounts:
+      /chain-data from chain-data (rw)
+      /keystore from chain-keystore (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+  chainspec:
+    Container ID:   
+    Image:          nginxinc/nginx-unprivileged:stable
+    Image ID:       
+    Port:           8080/TCP
+    Host Port:      0/TCP
+    State:          Waiting
+      Reason:       PodInitializing
+    Ready:          False
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /usr/share/nginx/html/chainspec.json from chain-data (ro,path="chainspec.json")
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nwmnb (ro)
+      /vault/secrets from vault-secrets (rw)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 False 
+  Ready                       False 
+  ContainersReady             False 
+  PodScheduled                True 
+Volumes:
+  chain-data:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  chain-data-bootnode-0
+    ReadOnly:   false
+  chain-keystore:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  <unset>
+  kube-api-access-nwmnb:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+  home-init:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  <unset>
+  vault-secrets:
+    Type:        EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:      Memory
+    SizeLimit:   <unset>
+QoS Class:       Burstable
+Node-Selectors:  <none>
+Tolerations:     node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                 node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age    From               Message
+  ----    ------     ----   ----               -------
+  Normal  Scheduled  7m43s  default-scheduler  Successfully assigned chronicle-substrate/bootnode-0 to docker-desktop
+  Normal  Pulled     7m43s  kubelet            Container image "hashicorp/vault:1.16" already present on machine
+  Normal  Created    7m43s  kubelet            Created container vault-agent-init
+  Normal  Started    7m43s  kubelet            Started container vault-agent-init

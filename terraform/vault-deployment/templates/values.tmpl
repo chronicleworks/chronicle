@@ -15,11 +15,18 @@ injector:
   agentImage:
     repository: ${vault_image_repository}
     tag: "${vault_image_tag}"
+
+  logFormat: json
 server:
+  annotations:
+     sidecar.opentelemetry.io/inject: "true"
+  logLevel: debug
+  logFormat: json
+  metrics:
+    enabled: true
   serviceAccount:
     create: false
     name: ${kubernetes_vault_service_account}
-  logLevel: debug
   image:
     repository: ${vault_image_repository}
     tag: "${vault_image_tag}"
@@ -47,7 +54,6 @@ server:
           tls_cert_file = "/vault/userconfig/${kubernetes_secret_name_tls_cert}/tls.crt"
           tls_key_file  = "/vault/userconfig/${kubernetes_secret_name_tls_cert}/tls.key"
           tls_client_ca_file = "/vault/userconfig/${kubernetes_secret_name_tls_ca}/ca.crt"
-
         }
 
         storage "raft" {

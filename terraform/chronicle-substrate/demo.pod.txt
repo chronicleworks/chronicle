@@ -1,0 +1,147 @@
+Name:             demo-pod
+Namespace:        chronicle-substrate
+Priority:         0
+Service Account:  default
+Node:             docker-desktop/192.168.65.3
+Start Time:       Thu, 23 May 2024 22:02:12 +0100
+Labels:           <none>
+Annotations:      vault.hashicorp.com/agent-inject: true
+                  vault.hashicorp.com/agent-inject-secret-aura: kv/chronicle-substrate/aura
+                  vault.hashicorp.com/agent-inject-status: injected
+                  vault.hashicorp.com/ca-cert: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                  vault.hashicorp.com/role: admin
+Status:           Running
+IP:               10.1.0.143
+IPs:
+  IP:  10.1.0.143
+Init Containers:
+  vault-agent-init:
+    Container ID:  docker://0c650b616145a99091270b4a4848357b5bbe47ef6223d16bc1c7f18fcffe06b1
+    Image:         hashicorp/vault:1.16
+    Image ID:      docker-pullable://hashicorp/vault@sha256:e139ff28c23e1f22a6e325696318141259b177097d8e238a3a4c5b84862fadd8
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+      -ec
+    Args:
+      echo ${VAULT_CONFIG?} | base64 -d > /home/vault/config.json && vault agent -config=/home/vault/config.json
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 23 May 2024 22:02:12 +0100
+      Finished:     Thu, 23 May 2024 22:02:12 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     500m
+      memory:  128Mi
+    Requests:
+      cpu:     250m
+      memory:  64Mi
+    Environment:
+      NAMESPACE:         chronicle-substrate (v1:metadata.namespace)
+      HOST_IP:            (v1:status.hostIP)
+      POD_IP:             (v1:status.podIP)
+      VAULT_LOG_LEVEL:   info
+      VAULT_LOG_FORMAT:  standard
+      VAULT_CONFIG:      eyJhdXRvX2F1dGgiOnsibWV0aG9kIjp7InR5cGUiOiJrdWJlcm5ldGVzIiwibW91bnRfcGF0aCI6ImF1dGgva3ViZXJuZXRlcyIsImNvbmZpZyI6eyJyb2xlIjoiYWRtaW4iLCJ0b2tlbl9wYXRoIjoiL3Zhci9ydW4vc2VjcmV0cy9rdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3Rva2VuIn19LCJzaW5rIjpbeyJ0eXBlIjoiZmlsZSIsImNvbmZpZyI6eyJwYXRoIjoiL2hvbWUvdmF1bHQvLnZhdWx0LXRva2VuIn19XX0sImV4aXRfYWZ0ZXJfYXV0aCI6dHJ1ZSwicGlkX2ZpbGUiOiIvaG9tZS92YXVsdC8ucGlkIiwidmF1bHQiOnsiYWRkcmVzcyI6Imh0dHBzOi8vdmF1bHQudmF1bHQuc3ZjOjgyMDAiLCJjYV9jZXJ0IjoiL3Zhci9ydW4vc2VjcmV0cy9rdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L2NhLmNydCJ9LCJ0ZW1wbGF0ZSI6W3siZGVzdGluYXRpb24iOiIvdmF1bHQvc2VjcmV0cy9hdXJhIiwiY29udGVudHMiOiJ7eyB3aXRoIHNlY3JldCBcImt2L2Nocm9uaWNsZS1zdWJzdHJhdGUvYXVyYVwiIH19e3sgcmFuZ2UgJGssICR2IDo9IC5EYXRhIH19e3sgJGsgfX06IHt7ICR2IH19XG57eyBlbmQgfX17eyBlbmQgfX0iLCJsZWZ0X2RlbGltaXRlciI6Int7IiwicmlnaHRfZGVsaW1pdGVyIjoifX0ifV0sInRlbXBsYXRlX2NvbmZpZyI6eyJleGl0X29uX3JldHJ5X2ZhaWx1cmUiOnRydWV9fQ==
+    Mounts:
+      /home/vault from home-init (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-qgjjq (ro)
+      /vault/secrets from vault-secrets (rw)
+Containers:
+  demo-container:
+    Container ID:  docker://919a861d708deb09e57be21cf5c16bc9f10c324c291bd19f01995cf81ebc7fee
+    Image:         alpine
+    Image ID:      docker-pullable://alpine@sha256:77726ef6b57ddf65bb551896826ec38bc3e53f75cdde31354fbffb4f25238ebd
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      sh
+      -c
+      sleep 3600
+    State:          Running
+      Started:      Thu, 23 May 2024 22:02:15 +0100
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-qgjjq (ro)
+      /vault/secrets from vault-secrets (rw)
+  vault-agent:
+    Container ID:  docker://ba836795513a44c0b11c068f06cd08216ef628d976a1ed46fd22e540f7c6cb49
+    Image:         hashicorp/vault:1.16
+    Image ID:      docker-pullable://hashicorp/vault@sha256:e139ff28c23e1f22a6e325696318141259b177097d8e238a3a4c5b84862fadd8
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+      -ec
+    Args:
+      echo ${VAULT_CONFIG?} | base64 -d > /home/vault/config.json && vault agent -config=/home/vault/config.json
+    State:          Running
+      Started:      Thu, 23 May 2024 22:02:15 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     500m
+      memory:  128Mi
+    Requests:
+      cpu:     250m
+      memory:  64Mi
+    Environment:
+      NAMESPACE:         chronicle-substrate (v1:metadata.namespace)
+      HOST_IP:            (v1:status.hostIP)
+      POD_IP:             (v1:status.podIP)
+      VAULT_LOG_LEVEL:   info
+      VAULT_LOG_FORMAT:  standard
+      VAULT_CONFIG:      eyJhdXRvX2F1dGgiOnsibWV0aG9kIjp7InR5cGUiOiJrdWJlcm5ldGVzIiwibW91bnRfcGF0aCI6ImF1dGgva3ViZXJuZXRlcyIsImNvbmZpZyI6eyJyb2xlIjoiYWRtaW4iLCJ0b2tlbl9wYXRoIjoiL3Zhci9ydW4vc2VjcmV0cy9rdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3Rva2VuIn19LCJzaW5rIjpbeyJ0eXBlIjoiZmlsZSIsImNvbmZpZyI6eyJwYXRoIjoiL2hvbWUvdmF1bHQvLnZhdWx0LXRva2VuIn19XX0sImV4aXRfYWZ0ZXJfYXV0aCI6ZmFsc2UsInBpZF9maWxlIjoiL2hvbWUvdmF1bHQvLnBpZCIsInZhdWx0Ijp7ImFkZHJlc3MiOiJodHRwczovL3ZhdWx0LnZhdWx0LnN2Yzo4MjAwIiwiY2FfY2VydCI6Ii92YXIvcnVuL3NlY3JldHMva3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9jYS5jcnQifSwidGVtcGxhdGUiOlt7ImRlc3RpbmF0aW9uIjoiL3ZhdWx0L3NlY3JldHMvYXVyYSIsImNvbnRlbnRzIjoie3sgd2l0aCBzZWNyZXQgXCJrdi9jaHJvbmljbGUtc3Vic3RyYXRlL2F1cmFcIiB9fXt7IHJhbmdlICRrLCAkdiA6PSAuRGF0YSB9fXt7ICRrIH19OiB7eyAkdiB9fVxue3sgZW5kIH19e3sgZW5kIH19IiwibGVmdF9kZWxpbWl0ZXIiOiJ7eyIsInJpZ2h0X2RlbGltaXRlciI6In19In1dLCJ0ZW1wbGF0ZV9jb25maWciOnsiZXhpdF9vbl9yZXRyeV9mYWlsdXJlIjp0cnVlfX0=
+    Mounts:
+      /home/vault from home-sidecar (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-qgjjq (ro)
+      /vault/secrets from vault-secrets (rw)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-qgjjq:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+  home-init:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  <unset>
+  home-sidecar:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  <unset>
+  vault-secrets:
+    Type:        EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:      Memory
+    SizeLimit:   <unset>
+QoS Class:       Burstable
+Node-Selectors:  <none>
+Tolerations:     node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                 node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  14m   default-scheduler  Successfully assigned chronicle-substrate/demo-pod to docker-desktop
+  Normal  Pulled     14m   kubelet            Container image "hashicorp/vault:1.16" already present on machine
+  Normal  Created    14m   kubelet            Created container vault-agent-init
+  Normal  Started    14m   kubelet            Started container vault-agent-init
+  Normal  Pulling    14m   kubelet            Pulling image "alpine"
+  Normal  Pulled     14m   kubelet            Successfully pulled image "alpine" in 1.204s (1.204s including waiting)
+  Normal  Created    14m   kubelet            Created container demo-container
+  Normal  Started    14m   kubelet            Started container demo-container
+  Normal  Pulled     14m   kubelet            Container image "hashicorp/vault:1.16" already present on machine
+  Normal  Created    14m   kubelet            Created container vault-agent
+  Normal  Started    14m   kubelet            Started container vault-agent

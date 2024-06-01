@@ -303,7 +303,7 @@ pub async fn api(
     options: &ArgMatches,
     remote_opa: Option<PolicyAddress>,
     liveness_check_interval: Option<u64>,
-) -> Result<api::dispatch::ApiDispatch, CliError> {
+) -> Result<ApiDispatch, CliError> {
     use protocol_substrate::PolkadotConfig;
 
     let embedded_tp = in_mem_ledger(options).await?;

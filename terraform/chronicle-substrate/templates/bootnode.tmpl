@@ -1,8 +1,21 @@
 fullnameOverride: bootnode
+initContainers:
+  injectKeys:
+    debug: true
+jaegerAgent:
+  collector:
+    url: 127.0.0.1
+    port: 14250
 image:
   repository: ${chronicle_node_repository}
   tag: local
   pullPolicy: IfNotPresent
+  debug: true
+podAnnotations:
+  sidecar.opentelemetry.io/inject: "true"
+  vault.hashicorp.com/ca-cert: '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+  vault.hashicorp.com/agent-inject-template-bootnode_key: '{{ with secret "kv/chronicle-substrate/bootnode_key" }}{{ .Data.data.key }}{{ end }}'
+  vault.hashicorp.com/agent-inject-template-bootnode_peer: '{{ with secret "kv/chronicle-substrate/bootnode_peer" }}{{ .Data.data.peer_id }}{{ end }}'
 node:
   chain: local
   customChainspec: true # see extraInitContainers, chainspec-generator
@@ -18,24 +31,26 @@ node:
   perNodeServices:
     relayP2pService:
       enabled: true
+  prometheus:
+      enabled: true
   vault:
-    enabled: false
+    enabled: true
+    authRole: admin
+    authType: kubernetes
     keys:
       - name: aura
         type: aura
         scheme: sr25519
-        vaultPath: kv/chronicle_substrate/aura # path at which the secret is located in Vault
+        vaultPath: kv/chronicle-substrate/aura # path at which the secret is located in Vault
         vaultKey: secretSeed # key under which the secret value is stored in Vault
         extraDerivation: "//$${HOSTNAME}//aura" # allows to have unique derived keys for each pod of the statefulset
     nodeKey:
       name: bootnode_key
-      vaultPath: kv/chronicle-substrate/bootnode_key
       vaultKey: key
+      vaultPath: kv/chronicle-substrate/bootnode_key
   env:
    - name: VAULT_LOG_LEVEL
      value: "debug"
-
-  customNodeKey: ${bootnode_key}
   flags:
     - "--allow-private-ipv4"
     - "--discover-local"
@@ -66,11 +81,6 @@ ingress:
 extraInitContainers:
   - name: chainspec-generator
     image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-    annotations:
-      vault.hashicorp.com/agent-inject: "true"
-      vault.hashicorp.com/role: 'bootnode'
-      vault.hashicorp.com/agent-inject-secret-bootnode_key: 'kv/chronicle_substrate/bootnode_key'
-      vault.hashicorp.com/agent-inject-secret-bootnode_peer: 'kv/chronicle_substrate/bootnode_peer'
     securityContext:
       runAsUser: 0
     command: [ "/bin/bash" ]
@@ -83,7 +93,8 @@ extraInitContainers:
           echo "base.json is empty or missing."
           exit 1
         fi
-        echo '{"bootNodes":["/dns/bootnode-0/tcp/30333/p2p/12D3KooWRpzRTivvJ5ySvgbFnPeEE6rDhitQKL1fFJvvBGhnenSk"]}' > override1.json
+        BOOTNODE_PEER=$(cat /vault/secrets/bootnode_peer)
+        echo "{\"bootNodes\":[\"/dns/bootnode-0/tcp/30333/p2p/$${BOOTNODE_PEER}\"]}" > override1.json
         jq -s '.[0] * .[1]' base.json override1.json | sed 's/1e+18/1000000000000000000/' > plain.json
         if [ ! -s plain.json ]; then
           echo "plain.json is empty or malformed after jq processing."

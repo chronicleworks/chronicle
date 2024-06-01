@@ -23,3 +23,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+#Don't bring in certs
+*.pem

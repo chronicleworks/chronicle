@@ -35,8 +35,8 @@ uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 chronicle-telemetry = { path = "../chronicle-telemetry" }
-frame-support = { version = "25.0.0", features = ["std"] }
-frame-system = { version = "25.0.0", features = ["std"] }
+frame-support = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', features = ["std"] }
+frame-system = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', features = ["std"] }
 hex = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
 pallet-opa = { path = "../pallet-opa", features = ["std"] }
@@ -50,9 +50,9 @@ scale-info = { version = "2.10.0", default-features = false, features = [
 ] }
 scale-value = { version = "^0.14" }
 serde_json = { workspace = true }
-sp-core = { version = "25.0.0" }
-sp-io = { version = "27.0.0" }
-sp-runtime = { version = "28.0.0" }
+sp-core = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', features = ["std"] }
+sp-io = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', features = ["std"] }
+sp-runtime = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', features = ["std"] }
 subxt = { version = "0.34", features = ["substrate-compat"] }
 tempfile = { workspace = true }
 

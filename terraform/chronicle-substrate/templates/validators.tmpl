@@ -1,0 +1,38 @@
+image:
+  repository:  ${chronicle_node_repository}
+  tag: local
+  pullPolicy: IfNotPresent
+
+node:
+  chain: local
+  command: node-chronicle
+  customChainspecUrl: http://bootnode:8080/chainspec.json
+  forceDownloadChainspec: true
+  role: authority
+  replicas: 2
+  vault:
+    enabled: true
+    authRole: admin
+    authType: kubernetes
+    keys:
+      - name: aura
+        type: aura
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/aura # path at which the secret is located in Vault
+        vaultKey: secretSeed # key under which the secret value is stored in Vault
+        extraDerivation: "//$${HOSTNAME}//aura" # allows to have unique derived keys for each pod of the statefulset
+      - name: grankey
+        type: grandpa
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/grankey
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//gran" # allows to have unique derived keys for each pod of the statefulset
+  chainData:
+    pruning: 1000
+    storageClass: ""
+  chainKeystore:
+    storageClass: ""
+  keys: {}
+  flags:
+    - "--allow-private-ipv4"
+    - "--discover-local"

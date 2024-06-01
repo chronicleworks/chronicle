@@ -107,9 +107,6 @@ spec:
               mountPath: /var/lib/chronicle/store/
             {{- include "lib.volumeMounts" .Values.extraVolumeMounts | nindent 12 }}
       volumes:
-        - name: chronicle-secrets
-          persistentVolumeClaim:
-            claimName: chronicle-secrets
         - name: chronicle-data
           persistentVolumeClaim:
             claimName: chronicle-data
