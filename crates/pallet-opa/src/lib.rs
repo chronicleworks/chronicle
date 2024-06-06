@@ -42,7 +42,7 @@ pub mod opa_core {
 }
 
 use parity_scale_codec::Encode;
-use sp_core_hashing::blake2_128;
+use sp_core::blake2_128;
 use tracing::{error, instrument};
 pub use weights::*;
 
@@ -256,7 +256,7 @@ fn apply_signed_operation_payload<T: Config>(
             Ok(())
         }
         Operation::SetPolicy(SetPolicy { policy, id }) => {
-            let hash = sp_core_hashing::blake2_128(policy.as_bytes());
+            let hash = sp_core::blake2_128(policy.as_bytes());
 
             let meta = PolicyMeta {
                 id: id.clone(),

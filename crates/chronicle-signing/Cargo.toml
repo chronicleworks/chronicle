@@ -17,6 +17,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+hex = {workspace = true}
 vaultrs = { workspace = true }
 
 [dev-dependencies]

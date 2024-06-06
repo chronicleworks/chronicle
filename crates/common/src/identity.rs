@@ -7,10 +7,10 @@ use k256::sha2::{Digest, Sha512};
 #[cfg(not(feature = "std"))]
 use parity_scale_codec::{
     alloc::collections::BTreeMap, alloc::collections::BTreeSet, alloc::string::String,
-    alloc::vec::Vec, Decode, Encode,
+    alloc::vec::Vec
 };
 #[cfg(not(feature = "std"))]
-use scale_info::{prelude::*, prelude::borrow::ToOwned, prelude::string::ToString, TypeInfo};
+use scale_info::{prelude::borrow::ToOwned, prelude::string::ToString};
 use serde_json::{Map, Value};
 #[cfg(feature = "std")]
 use thiserror::Error;

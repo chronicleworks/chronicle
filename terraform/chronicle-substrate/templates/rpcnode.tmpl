@@ -10,17 +10,19 @@ node:
   command: node-chronicle
   customChainspecUrl: http://bootnode:8080/chainspec.json
   forceDownloadChainspec: true
-  role: full
+  role: rpc
+  replicas: 2
+  ingress:
+    enabled: true
+    host: chronicle-substrate-rpc
   logLevels:
     - debug
     - wasmtime_cranelift=info
     - wasmtime_jit=info
   replicas: 3
-  chainData:
-    pruning: 1000
-    storageClass: ""
-  enableSidecarReadinessProbe: false
-  enableSidecarLivenessProbe: false
+  enabled: true
+  enableSidecarReadinessProbe: true
+  enableSidecarLivenessProbe: true
   vault:
     enabled: true
     authRole: admin

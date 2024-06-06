@@ -4,8 +4,8 @@ resource "vault_policy" "admin_policy" {
 }
 
 resource "vault_policy" "bootnode_policy" {
-  name   = "bootnode"
-  policy = file("policies/bootnode.hcl")
+  name   = "chronicle-substrate"
+  policy = file("policies/chronicle-substrate.hcl")
 }
 
 resource "vault_policy" "chronicle_policy" {
@@ -88,6 +88,50 @@ resource "vault_kv_secret_v2" "grankey" {
   }
 }
 
+resource "vault_kv_secret_v2" "rootkey" {
+  name      = "root"
+  mount     = vault_mount.chronicle_substrate.path
+  data_json = var.root_key
+
+  #Once secrets are set, do not update
+  lifecycle {
+    ignore_changes = [data_json]
+  }
+}
+
+resource "vault_kv_secret_v2" "onlinekey" {
+  name      = "online"
+  mount     = vault_mount.chronicle_substrate.path
+  data_json = var.online_key
+
+  #Once secrets are set, do not update
+  lifecycle {
+    ignore_changes = [data_json]
+  }
+}
+
+resource "vault_kv_secret_v2" "chronicle_account_key" {
+  name      = "chronicle-account"
+  mount     = vault_mount.chronicle.path
+  data_json = var.chronicle_account_key
+
+  #Once secrets are set, do not update
+  lifecycle {
+    ignore_changes = [data_json]
+  }
+}
+
+resource "vault_kv_secret_v2" "chronicle_identity_key" {
+  name      = "chronicle-identity"
+  mount     = vault_mount.chronicle.path
+  data_json = var.chronicle_identity_key
+
+  #Once secrets are set, do not update
+  lifecycle {
+    ignore_changes = [data_json]
+  }
+}
+
 resource "vault_auth_backend" "kubernetes" {
   type = "kubernetes"
 }
@@ -114,10 +158,10 @@ resource "vault_kubernetes_auth_backend_role" "admin" {
     depends_on = [vault_auth_backend.kubernetes]
 }
 
-resource "vault_kubernetes_auth_backend_role" "bootnode" {
+resource "vault_kubernetes_auth_backend_role" "chronicle-substrate" {
   backend = vault_auth_backend.kubernetes.id
 
-  role_name                        = "bootnode"
+  role_name                        = "chronicle-substrate"
   bound_service_account_names      = ["*"]
   bound_service_account_namespaces = ["vault", "chronicle", "chronicle-substrate"]
   token_ttl                        = 3600

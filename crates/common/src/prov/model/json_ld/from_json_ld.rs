@@ -488,7 +488,6 @@ trait Operation {
     fn activity(&self) -> Option<ActivityId>;
     fn optional_role(&self) -> Option<Role>;
     fn start_time(&self) -> Option<String>;
-    fn locator(&self) -> Option<String>;
     fn end_time(&self) -> Option<String>;
     fn entity(&self) -> Option<EntityId>;
     fn used_entity(&self) -> Option<EntityId>;
@@ -614,12 +613,6 @@ impl Operation for Node<IriBuf, BlankIdBuf, ()> {
             self.get(&id_from_iri_string(vocab::ChronicleOperation::ActivityName));
         let external_id = name_objects.next()?.as_str()?;
         Some(ActivityId::from_external_id(external_id))
-    }
-
-    fn locator(&self) -> Option<String> {
-        let mut objects = self.get(&id_from_iri_string(vocab::ChronicleOperation::Locator));
-        let locator = objects.next()?;
-        Some(locator.as_str()?.to_owned())
     }
 
     fn informing_activity(&self) -> Option<ActivityId> {

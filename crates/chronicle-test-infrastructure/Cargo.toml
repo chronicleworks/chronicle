@@ -28,7 +28,7 @@ futures = { workspace = true }
 insta = { workspace = true, features = ["json", "yaml"] }
 lazy_static = { workspace = true }
 pallet-chronicle = { path = "../pallet-chronicle" }
-parity-scale-codec = { version = "3.4.0", default-features = false, features = [
+parity-scale-codec = { version = "3.6.1", default-features = false, features = [
     "derive",
 ] }
 portpicker = { workspace = true }

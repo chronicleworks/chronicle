@@ -17,7 +17,7 @@ use parity_scale_codec::{alloc::string::String, alloc::vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use scale_info::{
-    prelude::borrow::ToOwned, prelude::string::ToString, prelude::sync::Arc, prelude::*,
+    prelude::borrow::ToOwned, prelude::string::ToString, prelude::*,
 };
 
 #[cfg(feature = "diesel-bindings")]

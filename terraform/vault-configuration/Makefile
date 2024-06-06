@@ -4,14 +4,26 @@ KEYGEN_TAG := local
 TF_VAR_aura_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --output-type json)
 export TF_VAR_aura_key
 
-TF_VAR_grankey_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --output-type json)
+TF_VAR_grankey_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --scheme ed25519 --output-type json)
 export TF_VAR_grankey_key
+
+TF_VAR_root_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG)  node-chronicle key generate --network substrate --output-type json)
+export TF_VAR_root_key
+
+TF_VAR_online_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --output-type json)
+export TF_VAR_online_key
 
 TF_VAR_bootnode_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate-node-key)
 export TF_VAR_bootnode_key
 
 TF_VAR_bootnode_peer_id := $(shell echo $(TF_VAR_bootnode_key) | docker run -i $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key inspect-node-key)
 export TF_VAR_bootnode_peer_id
+
+TF_VAR_chronicle_account_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --scheme ecdsa --output-type json)
+export TF_VAR_chronicle_account_key
+
+TF_VAR_chronicle_identity_key := $(shell docker run $(KEYGEN_IMAGE):$(KEYGEN_TAG) node-chronicle key generate --network substrate --scheme ecdsa --output-type json)
+export TF_VAR_chronicle_identity_key
 
 TF_VAR_sa_jwt_token := $(shell kubectl get secret vault-auth-secret --namespace vault --output 'go-template={{ .data.token }}' | base64 --decode)
 export TF_VAR_sa_jwt_token

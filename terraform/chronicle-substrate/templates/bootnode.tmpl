@@ -1,11 +1,4 @@
 fullnameOverride: bootnode
-initContainers:
-  injectKeys:
-    debug: true
-jaegerAgent:
-  collector:
-    url: 127.0.0.1
-    port: 14250
 image:
   repository: ${chronicle_node_repository}
   tag: local
@@ -17,22 +10,21 @@ podAnnotations:
   vault.hashicorp.com/agent-inject-template-bootnode_key: '{{ with secret "kv/chronicle-substrate/bootnode_key" }}{{ .Data.data.key }}{{ end }}'
   vault.hashicorp.com/agent-inject-template-bootnode_peer: '{{ with secret "kv/chronicle-substrate/bootnode_peer" }}{{ .Data.data.peer_id }}{{ end }}'
 node:
-  chain: local
-  customChainspec: true # see extraInitContainers, chainspec-generator
+  chain: chronicle
+  customChainspec: true
   role: full
   replicas: 1
   command: node-chronicle
   chainData:
     pruning: archive
     storageClass: ""
-  chainKeystore:
-    mountInMemory:
-      enabled: true
   perNodeServices:
     relayP2pService:
       enabled: true
   prometheus:
       enabled: true
+  enableSidecarReadinessProbe: false
+  enableSidecarLivenessProbe: false
   vault:
     enabled: true
     authRole: admin
@@ -41,9 +33,27 @@ node:
       - name: aura
         type: aura
         scheme: sr25519
-        vaultPath: kv/chronicle-substrate/aura # path at which the secret is located in Vault
-        vaultKey: secretSeed # key under which the secret value is stored in Vault
-        extraDerivation: "//$${HOSTNAME}//aura" # allows to have unique derived keys for each pod of the statefulset
+        vaultPath: kv/chronicle-substrate/aura
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//aura"
+      - name: root
+        type: acco
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/root
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//acco"
+      - name: online
+        type: onli
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/online
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//onli"
+      - name: gran
+        type: gran
+        scheme: ed25519
+        vaultPath: kv/chronicle-substrate/grankey
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//gran"
     nodeKey:
       name: bootnode_key
       vaultKey: key
@@ -55,28 +65,6 @@ node:
     - "--allow-private-ipv4"
     - "--discover-local"
 
-ingress:
-  enabled: false
-  annotations:
-    kubernetes.io/ingress.class: TODO
-    external-dns.alpha.kubernetes.io/target: TODO
-    cert-manager.io/cluster-issuer: TODO
-  rules:
-    - host: chronicle-bootnode.paravela.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: bootnode
-                port:
-                  number: 9944
-  tls:
-    - secretName: chronicle-bootnode.paravela.io
-      hosts:
-        - chronicle-bootnode.paravela.io
-
 # Generate chainspec, and expose it as url
 extraInitContainers:
   - name: chainspec-generator
@@ -87,6 +75,7 @@ extraInitContainers:
     args:
       - -c
       - |
+        set -ex
         apt update && apt install -y jq &&
         {{ .Values.node.command }} build-spec --chain {{ .Values.node.chain }} > base.json
         if [ ! -s base.json ]; then
@@ -100,6 +89,7 @@ extraInitContainers:
           echo "plain.json is empty or malformed after jq processing."
           exit 1
         fi
+        cat plain.json
         cut -c -256 plain.json
         {{ .Values.node.command }} build-spec --chain plain.json --raw > chainspec.json
         if [ ! -s chainspec.json ]; then
@@ -110,6 +100,8 @@ extraInitContainers:
     volumeMounts:
       - mountPath: /chain-data
         name: chain-data
+      - mountPath: /keystore
+        name: chain-keystore
     env:
     - name: VAULT_LOG_LEVEL
       value: "debug"

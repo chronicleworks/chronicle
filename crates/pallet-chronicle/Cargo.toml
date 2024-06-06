@@ -15,11 +15,10 @@ frame-benchmarking = { git = 'https://github.com/paritytech/polkadot-sdk.git', t
 frame-support = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
 frame-system = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
 sp-core = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
-sp-core-hashing = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
 sp-std = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
 macro-attr-2018 = { workspace = true }
 newtype-derive-2018 = { workspace = true }
-parity-scale-codec = { version = "^3.4.0", default-features = false, features = [
+parity-scale-codec = { version = "3.6.1", default-features = false, features = [
     "derive",
 ] }
 scale-info = { version = "^2.10.0", default-features = false, features = [

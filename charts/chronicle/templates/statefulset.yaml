@@ -7,6 +7,11 @@ metadata:
   labels: {{ include "chronicle.labels" . | nindent 4 }}
     component: chronicle
 spec:
+  annotations:
+    sidecar.opentelemetry.io/inject: "true"
+    vault.hashicorp.com/ca-cert: '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+    vault.hashicorp.com/agent-inject-template-chronicle: '{{ with secret "kv/chronicle/chronicle_identity" }}{{ .Data.data.secret_seed }}{{ end }}'
+    vault.hashicorp.com/agent-inject-template-chronicle-pk: '{{ with secret "kv/chronicle/chronicle_account" }}{{ .Data.data.secret_seed }}{{ end }}'
   replicas: {{ include "chronicle.replicas" . }}
   selector:
     matchLabels: {{ include "chronicle.labels.matchLabels" . | nindent 6 }}
@@ -61,8 +66,10 @@ spec:
               sleep 20;
               chronicle \
                 -c /etc/chronicle/config/config.toml \
+                --chronicle-key-from-path /vault/secrets \
+                --batcher-key-from-path /vault/secrets
                 --console-logging json \
-                --substrate grpc://{{ include "chronicle.substrate.service" . }}:{{ include "chronicle.substrate.rpc" . }} \
+                --substrate grpc://{{  .Values.substrate.address  }}:{{  .Values.substrate.port  }} \
                 --remote-database \
                 --database-name {{ .Values.postgres.database }} \
                 --database-username {{ .Values.postgres.user }} \
@@ -84,6 +91,16 @@ spec:
                   {{ include "chronicle.id-claims" . }}
                   ;
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "localhost:4317"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=chronicle,service.instance.id={{ .Release.Name }}"
+            - name: OTEL_PROPAGATORS
+              value: "tracecontext,baggage"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
             - name: PGPASSWORD

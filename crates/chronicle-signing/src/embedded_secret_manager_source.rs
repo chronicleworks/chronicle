@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use k256::{
-    pkcs8::{EncodePrivateKey, LineEnding},
     SecretKey,
 };
 use rand::{rngs::StdRng, SeedableRng};
@@ -30,17 +29,16 @@ impl EmbeddedSecretManagerSource {
     }
 }
 
-fn new_signing_key(name: &str, seeds: &BTreeMap<String, [u8; 32]>) -> Result<Vec<u8>, SecretError> {
+fn new_signing_key(name: &str, seeds: &BTreeMap<String, [u8; 32]>) -> Result<String, SecretError> {
     let secret = if let Some(seed) = seeds.get(name) {
         SecretKey::from_be_bytes(seed).map_err(|_| SecretError::BadSeed)?
     } else {
         SecretKey::random(StdRng::from_entropy())
     };
-    let privpem = secret
-        .to_pkcs8_pem(LineEnding::CRLF)
-        .map_err(|_| SecretError::InvalidPrivateKey)?;
+    let secret_bytes = secret.to_be_bytes();
+    let hex_encoded = format!("0x{}", hex::encode(secret_bytes));
 
-    Ok(privpem.as_bytes().into())
+    Ok(hex_encoded)
 }
 
 #[async_trait]
@@ -62,7 +60,7 @@ impl SecretsSource for EmbeddedSecretManagerSource {
             let secret = secrets.entry(secret_ref.clone()).or_insert_with(|| {
                 let secret =
                     new_signing_key(secret_ref.key.secret_name.as_ref(), &self.seeds).unwrap();
-                secret.to_vec()
+                secret.into_bytes()
             });
 
             let secret_value = SecretValue::from(secret);

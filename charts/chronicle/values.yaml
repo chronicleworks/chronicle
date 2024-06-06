@@ -11,6 +11,10 @@ global:
 ## @md | `affinity`| custom affinity rules for the chronicle pod | {} |
 affinity: {}
 
+substrate:
+  address: chronicle-substrate-rpc-node.svc
+  port: 9933
+
 auth:
   ## @md | `auth.required` | if true require authentication, rejecting 'anonymous' requests | false |
   required: false
@@ -188,29 +192,3 @@ postgres:
 resources:
 
 volumes: {}
-
-node:
-  vault:
-    keys:
-      - name: aura
-        type: aura
-        scheme: secp256k1
-        vaultPath: kv/secret/chronicle-node # path at which the secret is located in Vault
-        vaultKey: aura # key under which the secret value is stored in Vault
-        extraDerivation: "//${HOSTNAME}//aura" # allows to have unique derived keys for each pod of the statefulset
-    nodeKey:
-      name: bootnode-key
-      vaultPath: kv/secret/chronicle-node
-      vaultKey: bootnode-key
-  image:
-    ## @md | `test.api.image.pullPolicy` | the image pull policy | IfNotPresent |
-    pullPolicy: IfNotPresent
-    ## @md | `test.api.image.repository` | the image repository | blockchaintp/chronicle-helm-api-test |
-    repository: blockchaintp/chronicle-node-amd64
-    ## @md | `test.api.image.tag` | the image tag | latest |
-    tag: BTP2.1.0-0.8.0
-  node:
-    chain: "chronicle"
-    command: "node-chronicle"
-
-

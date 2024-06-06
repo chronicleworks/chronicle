@@ -460,3 +460,18 @@ variable "node_command" {
   type        = string
   default     = "node-chronicle"
 }
+
+
+variable "helm_release_name" {
+  description = "Name of the helm release"
+  type        = string
+  default     = "chronicle"
+}
+
+
+variable "kubernetes_namespace" {
+  description = "Namespace for the helm release"
+  type        = string
+  default     = "chronicle-substrate"
+}
+

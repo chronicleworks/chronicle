@@ -2,8 +2,7 @@ use k256::{
     ecdsa::{
         signature::{Signer, Verifier},
         Signature, SigningKey, VerifyingKey,
-    },
-    pkcs8::DecodePrivateKey,
+    }
 };
 use secret_vault::{
     errors::SecretVaultError, FilesSource, FilesSourceOptions, MultipleSecretsSources, SecretName,
@@ -38,6 +37,8 @@ pub enum SecretError {
     NoPublicKeyFound,
     #[error("No private key found")]
     NoPrivateKeyFound,
+    #[error("Decoding failure")]
+    DecodingFailure,
 
     #[error("Vault {source}")]
     SecretVault {
@@ -237,11 +238,12 @@ impl WithSecret for ChronicleSigning {
 
         let signing_result = secret.value.exposed_in_as_str(|secret| {
             (
-                // Not semantically the same thing as we re-use f
-                SigningKey::from_pkcs8_pem(&secret)
-                    .map_err(|_| SecretError::InvalidPrivateKey)
+                // Convert hex encoded seed to SigningKey
+                hex::decode(secret.trim_start_matches("0x")).map_err(|_| SecretError::DecodingFailure).and_then(
+                   |secret|  SigningKey::from_bytes(&secret)
+                    .map_err(|_| SecretError::InvalidPrivateKey))
                     .map(&f),
-                secret,
+                    secret
             )
         });
 
@@ -265,10 +267,12 @@ impl WithSecret for ChronicleSigning {
 
         let signing_result = secret.value.exposed_in_as_str(|secret| {
             (
-                SigningKey::from_pkcs8_pem(&secret)
-                    .map_err(|_| SecretError::InvalidPrivateKey)
+                // Convert hex encoded seed to SigningKey
+                hex::decode(secret.trim_start_matches("0x")).map_err(|_| SecretError::DecodingFailure).and_then(
+                    |secret|  SigningKey::from_bytes(&secret)
+                    .map_err(|_| SecretError::InvalidPrivateKey))
                     .map(|signing_key| f(signing_key.verifying_key())),
-                secret,
+                    secret
             )
         });
 
@@ -286,10 +290,12 @@ impl WithSecret for ChronicleSigning {
 
         let key = secret.value.exposed_in_as_str(|secret| {
             (
-                SigningKey::from_pkcs8_pem(&secret)
-                    .map_err(|_| SecretError::InvalidPrivateKey)
+                // Convert hex encoded seed to SigningKey
+                hex::decode(secret.trim_start_matches("0x")).map_err(|_| SecretError::DecodingFailure).and_then(
+                    |decoded_secret| SigningKey::from_bytes(&decoded_secret)
+                    .map_err(|_| SecretError::InvalidPrivateKey))
                     .map(|signing_key| signing_key.verifying_key()),
-                secret,
+                    secret
             )
         });
 

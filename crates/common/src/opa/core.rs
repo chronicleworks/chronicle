@@ -30,9 +30,6 @@ impl H128 {
     }
 }
 
-#[cfg(not(feature = "std"))]
-use scale_info::prelude::format;
-
 #[cfg_attr(
     feature = "parity-encoding",
     derive(

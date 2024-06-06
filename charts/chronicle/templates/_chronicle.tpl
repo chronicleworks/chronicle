@@ -30,13 +30,6 @@ chronicle: {{ include "common.names.fullname" . }}
 9982
 {{- end -}}
 
-{{- define "chronicle.substrate.service" -}}
-{{- $svc := include "lib.call-nested" (list . "node" "common.names.fullname") -}}
-{{- $ns := .Release.Namespace -}}
-{{- $domain := "svc.cluster.local" -}}
-{{ printf "%s.%s.%s" $svc $ns $domain }}
-{{- end -}}
-
 {{- define "chronicle.affinity" -}}
 {{- if .Values.affinity -}}
 {{- toYaml .Values.affinity }}

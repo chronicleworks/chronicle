@@ -33,8 +33,6 @@ opa = { workspace = true }
 opentelemetry = { workspace = true }
 percent-encoding = { workspace = true }
 question = { workspace = true }
-rand = { workspace = true }
-rand_core = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }

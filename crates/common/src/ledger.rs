@@ -15,12 +15,9 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use core::str::FromStr;
-#[cfg(not(feature = "std"))]
 use parity_scale_codec::{
     alloc::boxed::Box, alloc::collections::btree_map::Entry, alloc::collections::BTreeMap,
-    alloc::collections::BTreeSet, alloc::string::String, alloc::sync::Arc, alloc::vec::Vec, Decode,
-    Encode,
+    alloc::collections::BTreeSet, alloc::string::String, alloc::sync::Arc, alloc::vec::Vec
 };
 #[cfg(not(feature = "std"))]
 use scale_info::prelude::*;

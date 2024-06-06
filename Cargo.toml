@@ -84,11 +84,9 @@ k256 = { version = "0.11.3", features = [
   "default",
   "arithmetic",
   "ecdsa",
-  "pkcs8",
   "sha256",
   "keccak256",
   "std",
-  "pem",
   "serde",
 ] }
 lazy_static = "1.4.0"

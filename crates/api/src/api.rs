@@ -70,7 +70,7 @@ impl<U, LEDGER> Api<U, LEDGER>
         policy_address: Option<PolicyAddress>,
         liveness_check_interval: Option<u64>,
     ) -> Result<ApiDispatch, ApiError> {
-        let (commit_tx, mut commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
+        let (commit_tx, commit_rx) = mpsc::channel::<ApiSendWithReply>(10);
 
         let (commit_notify_tx, _) = tokio::sync::broadcast::channel(20);
         let dispatch =

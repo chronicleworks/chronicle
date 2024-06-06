@@ -37,8 +37,6 @@ opa = { workspace = true }
 opentelemetry = { workspace = true }
 parking_lot = { workspace = true }
 poem = { workspace = true }
-rand = { workspace = true }
-rand_core = { workspace = true }
 reqwest = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true }

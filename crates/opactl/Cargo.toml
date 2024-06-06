@@ -40,7 +40,7 @@ frame-system = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = '
 hex = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
 pallet-opa = { path = "../pallet-opa", features = ["std"] }
-parity-scale-codec = { version = "3.4.0", default-features = false, features = [
+parity-scale-codec = { version = "3.6.1", default-features = false, features = [
     "derive",
 ] }
 

@@ -18,7 +18,7 @@ use parity_scale_codec::{
 };
 #[cfg(not(feature = "std"))]
 use scale_info::{
-    prelude::borrow::ToOwned, prelude::string::ToString, prelude::sync::Arc, prelude::*,
+    prelude::borrow::ToOwned, prelude::sync::Arc,
 };
 use serde::Serialize;
 #[cfg(feature = "std")]

@@ -38,6 +38,7 @@ pub mod pallet {
     use common::ledger::OperationSubmission;
     use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
     use frame_system::pallet_prelude::*;
+    use sp_core::blake2_128;
     use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
     #[pallet::pallet]
@@ -73,7 +74,7 @@ pub mod pallet {
             tracing::info!("Chronicle: Building genesis configuration.");
             if let Some(ref settings) = self.opa_settings {
                 OpaSettings::<T>::put(Some(common::opa::OpaSettings {
-                    policy_address: common::opa::PolicyAddress::from(sp_core_hashing::blake2_128(
+                    policy_address: common::opa::PolicyAddress::from(blake2_128(
                         settings.policy_name.as_bytes(),
                     )),
                     policy_name: settings.policy_name.clone(),

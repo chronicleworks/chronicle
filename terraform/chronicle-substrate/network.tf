@@ -18,9 +18,6 @@ resource "helm_release" "bootnode" {
 
       node = {
         command = "node-chronicle"
-        tracing =  {
-          enabled = true
-        }
       }
     })
   ]
@@ -43,9 +40,6 @@ resource "helm_release" "validators" {
 
       node = {
         command = "node-chronicle"
-        tracing =  {
-          enabled = true
-        }
       }
     })
   ]
@@ -54,33 +48,28 @@ resource "helm_release" "validators" {
 }
 
 
-resource "kubernetes_manifest" "bootnode_service_monitor" {
-  manifest = {
-    apiVersion = "monitoring.coreos.com/v1"
-    kind       = "ServiceMonitor"
-    metadata = {
-      name      = "bootnode-service-monitor"
-      namespace = var.kubernetes_namespace
-      labels = {
-        release = "prometheus-operator"
+resource "helm_release" "rpcnodes" {
+  name       = "${var.helm_release_name}-rpc"
+  repository = "https://paritytech.github.io/helm-charts/"
+  chart      = "node"
+  namespace  = var.kubernetes_namespace
+
+  values = [
+    templatefile("templates/rpcnode.tmpl", {
+      helm_release_name = var.helm_release_name
+
+      kubernetes_namespace                          = var.kubernetes_namespace
+      kubernetes_image_pull_secrets                 = var.kubernetes_image_pull_secrets
+
+      chronicle_node_repository = var.chronicle-node-repository
+
+      node = {
+        command = "node-chronicle"
       }
-    }
-    spec = {
-      selector = {
-        matchLabels = {
-          component = "substrate-node"
-        }
-      }
-      namespaceSelector = {
-        matchNames = [var.kubernetes_namespace]
-      }
-      endpoints = [
-        {
-          port     = 9625
-          interval = "30s"
-        }
-      ]
-    }
-  }
+    })
+  ]
+
+  depends_on = [helm_release.validators]
 }
+
 

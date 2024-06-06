@@ -12,19 +12,43 @@ variable "vault_token" {
 }
 
 variable "bootnode_key" {
-  description = "The bootnode key for the Chronicle Substrate node."
+  description = "The node key for the Chronicle Substrate."
   type        = string
   sensitive   = true
 }
 
 variable "aura_key" {
-  description = "The aura key for the Chronicle Substrate node."
+  description = "The AURA key for the Chronicle Substrate node."
   type        = string
   sensitive   = true
 }
 
 variable "grankey_key" {
-  description = "The grankey key for the Chronicle Substrate node."
+  description = "The GRANDPA key for the Chronicle Substrate node."
+  type        = string
+  sensitive   = true
+}
+
+variable "root_key" {
+  description = "The root account key for the Chronicle Substrate node."
+  type        = string
+  sensitive   = true
+}
+
+variable "online_key" {
+  description = "The i'm online account key for the Chronicle Substrate node."
+  type        = string
+  sensitive   = true
+}
+
+variable "chronicle_account_key" {
+  description = "The chronicle account key."
+  type        = string
+  sensitive   = true
+}
+
+variable "chronicle_identity_key" {
+  description = "The chronicle identity key."
   type        = string
   sensitive   = true
 }

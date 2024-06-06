@@ -2,13 +2,13 @@
 use std::collections::BTreeSet;
 
 #[cfg(not(feature = "std"))]
-use parity_scale_codec::{alloc::collections::BTreeMap, alloc::collections::BTreeSet, alloc::string::String, alloc::vec::Vec};
+use parity_scale_codec::{alloc::collections::BTreeSet, alloc::string::String, alloc::vec::Vec};
 #[cfg(feature = "parity-encoding")]
 use parity_scale_codec::Encode;
 #[cfg(feature = "parity-encoding")]
 use scale_encode::error::Kind;
 #[cfg(not(feature = "std"))]
-use scale_info::{prelude::*, prelude::borrow::ToOwned, prelude::string::ToString};
+use scale_info::{prelude::borrow::ToOwned};
 use serde_json::Value;
 
 use crate::prov::DomaintypeId;
