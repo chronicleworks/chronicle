@@ -1,17 +1,12 @@
-{{$substrateServiceName := include "lib.call-nested" (list . "node" "common.names.fullname")}}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "common.names.fullname" . }}-chronicle
-  labels: {{ include "chronicle.labels" . | nindent 4 }}
+  labels:
+    {{ include "chronicle.labels" . | nindent 4 }}
     component: chronicle
 spec:
-  annotations:
-    sidecar.opentelemetry.io/inject: "true"
-    vault.hashicorp.com/ca-cert: '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
-    vault.hashicorp.com/agent-inject-template-chronicle: '{{ with secret "kv/chronicle/chronicle_identity" }}{{ .Data.data.secret_seed }}{{ end }}'
-    vault.hashicorp.com/agent-inject-template-chronicle-pk: '{{ with secret "kv/chronicle/chronicle_account" }}{{ .Data.data.secret_seed }}{{ end }}'
   replicas: {{ include "chronicle.replicas" . }}
   selector:
     matchLabels: {{ include "chronicle.labels.matchLabels" . | nindent 6 }}
@@ -21,6 +16,19 @@ spec:
     metadata:
       labels: {{ include "chronicle.labels" . | nindent 8 }}
         component: chronicle
+      annotations:
+        sidecar.opentelemetry.io/inject: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "admin"
+        vault.hashicorp.com/ca-cert: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+        vault.hashicorp.com/agent-inject-secret-chronicle_identity: "kv/chronicle/chronicle_identity"
+        vault.hashicorp.com/agent-inject-secret-chronicle-pk: "kv/chronicle/chronicle_account"
+        vault.hashicorp.com/agent-inject-template-chronicle: |
+          {{`{{ with secret "kv/chronicle/chronicle_identity" }}{{ .Data.data.secret_seed }}{{ end }}`}}
+        vault.hashicorp.com/agent-inject-template-batcher-pk: |
+          {{`{{ with secret "kv/chronicle/chronicle_account" }}{{ .Data.data.secret_seed }}{{ end }}`}}
     spec:
       serviceAccountName: {{ include "lib.serviceAccountName" . }}
       affinity: {{ include "lib.safeToYaml" .Values.affinity | nindent 8 }}
@@ -53,8 +61,9 @@ spec:
           {{- include "lib.image" (dict "imageRoot" .Values.image "global" .Values.global ) | nindent 10 }}
           ports:
           - containerPort: {{ .Values.port }}
-          command: [ "bash", "-c"]
+          command: [ "/bin/sh" ]
           args:
+            - -c
             - |
               {{ if .Values.auth.required }}
               {{ if and (not .Values.auth.jwks.url) (not .Values.auth.userinfo.url) (not .Values.devIdProvider.enabled) }}
@@ -65,11 +74,11 @@ spec:
               echo "Waiting 20 seconds for postgres to start";
               sleep 20;
               chronicle \
-                -c /etc/chronicle/config/config.toml \
                 --chronicle-key-from-path /vault/secrets \
-                --batcher-key-from-path /vault/secrets
+                --batcher-key-from-path /vault/secrets \
+                --enable-otel \
                 --console-logging json \
-                --substrate grpc://{{  .Values.substrate.address  }}:{{  .Values.substrate.port  }} \
+                --validator ws://{{  .Values.substrate.address  }}:{{  .Values.substrate.port  }} \
                 --remote-database \
                 --database-name {{ .Values.postgres.database }} \
                 --database-username {{ .Values.postgres.user }} \
@@ -89,20 +98,17 @@ spec:
                   {{ include "chronicle.jwks-url.cli" . }}
                   {{ include "chronicle.userinfo-url.cli" . }}
                   {{ include "chronicle.id-claims" . }}
-                  ;
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "localhost:4317"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=chronicle,service.instance.id={{ .Release.Name }}"
-            - name: OTEL_PROPAGATORS
-              value: "tracecontext,baggage"
-            - name: OTEL_TRACES_EXPORTER
-              value: "otlp"
-            - name: OTEL_LOGS_EXPORTER
-              value: "otlp"
+            - name: OTEL_SERVICE_NAME
+              value: "chronicle"
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "full"
             - name: PGPASSWORD
               {{- if .Values.postgres.existingPasswordSecret }}
               valueFrom:
@@ -117,9 +123,6 @@ spec:
           volumeMounts:
             - name: chronicle-config
               mountPath: /etc/chronicle/config/
-            - name: chronicle-secrets
-              mountPath: /var/lib/chronicle/secrets/
-              readOnly: true
             - name: chronicle-data
               mountPath: /var/lib/chronicle/store/
             {{- include "lib.volumeMounts" .Values.extraVolumeMounts | nindent 12 }}

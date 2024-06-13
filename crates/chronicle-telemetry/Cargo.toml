@@ -8,12 +8,20 @@ version = "0.7.5"
 [dependencies]
 cfg-if = { workspace = true }
 console-subscriber = { workspace = true }
-opentelemetry-otlp = { version = "^0.15" }
 tracing = { workspace = true }
 tracing-flame = { version = "^0.2" }
 tracing-log = { workspace = true }
-tracing-opentelemetry = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-opentelemetry = "0.24"
+tracing-subscriber = { version = "^0.3.15", features = [
+  "default",
+  "registry",
+  "env-filter",
+  "json",
+] }
+opentelemetry_sdk = { version = "0.23", features = ["rt-tokio", "metrics", "trace"] }
+opentelemetry-otlp = { version = "0.16.0", features = ["trace", "metrics"] }
+opentelemetry-semantic-conventions = { version = "0.15.0" }
+opentelemetry-proto = { version = "0.6.0"}
 url = { workspace = true, features = ["serde"] }
 
 [features]

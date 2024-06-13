@@ -1,5 +1,4 @@
 ---
-{{$stlServiceName := include "lib.call-nested" (list . "node" "common.names.fullname")}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

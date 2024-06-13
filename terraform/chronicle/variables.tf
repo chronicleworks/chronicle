@@ -406,30 +406,6 @@ variable "volumes" {
   default     = {}
 }
 
-variable "node_vault_keys" {
-  description = "Vault keys for the node"
-  type        = list(map(string))
-  default     = [
-    {
-      name           = "aura",
-      type           = "aura",
-      scheme         = "secp256k1",
-      vaultPath      = "kv/secret/chronicle-node",
-      vaultKey       = "aura",
-      extraDerivation = "//${HOSTNAME}//aura"
-    }
-  ]
-}
-
-variable "node_vault_node_key" {
-  description = "Node key for the vault"
-  type        = map(string)
-  default     = {
-    name      = "bootnode-key",
-    vaultPath = "kv/secret/chronicle-node",
-    vaultKey  = "bootnode-key"
-  }
-}
 
 variable "node_image_pull_policy" {
   description = "The image pull policy for the node"

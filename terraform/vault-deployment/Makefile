@@ -27,7 +27,16 @@ unseal: apply
 	for ((i=0; i<$$num_pods; i++)); do \
 		pod_name="vault-$$i"; \
 		for key in $$unseal_keys; do \
-			kubectl exec $$pod_name --namespace vault -- vault operator unseal $$key; \
+			retry_key=0; \
+			while [[ $$retry_key -lt 5 ]]; do \
+				kubectl exec $$pod_name --namespace vault -- vault operator unseal $$key; \
+				if [[ $$? -eq 0 ]]; then \
+					break; \
+				fi; \
+				((retry_key++)); \
+				echo "Retrying unseal for $$pod_name in 3 seconds..."; \
+				sleep 3; \
+			done; \
 		done; \
 	done; \
 	echo "Unseal Keys: $$unseal_keys"; \

@@ -24,7 +24,7 @@ ENV GIT_HTTP_LOW_SPEED_TIME=60
 
 
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=shared \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -65,7 +65,7 @@ ARG TARGETARCH
 ARG BUILD_ARGS
 ARG CARGO_HOME
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=shared \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   dpkg --add-architecture ${TARGETARCH} \
   && apt-get update \
@@ -76,19 +76,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   libzmq3-dev
 
 USER root
-RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-  --mount=type=cache,target=./target,sharing=locked \
+RUN --mount=type=cache,target=.cargo_cached,sharing=shared \
+  --mount=type=cache,target=./target,sharing=shared \
   mkdir -p /artifacts/${TARGETARCH} \
   && chown -R tester \
-  .cargo_cached/registry \
+  .cargo_cached \
   /app \
   /artifacts
 
 # If we are doing a cross build, then build once on the host architecture
 # so we get the build script dependencies compiled and cached
 USER tester
-RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-  --mount=type=cache,target=./target,sharing=locked \
+RUN --mount=type=cache,target=.cargo_cached,sharing=shared \
+  --mount=type=cache,target=./target,sharing=shared \
   if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]; then \
   if [ "${BUILDPLATFORM}" = "linux/arm64" ]; then \
   export INITIAL_BUILD_TARGET=aarch64-unknown-linux-gnu; \
@@ -104,7 +104,7 @@ RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
 # Now we shuffle out the target architecture dev libraries, but
 # only if we are targeting other than the host architecture
 USER root
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=shared \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]; then \
   apt-get remove -y \
@@ -118,18 +118,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   libssl-dev:${TARGETARCH}; \
   fi
 
-RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-  --mount=type=cache,target=./target,sharing=locked \
+RUN --mount=type=cache,target=.cargo_cached,sharing=shared \
+  --mount=type=cache,target=./target,sharing=shared \
   mkdir -p /artifacts/${TARGETARCH} \
   && chown -R tester \
-  .cargo_cached/registry
+  .cargo_cached
 
 # Finally we build the target architecture binaries
 # If our target is the host architecture, then this is the
 # first build, otherwise it is the second
 USER tester
-RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
-  --mount=type=cache,target=./target,sharing=locked \
+RUN --mount=type=cache,target=.cargo_cached,sharing=shared \
+  --mount=type=cache,target=./target,sharing=shared \
   mkdir -p /artifacts/${TARGETARCH} \
   && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then \
   export CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu; \
@@ -148,7 +148,7 @@ RUN --mount=type=cache,target=.cargo_cached/registry,sharing=locked \
 FROM crossbuild AS testbase
 
 USER root
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=shared \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - \
   && echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian \

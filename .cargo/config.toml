@@ -11,5 +11,5 @@ multiplexing = false
 
 [net]
 retry = 3
-git-fetch-with-cli = false   # use the `git` executable for git operations
+git-fetch-with-cli = true   # use the `git` executable for git operations
 

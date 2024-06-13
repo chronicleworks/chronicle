@@ -72,6 +72,7 @@ fn validator_address(options: &ArgMatches) -> Result<Vec<SocketAddr>, CliError> 
 
 #[allow(dead_code)]
 #[cfg(not(feature = "devmode"))]
+#[tracing::instrument(level = "debug", skip(options))]
 async fn ledger(
     options: &ArgMatches,
 ) -> Result<ChronicleSubstrateClient<protocol_substrate::PolkadotConfig>, CliError> {
@@ -80,18 +81,14 @@ async fn ledger(
         .map(str::to_string)
         .ok_or_else(|| CliError::MissingArgument { arg: "validator".to_owned() })?;
 
-    let url = Url::parse(&url).map_err(CliError::from)?;
-
-    let addrs = url.socket_addrs(|| Some(9944)).map_err(CliError::from)?;
 
     let client = ChronicleSubstrateClient::<protocol_substrate::PolkadotConfig>::connect(
-        addrs[0].to_string(),
+        url
     )
-        .await?;
+    .await?;
 
     Ok(client)
 }
-
 #[allow(dead_code)]
 #[cfg(feature = "devmode")]
 async fn in_mem_ledger(
@@ -200,7 +197,7 @@ pub async fn graphql_api_server<Query, Mutation>(
 #[allow(dead_code)]
 fn namespace_bindings(options: &ArgMatches) -> Vec<NamespaceId> {
     options
-        .values_of("namespace-bindings")
+        .values_of("namespace-binding")
         .map(|values| {
             values
                 .map(|value| {
@@ -232,12 +229,12 @@ async fn chronicle_signing(options: &ArgMatches) -> Result<ChronicleSigning, Cli
     // Determine batcher configuration
 
     use std::path::PathBuf;
-    let batcher_options = match (
+    let batcher_options: ChronicleSecretsOptions = match (
         options.get_one::<PathBuf>("batcher-key-from-path"),
-        options.get_flag("batcher-key-from-vault"),
-        options.get_flag("batcher-key-generated"),
+        options.contains_id("batcher-key-from-vault"),
+        options.contains_id("batcher-key-generated"),
     ) {
-        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
+        (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(std::path::Path::new(path)),
         (_, true, _) => vault_secrets_options(options)?,
         (_, _, true) => ChronicleSecretsOptions::generate_in_memory(),
         _ => unreachable!("CLI should always set batcher key"),
@@ -245,8 +242,8 @@ async fn chronicle_signing(options: &ArgMatches) -> Result<ChronicleSigning, Cli
 
     let chronicle_options = match (
         options.get_one::<PathBuf>("chronicle-key-from-path"),
-        options.get_flag("chronicle-key-from-vault"),
-        options.get_flag("chronicle-key-generated"),
+        options.contains_id("chronicle-key-from-vault"),
+        options.contains_id("chronicle-key-generated"),
     ) {
         (Some(path), _, _) => ChronicleSecretsOptions::stored_at_path(path),
         (_, true, _) => vault_secrets_options(options)?,
@@ -827,7 +824,7 @@ pub async fn bootstrap<Query, Mutation>(
     }
     chronicle_telemetry::telemetry(
         matches
-            .get_one::<String>("instrument").is_some(),
+            .get_one::<String>("enable-otel").is_some(),
         if matches.contains_id("console-logging") {
             match matches.get_one::<String>("console-logging") {
                 Some(level) => match level.as_str() {

@@ -111,7 +111,7 @@ resource "vault_kv_secret_v2" "onlinekey" {
 }
 
 resource "vault_kv_secret_v2" "chronicle_account_key" {
-  name      = "chronicle-account"
+  name      = "chronicle_account"
   mount     = vault_mount.chronicle.path
   data_json = var.chronicle_account_key
 
@@ -122,7 +122,7 @@ resource "vault_kv_secret_v2" "chronicle_account_key" {
 }
 
 resource "vault_kv_secret_v2" "chronicle_identity_key" {
-  name      = "chronicle-identity"
+  name      = "chronicle_identity"
   mount     = vault_mount.chronicle.path
   data_json = var.chronicle_identity_key
 
@@ -182,15 +182,4 @@ resource "vault_kubernetes_auth_backend_role" "chronicle" {
     depends_on = [vault_auth_backend.kubernetes]
 }
 
-resource "vault_kubernetes_auth_backend_role" "chronicle-substrate" {
-  backend = vault_auth_backend.kubernetes.id
-
-  role_name                        = "chronicle-substrate"
-  bound_service_account_names      = ["*"]
-  bound_service_account_namespaces = ["vault"]
-  token_ttl                        = 3600
-  token_policies                   = []
-
-    depends_on = [vault_auth_backend.kubernetes]
-}
 

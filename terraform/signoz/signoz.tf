@@ -57,14 +57,9 @@ variable "namespaces" {
   default     = ["chronicle-substrate","chronicle","vault"]
 }
 
-resource "kubernetes_namespace" "namespaces" {
-  for_each = toset(var.namespaces)
-  metadata {
-    name = each.key
-  }
-}
 
 resource "kubernetes_manifest" "prometheus_service_monitor_crd" {
+  depends_on = [helm_release.opentelemetry_operator]
   manifest = {
     apiVersion = "apiextensions.k8s.io/v1"
     kind       = "CustomResourceDefinition"
@@ -532,6 +527,8 @@ resource "kubernetes_manifest" "prometheus_service_monitor_crd" {
 
 
 resource "kubernetes_manifest" "opentelemetry_collector" {
+  depends_on = [helm_release.opentelemetry_operator]
+
   count = length(var.namespaces)
   manifest = {
     apiVersion = "opentelemetry.io/v1beta1"
@@ -569,7 +566,7 @@ resource "kubernetes_manifest" "opentelemetry_collector" {
                   scrape_interval = "10s"
                   static_configs = [
                     {
-                      targets = ["$${env.MY_POD_IP}:8888"]
+                      targets = ["0.0.0.0:8888"]
                     }
                   ]
                 }
@@ -616,7 +613,10 @@ resource "kubernetes_manifest" "opentelemetry_collector" {
           }
           telemetry = {
             metrics = {
-              address = "$${env.MY_POD_IP}:8888"
+              address = "0.0.0.0:8888"
+            }
+            logs = {
+              level = "debug"
             }
           }
         }
@@ -624,4 +624,3 @@ resource "kubernetes_manifest" "opentelemetry_collector" {
     }
   }
 }
-

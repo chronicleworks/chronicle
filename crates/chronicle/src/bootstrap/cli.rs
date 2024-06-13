@@ -849,13 +849,12 @@ impl SubCommand for CliModel {
             .author("Blockchain Technology Partners")
             .about("Write and query provenance data to distributed ledgers")
             .arg(
-                Arg::new("instrument")
+                Arg::new("enable-otel")
                     .short('i')
-                    .long("instrument")
-                    .value_name("instrument")
-                    .takes_value(true)
-                    .value_hint(ValueHint::Url)
-                    .help("Instrument using RUST_LOG environment"),
+                    .long("enable-otel")
+                    .value_name("enable-otel")
+                    .takes_value(false)
+                    .help("Instrument using OLTP environment"),
             )
             .arg(Arg::new("console-logging").long("console-logging")
                 .takes_value(true)
@@ -923,6 +922,15 @@ impl SubCommand for CliModel {
                 ArgGroup::with_name("opa-bundle-address-args")
                     .args(&["opa-bundle-address"])
                     .requires_all(&["opa-policy-name", "opa-policy-entrypoint"]),
+            )
+            .arg(
+                Arg::new("namespace-binding")
+                    .long("namespace-binding")
+                    .takes_value(true)
+                    .action(clap::ArgAction::Append)
+                    .value_name("namespace-binding")
+                    .help("Namespace binding")
+                    .takes_value(true)
             )
             .subcommand(
                 Command::new("completions")
@@ -1020,8 +1028,7 @@ impl SubCommand for CliModel {
                             .help("which API endpoints to offer")
                     ),
             )
-            .subcommand(Command::new("verify-keystore").about("Initialize and verify keystore, then exit"))
-            .subcommand(
+             .subcommand(
                 Command::new("import")
                     .about("Import and apply Chronicle operations, then exit")
                     .arg(
@@ -1062,6 +1069,7 @@ impl SubCommand for CliModel {
                 Arg::new("batcher-key-from-path")
                     .long("batcher-key-from-path")
                     .takes_value(true)
+                    .value_parser(clap::builder::PathBufValueParser::new())
                     .value_hint(ValueHint::DirPath)
                     .help("Path to a directory containing the key for signing batches")
                     .conflicts_with("batcher-key-from-vault")
@@ -1091,6 +1099,7 @@ impl SubCommand for CliModel {
                     .long("chronicle-key-from-path")
                     .takes_value(true)
                     .value_hint(ValueHint::DirPath)
+                    .value_parser(clap::builder::PathBufValueParser::new())
                     .help("Path to a directory containing the key for signing identities and query results")
                     .conflicts_with("chronicle-key-from-vault")
                     .conflicts_with("chronicle-key-generated"),
@@ -1141,7 +1150,6 @@ impl SubCommand for CliModel {
             );
 
             app.arg(
-                // default is provided by cargo.toml
                 Arg::new("validator")
                     .long("validator")
                     .value_name("validator")

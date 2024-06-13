@@ -33,30 +33,21 @@ node:
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/aura
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//aura"
       - name: root
         type: acco
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/root
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//acco"
       - name: online
         type: onli
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/online
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//onli"
       - name: gran
         type: gran
         scheme: ed25519
         vaultPath: kv/chronicle-substrate/grankey
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//gran"
-    nodeKey:
-      name: bootnode_key
-      vaultKey: key
-      vaultPath: kv/chronicle-substrate/bootnode_key
-      extraDerivation: "//$${HOSTNAME}//boot" # allows to have unique derived keys for each pod of the statefulset
   chainData:
     pruning: 1000
     storageClass: ""

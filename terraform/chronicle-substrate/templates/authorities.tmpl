@@ -1,0 +1,59 @@
+image:
+  repository:  ${chronicle_node_repository}
+  tag: local
+  pullPolicy: IfNotPresent
+podAnnotations:
+  sidecar.opentelemetry.io/inject: "true"
+  vault.hashicorp.com/ca-cert: '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+node:
+  chain: chronicle
+  command: node-chronicle
+  customChainspecUrl: http://bootnode:8080/chainspec.json
+  forceDownloadChainspec: true
+  role: full
+  logLevels:
+    - info
+    - wasmtime_cranelift=info
+    - wasmtime_jit=info
+  replicas: 4
+  chainData:
+    pruning: 1000
+    storageClass: ""
+  enableSidecarReadinessProbe: false
+  enableSidecarLivenessProbe: true
+  vault:
+    enabled: true
+    authRole: admin
+    authType: kubernetes
+    keys:
+      - name: aura
+        type: aura
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/aura
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//aura"
+      - name: root
+        type: acco
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/root
+        vaultKey: secretSeed
+      - name: online
+        type: onli
+        scheme: sr25519
+        vaultPath: kv/chronicle-substrate/online
+        vaultKey: secretSeed
+        extraDerivation: "//$${HOSTNAME}//online"
+      - name: gran
+        type: gran
+        scheme: ed25519
+        vaultPath: kv/chronicle-substrate/grankey
+        vaultKey: secretSeed
+  persistGeneratedNodeKey: true
+  chainData:
+    pruning: 1000
+    storageClass: ""
+  chainKeystore:
+    storageClass: ""
+  flags:
+    - "--allow-private-ipv4"
+    - "--discover-local"

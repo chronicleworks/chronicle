@@ -53,12 +53,18 @@ documentation: lint check-security ## Generate README.md for a module
 		--sort-by-required  . > README.md
 
 apply: ca
-	kubectl port-forward service/vault-ui 8200:8200 --namespace vault &> /dev/null & \
-	VAULT_TLS_SERVER_NAME=vault-0.vault-internal terraform apply;
-	@kill $$! # Stop the port-forwarding process
+	@{ \
+		kubectl port-forward service/vault-ui 8200:8200 --namespace vault &> /dev/null & \
+		PID=$$!; \
+		VAULT_TLS_SERVER_NAME=vault-0.vault-internal terraform apply; \
+		kill $$PID; \
+	}
 
 destroy:
-	kubectl port-forward service/vault-ui 8200:8200 --namespace vault &> /dev/null & \
-	VAULT_TLS_SERVER_NAME=vault-0.vault-internal terraform destroy;
-	@kill $$! # Stop the port-forwarding proces
+	@{ \
+		kubectl port-forward service/vault-ui 8200:8200 --namespace vault &> /dev/null & \
+		PID=$$!; \
+		VAULT_TLS_SERVER_NAME=vault-0.vault-internal terraform destroy; \
+		kill $$PID; \
+	}
 

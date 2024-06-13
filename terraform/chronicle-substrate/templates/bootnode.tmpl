@@ -12,9 +12,13 @@ podAnnotations:
 node:
   chain: chronicle
   customChainspec: true
-  role: full
+  role: authority
   replicas: 1
   command: node-chronicle
+  logLevels:
+    - info
+    - wasmtime_cranelift=info
+    - wasmtime_jit=info
   chainData:
     pruning: archive
     storageClass: ""
@@ -24,7 +28,7 @@ node:
   prometheus:
       enabled: true
   enableSidecarReadinessProbe: false
-  enableSidecarLivenessProbe: false
+  enableSidecarLivenessProbe: true
   vault:
     enabled: true
     authRole: admin
@@ -35,25 +39,21 @@ node:
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/aura
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//aura"
       - name: root
         type: acco
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/root
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//acco"
       - name: online
         type: onli
         scheme: sr25519
         vaultPath: kv/chronicle-substrate/online
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//onli"
       - name: gran
         type: gran
         scheme: ed25519
         vaultPath: kv/chronicle-substrate/grankey
         vaultKey: secretSeed
-        extraDerivation: "//$${HOSTNAME}//gran"
     nodeKey:
       name: bootnode_key
       vaultKey: key
@@ -76,6 +76,10 @@ extraInitContainers:
       - -c
       - |
         set -ex
+        if [ -f chainspec.json ]; then
+          echo "chainspec.json already exists."
+          exit 0
+        fi
         apt update && apt install -y jq &&
         {{ .Values.node.command }} build-spec --chain {{ .Values.node.chain }} > base.json
         if [ ! -s base.json ]; then

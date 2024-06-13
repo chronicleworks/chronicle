@@ -55,12 +55,12 @@ impl<C, EC, T> SubstrateClient<C, EC, T>
         EC: LedgerEventCodec + Send + Sync,
 {
     pub async fn connect(url: impl AsRef<str>) -> Result<Self, SubxtClientError> {
-        Ok(Self { client: OnlineClient::from_url(url).await?, _p: Default::default() })
+        Ok(Self { client: OnlineClient::from_insecure_url(url).await?, _p: Default::default() })
     }
 
     pub async fn connect_socket_addr(socket: SocketAddr) -> Result<Self, SubxtClientError> {
         tracing::info!("Connecting to Substrate client via SocketAddr: {:?}", socket);
-        let client_result = OnlineClient::from_url(socket.to_string()).await;
+        let client_result = OnlineClient::from_insecure_url(socket.to_string()).await;
         match client_result {
             Ok(client) => {
                 tracing::info!("Successfully connected to Substrate client.");

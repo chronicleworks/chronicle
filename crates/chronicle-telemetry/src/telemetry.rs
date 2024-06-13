@@ -1,9 +1,10 @@
 use tracing::subscriber::set_global_default;
 use tracing_flame::FlameLayer;
 use tracing_log::{log::LevelFilter, LogTracer};
-
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 
+use opentelemetry_sdk::trace;
+use opentelemetry_sdk::Resource;
 #[derive(Debug, Clone, Copy)]
 pub enum ConsoleLogging {
     Off,
@@ -31,13 +32,14 @@ macro_rules! oltp_exporter_layer {
 	() => {{
 		let tracer = opentelemetry_otlp::new_pipeline()
 			.tracing()
-			.with_exporter(
-				opentelemetry_otlp::new_exporter().tonic(),
-			)
-			.install_simple()
-			.expect("Failed to install OpenTelemetry tracer");
+            .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+            .with_trace_config(
+                trace::config().with_resource(Resource::default()),
+            )
+            .install_batch(opentelemetry_sdk::runtime::Tokio)
+            .expect("Failed to install OpenTelemetry tracer");
 
-		tracing_opentelemetry::OpenTelemetryLayer::new(tracer)
+		tracing_opentelemetry::layer().with_tracer(tracer)
 	}};
 }
 
@@ -164,3 +166,4 @@ pub fn full_telemetry(
 
     OptionalDrop::new(guard)
 }
+

@@ -23,14 +23,14 @@ resource "helm_release" "bootnode" {
   ]
 }
 
-resource "helm_release" "validators" {
-  name       = "${var.helm_release_name}-validators"
+resource "helm_release" "authority" {
+  name       = "${var.helm_release_name}-authority"
   repository = "https://paritytech.github.io/helm-charts/"
   chart      = "node"
   namespace  = var.kubernetes_namespace
 
   values = [
-    templatefile("templates/validators.tmpl", {
+    templatefile("templates/authorities.tmpl", {
       helm_release_name = var.helm_release_name
 
       kubernetes_namespace                          = var.kubernetes_namespace
@@ -47,8 +47,7 @@ resource "helm_release" "validators" {
   depends_on = [helm_release.bootnode]
 }
 
-
-resource "helm_release" "rpcnodes" {
+resource "helm_release" "rpc" {
   name       = "${var.helm_release_name}-rpc"
   repository = "https://paritytech.github.io/helm-charts/"
   chart      = "node"
@@ -69,7 +68,7 @@ resource "helm_release" "rpcnodes" {
     })
   ]
 
-  depends_on = [helm_release.validators]
+  depends_on = [helm_release.authority]
 }
 
 
