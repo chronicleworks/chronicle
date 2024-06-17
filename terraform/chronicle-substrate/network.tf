@@ -1,3 +1,17 @@
+resource "kubernetes_namespace" "chronicle-substrate" {
+  metadata {
+    name = var.kubernetes_namespace
+  }
+
+  lifecycle {
+    ignore_changes = [
+      metadata[0].labels,
+    ]
+  }
+}
+
+
+
 #------------------------------------------------------------------------------
 # Bootnode  deployment
 #------------------------------------------------------------------------------

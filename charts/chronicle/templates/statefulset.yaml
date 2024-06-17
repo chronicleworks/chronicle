@@ -23,12 +23,10 @@ spec:
         vault.hashicorp.com/agent-pre-populate-only: "true"
         vault.hashicorp.com/role: "admin"
         vault.hashicorp.com/ca-cert: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-        vault.hashicorp.com/agent-inject-secret-chronicle_identity: "kv/chronicle/chronicle_identity"
-        vault.hashicorp.com/agent-inject-secret-chronicle-pk: "kv/chronicle/chronicle_account"
-        vault.hashicorp.com/agent-inject-template-chronicle: |
-          {{`{{ with secret "kv/chronicle/chronicle_identity" }}{{ .Data.data.secret_seed }}{{ end }}`}}
+        vault.hashicorp.com/agent-inject-template-chronicle-pk: |
+          {{`{{ with secret "kv/chronicle/chronicle_identity" }}{{ .Data.data.secretSeed }}{{ end }}`}}
         vault.hashicorp.com/agent-inject-template-batcher-pk: |
-          {{`{{ with secret "kv/chronicle/chronicle_account" }}{{ .Data.data.secret_seed }}{{ end }}`}}
+          {{`{{ with secret "kv/chronicle/chronicle_account" }}{{ .Data.data.secretSeed }}{{ end }}`}}
     spec:
       serviceAccountName: {{ include "lib.serviceAccountName" . }}
       affinity: {{ include "lib.safeToYaml" .Values.affinity | nindent 8 }}
@@ -100,7 +98,7 @@ spec:
                   {{ include "chronicle.id-claims" . }}
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "localhost:4317"
+              value: "signoz-otel-collector-metrics.observability.svc:4317"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=chronicle,service.instance.id={{ .Release.Name }}"
             - name: OTEL_SERVICE_NAME
