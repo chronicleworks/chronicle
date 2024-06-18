@@ -58,7 +58,6 @@ frame-system-benchmarking = { git = 'https://github.com/paritytech/polkadot-sdk.
 
 # RPC related
 frame-system-rpc-runtime-api = { git = 'https://github.com/paritytech/polkadot-sdk.git', tag = 'polkadot-v1.9.0', default-features = false }
-runtime-api-chronicle      = { default-features = false, path = "../../crates/runtime-api-chronicle" }
 
 
 # Local Pallets

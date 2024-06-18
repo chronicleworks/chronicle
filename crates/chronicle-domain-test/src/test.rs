@@ -122,7 +122,7 @@ mod test {
 	async fn test_schema_with_opa<'a>(
 		opa_executor: ExecutorContext,
 	) -> (Schema<Query, Mutation, Subscription>, TemporaryDatabase<'a>) {
-		chronicle_telemetry::telemetry(false, chronicle_telemetry::ConsoleLogging::Pretty);
+		chronicle_telemetry::telemetry(chronicle_telemetry::ConsoleLogging::Pretty);
 
 		let secrets = ChronicleSigning::new(
 			chronicle_secret_names(),

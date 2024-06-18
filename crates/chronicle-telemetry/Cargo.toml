@@ -9,19 +9,21 @@ version = "0.7.5"
 cfg-if = { workspace = true }
 console-subscriber = { workspace = true }
 tracing = { workspace = true }
-tracing-flame = { version = "^0.2" }
-tracing-log = { workspace = true }
-tracing-opentelemetry = "0.24"
 tracing-subscriber = { version = "^0.3.15", features = [
-  "default",
+  "std",
   "registry",
   "env-filter",
-  "json",
+  "json"
 ] }
-opentelemetry_sdk = { version = "0.23", features = ["rt-tokio", "metrics", "trace"] }
-opentelemetry-otlp = { version = "0.16.0", features = ["trace", "metrics"] }
-opentelemetry-semantic-conventions = { version = "0.15.0" }
-opentelemetry-proto = { version = "0.6.0"}
+log = "^0.4.21"
+opentelemetry-appender-log = { git="https://github.com/open-telemetry/opentelemetry-rust",version="0.4", default-features = false}
+opentelemetry-appender-tracing = { git="https://github.com/open-telemetry/opentelemetry-rust",version="0.4", default-features = false}
+opentelemetry = {git="https://github.com/open-telemetry/opentelemetry-rust", version = "0.23", features = ["metrics", "logs"] }
+opentelemetry_sdk = {git="https://github.com/open-telemetry/opentelemetry-rust", version = "0.23", features = ["rt-tokio", "logs"] }
+opentelemetry-otlp = {git="https://github.com/open-telemetry/opentelemetry-rust", version = "0.16.0", features = ["tonic", "metrics", "logs","grpc-tonic","tls-roots"] }
+opentelemetry-semantic-conventions = {git="https://github.com/open-telemetry/opentelemetry-rust", version = "0.15.0" }
+opentelemetry-stdout = {git="https://github.com/open-telemetry/opentelemetry-rust", version = "0.4", features = ["logs"]}
+
 url = { workspace = true, features = ["serde"] }
 
 [features]

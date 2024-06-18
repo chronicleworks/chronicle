@@ -23,7 +23,6 @@ members = [
   "node/runtime-chronicle",
   "node/node-chronicle",
   "crates/embedded-substrate",
-  "crates/runtime-api-chronicle",
   "crates/protocol-abstract",
   "crates/protocol-substrate",
   "crates/protocol-substrate-chronicle",

@@ -1,15 +1,15 @@
 use api::commands::{
-    ActivityCommand, AgentCommand, ApiCommand, EntityCommand, ImportCommand, NamespaceCommand,
+	ActivityCommand, AgentCommand, ApiCommand, EntityCommand, ImportCommand, NamespaceCommand,
 };
 use chrono::{TimeZone, Utc};
 use common::{
-    attributes::{Attribute, Attributes},
-    identity::AuthId,
-    prov::{
-        json_ld::ToJson,
-        operations::{ChronicleOperation, DerivationType},
-        ActivityId, AgentId, DomaintypeId, EntityId, NamespaceId,
-    },
+	attributes::{Attribute, Attributes},
+	identity::AuthId,
+	prov::{
+		json_ld::ToJson,
+		operations::{ChronicleOperation, DerivationType},
+		ActivityId, AgentId, DomaintypeId, EntityId, NamespaceId,
+	},
 };
 use uuid::Uuid;
 
@@ -18,10 +18,10 @@ use crate::substitutes::test_api;
 // Creates a mock file containing JSON-LD of the ChronicleOperations
 // that would be created by the given command, although not in any particular order.
 fn test_create_agent_operations_import() -> assert_fs::NamedTempFile {
-    let file = assert_fs::NamedTempFile::new("import.json").unwrap();
-    assert_fs::prelude::FileWriteStr::write_str(
-        &file,
-        r#"
+	let file = assert_fs::NamedTempFile::new("import.json").unwrap();
+	assert_fs::prelude::FileWriteStr::write_str(
+		&file,
+		r#"
         [
             {
                 "@id": "_:n1",
@@ -94,32 +94,32 @@ fn test_create_agent_operations_import() -> assert_fs::NamedTempFile {
             }
         ]
          "#,
-    )
-        .unwrap();
-    file
+	)
+	.unwrap();
+	file
 }
 
 #[tokio::test]
 async fn test_import_operations() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let file = test_create_agent_operations_import();
+	let file = test_create_agent_operations_import();
 
-    let contents = std::fs::read_to_string(file.path()).unwrap();
+	let contents = std::fs::read_to_string(file.path()).unwrap();
 
-    let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents).unwrap();
+	let json_array = serde_json::from_str::<Vec<serde_json::Value>>(&contents).unwrap();
 
-    let mut operations = Vec::with_capacity(json_array.len());
-    for value in json_array.into_iter() {
-        let op = ChronicleOperation::from_json(&value)
-            .await
-            .expect("Failed to parse imported JSON-LD to ChronicleOperation");
-        operations.push(op);
-    }
+	let mut operations = Vec::with_capacity(json_array.len());
+	for value in json_array.into_iter() {
+		let op = ChronicleOperation::from_json(&value)
+			.await
+			.expect("Failed to parse imported JSON-LD to ChronicleOperation");
+		operations.push(op);
+	}
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(api
+	insta::assert_json_snapshot!(api
             .dispatch(ApiCommand::Import(ImportCommand {  operations: operations.clone() } ), identity.clone())
             .await
             .unwrap()
@@ -148,8 +148,8 @@ async fn test_import_operations() {
  }
  "###);
 
-    // Check that the operations that do not result in data changes are not submitted
-    insta::assert_json_snapshot!(api
+	// Check that the operations that do not result in data changes are not submitted
+	insta::assert_json_snapshot!(api
             .dispatch(ApiCommand::Import(ImportCommand {  operations } ), identity)
             .await
             .unwrap()
@@ -175,11 +175,11 @@ async fn test_import_operations() {
 
 #[tokio::test]
 async fn create_namespace() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(api
+	insta::assert_json_snapshot!(api
             .dispatch(ApiCommand::NameSpace(NamespaceCommand::Create {
                 id: "testns".into(),
             }), identity)
@@ -199,11 +199,11 @@ async fn create_namespace() {
 
 #[tokio::test]
 async fn create_agent() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
+	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
@@ -244,11 +244,11 @@ async fn create_agent() {
 
 #[tokio::test]
 async fn create_system_activity() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             id: "testactivity".into(),
             namespace: common::prov::SYSTEM_ID.into(),
             attributes: Attributes::new(
@@ -289,11 +289,11 @@ async fn create_system_activity() {
 
 #[tokio::test]
 async fn create_activity() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
+	insta::assert_json_snapshot!(api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             id: "testactivity".into(),
             namespace: "testns".into(),
             attributes: Attributes::new(
@@ -334,11 +334,11 @@ async fn create_activity() {
 
 #[tokio::test]
 async fn start_activity() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -377,17 +377,17 @@ async fn start_activity() {
  }
  "###);
 
-    api.dispatch(
-        ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }),
-        identity.clone(),
-    )
-        .await
-        .unwrap();
+	api.dispatch(
+		ApiCommand::Agent(AgentCommand::UseInContext {
+			id: AgentId::from_external_id("testagent"),
+			namespace: "testns".into(),
+		}),
+		identity.clone(),
+	)
+	.await
+	.unwrap();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -435,11 +435,11 @@ async fn start_activity() {
 
 #[tokio::test]
 async fn contradict_attributes() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -478,35 +478,35 @@ async fn contradict_attributes() {
  }
  "###);
 
-    let res = api
-        .dispatch(
-            ApiCommand::Agent(AgentCommand::Create {
-                id: "testagent".into(),
-                namespace: "testns".into(),
-                attributes: Attributes::new(
-                    Some(DomaintypeId::from_external_id("test")),
-                    [Attribute {
-                        typ: "test".to_owned(),
-                        value: serde_json::Value::String("test2".to_owned()).into(),
-                    }]
-                        .into_iter()
-                        .collect(),
-                ),
-            }),
-            identity,
-        )
-        .await;
+	let res = api
+		.dispatch(
+			ApiCommand::Agent(AgentCommand::Create {
+				id: "testagent".into(),
+				namespace: "testns".into(),
+				attributes: Attributes::new(
+					Some(DomaintypeId::from_external_id("test")),
+					[Attribute {
+						typ: "test".to_owned(),
+						value: serde_json::Value::String("test2".to_owned()).into(),
+					}]
+					.into_iter()
+					.collect(),
+				),
+			}),
+			identity,
+		)
+		.await;
 
-    insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: SerdeWrapper(String("test2")) } Attribute { typ: "test", value: SerdeWrapper(String("test")) } }"###);
+	insta::assert_snapshot!(res.err().unwrap().to_string(), @r###"Contradiction: Contradiction { attribute value change: test Attribute { typ: "test", value: SerdeWrapper(String("test2")) } Attribute { typ: "test", value: SerdeWrapper(String("test")) } }"###);
 }
 
 #[tokio::test]
 async fn contradict_start_time() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -545,17 +545,17 @@ async fn contradict_start_time() {
  }
  "###);
 
-    api.dispatch(
-        ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }),
-        identity.clone(),
-    )
-        .await
-        .unwrap();
+	api.dispatch(
+		ApiCommand::Agent(AgentCommand::UseInContext {
+			id: AgentId::from_external_id("testagent"),
+			namespace: "testns".into(),
+		}),
+		identity.clone(),
+	)
+	.await
+	.unwrap();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -600,29 +600,29 @@ async fn contradict_start_time() {
  }
  "###);
 
-    // Should contradict
-    let res = api
-        .dispatch(
-            ApiCommand::Activity(ActivityCommand::Start {
-                id: ActivityId::from_external_id("testactivity"),
-                namespace: "testns".into(),
-                time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
-                agent: None,
-            }),
-            identity,
-        )
-        .await;
+	// Should contradict
+	let res = api
+		.dispatch(
+			ApiCommand::Activity(ActivityCommand::Start {
+				id: ActivityId::from_external_id("testactivity"),
+				namespace: "testns".into(),
+				time: Some(Utc.with_ymd_and_hms(2018, 7, 8, 9, 10, 11).unwrap()),
+				agent: None,
+			}),
+			identity,
+		)
+		.await;
 
-    insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08T09:10:11+00:00 2018-07-08T09:10:11+00:00 }");
+	insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { start date alteration: 2014-07-08T09:10:11+00:00 2018-07-08T09:10:11+00:00 }");
 }
 
 #[tokio::test]
 async fn contradict_end_time() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -661,17 +661,17 @@ async fn contradict_end_time() {
  }
  "###);
 
-    api.dispatch(
-        ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }),
-        identity.clone(),
-    )
-        .await
-        .unwrap();
+	api.dispatch(
+		ApiCommand::Agent(AgentCommand::UseInContext {
+			id: AgentId::from_external_id("testagent"),
+			namespace: "testns".into(),
+		}),
+		identity.clone(),
+	)
+	.await
+	.unwrap();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -716,29 +716,29 @@ async fn contradict_end_time() {
  }
  "###);
 
-    // Should contradict
-    let res = api
-        .dispatch(
-            ApiCommand::Activity(ActivityCommand::End {
-                id: ActivityId::from_external_id("testactivity"),
-                namespace: "testns".into(),
-                time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
-                agent: None,
-            }),
-            identity,
-        )
-        .await;
+	// Should contradict
+	let res = api
+		.dispatch(
+			ApiCommand::Activity(ActivityCommand::End {
+				id: ActivityId::from_external_id("testactivity"),
+				namespace: "testns".into(),
+				time: Some(Utc.with_ymd_and_hms(2022, 7, 8, 9, 10, 11).unwrap()),
+				agent: None,
+			}),
+			identity,
+		)
+		.await;
 
-    insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08T09:10:11+00:00 2022-07-08T09:10:11+00:00 }");
+	insta::assert_snapshot!(res.err().unwrap().to_string(), @"Contradiction: Contradiction { end date alteration: 2018-07-08T09:10:11+00:00 2022-07-08T09:10:11+00:00 }");
 }
 
 #[tokio::test]
 async fn end_activity() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -777,17 +777,17 @@ async fn end_activity() {
  }
  "###);
 
-    api.dispatch(
-        ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }),
-        identity.clone(),
-    )
-        .await
-        .unwrap();
+	api.dispatch(
+		ApiCommand::Agent(AgentCommand::UseInContext {
+			id: AgentId::from_external_id("testagent"),
+			namespace: "testns".into(),
+		}),
+		identity.clone(),
+	)
+	.await
+	.unwrap();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Start {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -832,7 +832,7 @@ async fn end_activity() {
  }
  "###);
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
 
             id: ActivityId::from_external_id("testactivity"),
@@ -882,11 +882,11 @@ async fn end_activity() {
 
 #[tokio::test]
 async fn activity_use() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Agent(AgentCommand::Create {
             id: "testagent".into(),
             namespace: "testns".into(),
@@ -925,17 +925,17 @@ async fn activity_use() {
  }
  "###);
 
-    api.dispatch(
-        ApiCommand::Agent(AgentCommand::UseInContext {
-            id: AgentId::from_external_id("testagent"),
-            namespace: "testns".into(),
-        }),
-        identity.clone(),
-    )
-        .await
-        .unwrap();
+	api.dispatch(
+		ApiCommand::Agent(AgentCommand::UseInContext {
+			id: AgentId::from_external_id("testagent"),
+			namespace: "testns".into(),
+		}),
+		identity.clone(),
+	)
+	.await
+	.unwrap();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             id: "testactivity".into(),
             namespace: "testns".into(),
@@ -974,7 +974,7 @@ async fn activity_use() {
  }
  "###);
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Use {
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
@@ -1017,7 +1017,7 @@ async fn activity_use() {
  }
  "###);
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::End {
             id: ActivityId::from_external_id("testactivity"),
             namespace: "testns".into(),
@@ -1073,11 +1073,11 @@ async fn activity_use() {
 
 #[tokio::test]
 async fn activity_generate() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Create {
             id: "testactivity".into(),
             namespace: "testns".into(),
@@ -1116,7 +1116,7 @@ async fn activity_generate() {
  }
  "###);
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Activity(ActivityCommand::Generate {
             id: EntityId::from_external_id("testentity"),
             namespace: "testns".into(),
@@ -1146,11 +1146,11 @@ async fn activity_generate() {
 
 #[tokio::test]
 async fn derive_entity_abstract() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1193,11 +1193,11 @@ async fn derive_entity_abstract() {
 
 #[tokio::test]
 async fn derive_entity_primary_source() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1240,11 +1240,11 @@ async fn derive_entity_primary_source() {
 
 #[tokio::test]
 async fn derive_entity_revision() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),
@@ -1287,11 +1287,11 @@ async fn derive_entity_revision() {
 
 #[tokio::test]
 async fn derive_entity_quotation() {
-    let mut api = test_api().await;
+	let mut api = test_api().await;
 
-    let identity = AuthId::chronicle();
+	let identity = AuthId::chronicle();
 
-    insta::assert_json_snapshot!(
+	insta::assert_json_snapshot!(
         api.dispatch(ApiCommand::Entity(EntityCommand::Derive {
             id: EntityId::from_external_id("testgeneratedentity"),
             namespace: "testns".into(),

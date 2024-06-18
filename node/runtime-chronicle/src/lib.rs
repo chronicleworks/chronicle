@@ -9,13 +9,16 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use frame_support::pallet_prelude::TransactionPriority;
 use frame_system::EnsureRoot;
 use pallet_grandpa::AuthorityId as GrandpaId;
+use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
-	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify},
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys,
+		Verify,
+	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
@@ -24,7 +27,6 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 pub mod no_nonce_fees;
-
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -204,11 +206,11 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 
 	type RuntimeTask = RuntimeTask;
-    type SingleBlockMigrations = ();
-    type MultiBlockMigrator = ();
-    type PreInherents = ();
-    type PostInherents = ();
-    type PostTransactions = ();
+	type SingleBlockMigrations = ();
+	type MultiBlockMigrator = ();
+	type PreInherents = ();
+	type PostInherents = ();
+	type PostTransactions = ();
 }
 
 parameter_types! {
@@ -283,7 +285,6 @@ impl frame_system::offchain::SigningTypes for Runtime {
 	type Public = <Signature as Verify>::Signer;
 	type Signature = Signature;
 }
-
 
 impl frame_system::offchain::SendTransactionTypes<pallet_im_online::Call<Runtime>> for Runtime {
 	type OverarchingCall = RuntimeCall;
@@ -379,12 +380,6 @@ mod benches {
 }
 
 impl_runtime_apis! {
-	impl runtime_api_chronicle::ChronicleApi<Block> for Runtime {
-		// Purely to keep runtime api dependencies in place
-		fn placeholder() -> u32 {
-			0
-		}
-	}
 
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -397,20 +392,20 @@ impl_runtime_apis! {
 
 
 		 fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::ExtrinsicInclusionMode {
-       		Executive::initialize_block(header);
-        	sp_runtime::ExtrinsicInclusionMode::AllExtrinsics
-    	 }
+			   Executive::initialize_block(header);
+			sp_runtime::ExtrinsicInclusionMode::AllExtrinsics
+		 }
 	}
 
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
-        fn create_default_config() -> Vec<u8> {
-            frame_support::genesis_builder_helper::create_default_config::<RuntimeGenesisConfig>()
-        }
+		fn create_default_config() -> Vec<u8> {
+			frame_support::genesis_builder_helper::create_default_config::<RuntimeGenesisConfig>()
+		}
 
-        fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
-            frame_support::genesis_builder_helper::build_config::<RuntimeGenesisConfig>(config)
-        }
-    }
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			frame_support::genesis_builder_helper::build_config::<RuntimeGenesisConfig>(config)
+		}
+	}
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {

@@ -6,9 +6,9 @@ use crate::service::FullClient;
 
 use pallet_chronicle::chronicle_core::OperationSubmission;
 use runtime::{AccountId, SystemCall};
+use runtime_chronicle::{self as runtime, pallet_opa::operations::ChronicleOperation, RuntimeCall};
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
-use runtime_chronicle::{self as runtime, pallet_opa::operations::ChronicleOperation, RuntimeCall};
 use sp_core::{Encode, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
@@ -83,11 +83,13 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for OperationSubmissionBuilder {
 		let extrinsic: OpaqueExtrinsic = create_benchmark_extrinsic(
 			self.client.as_ref(),
 			acc,
-			RuntimeCall::Chronicle(pallet_chronicle::Call::apply { operations: OperationSubmission {
-				correlation_id: [0; 16],
-				items: vec![self.value.clone()].into(),
-				identity: common::identity::SignedIdentity::new_no_identity().into(),
-			}}),
+			RuntimeCall::Chronicle(pallet_chronicle::Call::apply {
+				operations: OperationSubmission {
+					correlation_id: [0; 16],
+					items: vec![self.value.clone()].into(),
+					identity: common::identity::SignedIdentity::new_no_identity().into(),
+				},
+			}),
 			nonce,
 		)
 		.into();

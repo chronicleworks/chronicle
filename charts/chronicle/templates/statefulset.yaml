@@ -69,8 +69,6 @@ spec:
               {{ end }}
               {{ end }}
 
-              echo "Waiting 20 seconds for postgres to start";
-              sleep 20;
               chronicle \
                 --chronicle-key-from-path /vault/secrets \
                 --batcher-key-from-path /vault/secrets \
@@ -98,7 +96,13 @@ spec:
                   {{ include "chronicle.id-claims" . }}
           env: {{ include "lib.safeToYaml" .Values.env | nindent 12 }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "signoz-otel-collector-metrics.observability.svc:4317"
+              value: "grpc://signoz-otel-collector-metrics.observability.svc.cluster.local:4317"
+            - name: OTEL_LOG_LEVEL
+              value: debug
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
+            - name: OTEL_METRICS_EXPORTER
+              value: otlp
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=chronicle,service.instance.id={{ .Release.Name }}"
             - name: OTEL_SERVICE_NAME

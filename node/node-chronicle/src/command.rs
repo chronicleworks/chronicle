@@ -1,5 +1,5 @@
 use crate::{
-	benchmarking::{inherent_benchmark_data, RemarkBuilder, OperationSubmissionBuilder},
+	benchmarking::{inherent_benchmark_data, OperationSubmissionBuilder, RemarkBuilder},
 	chain_spec,
 	cli::{Cli, Subcommand},
 	service,
@@ -155,9 +155,8 @@ pub fn run() -> sc_cli::Result<()> {
 					BenchmarkCmd::Extrinsic(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						// Register the *Remark* and *TKA* builders.
-						let ext_factory = ExtrinsicFactory(vec![
-							Box::new(RemarkBuilder::new(client.clone())),
-						]);
+						let ext_factory =
+							ExtrinsicFactory(vec![Box::new(RemarkBuilder::new(client.clone()))]);
 
 						cmd.run(client, inherent_benchmark_data()?, Vec::new(), &ext_factory)
 					},

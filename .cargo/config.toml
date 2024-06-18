@@ -7,7 +7,7 @@ linker = "x86_64-linux-gnu-gcc"
 [http]
 timeout = 30                # timeout for each HTTP request, in seconds
 low-speed-limit = 10        # network timeout threshold (bytes/sec)
-multiplexing = false
+multiplexing = true
 
 [net]
 retry = 3
