@@ -184,6 +184,7 @@ pub async fn api(
     _options: &ArgMatches,
     config: &Config,
     remote_opa: Option<String>,
+    liveness_config: Option<api::LivenessConfig>,
 ) -> Result<api::ApiDispatch, ApiError> {
     let embedded_tp = in_mem_ledger(config, _options)?;
 
@@ -194,6 +195,7 @@ pub async fn api(
         UniqueUuid,
         config.namespace_bindings.clone(),
         remote_opa,
+        liveness_config,
     )
     .await
 }
