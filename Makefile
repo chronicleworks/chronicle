@@ -13,7 +13,7 @@ HOST_ARCHITECTURE ?= $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/a
 
 CLEAN_DIRS := $(CLEAN_DIRS)
 
-DOCKER_GID := $(shell getent group docker | cut -f 3 -d :)
+DOCKER_GID := $(shell if [ "$$(uname)" = "Darwin" ]; then dscl . -read /Groups/docker PrimaryGroupID 2>/dev/null | awk '{print $$2}' || echo 0; else getent group docker 2>/dev/null | cut -f 3 -d : || echo 0; fi)
 
 clean: clean_containers clean_target clean-opa
 
