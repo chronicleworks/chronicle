@@ -955,7 +955,7 @@ impl Store {
         use schema::ledgersync::dsl;
         self.connection()?.build_transaction().run(|connection| {
             let block_id_and_tx = schema::ledgersync::table
-                .order_by(dsl::sync_time)
+                .order_by(dsl::sync_time.desc())
                 .select((dsl::bc_offset, dsl::tx_id))
                 .first::<(Option<String>, String)>(connection)
                 .map_err(StoreError::from)?;

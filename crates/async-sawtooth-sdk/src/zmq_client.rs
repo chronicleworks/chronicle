@@ -210,6 +210,7 @@ impl RequestResponseSawtoothChannel for ZmqRequestResponseSawtoothChannel {
             })
     }
 
+
     async fn recv_stream<RX: protobuf::Message>(
         self,
     ) -> Result<BoxStream<'static, RX>, SawtoothCommunicationError> {

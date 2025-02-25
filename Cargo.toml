@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 
 members = [
   "crates/common",
@@ -75,6 +77,8 @@ k256 = { version = "0.11.3", features = [
 lazy_static = "1.4.0"
 locspan = "0.7"
 maplit = "1.0.2"
+metrics = "0.21.0"
+metrics-exporter-prometheus = "0.12.1"
 mime = "0.3"
 mockito = "1.0.2"
 oauth2 = "4.4"
@@ -98,8 +102,6 @@ prost = "0.10" # common, sawtooth-protocol, sawtooth-tp: version = "0.10.0"
 prost-build = "0.10.0"
 prost-types = "0.11.2"
 protobuf = "2.27.1"
-metrics = "0.21.0"
-metrics-exporter-prometheus = "0.12.1"
 question = "0.2.2"
 r2d2 = "0.8.9"
 rand = { version = "0.8.5", features = ["getrandom"] }
